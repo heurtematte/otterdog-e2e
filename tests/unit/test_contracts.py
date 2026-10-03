@@ -1676,6 +1676,8 @@ def test_redactor_add_mask_on_github_actions(
 ) -> None:
     """On GitHub Actions every new literal is masked once with ::add-mask::."""
     monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    # on a real runner the plugin routes the lines to the runner's stdout fd, past capsys: use the default sink
+    monkeypatch.setattr(redact, "_mask_sink", None)
     redactor = Redactor()
     redactor.add("100%-secret-value", variants=False)
     redactor.add("100%-secret-value", variants=False)

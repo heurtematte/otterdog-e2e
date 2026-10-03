@@ -19,7 +19,8 @@ predates.
 
 A mismatch is an expected failure (xfail with the bug, the step's own first) only when a known bug the SUT has covers
 the validate phase: the step's own ``known_bug`` (unless its ``phases`` leave validate out), else a bug of the
-scenario. Unknown-property warnings (typos, misplaced fragments) and crashes are never expected failures. The items
+scenario. Unknown-property warnings (typos, misplaced fragments) are never expected failures, and a crash only when
+that bug documents it (its ``crash_signature`` appears in the output, e.g. KB-008 on SUTs with #790). The items
 carry no scenario mark, so the known bugs of their scenarios never turn a clean lint into an XPASS.
 """
 
@@ -32,7 +33,7 @@ from pathlib import Path
 import pytest
 
 from otterdog_e2e.context import E2EContext, get_context
-from otterdog_e2e.known_bugs import bugs_for_scenario
+from otterdog_e2e.known_bugs import KnownBug, bugs_for_scenario
 from otterdog_e2e.otterdog.output import normalize_text
 from otterdog_e2e.otterdog.render import ConfigFragments
 from otterdog_e2e.otterdog.runner import CliResult, OtterdogCli
@@ -50,6 +51,7 @@ from otterdog_e2e.sut.cli_install import InstalledCli
 LIVE_DIRS = ("cli", "regressions", "enterprise")
 TAIL_LINES = 25
 CRASH_MARKERS = ("Traceback (most recent call last)", "object has no attribute")
+CRASH_PROBLEM_PREFIX = "otterdog crashed"
 SCHEMA_ERROR_MARKER = "Failed validating '"  # a jsonschema violation: otterdog reports it as a validation error
 TEAM_BLOCKERS = frozenset({"teams fragments", "newTeam"})
 
@@ -88,21 +90,30 @@ def expects_validation_errors(step: StepSpec) -> bool:
     return step.plan is not None and step.plan.expect == "validation_error"
 
 
-def affecting_bug_reason(
+def affecting_bug(
     context: E2EContext, scenario: Scenario, step: StepSpec, sut_version: str | None
-) -> str | None:
-    """xfail reason of the first known bug the SUT still has that covers validation: the step's own ``known_bug``
-    (engine.step_bug; a bug whose ``phases`` leave validate out makes the lint strict), then the scenario's bugs; an id
-    missing from known_bugs.yaml counts as affecting (like the plugin's collection xfail); None without one."""
+) -> tuple[str, KnownBug | None] | None:
+    """(xfail reason, bug) of the first known bug the SUT still has that covers validation: the step's own
+    ``known_bug`` (engine.step_bug; a bug whose ``phases`` leave validate out makes the lint strict), then the
+    scenario's bugs; an id missing from known_bugs.yaml counts as affecting (like the plugin's collection xfail), with
+    no bug object; None without one."""
     bugs = context.known_bugs()
     own = step_bug(step, bugs, sut_version)
     if own is not None:
-        return f"{own.reason} (step {step.name!r})" if own.covers("validate") else None
+        return (f"{own.reason} (step {step.name!r})", bugs.get(own.id)) if own.covers("validate") else None
     if scenario.known_bug is not None and scenario.known_bug not in bugs:
-        return f"{scenario.known_bug}: not listed in known_bugs.yaml"
+        return f"{scenario.known_bug}: not listed in known_bugs.yaml", None
     declared = scenario.known_bug
     affecting = [bug for bug in bugs_for_scenario(bugs, scenario.id, declared=declared) if bug.affects(sut_version)]
-    return affecting[0].xfail_reason if affecting else None
+    return (affecting[0].xfail_reason, affecting[0]) if affecting else None
+
+
+def affecting_bug_reason(
+    context: E2EContext, scenario: Scenario, step: StepSpec, sut_version: str | None
+) -> str | None:
+    """xfail reason of affecting_bug, None without one."""
+    found = affecting_bug(context, scenario, step, sut_version)
+    return found[0] if found else None
 
 
 def lint_fragments(step: StepSpec, fragments: ConfigFragments) -> tuple[ConfigFragments | None, str | None]:
@@ -125,7 +136,9 @@ def error_report_problems(result: CliResult) -> list[str]:
     output = result.output
     crash = [marker for marker in CRASH_MARKERS if marker in output]
     if crash:
-        return [f"otterdog crashed instead of reporting validation errors ({crash[0]!r}, exit {result.exit_code})"]
+        return [
+            f"{CRASH_PROBLEM_PREFIX} instead of reporting validation errors ({crash[0]!r}, exit {result.exit_code})"
+        ]
     parsed = result.validation()
     if SCHEMA_ERROR_MARKER in output:
         return []
@@ -172,9 +185,13 @@ def test_live_scenario_lint(
     if not problems and not strict:
         return
     summary = "; ".join(dict.fromkeys([*problems, *strict]))
-    bug = None if strict else affecting_bug_reason(offline_context, scenario, step, sut.sut.version)
-    if bug:
-        pytest.xfail(f"{bug} ({summary})")
+    crashes = [problem for problem in strict if problem.startswith(CRASH_PROBLEM_PREFIX)]
+    found = affecting_bug(offline_context, scenario, step, sut.sut.version)
+    if found is not None and len(crashes) == len(strict):
+        reason, bug = found
+        # unknown properties, unloadable configs and silent validations stay failures; a crash only with its bug
+        if not crashes or (bug is not None and bug.explains_crash(result.output)):
+            pytest.xfail(f"{reason} ({summary})")
     tail = "\n".join(normalize_text(result.output).splitlines()[-TAIL_LINES:])
     pytest.fail(
         f"{scenario.id} step {step.name!r} (plan {lint_plan(scenario)}, {scenario.source}): {summary}"

@@ -147,6 +147,9 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Env:
     """Fake environment; the caller's E2E_* variables must never reach otterdog."""
     monkeypatch.setenv("E2E_LEAK", "leaked-value-123456")
     monkeypatch.setenv("E2E_CACHE_DIR", str(tmp_path / "cache"))
+    # independent of the machine: no network sandbox and not in CI (tests of the sandbox set both explicitly)
+    monkeypatch.setattr(runner_module, "_unshare_available", lambda: False)
+    monkeypatch.delenv("CI", raising=False)
     return Env(tmp_path)
 
 

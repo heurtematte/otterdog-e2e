@@ -23,7 +23,7 @@ import yaml
 
 KNOWN_BUG_STATUSES = ("suspected", "confirmed", "fixed")
 KNOWN_BUG_ID_RE = re.compile(r"^KB-[0-9]{3,}$")
-KNOWN_BUG_KEYS = ("id", "title", "status", "evidence", "upstream", "fixed_in", "scenarios")
+KNOWN_BUG_KEYS = ("id", "title", "status", "evidence", "upstream", "fixed_in", "scenarios", "crash_signature")
 
 
 class KnownBugError(ValueError):
@@ -47,6 +47,13 @@ class KnownBug:
     upstream: str | None = None
     fixed_in: str | None = None
     scenarios: list[str] = field(default_factory=list)
+    # text that only this bug's crash prints (e.g. "object has no attribute 'get_model_header'"): a crash is an
+    # expected failure only when its output carries the signature of a bug that covers it; other crashes stay failures
+    crash_signature: str | None = None
+
+    def explains_crash(self, output: str) -> bool:
+        """True when the bug documents a crash and ``output`` carries its signature."""
+        return self.crash_signature is not None and self.crash_signature != "" and self.crash_signature in output
 
     @property
     def xfail_reason(self) -> str:
@@ -158,6 +165,7 @@ def _parse_bug(item: Any, where: str) -> KnownBug:
         upstream=_optional_text(item.get("upstream"), f"{where}.upstream"),
         fixed_in=_optional_text(item.get("fixed_in"), f"{where}.fixed_in"),
         scenarios=_texts(item.get("scenarios"), f"{where}.scenarios"),
+        crash_signature=_optional_text(item.get("crash_signature"), f"{where}.crash_signature"),
     )
 
 

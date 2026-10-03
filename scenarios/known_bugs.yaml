@@ -107,6 +107,7 @@
 - id: KB-008
   title: org ruleset validation raises AttributeError for incomplete nested rules (no get_model_header, #790) and for deployment rules (no environments)
   status: confirmed
+  crash_signature: "object has no attribute 'get_model_header'"
   evidence:
     - otterdog/models/ruleset.py:128-136
     - otterdog/models/ruleset.py:57-65

@@ -7,6 +7,8 @@ import stat
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from otterdog_e2e.otterdog.workspace import (
     CREDENTIAL_ENV,
     ConfigWorkspace,
@@ -237,6 +239,32 @@ def test_neutralize_untrusted_tree(tmp_path: Path) -> None:
     assert (root / "inner").is_symlink() and (root / "orgs" / "o" / "o.jsonnet").read_text() == "{}"
     assert (outside / "templates").is_dir()
     assert neutralize_untrusted_tree(root) == [] and neutralize_untrusted_tree(tmp_path / "missing") == []
+
+
+@pytest.mark.parametrize("reverse", [False, True], ids=["scandir-order", "reversed-order"])
+def test_neutralize_untrusted_tree_does_not_depend_on_the_listing_order(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, reverse: bool
+) -> None:
+    """A link chained through another outside link is removed whatever the directory listing order (the order
+    differs between filesystems: chain was kept on a GitHub runner when abs came first)."""
+    import os
+
+    from otterdog_e2e.otterdog import workspace as workspace_module
+
+    root, outside = tmp_path / "ws", tmp_path / "host"
+    root.mkdir()
+    outside.mkdir()
+    (root / "abs").symlink_to(outside)
+    (root / "chain").symlink_to("abs")
+    (root / "chain2").symlink_to("chain")
+    real_scandir = os.scandir
+
+    def ordered(path: str) -> list[os.DirEntry[str]]:
+        """Entries sorted by name, optionally reversed."""
+        return sorted(real_scandir(path), key=lambda entry: entry.name, reverse=reverse)
+
+    monkeypatch.setattr(workspace_module.os, "scandir", ordered)
+    assert workspace_module.neutralize_untrusted_tree(root) == ["abs", "chain", "chain2"]
 
 
 def test_workspace_reads_and_cleanups_stay_inside_the_root(tmp_path: Path) -> None:

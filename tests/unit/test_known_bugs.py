@@ -53,6 +53,22 @@ def test_load_valid_file(tmp_path: Path) -> None:
     assert bugs["KB-003"] == KnownBug("KB-003", "unpaginated variable reads")
 
 
+def test_crash_signature_explains_only_its_own_crash(tmp_path: Path) -> None:
+    """crash_signature is optional; a bug explains a crash only when the output carries its signature."""
+    path = tmp_path / "known_bugs.yaml"
+    path.write_text(
+        "- id: KB-008\n  title: org ruleset crash\n  status: confirmed\n"
+        "  crash_signature: \"object has no attribute 'get_model_header'\"\n"
+        "- id: KB-009\n  title: no crash documented\n"
+    )
+    bugs = load(path)
+    crash = "Error: 'GitHubOrganization' object has no attribute 'get_model_header'"
+    other = "Error: 'Repository' object has no attribute 'environments'"
+    assert bugs["KB-008"].explains_crash(crash) and not bugs["KB-008"].explains_crash(other)
+    assert bugs["KB-009"].crash_signature is None and not bugs["KB-009"].explains_crash(crash)
+    assert not KnownBug("KB-010", "empty signature", crash_signature="").explains_crash(crash)
+
+
 def test_xfail_mark_is_not_strict() -> None:
     """A fixed bug shows up as XPASS instead of failing the run."""
     mark = KnownBug("KB-001", "apply exits 0").xfail_mark().mark

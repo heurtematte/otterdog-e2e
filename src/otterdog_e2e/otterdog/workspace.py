@@ -104,6 +104,9 @@ def neutralize_untrusted_tree(root: Path) -> list[str]:
     base = os.path.realpath(root)
     if not os.path.isdir(base):
         return removed
+    # every decision is taken on the tree as the container left it, before any removal: a link chained through
+    # another removed link (chain -> abs -> /outside) must not look harmless just because abs went first
+    doomed: list[str] = []
     pending = [base]
     while pending:
         directory = pending.pop()
@@ -128,11 +131,13 @@ def neutralize_untrusted_tree(root: Path) -> list[str]:
             if stat.S_ISREG(mode) or (stat.S_ISLNK(mode) and is_within(entry.path, base)):
                 continue
             if any(check(mode) for check in _SPECIAL_MODES):
-                try:
-                    os.unlink(entry.path)
-                except OSError as exc:
-                    raise SafetyError(f"cannot remove {entry.path} planted by an untrusted container: {exc}") from exc
-                removed.append(os.path.relpath(entry.path, base))
+                doomed.append(entry.path)
+    for path in doomed:
+        try:
+            os.unlink(path)
+        except OSError as exc:
+            raise SafetyError(f"cannot remove {path} planted by an untrusted container: {exc}") from exc
+        removed.append(os.path.relpath(path, base))
     return sorted(removed)
 
 
