@@ -40,6 +40,7 @@ example), an otterdog command you replay by hand would act on real organizations
 | `report [RUN=<dir>]`, `scrub [RUN=<dir>]` | summary / scrub of a run (default: the newest run) |
 | `cache-prune [KEEP=3]`, `sut` | cache maintenance, resolve `SUT` |
 | `clean` | Python caches (never artifacts nor the harness cache) |
+| `docs`, `docs-serve` | strict build of the documentation site into `site/`, live preview (see [Documentation site](#documentation-site)) |
 
 `ARGS` passes extra pytest arguments, e.g. `make cli TARGET=free ARGS='-x -k lifecycle'` (options that could change
 the SUT, load plugins or show locals are refused).
@@ -249,27 +250,27 @@ lists the test organization and relays the App deliveries to it.
    `otterdog/otterdog-validation` and `otterdog/otterdog-sync`, so either override them there or set
    `E2E_VALIDATION_CONTEXT`/`E2E_SYNC_CONTEXT` accordingly). Then start it:
 
-   ```bash
-   cd ../otterdog && env -u OTTERDOG_CONFIG_ROOT make dev-webapp
-   ```
+    ```bash
+    cd ../otterdog && env -u OTTERDOG_CONFIG_ROOT make dev-webapp
+    ```
 
 2. Forward the webapp to a loopback port:
 
-   ```bash
-   kubectl -n otterdog port-forward svc/otterdog 5000:5000
-   ```
+    ```bash
+    kubectl -n otterdog port-forward svc/otterdog 5000:5000
+    ```
 
 3. Point the target at it (env file or shell) and run the webapp tier:
 
-   ```bash
-   export E2E_TRANSPORT=external
-   export E2E_EXTERNAL_URL=http://127.0.0.1:5000
-   export E2E_EXTERNAL_INIT_URL=http://127.0.0.1:5000/internal/init
-   make webapp TARGET=free
-   ```
+    ```bash
+    export E2E_TRANSPORT=external
+    export E2E_EXTERNAL_URL=http://127.0.0.1:5000
+    export E2E_EXTERNAL_INIT_URL=http://127.0.0.1:5000/internal/init
+    make webapp TARGET=free
+    ```
 
-   Only loopback URLs are accepted (`--e2e-allow-remote-webapp` overrides it; never point it to a shared deployment).
-   Without `E2E_EXTERNAL_INIT_URL` the webapp is not re-initialized after the harness writes `otterdog.json`.
+    Only loopback URLs are accepted (`--e2e-allow-remote-webapp` overrides it; never point it to a shared deployment).
+    Without `E2E_EXTERNAL_INIT_URL` the webapp is not re-initialized after the harness writes `otterdog.json`.
 
 To explore by hand (open PRs in the test org yourself and watch the webapp react), run only the relay:
 
@@ -333,6 +334,44 @@ update the feature (`status`, `covered_by`, drop the `gap_outline` once covered)
 ```
 
 Renaming a test or a scenario id listed in `covered_by` fails that test until the YAML follows.
+
+## Documentation site
+
+The site (https://heurtematte.github.io/otterdog-e2e/) is built with MkDocs and Material for MkDocs from `docs/` and
+`README.md`, its home page. `.github/workflows/docs.yml` runs the strict build for every pull request that changes the
+documentation, and deploys the site to GitHub Pages from `main`. Publishing needs one repository setting: Settings,
+Pages, Build and deployment, Source **GitHub Actions** (GitHub then creates the `github-pages` environment, which only
+accepts deployments from `main`).
+
+```bash
+poetry install --with docs     # MkDocs, Material for MkDocs, pymdown-extensions (the docs group of poetry.lock)
+make docs                      # strict build into site/: a broken link or anchor, a page missing from the nav fails
+make docs-serve                # live preview on http://127.0.0.1:8000/otterdog-e2e/
+```
+
+The pages stay GitHub-flavored Markdown that renders on github.com; `docs_hooks.py` adapts them for the site:
+
+- the home page is `README.md`, with its links rebased on `docs/` and without the blocks between
+  `<!-- github-only -->` and `<!-- /github-only -->` (the badge, the link to the site): there is no `docs/index.md`;
+- a link that leaves `docs/` (`../scenarios/coverage.yaml`) points to the file on GitHub (`blob/main`, `tree/main`
+  for a directory), and its target must exist;
+- GitHub callouts (`> [!WARNING]`) become admonitions;
+- `\|` in a code span of a table row (GitHub needs it to keep the pipe in its cell) loses its backslash.
+
+Python-Markdown is stricter than GitHub in a few places. Both render the page as written when you:
+
+- indent everything nested in a list item by 4 spaces per level: sub-lists, code blocks and paragraphs (GitHub also
+  accepts 2 or 3, MkDocs then flattens or splits the list), and leave a blank line before a list;
+- leave a blank line between a nested paragraph or code block and the next item of the list;
+- never start a line of text with `#` (`#790` becomes a heading) and write masked values in a code span (`********`);
+- write a placeholder in a code span (`orgs/<org>`) or as `&lt;org&gt;`: anywhere else `<org>` is an HTML tag, which
+  GitHub and MkDocs both drop (`tests/unit/test_docs_hooks.py` checks every page);
+- link pages relatively (`security.md#ci-environments`): anchors are GitHub's (lower case, punctuation dropped, spaces
+  as dashes), and `make docs` checks every link and anchor.
+
+The workflow installs `docs/requirements.txt`: the docs group of `poetry.lock` with the hashes of every file. After
+`poetry update --only docs` (or `poetry lock` after editing the group's constraints), regenerate it with
+`.venv/bin/python tests/unit/test_docs_site.py --write` (the unit tier fails while it differs from the lock).
 
 ## Troubleshooting
 

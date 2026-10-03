@@ -797,6 +797,12 @@ def _text(value: Any) -> str:
     return "`".join(part if index % 2 else part.translate(_MD_ESCAPES) for index, part in enumerate(parts))
 
 
+def heading_anchor(title: str) -> str:
+    """The anchor GitHub gives a heading, and the documentation site too (toc slugify of mkdocs.yml): lower case,
+    punctuation dropped, spaces as dashes."""
+    return re.sub(r"[^\w\- ]", "", title.lower()).replace(" ", "-")
+
+
 def _cell(text: Any) -> str:
     """A markdown table cell (pipes escaped, newlines flattened)."""
     return str(text).replace("|", "\\|").replace("\n", " ").strip()
@@ -896,10 +902,11 @@ def render_markdown(data: Mapping[str, Any]) -> str:
 def render_area(area: Mapping[str, Any], group: Sequence[Mapping[str, Any]]) -> list[str]:
     """The section of one area: a table of its features, then the details of notes, partials and gaps."""
     found = counts(group)
-    out = [
-        "",
-        f'<a id="{area["id"]}"></a>',
-        "",
+    out = [""]
+    # the summary links to #<area id>: an explicit anchor when the heading's own anchor is another (never a duplicate id)
+    if heading_anchor(area["title"]) != area["id"]:
+        out += [f'<a id="{area["id"]}"></a>', ""]
+    out += [
         f"## {area['title']}",
         "",
         (
@@ -938,28 +945,35 @@ def render_area(area: Mapping[str, Any], group: Sequence[Mapping[str, Any]]) -> 
     return out
 
 
+# nested bullets are indented by 4 spaces per level: GitHub accepts 2, but Python-Markdown (MkDocs, the documentation
+# site) only nests a list indented by 4 and would flatten the details
+LIST_INDENT = " " * 4
+
+
 def render_details(e: Mapping[str, Any]) -> list[str]:
     """The detail bullet list of one feature."""
     out = [f"- **`{e['id']}`** ({e['status']}, {e['priority']}, `{e['tier']}`): {_text(e['title'])}"]
-    out.append(f"  - Source: {', '.join(f'`{s}`' for s in e['source'])}")
+    out.append(f"{LIST_INDENT}- Source: {', '.join(f'`{s}`' for s in e['source'])}")
     if e.get("properties"):
-        out.append(f"  - Properties (`{e['model']}`): {', '.join(f'`{p}`' for p in e['properties'])}")
-    out.append(f"  - Operations: {', '.join(e['operations'])}")
+        out.append(f"{LIST_INDENT}- Properties (`{e['model']}`): {', '.join(f'`{p}`' for p in e['properties'])}")
+    out.append(f"{LIST_INDENT}- Operations: {', '.join(e['operations'])}")
     if e.get("known_bugs"):
-        out.append(f"  - Known bugs: {', '.join(e['known_bugs'])}")
+        out.append(f"{LIST_INDENT}- Known bugs: {', '.join(e['known_bugs'])}")
     if e.get("findings"):
-        out.append(f"  - New findings: {', '.join(e['findings'])}")
+        out.append(f"{LIST_INDENT}- New findings: {', '.join(e['findings'])}")
     if e.get("notes"):
-        out.append(f"  - Notes: {_text(e['notes'])}")
+        out.append(f"{LIST_INDENT}- Notes: {_text(e['notes'])}")
     for run in e.get("verified_on") or []:
-        out.append(f"  - Verified on `{run['target']}` with `{run['sut']}`: run `{run['run']}` ({run['date']})")
+        out.append(
+            f"{LIST_INDENT}- Verified on `{run['target']}` with `{run['sut']}`: run `{run['run']}` ({run['date']})"
+        )
     outline = e.get("gap_outline")
     if outline:
         target = f"`{outline['scenario']}`" + (f" in `{outline['file']}`" if outline.get("file") else "")
-        out.append(f"  - Suggested: {target}")
+        out.append(f"{LIST_INDENT}- Suggested: {target}")
         for label, key in (("Steps", "steps"), ("Assert", "assertions"), ("Needs", "needs")):
-            out.append(f"  - {label}:")
-            out += [f"    - {_text(item)}" for item in outline[key]]
+            out.append(f"{LIST_INDENT}- {label}:")
+            out += [f"{LIST_INDENT * 2}- {_text(item)}" for item in outline[key]]
     return out
 
 

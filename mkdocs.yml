@@ -1,0 +1,114 @@
+# Documentation site (GitHub Pages, .github/workflows/docs.yml): `make docs` builds it strictly into site/, `make
+# docs-serve` previews it (both need `poetry install --with docs`). The pages stay GitHub-flavored Markdown that renders
+# on github.com: docs_hooks.py generates the home page from README.md and bridges what Python-Markdown does differently
+# (links leaving docs/, GitHub callouts, escaped pipes in table code spans). See docs/local-development.md.
+site_name: otterdog-e2e
+site_description: >-
+  End-to-end test harness for otterdog (CLI, GitHub App webapp and webhooks) against real GitHub organizations.
+site_url: https://heurtematte.github.io/otterdog-e2e/
+repo_url: https://github.com/heurtematte/otterdog-e2e
+repo_name: heurtematte/otterdog-e2e
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  icon:
+    repo: fontawesome/brands/github
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - content.action.edit
+    - content.code.copy
+    - navigation.footer
+    - navigation.indexes
+    - navigation.sections
+    - navigation.top
+    - search.highlight
+    - search.suggest
+    - toc.follow
+
+hooks:
+  - docs_hooks.py
+
+# the home page is generated from README.md (docs_hooks.py): rebuild it on README changes too
+watch:
+  - README.md
+
+# installed by .github/workflows/docs.yml, not a page of the site
+exclude_docs: |
+  /requirements.txt
+
+# with `mkdocs build --strict`, every one of these is an error: broken links and anchors, pages missing from the nav
+validation:
+  omitted_files: warn
+  absolute_links: warn
+  unrecognized_links: warn
+  anchors: warn
+
+nav:
+  - Home: index.md
+  - Getting started:
+      - GitHub Free organization: setup-free-org.md
+      - GitHub Enterprise Cloud organization: setup-enterprise-org.md
+      - The e2e GitHub App: github-app.md
+      - Local development: local-development.md
+  - Writing tests:
+      - Writing scenarios: writing-scenarios.md
+      - Writing the test battery: battery-guide.md
+      - Web-UI testing: web-ui-testing.md
+  - Testing otterdog PRs:
+      - Testing a pull request or a checkout: testing-an-otterdog-pr.md
+  - Reference:
+      - Architecture: architecture.md
+      - Security: security.md
+      - Capability matrix: capability-matrix.md
+      - Coverage matrix: coverage-matrix.md
+      - Scenario catalog: scenario-catalog.md
+      - Known otterdog issues: known-issues.md
+
+# GitHub-flavored Markdown only: no extension whose syntax github.com would show verbatim (attr_list is left out on
+# purpose: it turns a trailing `{...}` of a table cell or a heading into HTML attributes and drops the text)
+markdown_extensions:
+  - toc:
+      permalink: true
+      # the anchors GitHub generates (lower case, punctuation dropped, spaces to dashes): links to
+      # page.md#some-heading work on github.com and on the site
+      slugify: !!python/object/apply:pymdownx.slugs.slugify
+        kwds:
+          case: lower
+  - tables
+  - md_in_html
+  - admonition
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences:
+      custom_fences:
+        # ```mermaid blocks, rendered by Material's own mermaid integration
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  # GitHub's extended autolinks (bare https:// URLs), ~~strikethrough~~ and `\~` escapes, task lists
+  - pymdownx.magiclink
+  - pymdownx.tilde:
+      subscript: false
+  - pymdownx.tasklist:
+      custom_checkbox: true

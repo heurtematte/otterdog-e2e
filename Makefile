@@ -9,6 +9,7 @@
 #   make inject ARGS='--fragment repositories=scenarios/fragments/repo-basic.jsonnet --print'
 #   make pr PR=792 SHA=<40-hex> TARGET=free
 #   make bootstrap TARGET=free APPLY=1
+#   make docs                             strict build of the documentation site (poetry install --with docs)
 
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
@@ -21,6 +22,8 @@ VENV ?= .venv
 E2E := $(VENV)/bin/otterdog-e2e
 PYTHON := $(VENV)/bin/python
 POETRY ?= poetry
+# Python files outside the package: the MkDocs hooks of the documentation site
+HOOKS := docs_hooks.py
 
 TARGET ?= $(E2E_TARGET)
 SUT ?= $(or $(E2E_SUT),release:latest)
@@ -42,8 +45,8 @@ ARTIFACTS ?= $(or $(E2E_ARTIFACTS),artifacts)
 RUN ?= $(shell ls -1td "$(ARTIFACTS)"/*/ 2>/dev/null | head -n 1)
 
 .PHONY: help init unit lint format typecheck check offline lint-scenarios cli webhooks webapp web-ui enterprise \
-	differential e2e one inject pr doctor bootstrap janitor relay report scrub cache-prune sut clean \
-	require-target require-base require-scenario require-pr
+	differential e2e one inject pr doctor bootstrap janitor relay report scrub cache-prune sut docs docs-serve clean \
+	require-target require-base require-scenario require-pr require-docs
 
 help: ## Show this help
 	@echo "Targets:"
@@ -59,15 +62,15 @@ unit: ## Unit tier: harness self-tests (no network, no docker)
 	$(PYTHON) -m pytest -q -p no:cacheprovider tests/unit $(ARGS)
 
 lint: ## ruff check and ruff format --check
-	$(VENV)/bin/ruff check src tests
-	$(VENV)/bin/ruff format --check src tests
+	$(VENV)/bin/ruff check src tests $(HOOKS)
+	$(VENV)/bin/ruff format --check src tests $(HOOKS)
 
 format: ## ruff format and safe ruff fixes
-	$(VENV)/bin/ruff format src tests
-	$(VENV)/bin/ruff check --fix src tests
+	$(VENV)/bin/ruff format src tests $(HOOKS)
+	$(VENV)/bin/ruff check --fix src tests $(HOOKS)
 
-typecheck: ## mypy on src
-	$(VENV)/bin/mypy src
+typecheck: ## mypy on src (and the documentation hooks)
+	$(VENV)/bin/mypy src $(HOOKS)
 
 check: lint typecheck unit ## lint + typecheck + unit
 
@@ -131,6 +134,13 @@ cache-prune: ## Keep only the KEEP newest builds, sources, runs and images in th
 sut: ## Resolve SUT and print it as JSON (label, sha, version, trust)
 	$(E2E) sut resolve "$(SUT)"
 
+# Material for MkDocs prints a banner about MkDocs 2 on every build: the docs group pins mkdocs<2
+docs: require-docs ## Strict build of the documentation site into site/ (broken links and anchors fail)
+	NO_MKDOCS_2_WARNING=true $(VENV)/bin/mkdocs build --strict
+
+docs-serve: require-docs ## Live preview of the documentation site on http://127.0.0.1:8000/otterdog-e2e/
+	NO_MKDOCS_2_WARNING=true $(VENV)/bin/mkdocs serve
+
 clean: ## Remove Python caches (never the artifacts nor the harness cache)
 	find src tests -name __pycache__ -type d -prune -exec rm -rf {} +
 	rm -rf .pytest_cache .mypy_cache .ruff_cache
@@ -143,6 +153,9 @@ require-base:
 
 require-scenario:
 	@test -n "$(SCENARIO)" || { echo "set SCENARIO=<scenario id glob>" >&2; exit 2; }
+
+require-docs:
+	@test -x "$(VENV)/bin/mkdocs" || { echo "install the documentation tools first: $(POETRY) install --with docs" >&2; exit 2; }
 
 require-pr:
 	@[[ "$(PR)" =~ ^[0-9]+$$ && "$(SHA)" =~ ^[0-9a-f]{40}$$ ]] || { echo "set PR=<number> SHA=<40-hex head commit>" >&2; exit 2; }

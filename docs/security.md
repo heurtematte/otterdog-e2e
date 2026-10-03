@@ -276,8 +276,9 @@ and janitor workflows run on (default `["free"]`); while it is unset, their sche
 
 What the workflows enforce (and `tests/unit/test_workflows_static.py` checks):
 
-- `permissions: {}` at the top of every workflow and `contents: read` per job; actions pinned to full commit shas;
-  `actions/checkout` with `persist-credentials: false` (the SUT must not find the `GITHUB_TOKEN` in `.git/config`);
+- `permissions: {}` at the top of every workflow and `contents: read` per job (except the GitHub Pages jobs of
+  `docs.yml`, below); actions pinned to full commit shas; `actions/checkout` with `persist-credentials: false` (the
+  SUT must not find the `GITHUB_TOKEN` in `.git/config`);
 - no `${{ }}` expression inside `run:` scripts: inputs and outputs reach scripts through `env:`, always quoted, and
   are validated in bash (`target` allowlist, suites allowlist, tag/glob/`-k` character sets, `pr` and `sha` regular
   expressions);
@@ -295,7 +296,12 @@ What the workflows enforce (and `tests/unit/test_workflows_static.py` checks):
   trusted one; the upstream mirror and tool venvs are rebuilt in every run;
 - `e2e-otterdog-pr.yml` is `workflow_dispatch` only (no `repository_dispatch`, no `pull_request_target`); its
   `resolve` job checks with the GitHub API that the PR targets eclipse-csi/otterdog and that the pinned sha is
-  reachable from the PR head.
+  reachable from the PR head;
+- `docs.yml` (the documentation site) uses no secret. Its build job runs for pull requests too, with `contents: read`
+  plus `pages: read` (`actions/configure-pages`, on main only), and installs MkDocs from `docs/requirements.txt`
+  (exact versions, `--require-hashes`, wheels only). Its deploy job, the only job of the repository allowed to write,
+  holds just `pages: write` and `id-token: write`, runs only on `main` (never for a pull request) in the
+  `github-pages` environment, and only publishes the artifact of the build job.
 
 What you must configure: the two environments per target with the protections above, the secrets and variables, a
 ruleset on `main` of this repository (pull request with review, no bypass), and GitHub-hosted runners only (never run
@@ -330,14 +336,14 @@ organization.
    the environments) so no new job gets secrets; suspend the GitHub App installation on the test organization
    (organization settings, GitHub Apps, Configure, Suspend), which also invalidates its installation tokens.
 2. **Rotate** every credential the run could see:
-   - each machine account's PATs (account settings, Developer settings, Personal access tokens: delete the old
-     token, create a new one with the same scopes) and the fine-grained `config_reader` token;
-   - the App private key (App settings, Private keys: generate a new key, then delete the old one) and the webhook
-     secret (App settings, Webhook secret);
-   - with the web-UI tier: the admin bot's password, its TOTP seed (remove the authenticator app from the account and
-     add it again: a new setup key) and its web sessions (account settings, Sessions: revoke them), then
-     `E2E_ADMIN_PASSWORD`/`E2E_ADMIN_TOTP_SEED` in `e2e-<target>-webui` and in the local env files;
-   - the CI environment secrets of both environments and your local env files.
+    - each machine account's PATs (account settings, Developer settings, Personal access tokens: delete the old
+      token, create a new one with the same scopes) and the fine-grained `config_reader` token;
+    - the App private key (App settings, Private keys: generate a new key, then delete the old one) and the webhook
+      secret (App settings, Webhook secret);
+    - with the web-UI tier: the admin bot's password, its TOTP seed (remove the authenticator app from the account and
+      add it again: a new setup key) and its web sessions (account settings, Sessions: revoke them), then
+      `E2E_ADMIN_PASSWORD`/`E2E_ADMIN_TOTP_SEED` in `e2e-<target>-webui` and in the local env files;
+    - the CI environment secrets of both environments and your local env files.
 3. **Inspect** the organization: its audit log (organization settings, Logs, Audit log), owners
    (`GET /orgs/{org}/members?role=admin`), outside collaborators, deploy keys and default-branch heads of the
    configs, defaults and fixture repositories, organization and repository webhooks not pointing to

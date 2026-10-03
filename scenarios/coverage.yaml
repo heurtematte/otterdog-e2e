@@ -1157,7 +1157,7 @@ features:
 
   - id: config.template-url
     area: config
-    title: "base_template URL 'https://github.com/<owner>/<repo>#<file>@<ref>': only github.com, ref mandatory (exit 2 at load)"
+    title: "base_template URL `https://github.com/<owner>/<repo>#<file>@<ref>`: only github.com, ref mandatory (exit 2 at load)"
     source: ["otterdog/utils.py:490-517", "otterdog/jsonnet.py:51-68"]
     operations: [config, error]
     min_plan: free

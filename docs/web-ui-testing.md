@@ -258,7 +258,7 @@ nightly at most; `run.json` (`web_ui`) records the logins and the time spent wai
   machine of the run, in `<E2E_CACHE_DIR>/webui/pending-restore-<org id>.json`; the next round trip on that machine
   restores them first. Otherwise restore them in the GitHub UI (Organization settings: Member privileges, Repository
   defaults, Packages, Discussions, Projects).
-* "web logins of <bot> are blocked until ...": sign in as the bot in a browser, fix the cause (password, seed, a
+* "web logins of &lt;bot&gt; are blocked until ...": sign in as the bot in a browser, fix the cause (password, seed, a
   pending verification), then delete `<E2E_CACHE_DIR>/webui/<login>.json` (or wait for the block to expire).
 * A locked-out bot: wait for GitHub's lockout to end; recovery codes or a password reset if needed; never retry in a
   loop.

@@ -330,7 +330,7 @@ Evidence: `otterdog/models/ruleset.py:128-136`, `otterdog/models/ruleset.py:57-6
 `otterdog/models/ruleset.py:451-458`, `otterdog/models/github_organization.py:84-85`,
 `otterdog/models/github_organization.py:226-227`, `otterdog/models/__init__.py:566`.
 
-#790 (9bdeb75) made `Ruleset.validate` call `StatusCheckSettings.validate`. That method builds its error with
+PR #790 (9bdeb75) made `Ruleset.validate` call `StatusCheckSettings.validate`. That method builds its error with
 `parent_object.get_model_header(parent_object)`. For an ORGANIZATION ruleset the parent is `GitHubOrganization`, a
 plain dataclass without `get_model_header` (only `ModelObject` has one). A missing `strict` or `status_checks`
 therefore crashes validation with AttributeError instead of producing an error. The CLI exits 2, and the webapp
@@ -835,10 +835,10 @@ Status: **confirmed** · Upstream: none · Scenarios: none
 Evidence: `otterdog/models/secret.py:56-61`, `otterdog/models/webhook.py:85-95`,
 `otterdog/webapp/tasks/validate_pull_request.py:157-181`, `otterdog/webapp/tasks/validate_pull_request.py:207-211`.
 
-A secret or webhook secret that does not use a credential provider produces the warning "has a value '<value>' that
-does not use a credential provider", which contains the value itself. The webapp renders the same validation output
-into the PR comment, which is public on a public config repository. The harness only allows dummy values (SPEC 5.8)
-and redacts every registered secret.
+A secret or webhook secret that does not use a credential provider produces the warning "has a value
+'&lt;value&gt;' that does not use a credential provider", which contains the value itself. The webapp renders the same
+validation output into the PR comment, which is public on a public config repository. The harness only allows dummy
+values (SPEC 5.8) and redacts every registered secret.
 
 #### Reproduction
 
@@ -995,7 +995,7 @@ Evidence: `otterdog/models/ruleset.py:57-65`, `otterdog/models/ruleset.py:240-24
 
 Coverage finding F-04. `PullRequestSettings.validate` and `MergeQueueSettings.validate` look for unset parameters by
 iterating `self.keys(False)`, but `keys()` skips unset keys by default (`exclude_unset_keys=True`). The error "has not
-set required parameter 'required_pull_request.<key>'" can therefore never print. `StatusCheckSettings.validate`
+set required parameter 'required_pull_request.&lt;key&gt;'" can therefore never print. `StatusCheckSettings.validate`
 iterates a fixed key list since #790 and works. The incomplete rule then reaches the apply. The pull request
 parameters carry `UNSET`, which `json.dumps` in the REST requester cannot serialize (TypeError). The merge queue
 mapping reads every key and raises jsonbender's BendingException. Neither is a RuntimeError, the only exception the
@@ -1516,7 +1516,7 @@ the optional `app` dependency group, so with the CLI alone the two commands die 
 anything else runs: `pip install otterdog` gives "No module named 'otterdog.webapp'", `poetry sync --only main` (the
 harness's host install) "No module named 'quart_flask_patch'". Only the development setup (`make init`, every group)
 and the webapp image can run them. The test asserts the documented refusal without `defaults.base_url` ("no base_url
-set which is required when using operation '<command>'", exit 2).
+set which is required when using operation '&lt;command&gt;'", exit 2).
 
 #### Reproduction
 
@@ -1601,8 +1601,8 @@ Status: **confirmed** · Upstream: none · Scenarios: `cli.kb.dispatch-workflow-
 Evidence: `otterdog/operations/dispatch_workflow.py:61-69`, `otterdog/providers/github/rest/repo_client.py:1361-1366`.
 
 `RepoClient.dispatch_workflow` returns False for any answer other than 204 (unknown workflow, a workflow without
-`workflow_dispatch`, missing permissions); the operation prints "failed to dispatch workflow '<wf>' for repo '<repo>'"
-and still returns 0. An unknown repository, by contrast, raises and exits 2.
+`workflow_dispatch`, missing permissions); the operation prints "failed to dispatch workflow '&lt;wf&gt;' for repo
+'&lt;repo&gt;'" and still returns 0. An unknown repository, by contrast, raises and exits 2.
 
 #### Reproduction
 
@@ -1671,7 +1671,7 @@ Status: **confirmed** · Upstream: none · Scenarios: `webui.kb.install-deps-exi
 Evidence: `otterdog/cli.py:953-969`.
 
 `install_deps` runs `<python> -m playwright install firefox`, prints "could not install required dependencies:
-<status>" for a non-zero status and returns normally, so the command exits 0 and a setup script goes on without a
+&lt;status&gt;" for a non-zero status and returns normally, so the command exits 0 and a setup script goes on without a
 browser; every later web-UI command then fails.
 
 #### Reproduction
@@ -1729,7 +1729,7 @@ Status: **confirmed** · Upstream: none · Scenarios: `cli.kb.fetch-config-ref-m
 Evidence: `otterdog/operations/fetch_config.py:80-91`, `otterdog/operations/fetch_config.py:104-109`.
 
 With `-r <ref>` the content of the ref is fetched, but the message only distinguishes pull requests from everything
-else: "organization definition fetched from default branch to '<file>'".
+else: "organization definition fetched from default branch to '&lt;file&gt;'".
 
 #### Reproduction
 

@@ -162,7 +162,7 @@ def test_nightly_web_job_is_optional_and_last() -> None:
     assert job["permissions"] == {"contents": "read"} and not secret_names(job) and "environment" not in job
 
 
-@pytest.mark.parametrize("name", ["e2e", "e2e-otterdog-pr", "janitor", "ci"])
+@pytest.mark.parametrize("name", ["e2e", "e2e-otterdog-pr", "janitor", "ci", "docs"])
 def test_other_workflows_never_get_web_credentials(name: str) -> None:
     """The web secrets exist only in the web-UI lane (never the trusted or untrusted e2e environments)."""
     assert not secret_names(workflow(name)) & WEB_SECRETS

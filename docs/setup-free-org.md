@@ -41,9 +41,9 @@ For every account:
 3. Do not enable SAML SSO or IP allow lists (see [setup-enterprise-org.md](setup-enterprise-org.md) for those).
 4. Note the exact-case login and the numeric id:
 
-   ```bash
-   curl -s https://api.github.com/orgs/<org> | jq '{login, id}'
-   ```
+    ```bash
+    curl -s https://api.github.com/orgs/<org> | jq '{login, id}'
+    ```
 
 ## 3. Tokens
 
@@ -115,7 +115,7 @@ The author and the approver must be **active and public** members, the outsider 
 
 1. Invite the author and the approver (organization People page, Invite member), or let `bootstrap --apply` invite
    them.
-2. Signed in as each of them, accept the invitation (https://github.com/orgs/<org>/invitation) and set the
+2. Signed in as each of them, accept the invitation (`https://github.com/orgs/<org>/invitation`) and set the
    membership visibility to public on the organization's People page.
 
 With their minimal scopes (`public_repo`, `read:org`: read-only access to memberships) the machine-account tokens are
@@ -167,11 +167,11 @@ them from the deliveries API and relays them to the webapp under test; nothing e
 2. The command exchanges the code and writes the private key, the webhook secret and an env snippet to
    `~/.config/otterdog-e2e/free/` (mode 0600). Append the snippet:
 
-   ```bash
-   cat ~/.config/otterdog-e2e/free/app-<id>.env >> ~/.config/otterdog-e2e/free.env
-   ```
+    ```bash
+    cat ~/.config/otterdog-e2e/free/app-<id>.env >> ~/.config/otterdog-e2e/free.env
+    ```
 
-3. Install the App on the organization for **All repositories** (https://github.com/apps/<slug>/installations/new).
+3. Install the App on the organization for **All repositories** (`https://github.com/apps/<slug>/installations/new`).
 4. Run `bootstrap --target free --apply` again: it writes `otterdog.json` and probes the deliveries.
 
 ## 9. Check and run
@@ -197,11 +197,11 @@ reachable through the UI ([web-ui-testing.md](web-ui-testing.md)). It is off unl
    the `otpauth://` URI) when you enroll it; keep TOTP the only 2FA method (no passkey, no security key, no SMS).
 2. Add the web login to `~/.config/otterdog-e2e/free.env`:
 
-   ```bash
-   E2E_ADMIN_PASSWORD='<password of the admin account>'
-   E2E_ADMIN_TOTP_SEED='<base32 setup key>'
-   # E2E_ADMIN_USERNAME=  only when the login form needs another username than E2E_ADMIN_LOGIN (e.g. the email)
-   ```
+    ```bash
+    E2E_ADMIN_PASSWORD='<password of the admin account>'
+    E2E_ADMIN_TOTP_SEED='<base32 setup key>'
+    # E2E_ADMIN_USERNAME=  only when the login form needs another username than E2E_ADMIN_LOGIN (e.g. the email)
+    ```
 
 3. `doctor --target free` checks the variables, the seed, the account's 2FA, the Playwright browser and the login
    gate (it never logs in). The first web session installs the Playwright Firefox into
@@ -220,37 +220,37 @@ To run the live lanes from GitHub Actions (`e2e.yml`, `nightly.yml`, `janitor.ym
    (deployment branches: `main` only, required reviewers, prevent self-review) in the repository settings.
 2. Add the secrets to both environments (values read from stdin, never from the command line):
 
-   ```bash
-   for env in e2e-free e2e-free-untrusted; do
-     gh secret set E2E_ADMIN_TOKEN --env "$env" < ~/secrets/e2e-admin.token
-     gh secret set E2E_AUTHOR_TOKEN --env "$env" < ~/secrets/e2e-author.token
-     gh secret set E2E_APPROVER_TOKEN --env "$env" < ~/secrets/e2e-approver.token
-     gh secret set E2E_OUTSIDER_TOKEN --env "$env" < ~/secrets/e2e-outsider.token
-     gh secret set E2E_CONFIG_READ_TOKEN --env "$env" < ~/secrets/e2e-reader.token
-     gh secret set E2E_APP_PRIVATE_KEY --env "$env" < ~/.config/otterdog-e2e/free/app-<id>.private-key.pem
-     gh secret set E2E_APP_WEBHOOK_SECRET --env "$env" < ~/.config/otterdog-e2e/free/app-<id>.webhook-secret
-   done
-   ```
+    ```bash
+    for env in e2e-free e2e-free-untrusted; do
+      gh secret set E2E_ADMIN_TOKEN --env "$env" < ~/secrets/e2e-admin.token
+      gh secret set E2E_AUTHOR_TOKEN --env "$env" < ~/secrets/e2e-author.token
+      gh secret set E2E_APPROVER_TOKEN --env "$env" < ~/secrets/e2e-approver.token
+      gh secret set E2E_OUTSIDER_TOKEN --env "$env" < ~/secrets/e2e-outsider.token
+      gh secret set E2E_CONFIG_READ_TOKEN --env "$env" < ~/secrets/e2e-reader.token
+      gh secret set E2E_APP_PRIVATE_KEY --env "$env" < ~/.config/otterdog-e2e/free/app-<id>.private-key.pem
+      gh secret set E2E_APP_WEBHOOK_SECRET --env "$env" < ~/.config/otterdog-e2e/free/app-<id>.webhook-secret
+    done
+    ```
 
 3. Add the non-secret variables to both environments:
 
-   ```bash
-   for env in e2e-free e2e-free-untrusted; do
-     gh variable set E2E_ORG --env "$env" --body my-otterdog-e2e-free
-     gh variable set E2E_ORG_ID --env "$env" --body 123456789
-     gh variable set E2E_ADMIN_LOGIN --env "$env" --body my-e2e-admin
-     gh variable set E2E_AUTHOR_LOGIN --env "$env" --body my-e2e-author
-     gh variable set E2E_APPROVER_LOGIN --env "$env" --body my-e2e-approver
-     gh variable set E2E_OUTSIDER_LOGIN --env "$env" --body my-e2e-outsider
-     gh variable set E2E_CONFIG_READER_LOGIN --env "$env" --body my-e2e-reader
-     gh variable set E2E_APP_ID --env "$env" --body <app id>
-     gh variable set E2E_APP_SLUG --env "$env" --body <app slug>
-   done
-   gh variable set E2E_TARGETS --body '["free"]'      # targets of the nightly and janitor workflows
-   ```
+    ```bash
+    for env in e2e-free e2e-free-untrusted; do
+      gh variable set E2E_ORG --env "$env" --body my-otterdog-e2e-free
+      gh variable set E2E_ORG_ID --env "$env" --body 123456789
+      gh variable set E2E_ADMIN_LOGIN --env "$env" --body my-e2e-admin
+      gh variable set E2E_AUTHOR_LOGIN --env "$env" --body my-e2e-author
+      gh variable set E2E_APPROVER_LOGIN --env "$env" --body my-e2e-approver
+      gh variable set E2E_OUTSIDER_LOGIN --env "$env" --body my-e2e-outsider
+      gh variable set E2E_CONFIG_READER_LOGIN --env "$env" --body my-e2e-reader
+      gh variable set E2E_APP_ID --env "$env" --body <app id>
+      gh variable set E2E_APP_SLUG --env "$env" --body <app slug>
+    done
+    gh variable set E2E_TARGETS --body '["free"]'      # targets of the nightly and janitor workflows
+    ```
 
-   Until `E2E_TARGETS` is set, the scheduled nightly and janitor runs are skipped (manual `workflow_dispatch` runs
-   still work), so the repository stays quiet before the test org is configured.
+    Until `E2E_TARGETS` is set, the scheduled nightly and janitor runs are skipped (manual `workflow_dispatch` runs
+    still work), so the repository stays quiet before the test org is configured.
 
 4. Protect `main` with a ruleset (pull request with review, no bypass): environment secrets are only reachable from
    `main`.
@@ -258,15 +258,15 @@ To run the live lanes from GitHub Actions (`e2e.yml`, `nightly.yml`, `janitor.ym
 6. Optional web-UI lane: create a third environment `e2e-free-webui` (deployment branches: `main` only), the ONLY one
    holding the admin account's web login, with `E2E_ADMIN_TOKEN` and the same variables as `e2e-free`:
 
-   ```bash
-   gh secret set E2E_ADMIN_TOKEN --env e2e-free-webui < ~/secrets/e2e-admin.token
-   gh secret set E2E_ADMIN_PASSWORD --env e2e-free-webui < ~/secrets/e2e-admin.password
-   gh secret set E2E_ADMIN_TOTP_SEED --env e2e-free-webui < ~/secrets/e2e-admin.totp-seed
-   gh variable set E2E_WEB_UI_ENABLED --body true          # nightly webui job
-   gh variable set E2E_WEB_UI_TARGETS --body '["free"]'
-   gh workflow run e2e-webui.yml -f target=free -f sut=release:latest
-   ```
+    ```bash
+    gh secret set E2E_ADMIN_TOKEN --env e2e-free-webui < ~/secrets/e2e-admin.token
+    gh secret set E2E_ADMIN_PASSWORD --env e2e-free-webui < ~/secrets/e2e-admin.password
+    gh secret set E2E_ADMIN_TOTP_SEED --env e2e-free-webui < ~/secrets/e2e-admin.totp-seed
+    gh variable set E2E_WEB_UI_ENABLED --body true          # nightly webui job
+    gh variable set E2E_WEB_UI_TARGETS --body '["free"]'
+    gh workflow run e2e-webui.yml -f target=free -f sut=release:latest
+    ```
 
-   Never add the password or the seed to `e2e-free` or `e2e-free-untrusted`.
+    Never add the password or the seed to `e2e-free` or `e2e-free-untrusted`.
 
 The full list of variables and the protections are in [security.md](security.md#ci-environments).

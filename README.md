@@ -1,5 +1,13 @@
 # otterdog-e2e
 
+<!-- github-only -->
+
+[![docs](https://github.com/heurtematte/otterdog-e2e/actions/workflows/docs.yml/badge.svg?branch=main)](https://github.com/heurtematte/otterdog-e2e/actions/workflows/docs.yml)
+
+Documentation: https://heurtematte.github.io/otterdog-e2e/
+
+<!-- /github-only -->
+
 End-to-end test harness for [otterdog](https://github.com/eclipse-csi/otterdog), the GitOps tool that manages GitHub
 organizations as code. It covers the three faces of otterdog:
 
@@ -92,7 +100,7 @@ when the two diverge. After editing the YAML, regenerate the page:
 .venv/bin/python tests/unit/test_coverage_matrix.py --write   # rewrites docs/coverage-matrix.md, prints the coverage per area
 ```
 
-At otterdog main 9bdeb75 the matrix lists 337 features: 310 covered, 22 partial and 5 gaps (92% covered, 95% when a
+At otterdog main 9bdeb75 the matrix lists 337 features: 300 covered, 32 partial and 5 gaps (89% covered, 94% when a
 partial feature counts half); 139 are covered by offline items, the only tier run against real SUTs so far. The battery
 behind it has 137 YAML scenarios (59 offline, 64 cli, 7 regressions, 7 enterprise) and 218 Python test functions (75
 offline, 58 cli, 5 webhooks, 64 webapp, 11 web-UI, 1 enterprise, 4 differential); the offline tier runs 356 items in
@@ -199,11 +207,15 @@ scratch directory below `E2E_CACHE_DIR`, which is deleted at session end (unless
 | `e2e-webui.yml` | dispatch, reusable | the web-UI tier of a trusted SUT on a target, in the `e2e-<target>-webui` environment (the only one holding the bot's password and TOTP seed) |
 | `nightly.yml` | schedule | per enabled target: `release:latest`, then `branch:main` with a differential against `release:latest`; the web-UI lane when `E2E_WEB_UI_ENABLED` is `true` |
 | `janitor.yml` | every 6 hours | sweeps leftovers of old runs on every enabled target |
+| `docs.yml` | push to main and pull requests changing the documentation, dispatch | strict MkDocs build of the documentation site; on main, deploys it to GitHub Pages (no secrets) |
 
 The required repository setup (environments, variables, secrets) is described in
 [docs/security.md](docs/security.md#ci-environments) and [docs/setup-free-org.md](docs/setup-free-org.md#ci).
 
 ## Documentation
+
+The documentation is published at https://heurtematte.github.io/otterdog-e2e/ (MkDocs, built and deployed by
+`docs.yml`; `make docs` builds it locally, see [local-development.md](docs/local-development.md#documentation-site)).
 
 | Document | Content |
 |---|---|

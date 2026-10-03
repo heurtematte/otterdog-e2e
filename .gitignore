@@ -12,6 +12,8 @@ secrets/
 # run artifacts (redacted text only, but still per-run data) and any local harness cache
 artifacts/
 .cache/
+# the documentation site built by `make docs` (MkDocs)
+site/
 
 # --- Python tooling ---
 .venv/

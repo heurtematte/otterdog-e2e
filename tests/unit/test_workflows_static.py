@@ -5,6 +5,10 @@ asserted directly (empty top-level permissions, read-only jobs, pinned actions, 
 expressions inside ``run:``, secrets only on harness steps, scrub before upload, environments and concurrency for
 jobs holding secrets). Commands and options used in workflows and in the Makefile are checked against the real
 ``otterdog-e2e`` click application, and the variables of targets/*.yaml against the workflows and .env.example.
+
+docs.yml (the documentation site on GitHub Pages) follows the same rules, with the two exceptions a Pages deployment
+needs: its deploy job, the only job of the repository writing anything, holds ``pages: write`` and ``id-token: write``
+and runs in the ``github-pages`` environment (without secrets); its build job may read the Pages settings.
 """
 
 from __future__ import annotations
@@ -26,13 +30,22 @@ from otterdog_e2e.redact import SECRET_KEY_RE
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS_DIR = ROOT / ".github" / "workflows"
-WORKFLOW_NAMES = ("ci", "e2e", "e2e-otterdog-pr", "nightly", "janitor")
+WORKFLOW_NAMES = ("ci", "e2e", "e2e-otterdog-pr", "nightly", "janitor", "docs")
+# checked by tests/unit/test_webui_workflow.py
+OTHER_WORKFLOWS = ("e2e-webui",)
 # SPEC 17 pins (other actions must be pinned to a full commit sha as well)
 SPEC_PINS = {
     "actions/checkout": ("3d3c42e5aac5ba805825da76410c181273ba90b1", "v7.0.1"),
     "actions/setup-python": ("5fda3b95a4ea91299a34e894583c3862153e4b97", "v7.0.0"),
     "actions/upload-artifact": ("043fb46d1a93c77aae656e7c1c64a875d1fc6a0a", "v7.0.1"),
 }
+# the GitHub Pages actions of docs.yml
+PAGES_PINS = {
+    "actions/configure-pages": ("45bfe0192ca1faeb007ade9deae92b16b8254a0d", "v6.0.0"),
+    "actions/upload-pages-artifact": ("fc324d3547104276b827a68afc52ff2a11cc49c9", "v5.0.0"),
+    "actions/deploy-pages": ("368f82528645a54fb793d4d04e342629a3f51346", "v5.0.1"),
+}
+PINS = {**SPEC_PINS, **PAGES_PINS}
 PINNED_ACTION_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+@[0-9a-f]{40}$")
 LOCAL_WORKFLOW_RE = re.compile(r"^\./\.github/workflows/[a-z0-9-]+\.yml$")
 EXPRESSION_RE = re.compile(r"\$\{\{")
@@ -55,6 +68,14 @@ E2E_ENVIRONMENT = (
     "${{ needs.classify.outputs.trust == 'trusted' && format('e2e-{0}', inputs.target) "
     "|| format('e2e-{0}-untrusted', inputs.target) }}"
 )
+# jobs whose permissions are not exactly {contents: read}: the GitHub Pages build and deployment of the documentation
+JOB_PERMISSIONS = {
+    ("docs", "build"): {"contents": "read", "pages": "read"},
+    ("docs", "deploy"): {"pages": "write", "id-token": "write"},
+}
+PAGES_ENVIRONMENT = {"name": "github-pages", "url": "${{ steps.deployment.outputs.page_url }}"}
+DEPLOY_CONDITION = "github.event_name != 'pull_request' && github.ref == 'refs/heads/main'"
+DOCS_PATHS = ["docs/**", "README.md", "mkdocs.yml", "docs_hooks.py", ".github/workflows/docs.yml"]
 MAKE_TARGETS = (
     "help",
     "init",
@@ -70,6 +91,8 @@ MAKE_TARGETS = (
     "janitor",
     "report",
     "cache-prune",
+    "docs",
+    "docs-serve",
 )
 GITIGNORE_PATTERNS = (
     ".env.e2e*",
@@ -82,6 +105,7 @@ GITIGNORE_PATTERNS = (
     ".pytest_cache/",
     ".mypy_cache/",
     ".ruff_cache/",
+    "site/",
 )
 
 
@@ -205,9 +229,10 @@ def harness_lines(script: str) -> list[str]:
 
 # --- files -----------------------------------------------------------------------------------------------------------
 def test_workflow_files_exist_and_parse() -> None:
-    """The five workflows of SPEC 17 exist and are YAML mappings with a name, triggers and jobs."""
+    """The workflows of SPEC 17 and docs.yml exist and are YAML mappings with a name, triggers and jobs; every workflow
+    file is checked (here or in tests/unit/test_webui_workflow.py)."""
     present = {path.stem for path in WORKFLOWS_DIR.glob("*.yml")}
-    assert set(WORKFLOW_NAMES) <= present
+    assert present == {*WORKFLOW_NAMES, *OTHER_WORKFLOWS}, "check a new workflow in this module"
     assert not list(WORKFLOWS_DIR.glob("*.yaml")), "use the .yml extension"
     for name in WORKFLOW_NAMES:
         data = workflow(name)
@@ -225,9 +250,11 @@ def test_top_level_permissions_are_empty(name: str) -> None:
 
 @pytest.mark.parametrize("name", WORKFLOW_NAMES)
 def test_every_job_only_reads_contents(name: str) -> None:
-    """Each job (reusable workflow calls included) grants exactly ``contents: read``."""
+    """Each job (reusable workflow calls included) grants exactly ``contents: read``, except the GitHub Pages jobs of
+    docs.yml (JOB_PERMISSIONS)."""
     for job_id, job in jobs(name).items():
-        assert job.get("permissions") == {"contents": "read"}, f"{name}.{job_id}"
+        expected = JOB_PERMISSIONS.get((name, job_id), {"contents": "read"})
+        assert job.get("permissions") == expected, f"{name}.{job_id}"
 
 
 def test_checkouts_do_not_persist_credentials() -> None:
@@ -246,8 +273,8 @@ def test_actions_are_pinned_to_full_commit_shas() -> None:
             continue
         assert PINNED_ACTION_RE.match(uses), f"{name}.{job_id} step {index}: {uses!r} is not pinned to a sha"
         action, sha = uses.split("@", 1)
-        if action in SPEC_PINS:
-            assert sha == SPEC_PINS[action][0], f"{name}.{job_id} step {index}: {uses!r} is not the SPEC pin"
+        if action in PINS:
+            assert sha == PINS[action][0], f"{name}.{job_id} step {index}: {uses!r} is not the expected pin"
     for name in WORKFLOW_NAMES:
         for job_id, job in jobs(name).items():
             if "uses" in job:
@@ -256,11 +283,11 @@ def test_actions_are_pinned_to_full_commit_shas() -> None:
 
 @pytest.mark.parametrize("name", WORKFLOW_NAMES)
 def test_pins_carry_their_version_comment(name: str) -> None:
-    """Pinned SPEC actions keep a ``# vX.Y.Z`` comment so updates stay reviewable."""
+    """Pinned SPEC and Pages actions keep a ``# vX.Y.Z`` comment so updates stay reviewable."""
     for line in workflow_text(name).splitlines():
         match = re.search(r"uses:\s*([^@\s]+)@([0-9a-f]{40})(.*)$", line)
-        if match and match.group(1) in SPEC_PINS:
-            assert match.group(3).strip() == f"# {SPEC_PINS[match.group(1)][1]}", line.strip()
+        if match and match.group(1) in PINS:
+            assert match.group(3).strip() == f"# {PINS[match.group(1)][1]}", line.strip()
 
 
 # --- scripts ---------------------------------------------------------------------------------------------------------
@@ -362,6 +389,9 @@ def test_jobs_with_secrets_declare_environment_and_concurrency() -> None:
     for name in WORKFLOW_NAMES:
         for job_id, job in jobs(name).items():
             if not uses_secrets(job):
+                if (name, job_id) == ("docs", "deploy"):
+                    assert job["environment"] == PAGES_ENVIRONMENT, "the Pages deployment environment"
+                    continue
                 assert "environment" not in job, f"{name}.{job_id}: environment without secrets"
                 continue
             holders.append(f"{name}.{job_id}")
@@ -515,6 +545,61 @@ def test_janitor_workflow_contract() -> None:
     assert job["concurrency"]["group"] == "e2e-${{ matrix.target }}"
     _, step = step_by_id(job, "janitor")
     assert set(secret_names(step.get("env"))) == {"E2E_ADMIN_TOKEN"}
+
+
+def test_docs_workflow_contract() -> None:
+    """docs.yml: build (strict, pinned hash-checked packages) on pull requests and main, deploy from main only."""
+    on = triggers(workflow("docs"))
+    assert set(on) == {"push", "pull_request", "workflow_dispatch"}, "no pull_request_target"
+    assert on["push"]["branches"] == ["main"]
+    assert on["push"]["paths"] == on["pull_request"]["paths"] == DOCS_PATHS
+    assert "secrets." not in workflow_text("docs")
+    assert set(jobs("docs")) == {"build", "deploy"}
+    build, deploy = jobs("docs")["build"], jobs("docs")["deploy"]
+    assert "environment" not in build and "if" not in build, "pull requests build the site too"
+    concurrency = workflow("docs")["concurrency"]
+    assert "'refs/heads/main' && 'pages'" in concurrency["group"], "runs of main share the group pages"
+    assert concurrency["cancel-in-progress"] is False, "never cancel a deployment"
+
+    kinds = [str(step["uses"]).split("@")[0] if "uses" in step else "run" for step in steps(build)]
+    assert kinds == [
+        "actions/checkout",
+        "actions/setup-python",
+        "run",
+        "run",
+        "actions/configure-pages",
+        "actions/upload-pages-artifact",
+    ]
+    assert steps(build)[1]["with"] == {"python-version": "3.12"}, "no setup-python cache"
+    install, run = steps(build)[2]["run"], steps(build)[3]["run"]
+    assert "--require-hashes" in install and "--only-binary=:all:" in install and "-r docs/requirements.txt" in install
+    assert run == "mkdocs build --strict"
+    configure, upload = steps(build)[4], steps(build)[5]
+    assert configure["uses"].startswith("actions/configure-pages@")
+    assert upload["uses"].startswith("actions/upload-pages-artifact@") and upload["with"] == {"path": "site/"}
+    assert configure["if"] == upload["if"] == DEPLOY_CONDITION, "pull requests never upload a site"
+
+    assert deploy["needs"] == "build"
+    assert deploy["if"] == DEPLOY_CONDITION, "deploy from main only, never from a pull request"
+    assert deploy["environment"] == PAGES_ENVIRONMENT
+    assert [step["uses"].split("@")[0] for step in steps(deploy)] == ["actions/deploy-pages"]
+    assert steps(deploy)[0]["id"] == "deployment"
+
+
+def test_only_the_pages_deployment_writes() -> None:
+    """``pages: write`` and ``id-token: write`` are granted to the deploy job of docs.yml and nowhere else."""
+    for name in (*WORKFLOW_NAMES, *OTHER_WORKFLOWS):
+        data = workflow(name)
+        for scope, permissions in [
+            ("workflow", data.get("permissions")),
+            *[(job_id, job.get("permissions")) for job_id, job in jobs(name).items()],
+        ]:
+            if isinstance(permissions, str):  # read-all or write-all
+                writes = {permissions} if permissions == "write-all" else set()
+            else:
+                writes = {key for key, value in (permissions or {}).items() if value == "write"}
+            expected = {"pages", "id-token"} if (name, scope) == ("docs", "deploy") else set()
+            assert writes == expected, f"{name}.{scope}: {permissions}"
 
 
 # --- Makefile and hygiene files ---------------------------------------------------------------------------------------

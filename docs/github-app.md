@@ -56,20 +56,22 @@ marker), and you have a browser session as an organization owner (the admin mach
    listener accepts only the `state` it generated, and never logs the request (it carries the code).
 3. The command exchanges the code (`POST /app-manifests/<code>/conversions`, valid one hour) and writes, with mode
    0600 in `~/.config/otterdog-e2e/<target>/` (mode 0700):
-   - `app-<id>.private-key.pem`,
-   - `app-<id>.webhook-secret`,
-   - `app-<id>.env`: `E2E_APP_ID`, `E2E_APP_SLUG`, `E2E_APP_PRIVATE_KEY_FILE`, `E2E_APP_WEBHOOK_SECRET`.
+    - `app-<id>.private-key.pem`,
+    - `app-<id>.webhook-secret`,
+    - `app-<id>.env`: `E2E_APP_ID`, `E2E_APP_SLUG`, `E2E_APP_PRIVATE_KEY_FILE`, `E2E_APP_WEBHOOK_SECRET`.
 
-   The OAuth client id and secret of the conversion answer are discarded; nothing secret is printed.
+    The OAuth client id and secret of the conversion answer are discarded; nothing secret is printed.
+
 4. Append the env snippet and install the App:
 
-   ```bash
-   cat ~/.config/otterdog-e2e/free/app-<id>.env >> ~/.config/otterdog-e2e/free.env
-   ```
+    ```bash
+    cat ~/.config/otterdog-e2e/free/app-<id>.env >> ~/.config/otterdog-e2e/free.env
+    ```
 
-   Install it on the organization with **All repositories** (https://github.com/apps/<slug>/installations/new):
-   the harness creates repositories during the run, and an installation limited to selected repositories is
-   refused.
+    Install it on the organization with **All repositories** (`https://github.com/apps/<slug>/installations/new`):
+    the harness creates repositories during the run, and an installation limited to selected repositories is
+    refused.
+
 5. Run `bootstrap --target free --apply` again: it writes the webapp's `otterdog.json` to the configs repository and
    probes the deliveries.
 

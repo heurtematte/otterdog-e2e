@@ -42,12 +42,13 @@ $EDITOR ~/.config/otterdog-e2e/enterprise.env      # E2E_ORG, E2E_ORG_ID, identi
   in `E2E_ALLOWED_ORG_IDS` of **both** env files; otherwise the isolation check fails.
 - Capability overrides (`github.capabilities` in the target file) adjust what the plan matrix grants. For a trial:
 
-  ```yaml
-  capabilities: {add: [ghas_private], remove: [larger_runners]}
-  ```
+    ```yaml
+    capabilities: {add: [ghas_private], remove: [larger_runners]}
+    ```
 
-  `ghas_private` is never probed: add it only when Code Security / Secret Protection covers private repositories.
-  See [capability-matrix.md](capability-matrix.md).
+    `ghas_private` is never probed: add it only when Code Security / Secret Protection covers private repositories.
+    See [capability-matrix.md](capability-matrix.md).
+
 - One GitHub App per test organization: create a second App with
   `app-manifest --target enterprise --webhook-url ...` (the credentials go to `~/.config/otterdog-e2e/enterprise/`).
 

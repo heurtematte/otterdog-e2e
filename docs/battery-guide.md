@@ -26,13 +26,13 @@ outlines as the YAML.
 4. **Write it** following the conventions (section 2), with dummy secrets and run-prefixed names only.
 5. **Run it alone**, offline first, then live:
 
-   ```bash
-   make one SCENARIO=O-VAL-ORGVAR                         # an offline scenario (no GitHub)
-   make lint-scenarios                                    # every live scenario step validated offline
-   make one SCENARIO=cli.org.workflow-permissions TARGET=free
-   .venv/bin/otterdog-e2e run --target free --suite webapp -k test_draft_pr   # a Python test of a tier
-   make report                                            # summary.md of the newest run
-   ```
+    ```bash
+    make one SCENARIO=O-VAL-ORGVAR                         # an offline scenario (no GitHub)
+    make lint-scenarios                                    # every live scenario step validated offline
+    make one SCENARIO=cli.org.workflow-permissions TARGET=free
+    .venv/bin/otterdog-e2e run --target free --suite webapp -k test_draft_pr   # a Python test of a tier
+    make report                                            # summary.md of the newest run
+    ```
 
 6. **Update the coverage matrix** (section 7) and run `make check` and `make offline`.
 7. **Submit** with the checklist of section 9.
@@ -501,7 +501,7 @@ Needs of these outlines: the App permissions and events listed in the gap outlin
   `open_pull_requests`, `merged_pull_requests`, `blueprint_remediations`, `dismissed_blueprints`, `scorecard_results`,
   `graphql`, `statistics_progress`), `/internal` (`init`, `check`, `health`), and the pages the API does not expose
   (`installations()` of /admin/organizations, `policy_status()` of /admin/policies, `blueprint_statuses(project, id)`
-  of /projects/<project>, `deployed_version()`);
+  of /projects/&lt;project&gt;, `deployed_version()`);
 - offline boot and route checks with dummy credentials belong to `tests/offline/test_webapp_contract.py` (no App).
 
 ### 3.12 Web UI
