@@ -1,0 +1,69 @@
+# Offline tier (battery, plan semantics): dict fields diff one way (KB-005).
+id: O-LPLAN-DICT-ONE-WAY
+tier: offline
+title: Removing a team_permissions or custom_properties entry is only planned with another change
+description: >-
+  Dict fields (repository team_permissions and custom_properties) are compared one way: only the keys of the new
+  configuration are looked at, so removing an entry alone plans nothing (KB-005, expected failures of their own
+  steps). Once another key of the same dict changes, the whole dict is diffed and the removed key is printed
+  ('- key = value') and sent (custom properties as null); an added key is always planned.
+priority: P1
+tags: [offline, repo, custom-properties]
+observe: true
+variables: {plan: free}
+steps:
+  - name: team-permission-removed
+    known_bug: KB-005
+    base_fragments:
+      repositories: ["orgs.newRepo('{{ p }}-dict') { team_permissions: { '{{ p }}-a': 'push', '{{ p }}-b': 'pull' } }"]
+    fragments:
+      repositories: ["orgs.newRepo('{{ p }}-dict') { team_permissions: { '{{ p }}-a': 'push' } }"]
+    plan:
+      expect: changes
+      counts: {add: 0, change: 1, delete: 0}
+      contains: ['~ repository[name="{{ p }}-dict"] {', '- {{ p }}-b']
+  - name: team-permission-removed-with-change
+    base_fragments:
+      repositories: ["orgs.newRepo('{{ p }}-dict') { team_permissions: { '{{ p }}-a': 'push', '{{ p }}-b': 'pull' } }"]
+    fragments:
+      repositories: ["orgs.newRepo('{{ p }}-dict') { team_permissions: { '{{ p }}-a': 'maintain' } }"]
+    plan:
+      expect: changes
+      counts: {add: 0, change: 1, delete: 0}
+      contains:
+        - '~ team_permissions = {'
+        - '~ {{ p }}-a'
+        - '"push" -> "maintain"'
+        - '- {{ p }}-b'
+        - '"pull"'
+  - name: team-permission-added
+    base_fragments:
+      repositories: ["orgs.newRepo('{{ p }}-dict') { team_permissions: { '{{ p }}-a': 'push' } }"]
+    fragments:
+      repositories: ["orgs.newRepo('{{ p }}-dict') { team_permissions: { '{{ p }}-a': 'push', '{{ p }}-b': 'triage' } }"]
+    plan:
+      expect: changes
+      counts: {add: 0, change: 1, delete: 0}
+      contains: ['~ team_permissions = {', '+ {{ p }}-b', '"triage"']
+      not_contains: ['~ {{ p }}-a']
+  - name: custom-property-removed
+    known_bug: KB-005
+    base_fragments: &properties
+      custom_properties: ["orgs.newCustomProperty('{{ p }}-p1')", "orgs.newCustomProperty('{{ p }}-p2')"]
+      repositories: ["orgs.newRepo('{{ p }}-dict') { custom_properties: { '{{ p }}-p1': 'x', '{{ p }}-p2': 'y' } }"]
+    fragments:
+      custom_properties: ["orgs.newCustomProperty('{{ p }}-p1')", "orgs.newCustomProperty('{{ p }}-p2')"]
+      repositories: ["orgs.newRepo('{{ p }}-dict') { custom_properties: { '{{ p }}-p1': 'x' } }"]
+    plan:
+      expect: changes
+      counts: {add: 0, change: 1, delete: 0}
+      contains: ['~ repository[name="{{ p }}-dict"] {', '- {{ p }}-p2']
+  - name: custom-property-removed-with-change
+    base_fragments: *properties
+    fragments:
+      custom_properties: ["orgs.newCustomProperty('{{ p }}-p1')", "orgs.newCustomProperty('{{ p }}-p2')"]
+      repositories: ["orgs.newRepo('{{ p }}-dict') { custom_properties: { '{{ p }}-p1': 'z' } }"]
+    plan:
+      expect: changes
+      counts: {add: 0, change: 1, delete: 0}
+      contains: ['~ custom_properties', '~ {{ p }}-p1', '"x" -> "z"', '- {{ p }}-p2', '"y"']

@@ -1,0 +1,76 @@
+# Regression #779 (f055d51, after v1.6.1): individual users as ruleset bypass actors.
+id: regression.779-user-bypass-actors
+title: "#779: an individual user ('@login') as a ruleset bypass actor"
+description: |
+  PR https://github.com/eclipse-csi/otterdog/pull/779 ("feat: support individual users as ruleset bypass actors"):
+  '@<login>' (no '/') in bypass_actors is now a User actor, its id resolved with GET /users/{login}
+  (models/ruleset.py:655-662), and a live User actor is read back as '@<login>' through GET /user/{id}
+  (models/ruleset.py:548-553, GitHubOrganization._enrich_user_bypass_actors). '@<org>/<team>' stays a Team.
+  Known-bad: v1.6.1 (f055d51^ and earlier) - every '@...' actor was treated as a team: the apply crashed in
+  TeamClient.get_team_ids, which splits '<org>/<team>' ("not enough values to unpack" for a login), and a live User
+  actor was dropped on read (actor types other than roles, teams and apps were skipped). The admin identity (an
+  organization owner) is the bypass actor of a ruleset on the default branch of a public run repository, first in
+  the default mode, then for pull requests only; the oracle sees a User actor and both steps converge, which shows
+  the '@<login>' read-back.
+  Not released yet: f055d51 is otterdog 1.7.0.dev7 (v1.6.1 + 7 commits), so fixed_in skips the scenario on older SUTs
+  such as release:latest (ScenarioEngine.skip_reason).
+priority: P2
+min_plan: free
+fixed_in: "1.7.0.dev7"
+tags: [rulesets, repo, regression, pr-779]
+steps:
+  - name: user-actor
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-r779') {
+            description: "otterdog e2e: #779 user bypass actor",
+            rulesets: [
+              orgs.newRepoRuleset('{{ p }}-r779') {
+                include_refs+: ["~DEFAULT_BRANCH"],
+                bypass_actors: ["@{{ logins.admin }}"],
+                required_status_checks: null,
+              },
+            ],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '+ add repo_ruleset[name="{{ p }}-r779", repository={{ p }}-r779]'
+      counts: {add: 2, change: 0, delete: 0}
+    apply:
+      expect: ok
+      not_contains:
+        - "not enough values to unpack"
+    state:
+      - kind: repo_ruleset
+        repo: "{{ p }}-r779"
+        name: "{{ p }}-r779"
+        match:
+          bypass_actors: [{actor_type: User, actor_id: {$exists: true}, bypass_mode: always}]
+
+  - name: pull-request-mode
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-r779') {
+            description: "otterdog e2e: #779 user bypass actor",
+            rulesets: [
+              orgs.newRepoRuleset('{{ p }}-r779') {
+                include_refs+: ["~DEFAULT_BRANCH"],
+                bypass_actors: ["@{{ logins.admin }}:pull_request"],
+                required_status_checks: null,
+              },
+            ],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ repo_ruleset[name="{{ p }}-r779", repository={{ p }}-r779]'
+      counts: {add: 0, change: 1, delete: 0}
+    state:
+      - kind: repo_ruleset
+        repo: "{{ p }}-r779"
+        name: "{{ p }}-r779"
+        match:
+          bypass_actors: [{actor_type: User, bypass_mode: pull_request}]

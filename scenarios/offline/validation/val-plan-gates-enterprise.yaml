@@ -1,0 +1,55 @@
+# Offline tier (battery, validation): every plan-gated feature on the enterprise plan.
+id: O-VAL-PLAN-GATES-ENTERPRISE
+tier: offline
+title: The enterprise plan accepts every plan-gated feature
+description: >-
+  The objects refused by O-VAL-PLAN-GATES on the free plan (organization roles and rulesets, ruleset enforcement
+  'evaluate', members_can_create_private_pages, a private organization secret, a private repository with a wiki)
+  validate without any notice once settings.plan is 'enterprise', and local-plan plans them: the gates read the
+  configured plan and nothing else, so an enterprise organization never loses these objects to a stale gate.
+priority: P1
+tags: [offline, org-roles, rulesets, org-settings, repo, secrets]
+observe: true
+variables: {plan: enterprise}
+steps:
+  - name: enterprise-features
+    base_fragments: {}
+    fragments:
+      settings: ["members_can_create_private_pages: true"]
+      roles:
+        - "orgs.newOrgRole('{{ p }}-role') { base_role: 'read' }"
+      rulesets:
+        - "orgs.newOrgRuleset('{{ p }}-org-rs') { include_refs+: ['~DEFAULT_BRANCH'], include_repo_names+: ['~ALL'] }"
+      secrets:
+        - "orgs.newOrgSecret('{{ P }}_PRIV') { value: 'pass:e2e/private', visibility: 'private' }"
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-priv') {
+            private: true,
+            allow_forking: false,
+            has_wiki: true,
+            rulesets: [
+              orgs.newRepoRuleset('{{ p }}-eval') { enforcement: 'evaluate', include_refs+: ['~DEFAULT_BRANCH'] },
+            ],
+          }
+    validate:
+      ok: true
+      errors: 0
+      exit_code: 0
+      contains: ["Validation succeeded"]
+      not_contains:
+        - "Warning:"
+        - "requires an 'enterprise' plan"
+        - "only available for an 'enterprise' plan"
+        - "requires at least GitHub Team billing"
+    plan:
+      expect: changes
+      counts: {add: 5, change: 1, delete: 0}
+      contains:
+        - '~ members_can_create_private_pages = false -> true'
+        - '+ add org_role[name="{{ p }}-role"]'
+        - '+ add org_ruleset[name="{{ p }}-org-rs"]'
+        - '+ add org_secret[name="{{ P }}_PRIV"]'
+        - '+ add repository[name="{{ p }}-priv"]'
+        - '+ add repo_ruleset[name="{{ p }}-eval", repository={{ p }}-priv]'
+        - '= "evaluate"'

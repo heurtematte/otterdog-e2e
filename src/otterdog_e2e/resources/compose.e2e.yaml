@@ -1,0 +1,135 @@
+# otterdog-e2e webapp stack (SPEC 13.1), started by otterdog_e2e.webapp.stack.WebappStack with
+#   docker compose -p otterdog-e2e-<run_id> -f compose.e2e.yaml up -d --wait   (always followed by `down -v --remove-orphans`)
+#
+# Every value comes from the environment of the `docker compose` process (never from an env_file). WebappStack passes
+# exactly the variables of webapp.stack.COMPOSE_VARIABLES:
+#   required  E2E_WEBAPP_IMAGE E2E_HYPERCORN_CFG E2E_GITHUB_APP_KEY_FILE E2E_BASE_URL E2E_CONFIG_OWNER E2E_CONFIG_TOKEN
+#             E2E_GITHUB_APP_ID E2E_WEBHOOK_SECRET E2E_SECRET_KEY
+#   optional  E2E_WEBAPP_PORT (5000) E2E_WEBAPP_PULL_POLICY (never) E2E_CONFIGS_REPO (otterdog-e2e-configs)
+#             E2E_VALIDATION_CONTEXT E2E_SYNC_CONTEXT E2E_ADMIN_TEAMS E2E_APPROVAL_TEAMS
+#             E2E_DEPENDENCY_TRACK_URL (http://127.0.0.1:9: nothing listens) E2E_DTRACK_MOCK_IMAGE E2E_DTRACK_MOCK_STATUS
+#
+# Profile `dtrack` (WebappSettings.dtrack_mock / WebappStack.enable_dtrack_mock): the Dependency-Track mock
+# resources/dtrack_mock.py (written next to this file) answers PUT /api/v1/bom and records the requests; the webapp then
+# gets E2E_DEPENDENCY_TRACK_URL=http://dtrack-mock:8080. Environment overrides of the webapp (restart_webapp) come from
+# a generated compose.override.yaml whose values are again variables of the compose process.
+#
+# Safety (SEC-13): only the webapp and the dtrack mock (dummy data only) are published, on 127.0.0.1; mongodb and redis
+# (which holds installation tokens) are never published. Never write `docker compose config` or `docker inspect` output
+# to artifacts: both inline secrets.
+name: otterdog-e2e
+
+services:
+  webapp:
+    image: ${E2E_WEBAPP_IMAGE:?set E2E_WEBAPP_IMAGE}
+    pull_policy: ${E2E_WEBAPP_PULL_POLICY:-never}
+    environment:
+      DEBUG: "True"
+      # must be an empty string: under DEBUG app.py logs "CACHE_CONTROL = " + value (a bool raises TypeError) and any
+      # non-empty string enables Cache-Control headers
+      CACHE_CONTROL: ""
+      BASE_URL: ${E2E_BASE_URL:?set E2E_BASE_URL}
+      APP_ROOT: /app/work
+      MONGO_URI: mongodb://mongodb:27017/otterdog_e2e
+      REDIS_URI: redis://redis:6379
+      GHPROXY_URI: https://api.github.com
+      OTTERDOG_CONFIG_OWNER: ${E2E_CONFIG_OWNER:?set E2E_CONFIG_OWNER}
+      OTTERDOG_CONFIG_REPO: ${E2E_CONFIGS_REPO:-otterdog-e2e-configs}
+      OTTERDOG_CONFIG_PATH: otterdog.json
+      OTTERDOG_CONFIG_TOKEN: ${E2E_CONFIG_TOKEN:?set E2E_CONFIG_TOKEN}
+      GITHUB_APP_ID: ${E2E_GITHUB_APP_ID:?set E2E_GITHUB_APP_ID}
+      GITHUB_APP_PRIVATE_KEY: /run/secrets/github_app_key
+      GITHUB_WEBHOOK_ENDPOINT: /github-webhook/receive
+      GITHUB_WEBHOOK_SECRET: ${E2E_WEBHOOK_SECRET:?set E2E_WEBHOOK_SECRET}
+      GITHUB_WEBHOOK_VALIDATION_CONTEXT: ${E2E_VALIDATION_CONTEXT:-e2e/otterdog-validate}
+      GITHUB_WEBHOOK_SYNC_CONTEXT: ${E2E_SYNC_CONTEXT:-e2e/otterdog-sync}
+      GITHUB_ADMIN_TEAMS: ${E2E_ADMIN_TEAMS:-otterdog-admins}
+      GITHUB_APPROVAL_TEAMS: ${E2E_APPROVAL_TEAMS:-^project-leads$$}
+      BLUEPRINT_CHECK_INTERVAL: "0"
+      PULL_REQUEST_STATISTICS_CACHE_TTL: "0"
+      PROJECTS_BASE_URL: https://otterdog-e2e.invalid/projects/
+      DEPENDENCY_TRACK_URL: ${E2E_DEPENDENCY_TRACK_URL:-http://127.0.0.1:9}
+      DEPENDENCY_TRACK_TOKEN: e2e-dummy-token
+      SECRET_KEY: ${E2E_SECRET_KEY:?set E2E_SECRET_KEY}
+    secrets:
+      - github_app_key
+    volumes:
+      - type: bind
+        source: ${E2E_HYPERCORN_CFG:?set E2E_HYPERCORN_CFG}
+        target: /app/hypercorn-cfg.toml
+        read_only: true
+    ports:
+      - "127.0.0.1:${E2E_WEBAPP_PORT:-5000}:5000"
+    security_opt:
+      - "no-new-privileges:true"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://127.0.0.1:5000/internal/health"]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+      start_period: 5s
+    restart: "no"
+    stop_grace_period: 5s
+
+  mongodb:
+    image: mongo:8.3.4
+    command: ["mongod", "--quiet", "--bind_ip_all"]
+    tmpfs:
+      - /data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand({ping: 1}).ok"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+      start_period: 5s
+    restart: "no"
+
+  redis:
+    image: valkey/valkey:9.1.0-alpine3.23
+    command: ["valkey-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    restart: "no"
+
+  dtrack-mock:
+    image: ${E2E_DTRACK_MOCK_IMAGE:-python:3.12-alpine}
+    profiles: ["dtrack"]
+    pull_policy: missing
+    command: ["python", "/mock/dtrack_mock.py"]
+    environment:
+      DTRACK_MOCK_PORT: "8080"
+      DTRACK_MOCK_STATUS: ${E2E_DTRACK_MOCK_STATUS:-200}
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - type: bind
+        source: ./dtrack_mock.py
+        target: /mock/dtrack_mock.py
+        read_only: true
+    ports:
+      - target: 8080
+        host_ip: 127.0.0.1
+    user: "65534:65534"
+    read_only: true
+    cap_drop: ["ALL"]
+    security_opt:
+      - "no-new-privileges:true"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=2)"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    restart: "no"
+    stop_grace_period: 2s
+
+secrets:
+  github_app_key:
+    file: ${E2E_GITHUB_APP_KEY_FILE:?set E2E_GITHUB_APP_KEY_FILE}

@@ -1,0 +1,14 @@
+Validating organization configurations:
+
+Project e2e-test-org[github_id=e2e-test-org] (1/1)
+╷                                                                                                                                                   
+│ Error:   org_secret[name="E2E_T3C7Z8A5_PRIVATE"] has 'visibility' of value 'private', which is not available for an organization with free plan.  
+╵                                                                                                                                                   
+╷                                                                                                                              
+│ Error:   use of organization rulesets requires an 'enterprise' plan, while this organization is currently on a 'free' plan.  
+╵                                                                                                                              
+╷                                                                                                                                          
+│ Error:   repository[name="e2e-t3c7z8a5-rs", repository=e2e-t3c7z8a5-rs] has not set required parameter 'required_status_checks.strict'.  
+╵                                                                                                                                          
+  Validation failed: 1 info(s), 0 warning(s), 3 error(s)
+    in order to print validation infos, enable printing info messages by adding '-v' flag.

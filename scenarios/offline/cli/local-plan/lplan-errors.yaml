@@ -1,0 +1,61 @@
+# Offline tier (battery, cli): the error paths of local-plan (scenarios/offline/cli/<group>: the tier is that of
+# offline/, the directory right below scenarios/).
+id: O-LPLAN-ERRORS
+tier: offline
+title: local-plan error paths exit 1 with the reason and no Plan line
+description: >-
+  The diff engine stops in three ways that a pull request validation must report instead of a plan: a change it
+  cannot apply (a custom property value_type change, 'planning aborted: trying to change ...'), a configuration that
+  does not evaluate ('failed to load configuration', a validation error) and another side that does not evaluate
+  ('failed to load current configuration', after the configuration itself validated). Each one exits 1 and prints no
+  'Plan:' summary; the control step shows that the same custom property without the type change plans nothing.
+priority: P1
+tags: [offline, cli, custom-properties, repo]
+observe: true
+variables: {plan: free}
+steps:
+  - name: value-type-change
+    base_fragments:
+      custom_properties: ["orgs.newCustomProperty('{{ p }}-p1') { value_type: 'string' }"]
+    fragments:
+      custom_properties: ["orgs.newCustomProperty('{{ p }}-p1') { value_type: 'true_false' }"]
+    validate: {ok: true, errors: 0}
+    plan:
+      expect: error
+      exit_code: 1
+      contains:
+        - >-
+          Error: planning aborted: trying to change 'value_type' to 'true_false' for
+          custom_property[name="{{ p }}-p1"] which is not supported.
+      not_contains: ["Plan: ", "Planning aborted due to validation errors"]
+  - name: value-type-unchanged
+    base_fragments:
+      custom_properties: ["orgs.newCustomProperty('{{ p }}-p1') { value_type: 'string' }"]
+    fragments:
+      custom_properties: ["orgs.newCustomProperty('{{ p }}-p1') { value_type: 'string' }"]
+    plan:
+      expect: noop
+      exit_code: 0
+      counts: {add: 0, change: 0, delete: 0}
+  - name: configuration-does-not-load
+    base_fragments: {}
+    fragments:
+      # the renderer closes the fragment with ',' and then ']': the object is never closed
+      repositories: ["orgs.newRepo('{{ p }}-broken') { description: 'unterminated object'"]
+    validate: {ok: false, contains: ["failed to load configuration"]}
+    plan:
+      expect: validation_error
+      exit_code: 1
+      contains: ["Error: failed to load configuration", "failed to evaluate jsonnet file"]
+      not_contains: ["Plan: ", "failed to load current configuration"]
+  - name: other-side-does-not-load
+    base_fragments:
+      repositories: ["orgs.newRepo('{{ p }}-broken') { description: 'unterminated object'"]
+    fragments:
+      repositories: ["orgs.newRepo('{{ p }}-ok')"]
+    validate: {ok: true, errors: 0}
+    plan:
+      expect: error
+      exit_code: 1
+      contains: ["Error: failed to load current configuration", "failed to evaluate jsonnet file"]
+      not_contains: ["Plan: ", "Planning aborted due to validation errors"]

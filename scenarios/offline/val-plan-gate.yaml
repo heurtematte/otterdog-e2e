@@ -1,0 +1,22 @@
+# Offline tier (SPEC 19): plan-dependent validation of organization rulesets.
+id: O-VAL-PLAN-GATE
+title: Organization rulesets are refused on the free plan
+description: >-
+  otterdog only manages organization rulesets on an 'enterprise' plan. With settings.plan free, an organization
+  ruleset must be reported as exactly one validation error naming the required and the current plan, so that a
+  configuration never reaches GitHub with an object the plan cannot hold. A plan gate that silently disappears
+  would only show up live, as a failed apply.
+priority: P0
+tags: [offline, rulesets, org-settings]
+observe: true
+variables: {plan: free}
+steps:
+  - name: org-ruleset-on-free
+    fragments:
+      rulesets:
+        - "orgs.newOrgRuleset('{{ p }}-org-rs') { include_refs+: ['~DEFAULT_BRANCH'] }"
+    validate:
+      ok: false
+      errors: 1
+      contains:
+        - "use of organization rulesets requires an 'enterprise' plan, while this organization is currently on a 'free' plan."

@@ -1,0 +1,51 @@
+# Offline tier (SPEC 19) and differential proof of concept: eclipse-csi/otterdog#790.
+id: O-VAL-790
+title: Ruleset status checks without 'strict' are a validation error (#790)
+description: >-
+  A repository ruleset whose required_status_checks object replaces the template default (no 'strict') passed
+  validation before eclipse-csi/otterdog#790 and only failed at apply time ("Error for key
+  strict_required_status_checks_policy: 'strict'"). SUTs that contain #790 (squash commit 9bdeb75) report "has not
+  set required parameter 'required_status_checks.strict'" as a validation error and abort local-plan; older SUTs
+  validate the configuration and plan the ruleset. The first step is SUT-dependent, so its YAML only records the
+  outcome (tests/offline/test_scenarios.py asserts the result that matches the SUT's history and
+  scenarios/otterdog-prs/790.yaml declares the expected differential delta). The second step sets 'strict' and must
+  validate and plan identically on every SUT: the fix must not reject complete status checks.
+priority: P0
+tags: [offline, rulesets]
+observe: true
+variables: {plan: free}
+steps:
+  - name: no-strict
+    base_fragments: {}
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-rs') {
+            rulesets: [
+              orgs.newRepoRuleset('{{ p }}-rs-main') {
+                include_refs+: ['~DEFAULT_BRANCH'],
+                required_status_checks: { status_checks: ['ci'] },
+              },
+            ],
+          }
+    plan: {expect: any}
+  - name: with-strict
+    base_fragments: {}
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-rs') {
+            rulesets: [
+              orgs.newRepoRuleset('{{ p }}-rs-main') {
+                include_refs+: ['~DEFAULT_BRANCH'],
+                required_status_checks+: { strict: true, status_checks+: ['ci'] },
+              },
+            ],
+          }
+    validate: {ok: true, errors: 0}
+    plan:
+      expect: changes
+      contains:
+        - 'add repository[name="{{ p }}-rs"]'
+        - 'add repo_ruleset[name="{{ p }}-rs-main", repository={{ p }}-rs]'
+      counts: {add: 2, change: 0, delete: 0}

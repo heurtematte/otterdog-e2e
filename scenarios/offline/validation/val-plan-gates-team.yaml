@@ -1,0 +1,64 @@
+# Offline tier (battery, validation): the plan gates on the team plan.
+id: O-VAL-PLAN-GATES-TEAM
+tier: offline
+title: The team plan lifts the team gates and keeps the enterprise gates
+description: >-
+  With settings.plan 'team', the gates that need GitHub Team disappear (a private repository may keep its wiki, an
+  organization secret may be 'private') while organization roles, ruleset enforcement 'evaluate' and private Pages
+  stay refused with the messages naming the 'team' plan. Organization rulesets are refused too although GitHub Team
+  supports them: that step expects them to validate and runs as an expected failure of KB-009 until otterdog lowers
+  the gate.
+priority: P1
+tags: [offline, org-roles, rulesets, org-settings, repo, secrets]
+observe: true
+variables: {plan: team}
+steps:
+  - name: enterprise-gates
+    fragments:
+      settings: ["members_can_create_private_pages: true"]
+      roles:
+        - "orgs.newOrgRole('{{ p }}-role') { base_role: 'read' }"
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-gates') {
+            rulesets: [
+              orgs.newRepoRuleset('{{ p }}-eval') { enforcement: 'evaluate', include_refs+: ['~DEFAULT_BRANCH'] },
+            ],
+          }
+    validate:
+      ok: false
+      errors: 3
+      contains:
+        - "use of organization roles requires an 'enterprise' plan, while this organization is currently on a 'team' plan."
+        - "enabling 'members_can_create_private_pages' requires an 'enterprise' plan."
+        - >-
+          repo_ruleset[name="{{ p }}-eval", repository={{ p }}-gates] has 'enforcement' of value 'evaluate' which is
+          only available for an 'enterprise' plan.
+  - name: team-features
+    base_fragments: {}
+    fragments:
+      secrets:
+        - "orgs.newOrgSecret('{{ P }}_PRIV') { value: 'pass:e2e/private', visibility: 'private' }"
+      repositories:
+        - "orgs.newRepo('{{ p }}-priv') { private: true, allow_forking: false, has_wiki: true }"
+    validate:
+      ok: true
+      errors: 0
+      exit_code: 0
+      contains: ["Validation succeeded"]
+      not_contains: ["Warning:", "requires at least GitHub Team billing", "which is not available for an organization"]
+    plan:
+      expect: changes
+      counts: {add: 2, change: 0, delete: 0}
+      contains:
+        - 'add org_secret[name="{{ P }}_PRIV"]'
+        - 'add repository[name="{{ p }}-priv"]'
+  - name: org-rulesets-on-team
+    known_bug: KB-009
+    fragments:
+      rulesets:
+        - "orgs.newOrgRuleset('{{ p }}-org-rs') { include_refs+: ['~DEFAULT_BRANCH'], include_repo_names+: ['~ALL'] }"
+    validate:
+      ok: true
+      errors: 0
+      not_contains: ["use of organization rulesets requires an 'enterprise' plan"]

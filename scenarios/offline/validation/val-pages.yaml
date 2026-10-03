@@ -1,0 +1,119 @@
+# Offline tier (battery, validation): GitHub Pages settings below the enterprise plan.
+id: O-VAL-PAGES
+tier: offline
+title: GitHub Pages build type, legacy source path and the organization site are validated
+description: >-
+  Repository.validate accepts gh_pages_build_type disabled | legacy | workflow, requires a legacy source path '/' or
+  '/docs', refuses to leave the organization site repository '<org>.github.io' disabled (GitHub enables it anyway)
+  and, with -v, reminds that legacy and workflow sites (and the organization site) need a 'github-pages'
+  environment. Valid legacy, workflow and organization-site configurations with their environment validate without
+  any notice. gh_pages_visibility is enterprise-only and covered by O-VAL-PAGES-ENTERPRISE and O-VAL-COERCED.
+priority: P1
+tags: [offline, repo, environments]
+observe: true
+variables: {plan: free}
+steps:
+  - name: unknown-build-type
+    fragments:
+      repositories: ["orgs.newRepo('{{ p }}-pages') { gh_pages_build_type: 'foo' }"]
+    validate:
+      ok: false
+      errors: 1
+      exit_code: 1
+      contains:
+        - >-
+          Error: repository[name="{{ p }}-pages"] has 'gh_pages_build_type' set to value 'foo', while only values
+          ['disabled' | 'legacy' | 'workflow'] are allowed.
+  - name: legacy-without-source-path
+    fragments:
+      repositories: ["orgs.newRepo('{{ p }}-pages') { gh_pages_build_type: 'legacy', gh_pages_source_branch: 'main' }"]
+    validate:
+      ok: false
+      errors: 1
+      exit_code: 1
+      contains:
+        - >-
+          Error: repository[name="{{ p }}-pages"] has 'gh_pages_source_path' with value 'None', while only values
+          ['/' | '/docs'] are allowed.
+  - name: organization-site-disabled
+    fragments:
+      repositories:
+        - "orgs.newRepo('{{ org }}.github.io') { description: 'organization site of the run {{ run }}' }"
+    validate:
+      ok: false
+      errors: 1
+      exit_code: 1
+      contains:
+        - >-
+          Error: repository[name="{{ org }}.github.io"] has 'gh_pages_build_type' disabled but the repo hosts the
+          organization site and GitHub pages will be enabled automatically.
+        - 'gh_pages_build_type: "legacy",'
+        - 'gh_pages_source_path: "/",'
+  - name: missing-github-pages-environments
+    fragments:
+      repositories:
+        - "orgs.newRepo('{{ p }}-legacy') { gh_pages_build_type: 'legacy', gh_pages_source_branch: 'main', gh_pages_source_path: '/' }"
+        - "orgs.newRepo('{{ p }}-workflow') { gh_pages_build_type: 'workflow' }"
+        - |-
+          orgs.newRepo('{{ org }}.github.io') {
+            description: 'organization site of the run {{ run }}',
+            gh_pages_build_type: 'legacy',
+            gh_pages_source_branch: 'main',
+            gh_pages_source_path: '/',
+          }
+    validate:
+      verbose: true
+      ok: true
+      errors: 0
+      infos: 3
+      exit_code: 0
+      contains:
+        - >-
+          Info: repository[name="{{ p }}-legacy"] has 'gh_pages_build_type' with value 'legacy', but no
+          corresponding 'github-pages' environment, please add such an environment.
+        - >-
+          Info: repository[name="{{ p }}-workflow"] has 'gh_pages_build_type' with value 'workflow', but no
+          corresponding 'github-pages' environment, please add such an environment.
+        - >-
+          Info: repository[name="{{ org }}.github.io"] hosts the organization site but no corresponding
+          'github-pages' environment, please add such an environment.
+        - "orgs.newEnvironment('github-pages') {"
+  - name: valid-sites
+    base_fragments: {}
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-legacy') {
+            gh_pages_build_type: 'legacy',
+            gh_pages_source_branch: 'main',
+            gh_pages_source_path: '/docs',
+            environments: [orgs.newEnvironment('github-pages') { deployment_branch_policy: 'selected', branch_policies+: ['main'] }],
+          }
+        - |-
+          orgs.newRepo('{{ p }}-workflow') {
+            gh_pages_build_type: 'workflow',
+            environments: [orgs.newEnvironment('github-pages') { deployment_branch_policy: 'selected', branch_policies+: ['main'] }],
+          }
+        - |-
+          orgs.newRepo('{{ org }}.github.io') {
+            description: 'organization site of the run {{ run }}',
+            gh_pages_build_type: 'legacy',
+            gh_pages_source_branch: 'main',
+            gh_pages_source_path: '/',
+            environments: [orgs.newEnvironment('github-pages') { deployment_branch_policy: 'selected', branch_policies+: ['main'] }],
+          }
+    validate:
+      verbose: true
+      ok: true
+      errors: 0
+      infos: 0
+      exit_code: 0
+      contains: ["Validation succeeded"]
+      not_contains: ["Error:", "Warning:", "Info:"]
+    plan:
+      expect: changes
+      counts: {add: 6, change: 0, delete: 0}
+      contains:
+        - '+ add repository[name="{{ p }}-legacy"]'
+        - '+ add environment[name="github-pages", repository={{ p }}-workflow]'
+        - '+ add repository[name="{{ org }}.github.io"]'

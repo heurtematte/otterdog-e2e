@@ -1,0 +1,47 @@
+# Offline tier (battery, regressions): otterdog v1.1.0 #440 "Properly escape string values when passing them to a rich
+# Console" (scenarios/offline/regressions/<group>: the tier is that of offline/, the directory right below
+# scenarios/).
+id: O-LPLAN-ESCAPING
+tier: offline
+title: Values containing rich markup are printed literally by local-plan and show
+description: >-
+  Regression guard of #440: otterdog prints through rich, which interprets '[bold]', '[/]' and '[link=...]' as
+  markup; string values must be escaped so that a description or a variable value holding such text is printed
+  verbatim by local-plan (additions and changes) and by show, and the markup never styles or swallows the text.
+  Validation messages quoting such a value are not escaped (KB-050): tests/offline/test_cli_markup.py.
+priority: P2
+tags: [offline, repo, variables]
+observe: true
+variables: {plan: free}
+steps:
+  - name: added
+    base_fragments: {}
+    fragments:
+      variables: ["orgs.newOrgVariable('{{ P }}_MARKUP') { value: '[b]v[/b] [/]' }"]
+      repositories: ["orgs.newRepo('{{ p }}-esc') { description: '[bold]e2e[/bold] [link=x]y[/link]' }"]
+    validate: {ok: true, errors: 0}
+    plan:
+      expect: changes
+      counts: {add: 2, change: 0, delete: 0}
+      contains:
+        - '+ add repository[name="{{ p }}-esc"] {'
+        - '"[bold]e2e[/bold] [link=x]y[/link]"'
+        - '+ add org_variable[name="{{ P }}_MARKUP"] {'
+        - '"[b]v[/b] [/]"'
+      not_contains: ['"e2e y"', '"v "']
+    commands:
+      show:
+        exit_code: 0
+        contains: ['"[bold]e2e[/bold] [link=x]y[/link]"', '"[b]v[/b] [/]"']
+        not_contains: ['"e2e y"']
+  - name: changed
+    base_fragments:
+      repositories: ["orgs.newRepo('{{ p }}-esc') { description: '[i]old[/i]' }"]
+    fragments:
+      repositories: ["orgs.newRepo('{{ p }}-esc') { description: '[bold]new[/bold]' }"]
+    validate: {ok: true, errors: 0}
+    plan:
+      expect: changes
+      counts: {add: 0, change: 1, delete: 0}
+      contains: ['~ description = "[i]old[/i]" -> "[bold]new[/bold]"']
+      not_contains: ['"old" -> "new"']

@@ -1,0 +1,12 @@
+Validating organization configurations:
+
+Project e2e-test-org[github_id=e2e-test-org] (1/1)
+╷                                                                                                                
+│ Error:   123 is not of type 'boolean'                                                                          
+│                                                                                                                
+│          Failed validating 'type' in schema['properties']['repositories']['items']['properties']['has_wiki']:  
+│              {'type': 'boolean'}                                                                               
+│                                                                                                                
+│          On instance['repositories'][0]['has_wiki']:                                                           
+│              123                                                                                               
+╵                                                                                                                

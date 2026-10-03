@@ -1,0 +1,66 @@
+# Known bug KB-004: a webhook URL change through 'aliases' is never applied (url is excluded from diffs).
+id: cli.kb.webhook-url-alias
+title: Webhook URL change through aliases (known bug KB-004)
+description: |
+  docs/userguide/renaming.md documents 'aliases' as the way to change a webhook URL without re-creating the
+  webhook. otterdog matches the live hook through the alias, but Webhook.include_field_for_diff_computation excludes
+  'url' and 'aliases' from the diff (otterdog/models/webhook.py:65-70), so the plan shows no change and the URL is
+  never updated unless another field changes too. This scenario asserts the documented behaviour (the URL changes,
+  the old URL disappears) and is expected to fail (xfail) while the bug exists; a KnownBugNotReproducedWarning means
+  it was fixed. Only the 'rename-url' step declares the bug: the 'create' step and the cleanup stay strict (BAT-03).
+priority: P2
+min_plan: free
+tags: [webhooks, repo, known-bug]
+steps:
+  - name: create
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-hook-alias') {
+            description: "otterdog e2e: webhook url alias",
+            webhooks: [
+              orgs.newRepoWebhook('{{ hook_base }}alias-before') {
+                content_type: "json",
+                events+: ["push"],
+              },
+            ],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '+ add repo_webhook[url="{{ hook_base }}alias-before", repository={{ p }}-hook-alias]'
+    state:
+      - kind: repo_webhook
+        repo: "{{ p }}-hook-alias"
+        url: "{{ hook_base }}alias-before"
+        match: {config: {url: "{{ hook_base }}alias-before"}}
+
+  - name: rename-url
+    known_bug: KB-004
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-hook-alias') {
+            description: "otterdog e2e: webhook url alias",
+            webhooks: [
+              orgs.newRepoWebhook('{{ hook_base }}alias-after') {
+                aliases: ["{{ hook_base }}alias-before"],
+                content_type: "json",
+                events+: ["push"],
+              },
+            ],
+          }
+    plan:
+      expect: changes
+      not_contains:
+        - '+ add repo_webhook[url="{{ hook_base }}alias-after"'
+        - '- remove repo_webhook[url="{{ hook_base }}alias-before"'
+    state:
+      - kind: repo_webhook
+        repo: "{{ p }}-hook-alias"
+        url: "{{ hook_base }}alias-after"
+        match: {config: {url: "{{ hook_base }}alias-after"}}
+      - kind: repo_webhook
+        repo: "{{ p }}-hook-alias"
+        url: "{{ hook_base }}alias-before"
+        absent: true

@@ -1,0 +1,121 @@
+# Simple ruleset rules on branch and tag targets (coverage: rulesets.rules, rulesets.targets).
+id: cli.ruleset.rules
+tier: cli
+title: Ruleset simple rules on a branch ruleset and a tag ruleset
+description: |
+  The simple rules of repository rulesets (models/ruleset.py:513-525 and :677-691): allows_creations,
+  allows_deletions, allows_updates and allows_force_pushes are inverted (false adds the creation, deletion, update or
+  non_fast_forward rule), requires_linear_history and requires_commit_signatures add required_linear_history and
+  required_signatures. A public run repository gets a branch ruleset on the default branch and a tag ruleset on every
+  tag (target 'tag', include_refs ['~ALL'], the tag protection pattern of eclipse-csi); both leave out the pull
+  request and status check rules (the template's empty newStatusChecks() never converges, KB-021). The oracle
+  matches the exact rule set of each ruleset (the template's non_fast_forward included where force pushes stay
+  blocked). The flip step inverts every flag of the branch ruleset and narrows the tag ruleset with an exclude
+  pattern (refs/tags/*); both steps converge.
+priority: P1
+min_plan: free
+tags: [rulesets, repo]
+steps:
+  - name: create
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-rs-rules') {
+            description: "otterdog e2e: ruleset rules",
+            rulesets: [
+              orgs.newRepoRuleset('{{ p }}-rs-branch') {
+                include_refs+: ["~DEFAULT_BRANCH"],
+                allows_creations: true,
+                allows_deletions: false,
+                allows_updates: false,
+                allows_force_pushes: true,
+                requires_linear_history: false,
+                requires_commit_signatures: true,
+                required_pull_request: null,
+                required_status_checks: null,
+              },
+              orgs.newRepoRuleset('{{ p }}-rs-tags') {
+                target: "tag",
+                include_refs+: ["~ALL"],
+                allows_creations: false,
+                allows_deletions: false,
+                allows_updates: false,
+                allows_force_pushes: true,
+                required_pull_request: null,
+                required_status_checks: null,
+              },
+            ],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '+ add repo_ruleset[name="{{ p }}-rs-branch", repository={{ p }}-rs-rules]'
+        - '+ add repo_ruleset[name="{{ p }}-rs-tags", repository={{ p }}-rs-rules]'
+      counts: {add: 3, change: 0, delete: 0}
+    state:
+      - kind: repo_ruleset
+        repo: "{{ p }}-rs-rules"
+        name: "{{ p }}-rs-branch"
+        match:
+          target: branch
+          enforcement: active
+          conditions: {ref_name: {include: ["~DEFAULT_BRANCH"], exclude: []}}
+          rules: {$unordered: [{type: deletion}, {type: update}, {type: required_signatures}]}
+      - kind: repo_ruleset
+        repo: "{{ p }}-rs-rules"
+        name: "{{ p }}-rs-tags"
+        match:
+          target: tag
+          enforcement: active
+          conditions: {ref_name: {include: ["~ALL"], exclude: []}}
+          rules: {$unordered: [{type: creation}, {type: deletion}, {type: update}]}
+
+  - name: flip
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-rs-rules') {
+            description: "otterdog e2e: ruleset rules",
+            rulesets: [
+              orgs.newRepoRuleset('{{ p }}-rs-branch') {
+                include_refs+: ["~DEFAULT_BRANCH"],
+                allows_creations: false,
+                allows_deletions: true,
+                allows_updates: true,
+                allows_force_pushes: false,
+                requires_linear_history: true,
+                requires_commit_signatures: false,
+                required_pull_request: null,
+                required_status_checks: null,
+              },
+              orgs.newRepoRuleset('{{ p }}-rs-tags') {
+                target: "tag",
+                include_refs+: ["~ALL"],
+                exclude_refs+: ["refs/tags/e2e-scratch-*"],
+                allows_creations: true,
+                allows_deletions: false,
+                allows_updates: false,
+                allows_force_pushes: true,
+                required_pull_request: null,
+                required_status_checks: null,
+              },
+            ],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ repo_ruleset[name="{{ p }}-rs-branch", repository={{ p }}-rs-rules]'
+        - '~ repo_ruleset[name="{{ p }}-rs-tags", repository={{ p }}-rs-rules]'
+      counts: {add: 0, change: 8, delete: 0}
+    state:
+      - kind: repo_ruleset
+        repo: "{{ p }}-rs-rules"
+        name: "{{ p }}-rs-branch"
+        match:
+          rules: {$unordered: [{type: creation}, {type: non_fast_forward}, {type: required_linear_history}]}
+      - kind: repo_ruleset
+        repo: "{{ p }}-rs-rules"
+        name: "{{ p }}-rs-tags"
+        match:
+          conditions: {ref_name: {include: ["~ALL"], exclude: ["refs/tags/e2e-scratch-*"]}}
+          rules: {$unordered: [{type: deletion}, {type: update}]}

@@ -1,0 +1,107 @@
+# Default merge commit messages (coverage: repositories.merge-commit-messages).
+id: cli.repo.merge-messages
+tier: cli
+title: Squash and merge commit title and message defaults
+description: |
+  squash_merge_commit_title / squash_merge_commit_message and merge_commit_title / merge_commit_message of a public
+  run repository. GitHub requires the title whenever the message is sent ("Required when using
+  squash_merge_commit_message" / "Required when using merge_commit_message", PATCH /repos/{owner}/{repo} in GitHub's
+  REST description). The create step sets both pairs to non-default combinations (POST /orgs/{org}/repos takes all
+  four fields). The squash-message step changes only squash_merge_commit_message: the plan shows ONE changed attribute
+  and otterdog completes the patch with the unchanged title
+  (Repository._include_squash_merge_patch_required_properties, models/repository.py:1331-1355), so the apply must
+  succeed. The merge-message step changes only merge_commit_message: otterdog completes the squash pair only, so its
+  PATCH carries the message without merge_commit_title; the step asserts the correct outcome (apply ok, the new
+  message live, converged) and is an expected failure of its own while KB-053 (suspected) exists; it is the last step,
+  so the other steps stay strict and meaningful.
+priority: P1
+min_plan: free
+tags: [repo]
+steps:
+  - name: create
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-merge-msgs') {
+            description: "otterdog e2e: merge commit messages",
+            allow_merge_commit: true,
+            allow_squash_merge: true,
+            squash_merge_commit_title: "PR_TITLE",
+            squash_merge_commit_message: "PR_BODY",
+            merge_commit_title: "PR_TITLE",
+            merge_commit_message: "BLANK",
+          }
+    plan:
+      expect: changes
+      contains:
+        - '+ add repository[name="{{ p }}-merge-msgs"]'
+      counts: {add: 1, change: 0, delete: 0}
+    state:
+      - kind: repo
+        name: "{{ p }}-merge-msgs"
+        match:
+          allow_merge_commit: true
+          allow_squash_merge: true
+          squash_merge_commit_title: PR_TITLE
+          squash_merge_commit_message: PR_BODY
+          merge_commit_title: PR_TITLE
+          merge_commit_message: BLANK
+
+  - name: squash-message
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-merge-msgs') {
+            description: "otterdog e2e: merge commit messages",
+            allow_merge_commit: true,
+            allow_squash_merge: true,
+            squash_merge_commit_title: "PR_TITLE",
+            squash_merge_commit_message: "BLANK",
+            merge_commit_title: "PR_TITLE",
+            merge_commit_message: "BLANK",
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ repository[name="{{ p }}-merge-msgs"]'
+      counts: {add: 0, change: 1, delete: 0}
+    state:
+      - kind: repo
+        name: "{{ p }}-merge-msgs"
+        match:
+          squash_merge_commit_title: PR_TITLE
+          squash_merge_commit_message: BLANK
+          merge_commit_title: PR_TITLE
+          merge_commit_message: BLANK
+
+  - name: merge-message
+    known_bug: KB-053
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-merge-msgs') {
+            description: "otterdog e2e: merge commit messages",
+            allow_merge_commit: true,
+            allow_squash_merge: true,
+            squash_merge_commit_title: "PR_TITLE",
+            squash_merge_commit_message: "BLANK",
+            merge_commit_title: "PR_TITLE",
+            merge_commit_message: "PR_BODY",
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ repository[name="{{ p }}-merge-msgs"]'
+      counts: {add: 0, change: 1, delete: 0}
+    apply:
+      expect: ok
+      not_contains:
+        - "failed to update settings for repo"
+    state:
+      - kind: repo
+        name: "{{ p }}-merge-msgs"
+        match:
+          squash_merge_commit_title: PR_TITLE
+          squash_merge_commit_message: BLANK
+          merge_commit_title: PR_TITLE
+          merge_commit_message: PR_BODY

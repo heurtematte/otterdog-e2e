@@ -1,0 +1,125 @@
+# Offline tier (battery, validation): squash and merge commit title/message settings.
+id: O-VAL-MERGE-SETTINGS
+tier: offline
+title: Squash and merge commit titles and messages are validated as values and as pairs
+description: >-
+  Repository.validate checks each of squash_merge_commit_title/_message and merge_commit_title/_message against its
+  enum and each pair against the combinations GitHub accepts (four squash pairs, three merge pairs). An invalid pair
+  of valid values is one error (exit 1); an invalid value is two errors, the value and its pair. Every valid
+  combination validates. otterdog exits with the number of errors, so two errors exit 2 like a crash (KB-034): the
+  last step expects exit status 1 and runs as an expected failure.
+priority: P1
+tags: [offline, repo]
+observe: true
+variables: {plan: free}
+steps:
+  - name: squash-pair
+    fragments:
+      repositories:
+        - "orgs.newRepo('{{ p }}-merge') { squash_merge_commit_title: 'COMMIT_OR_PR_TITLE', squash_merge_commit_message: 'PR_BODY' }"
+    validate:
+      ok: false
+      errors: 1
+      exit_code: 1
+      contains:
+        - >-
+          Error: repository[name="{{ p }}-merge"] has ('squash_merge_commit_title', 'squash_merge_commit_message') of
+          value ('COMMIT_OR_PR_TITLE', 'PR_BODY'), while only combinations ('PR_TITLE', 'PR_BODY') | ('PR_TITLE',
+          'BLANK') | ('PR_TITLE', 'COMMIT_MESSAGES') | ('COMMIT_OR_PR_TITLE', 'COMMIT_MESSAGES') are allowed.
+  - name: merge-pair
+    fragments:
+      repositories:
+        - "orgs.newRepo('{{ p }}-merge') { merge_commit_title: 'MERGE_MESSAGE', merge_commit_message: 'PR_BODY' }"
+    validate:
+      ok: false
+      errors: 1
+      exit_code: 1
+      contains:
+        - >-
+          Error: repository[name="{{ p }}-merge"] has ('merge_commit_title', 'merge_commit_message') of value
+          ('MERGE_MESSAGE', 'PR_BODY'), while only combinations ('PR_TITLE', 'PR_BODY') | ('PR_TITLE', 'BLANK') |
+          ('MERGE_MESSAGE', 'PR_TITLE') are allowed.
+  - name: squash-title-value
+    fragments:
+      repositories: ["orgs.newRepo('{{ p }}-merge') { squash_merge_commit_title: 'X' }"]
+    validate:
+      ok: false
+      errors: 2
+      contains:
+        - >-
+          Error: repository[name="{{ p }}-merge"] has 'squash_merge_commit_title' of value 'X', while only values
+          ('PR_TITLE' | 'COMMIT_OR_PR_TITLE') are allowed.
+        - "of value ('X', 'COMMIT_MESSAGES'), while only combinations"
+  - name: squash-message-value
+    fragments:
+      repositories: ["orgs.newRepo('{{ p }}-merge') { squash_merge_commit_message: 'X' }"]
+    validate:
+      ok: false
+      errors: 2
+      contains:
+        - >-
+          Error: repository[name="{{ p }}-merge"] has 'squash_merge_commit_message' of value 'X', while only values
+          ('PR_BODY' | 'COMMIT_MESSAGES' | 'BLANK') are allowed.
+        - "of value ('COMMIT_OR_PR_TITLE', 'X'), while only combinations"
+  - name: merge-title-value
+    fragments:
+      repositories: ["orgs.newRepo('{{ p }}-merge') { merge_commit_title: 'X' }"]
+    validate:
+      ok: false
+      errors: 2
+      contains:
+        - >-
+          Error: repository[name="{{ p }}-merge"] has 'merge_commit_title' of value 'X', while only values
+          ('PR_TITLE' | 'MERGE_MESSAGE') are allowed.
+        - "of value ('X', 'PR_TITLE'), while only combinations"
+  - name: merge-message-value
+    fragments:
+      repositories: ["orgs.newRepo('{{ p }}-merge') { merge_commit_title: 'PR_TITLE', merge_commit_message: 'X' }"]
+    validate:
+      ok: false
+      errors: 2
+      contains:
+        - >-
+          Error: repository[name="{{ p }}-merge"] has 'merge_commit_message' of value 'X', while only values
+          ('PR_TITLE' | 'PR_BODY' | 'BLANK') are allowed.
+        - "of value ('PR_TITLE', 'X'), while only combinations"
+  - name: valid-combinations
+    base_fragments: {}
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-merge-1') {
+            squash_merge_commit_title: 'PR_TITLE', squash_merge_commit_message: 'PR_BODY',
+            merge_commit_title: 'PR_TITLE', merge_commit_message: 'PR_BODY',
+          }
+        - |-
+          orgs.newRepo('{{ p }}-merge-2') {
+            squash_merge_commit_title: 'PR_TITLE', squash_merge_commit_message: 'BLANK',
+            merge_commit_title: 'PR_TITLE', merge_commit_message: 'BLANK',
+          }
+        - |-
+          orgs.newRepo('{{ p }}-merge-3') {
+            squash_merge_commit_title: 'PR_TITLE', squash_merge_commit_message: 'COMMIT_MESSAGES',
+            merge_commit_title: 'MERGE_MESSAGE', merge_commit_message: 'PR_TITLE',
+          }
+        - |-
+          orgs.newRepo('{{ p }}-merge-4') {
+            squash_merge_commit_title: 'COMMIT_OR_PR_TITLE', squash_merge_commit_message: 'COMMIT_MESSAGES',
+          }
+    validate:
+      ok: true
+      errors: 0
+      exit_code: 0
+      contains: ["Validation succeeded"]
+    plan:
+      expect: changes
+      counts: {add: 4, change: 0, delete: 0}
+  - name: exit-status-of-two-errors
+    known_bug: KB-034
+    fragments:
+      repositories: ["orgs.newRepo('{{ p }}-merge') { squash_merge_commit_title: 'X' }"]
+    validate:
+      ok: false
+      errors: 2
+      exit_code: 1
+      contains: ["Validation failed: 0 info(s), 0 warning(s), 2 error(s)"]

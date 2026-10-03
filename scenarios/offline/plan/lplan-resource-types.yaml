@@ -1,0 +1,159 @@
+# Offline tier (battery, plan semantics): additions, changes and removals of every resource type.
+id: O-LPLAN-RESOURCE-TYPES
+tier: offline
+title: local-plan adds, changes and removes every resource type (enterprise plan)
+description: >-
+  Complements O-LPLAN-ADD/CHANGE/REMOVE with the resource types they leave out, on an enterprise plan so that
+  organization roles and rulesets are allowed: organization roles, custom properties and rulesets are added, changed
+  and removed, organization settings, Actions settings, webhooks and secrets are changed, and inside a repository
+  rulesets, branch protection rules, repository secrets and environment secrets and variables are changed, added and
+  removed. A removed environment is ONE block, its secrets and variables are neither listed nor counted. Every block
+  header and every Plan count is asserted.
+priority: P1
+tags: [offline, org-roles, custom-properties, rulesets, org-settings, workflows, webhooks, secrets, variables, environments, bpr, repo]
+observe: true
+variables: {plan: enterprise}
+steps:
+  - name: organization-objects-added
+    base_fragments: {}
+    fragments:
+      custom_properties: ["orgs.newCustomProperty('{{ p }}-cp') { value_type: 'single_select', allowed_values: ['a', 'b'] }"]
+      roles: ["orgs.newOrgRole('{{ p }}-role') { description: 'auditors', base_role: 'read', permissions: ['read_audit_logs'] }"]
+      rulesets: ["orgs.newOrgRuleset('{{ p }}-org-rs') { include_refs+: ['~DEFAULT_BRANCH'], include_repo_names+: ['~ALL'] }"]
+    validate: {ok: true, errors: 0}
+    plan:
+      expect: changes
+      counts: {add: 3, change: 0, delete: 0}
+      contains:
+        - '+ add custom_property[name="{{ p }}-cp"] {'
+        - '+ add org_role[name="{{ p }}-role"] {'
+        - '+ "read_audit_logs"'
+        - '+ add org_ruleset[name="{{ p }}-org-rs"] {'
+        - '+ "~ALL"'
+  - name: organization-objects-changed
+    base_fragments:
+      settings: ["members_can_create_teams: false"]
+      custom_properties: ["orgs.newCustomProperty('{{ p }}-cp') { value_type: 'single_select', allowed_values: ['a', 'b'], description: 'one' }"]
+      roles: ["orgs.newOrgRole('{{ p }}-role') { description: 'auditors', base_role: 'read', permissions: ['read_audit_logs'] }"]
+      rulesets: ["orgs.newOrgRuleset('{{ p }}-org-rs') { include_refs+: ['~DEFAULT_BRANCH'], include_repo_names+: ['~ALL'] }"]
+      secrets: ["orgs.newOrgSecret('{{ P }}_SECRET') { value: 'pass:e2e/secret' }"]
+      webhooks: ["orgs.newOrgWebhook('{{ hook_base }}org') { events+: ['push'] }"]
+      repositories: ["orgs.newRepo('{{ p }}-repo')"]
+    fragments:
+      settings:
+        - "members_can_create_teams: true"
+        - "workflows+: { default_workflow_permissions: 'write' }"
+      custom_properties: ["orgs.newCustomProperty('{{ p }}-cp') { value_type: 'single_select', allowed_values: ['a', 'b', 'c'], description: 'two' }"]
+      roles: ["orgs.newOrgRole('{{ p }}-role') { description: 'auditors', base_role: 'write', permissions: ['read_audit_logs'] }"]
+      rulesets: ["orgs.newOrgRuleset('{{ p }}-org-rs') { include_refs+: ['~DEFAULT_BRANCH'], include_repo_names+: ['~ALL'], enforcement: 'disabled' }"]
+      secrets: ["orgs.newOrgSecret('{{ P }}_SECRET') { value: 'pass:e2e/secret', visibility: 'selected', selected_repositories: ['{{ p }}-repo'] }"]
+      webhooks: ["orgs.newOrgWebhook('{{ hook_base }}org') { events+: ['push'], active: false, content_type: 'json' }"]
+      repositories: ["orgs.newRepo('{{ p }}-repo')"]
+    validate: {ok: true, errors: 0}
+    plan:
+      expect: changes
+      counts: {add: 0, change: 10, delete: 0}
+      contains:
+        - '~ settings {'
+        - '= false -> true'
+        - '~ workflows'
+        - '"read" -> "write"'
+        - '~ custom_property[name="{{ p }}-cp"] {'
+        - '+ "c"'
+        - '"one" -> "two"'
+        - '~ org_role[name="{{ p }}-role"] {'
+        - '~ base_role = "read" -> "write"'
+        - '~ org_ruleset[name="{{ p }}-org-rs"] {'
+        - '~ enforcement = "active" -> "disabled"'
+        - '~ org_secret[name="{{ P }}_SECRET"] {'
+        - '"public" -> "selected"'
+        - '+ "{{ p }}-repo"'
+        - '~ org_webhook[url="{{ hook_base }}org"] {'
+        - '"form" -> "json"'
+      not_contains: ['+ add ', '- remove ']
+  - name: organization-objects-removed
+    base_fragments:
+      custom_properties: ["orgs.newCustomProperty('{{ p }}-cp') { value_type: 'single_select', allowed_values: ['a', 'b'] }"]
+      roles: ["orgs.newOrgRole('{{ p }}-role') { base_role: 'read' }"]
+      rulesets: ["orgs.newOrgRuleset('{{ p }}-org-rs') { include_refs+: ['~DEFAULT_BRANCH'], include_repo_names+: ['~ALL'] }"]
+      secrets: ["orgs.newOrgSecret('{{ P }}_SECRET') { value: 'pass:e2e/secret' }"]
+    fragments: {}
+    plan:
+      expect: changes
+      counts: {add: 0, change: 0, delete: 4}
+      contains:
+        - '- remove custom_property[name="{{ p }}-cp"] {'
+        - '- remove org_role[name="{{ p }}-role"] {'
+        - '- remove org_ruleset[name="{{ p }}-org-rs"] {'
+        - '- remove org_secret[name="{{ P }}_SECRET"] {'
+  - name: nested-objects
+    base_fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-repo') {
+            secrets: [orgs.newRepoSecret('{{ P }}_REPO') { value: 'pass:e2e/repo' }],
+            rulesets: [
+              orgs.newRepoRuleset('{{ p }}-kept') { include_refs+: ['~DEFAULT_BRANCH'] },
+              orgs.newRepoRuleset('{{ p }}-gone') { include_refs+: ['~DEFAULT_BRANCH'] },
+            ],
+            branch_protection_rules: [orgs.newBranchProtectionRule('main'), orgs.newBranchProtectionRule('release/*')],
+            environments: [
+              orgs.newEnvironment('{{ p }}-env') {
+                secrets: [
+                  orgs.newEnvSecret('{{ P }}_ES1') { value: 'pass:e2e/es1' },
+                  orgs.newEnvSecret('{{ P }}_ES2') { value: 'pass:e2e/es2' },
+                ],
+                variables: [
+                  orgs.newEnvVariable('{{ P }}_EV1') { value: 'one' },
+                  orgs.newEnvVariable('{{ P }}_EV2') { value: 'two' },
+                ],
+              },
+              orgs.newEnvironment('{{ p }}-env-gone') {
+                secrets: [orgs.newEnvSecret('{{ P }}_GONE_SECRET') { value: 'pass:e2e/gone' }],
+                variables: [orgs.newEnvVariable('{{ P }}_GONE_VAR') { value: 'x' }],
+              },
+            ],
+          }
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-repo') {
+            rulesets: [orgs.newRepoRuleset('{{ p }}-kept') { include_refs+: ['~DEFAULT_BRANCH'], requires_linear_history: true }],
+            branch_protection_rules: [orgs.newBranchProtectionRule('main')],
+            environments: [
+              orgs.newEnvironment('{{ p }}-env') {
+                secrets: [
+                  orgs.newEnvSecret('{{ P }}_ES1') { value: 'pass:e2e/es1-new' },
+                  orgs.newEnvSecret('{{ P }}_ES3') { value: 'pass:e2e/es3' },
+                ],
+                variables: [
+                  orgs.newEnvVariable('{{ P }}_EV1') { value: 'uno' },
+                  orgs.newEnvVariable('{{ P }}_EV3') { value: 'three' },
+                ],
+              },
+            ],
+          }
+    validate: {ok: true, errors: 0}
+    plan:
+      expect: changes
+      counts: {add: 2, change: 3, delete: 6}
+      contains:
+        - '- remove repo_secret[name="{{ P }}_REPO", repository={{ p }}-repo] {'
+        - '~ repo_ruleset[name="{{ p }}-kept", repository={{ p }}-repo] {'
+        - '~ requires_linear_history = false -> true'
+        - '- remove repo_ruleset[name="{{ p }}-gone", repository={{ p }}-repo] {'
+        - '- remove branch_protection_rule[pattern="release/*", repository={{ p }}-repo] {'
+        - '~ env_secret[name="{{ P }}_ES1", environment={{ p }}-env] {'
+        - '~ value = "pass:e2e/es1" -> "pass:e2e/es1-new"'
+        - '- remove env_secret[name="{{ P }}_ES2", environment={{ p }}-env] {'
+        - '+ add env_secret[name="{{ P }}_ES3", environment={{ p }}-env] {'
+        - '~ env_variable[name="{{ P }}_EV1", environment={{ p }}-env] {'
+        - '~ value = "one" -> "uno"'
+        - '- remove env_variable[name="{{ P }}_EV2", environment={{ p }}-env] {'
+        - '+ add env_variable[name="{{ P }}_EV3", environment={{ p }}-env] {'
+        - '- remove environment[name="{{ p }}-env-gone", repository={{ p }}-repo] {'
+      not_contains:
+        - '{{ P }}_GONE_SECRET'
+        - '{{ P }}_GONE_VAR'
+        - 'branch_protection_rule[pattern="main"'
+        - '~ repository['

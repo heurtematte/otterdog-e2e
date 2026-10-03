@@ -1,0 +1,15 @@
+Applying changes:
+
+Actions are indicated with the following symbols:
+  + create
+  ~ modify
+  ! forced update
+  - delete
+
+Project e2e-test-org[github_id=e2e-test-org] (1/1)
+╷                                                                                                                              
+│ Error:   use of organization rulesets requires an 'enterprise' plan, while this organization is currently on a 'free' plan.  
+╵                                                                                                                              
+  Planning aborted due to validation errors.
+
+  No changes required.

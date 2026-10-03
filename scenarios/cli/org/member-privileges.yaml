@@ -1,0 +1,123 @@
+# org-settings.member-privileges (P1) and org-settings.pages-creation (P2), org_level: REST member privileges.
+id: cli.org.member-privileges
+title: Organization member privileges, repository creation, forking and Pages creation
+tier: cli
+description: |
+  The member privileges otterdog manages through PATCH /orgs/{org} (otterdog/models/organization_settings.py:65-76):
+  base repository permission (default_repository_permission read -> none), repository creation by members
+  (members_can_create_public_repositories, members_can_create_private_repositories: every plan), deploy keys
+  (deploy_keys_enabled_for_repositories), organization projects (has_organization_projects) and public Pages
+  creation (members_can_create_public_pages). GET /orgs/{org} returns every key under the same name, so the oracle
+  matches them one by one after each apply, and each step converges. The run repository is created PUBLIC in a first
+  step and made private in the 'privileges' step, with allow_forking false (the template's
+  members_can_fork_private_repositories false makes true a validation error, validation.repo.forking): otterdog
+  before 1.7.0.dev14 cannot create a private repository on an organization without Code Security (the code scanning
+  default setup PATCH of new repositories fails, #791; regression.791-731-private-repo covers that path), and this
+  scenario must run strictly on release:latest and Free. The 'fork' step allows members to fork private repositories
+  and turns the repository's allow_forking on in the same apply (settings are patched before repositories), which
+  GitHub keeps; the other privileges are back to the template in that step (the baseline values, asserted too).
+  Private Pages creation (members_can_create_private_pages) is enterprise-only (validation, KB-024) and not changed
+  here. org_level: unfiltered plans, full baseline reset as cleanup (it removes the private run repository too).
+priority: P1
+org_level: true
+tags: [org-settings, repo]
+steps:
+  - name: repo
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-fork') {
+            description: "otterdog e2e: private repository members may fork",
+            has_wiki: false,
+          }
+    plan:
+      expect: changes
+      contains:
+        - '+ add repository[name="{{ p }}-fork"]'
+    state:
+      - kind: repo
+        name: "{{ p }}-fork"
+        match: {private: false}
+
+  - name: privileges
+    fragments:
+      settings:
+        - "default_repository_permission: 'none'"
+        - "members_can_create_public_repositories: true"
+        - "members_can_create_private_repositories: true"
+        - "deploy_keys_enabled_for_repositories: false"
+        - "has_organization_projects: false"
+        - "members_can_create_public_pages: false"
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-fork') {
+            description: "otterdog e2e: private repository members may fork",
+            private: true,
+            allow_forking: false,
+            has_wiki: false,
+          }
+    plan:
+      expect: changes
+      contains:
+        - "~ settings {"
+        - '~ repository[name="{{ p }}-fork"]'
+        - '"read" -> "none"'
+        - "members_can_create_public_repositories"
+        - "members_can_create_private_repositories"
+        - "deploy_keys_enabled_for_repositories"
+        - "has_organization_projects"
+        - "members_can_create_public_pages"
+      not_contains:
+        - "members_can_fork_private_repositories"
+        - '+ add repository[name="{{ p }}-fork"]'
+        - '- remove repository[name="{{ p }}-fork"]'
+    state:
+      - kind: org
+        match:
+          default_repository_permission: none
+          members_can_create_public_repositories: true
+          members_can_create_private_repositories: true
+          deploy_keys_enabled_for_repositories: false
+          has_organization_projects: false
+          members_can_create_public_pages: false
+      - kind: repo
+        name: "{{ p }}-fork"
+        match: {private: true, allow_forking: false}
+
+  - name: fork
+    fragments:
+      settings:
+        - "members_can_fork_private_repositories: true"
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-fork') {
+            description: "otterdog e2e: private repository members may fork",
+            private: true,
+            allow_forking: true,
+            has_wiki: false,
+          }
+    validate:
+      ok: true
+      not_contains:
+        - "allow_forking"
+    plan:
+      expect: changes
+      contains:
+        - "~ settings {"
+        - "members_can_fork_private_repositories"
+        - '"none" -> "read"'
+        - '~ repository[name="{{ p }}-fork"]'
+        - "allow_forking"
+    state:
+      - kind: org
+        match:
+          members_can_fork_private_repositories: true
+          default_repository_permission: read
+          members_can_create_public_repositories: false
+          members_can_create_private_repositories: false
+          deploy_keys_enabled_for_repositories: true
+          has_organization_projects: true
+          members_can_create_public_pages: true
+      - kind: repo
+        name: "{{ p }}-fork"
+        match: {private: true, allow_forking: true}

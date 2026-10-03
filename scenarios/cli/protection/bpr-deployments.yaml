@@ -1,0 +1,100 @@
+# Required deployments of a branch protection rule (coverage: branch-protection.deployments).
+id: cli.bpr.deployments
+tier: cli
+title: Branch protection rule requiring successful deployments
+description: |
+  requires_deployments with required_deployment_environments (GraphQL requiresDeployments and
+  requiredDeploymentEnvironments): merges into main need a successful deployment to the listed environments, which
+  must be environments of the repository itself (validation error otherwise, models/branch_protection_rule.py:180-201).
+  The create step adds the repository, its environment e2e-staging and the rule in one apply (otterdog plans the
+  environments of a repository before its branch protection rules); the drop step stops requiring deployments (one
+  changed attribute: the environment list leaves the diff once requires_deployments is false) while the
+  environment stays. The last step is validation only: a rule naming an environment the repository does not define
+  is a validation error and nothing is planned.
+priority: P2
+min_plan: free
+tags: [bpr, environments, repo]
+steps:
+  - name: create
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-bpr-deploy') {
+            description: "otterdog e2e: required deployments (branch protection)",
+            environments: [
+              orgs.newEnvironment('e2e-staging'),
+            ],
+            branch_protection_rules: [
+              orgs.newBranchProtectionRule('main') {
+                required_approving_review_count: 1,
+                requires_deployments: true,
+                required_deployment_environments: ["e2e-staging"],
+              },
+            ],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '+ add environment[name="e2e-staging", repository={{ p }}-bpr-deploy]'
+        - '+ add branch_protection_rule[pattern="main", repository={{ p }}-bpr-deploy]'
+      counts: {add: 3, change: 0, delete: 0}
+    state:
+      - {kind: environment, repo: "{{ p }}-bpr-deploy", name: e2e-staging, match: {name: e2e-staging}}
+      - kind: bpr
+        repo: "{{ p }}-bpr-deploy"
+        pattern: main
+        match: {requiresDeployments: true, requiredDeploymentEnvironments: [e2e-staging]}
+
+  - name: drop
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-bpr-deploy') {
+            description: "otterdog e2e: required deployments (branch protection)",
+            environments: [
+              orgs.newEnvironment('e2e-staging'),
+            ],
+            branch_protection_rules: [
+              orgs.newBranchProtectionRule('main') {
+                required_approving_review_count: 1,
+              },
+            ],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ branch_protection_rule[pattern="main", repository={{ p }}-bpr-deploy]'
+      counts: {add: 0, change: 1, delete: 0}
+    state:
+      - kind: bpr
+        repo: "{{ p }}-bpr-deploy"
+        pattern: main
+        match: {requiresDeployments: false}
+      - {kind: environment, repo: "{{ p }}-bpr-deploy", name: e2e-staging, absent: false}
+
+  - name: undefined-environment
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-bpr-deploy') {
+            description: "otterdog e2e: required deployments (branch protection)",
+            environments: [
+              orgs.newEnvironment('e2e-staging'),
+            ],
+            branch_protection_rules: [
+              orgs.newBranchProtectionRule('main') {
+                required_approving_review_count: 1,
+                requires_deployments: true,
+                required_deployment_environments: ["e2e-missing"],
+              },
+            ],
+          }
+    validate:
+      ok: false
+      errors: 1
+      contains:
+        - "requires deployment environment 'e2e-missing' which is not defined in the repository itself."
+    plan:
+      expect: validation_error
+    apply: null
+    converge: false

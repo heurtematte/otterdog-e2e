@@ -1,0 +1,50 @@
+# validation.teams (P1): skip_non_organization_members refuses a member who is not an org member.
+id: cli.validate.team-non-member
+title: Team validation with skip_non_organization_members and a user outside the organization
+tier: cli
+description: |
+  skip_non_organization_members true means users who are not organization members cannot be added to the team
+  (docs/reference/organization/team.md): validation compares the members with the live org member list
+  (otterdog/models/team.py:92-99) and refuses the outsider identity (a GitHub account that is not a member of the
+  test org). The same team with an org member (the admin) validates. Validate only (plan null): nothing is applied,
+  so GitHub never sends an invitation. Team validation calls GitHub: no offline lint.
+priority: P1
+identities: [outsider]
+tags: [teams]
+steps:
+  - name: outsider
+    fragments:
+      teams:
+        - |
+          orgs.newTeam('{{ p }}-t4') {
+            description: "otterdog e2e: team validation",
+            privacy: "visible",
+            skip_non_organization_members: true,
+            members: ["{{ logins.outsider }}"],
+          }
+    validate:
+      ok: false
+      errors: 1
+      exit_code: 1
+      contains:
+        - >-
+          Error: team[name="{{ p }}-t4"] has 'skip_non_organization_members' enabled, but 'members' contains user
+          '{{ logins.outsider }}' who is not an organization member.
+    plan: null
+
+  - name: member
+    fragments:
+      teams:
+        - |
+          orgs.newTeam('{{ p }}-t4') {
+            description: "otterdog e2e: team validation",
+            privacy: "visible",
+            skip_non_organization_members: true,
+            members: ["{{ logins.admin }}"],
+          }
+    validate:
+      ok: true
+      errors: 0
+      not_contains:
+        - "who is not an organization member"
+    plan: null

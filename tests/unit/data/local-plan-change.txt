@@ -1,0 +1,54 @@
+Printing local diff:
+
+Actions are indicated with the following symbols:
+  + create
+  ~ modify
+  ! forced update
+  - delete
+
+Project e2e-test-org[github_id=e2e-test-org] (1/1)
+  there have been 1 validation infos, enable verbose output to display them.
+
+  
+  ~ settings {
+    ~ web_commit_signoff_required = true -> false
+  ~ }
+
+  
+  ~ repository[name="e2e-t3c7z8a5-basic"] {
+    ~ description                 = "e2e basic" -> "e2e basic changed"
+    ~ topics                      = [
+      + "changed"
+    ~ ]
+    ~ web_commit_signoff_required = true -> true
+  ~ }
+
+  
+  ~ repo_webhook[url="https://otterdog-e2e.invalid/t3c7z8a5/repo-hook", repository=e2e-t3c7z8a5-basic] {
+    ~ events = [
+      + "pull_request"
+    ~ ]
+  ~ }
+
+  
+  ~ repo_variable[name="E2E_T3C7Z8A5_VAR", repository=e2e-t3c7z8a5-basic] {
+    ~ value = "one" -> "two"
+  ~ }
+
+  
+  ~ environment[name="e2e-t3c7z8a5-env", repository=e2e-t3c7z8a5-basic] {
+    ~ wait_timer = 5 -> 10
+  ~ }
+
+  
+  ~ branch_protection_rule[pattern="main", repository=e2e-t3c7z8a5-basic] {
+    ~ required_approving_review_count = 1 -> 2
+    ~ requires_linear_history         = false -> true
+  ~ }
+
+  
+  ~ repository[name="otterdog-e2e-fixture-a"] {
+    ~ web_commit_signoff_required = true -> true
+  ~ }
+  
+  Plan: 0 to add, 10 to change, 0 to delete.

@@ -1,0 +1,45 @@
+# Known bug KB-003: variable listings are not paginated (GitHub's default page size is 10).
+id: cli.kb.variables-pagination
+title: More than ten repository variables (known bug KB-003)
+description: |
+  otterdog reads repository, environment and organization variables with a single GET without per_page
+  (rest/repo_client.py:1113, :873, rest/org_client.py:390); GitHub returns 10 variables per page by default
+  (max 30). A repository with 12 variables is created in one apply (a new repo has no live variables to read),
+  then the converge loop re-plans: with the bug only 10 variables are read back and otterdog plans to add the
+  missing ones again (and an apply would hit 409 'already exists'), so the scenario never converges. It asserts
+  convergence and the presence of all 12 variables (the oracle pages with per_page 30), and is expected to fail
+  (xfail) while the bug exists.
+priority: P2
+min_plan: free
+known_bug: KB-003
+tags: [variables, repo, known-bug]
+steps:
+  - name: create
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-many-vars') {
+            description: "otterdog e2e: more than ten variables",
+            variables: [
+              orgs.newRepoVariable('{{ P }}_VAR_%02d' % index) {
+                value: "value %d" % index,
+              }
+              for index in std.range(1, 12)
+            ],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '+ add repository[name="{{ p }}-many-vars"]'
+        - '+ add repo_variable[name="{{ P }}_VAR_01", repository={{ p }}-many-vars]'
+        - '+ add repo_variable[name="{{ P }}_VAR_12", repository={{ p }}-many-vars]'
+      counts: {add: 13, delete: 0}
+    state:
+      - kind: repo_variable
+        repo: "{{ p }}-many-vars"
+        name: "{{ P }}_VAR_01"
+        match: {value: "value 1"}
+      - kind: repo_variable
+        repo: "{{ p }}-many-vars"
+        name: "{{ P }}_VAR_12"
+        match: {value: "value 12"}

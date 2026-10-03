@@ -1,0 +1,63 @@
+# Offline tier (battery, validation): custom organization roles (enterprise plan).
+id: O-VAL-ORG-ROLES
+tier: offline
+title: Organization role base roles and permissions are validated
+description: >-
+  On an enterprise plan (organization roles are gated by settings.plan, see O-VAL-PLAN-GATES) Role.validate accepts
+  the base roles none | read | triage | write | maintain | admin and refuses additional permissions on top of the
+  base role 'none'. One error per step with the exact message, then every valid base role (with and without
+  permissions) validates and is planned as one addition per role.
+priority: P2
+tags: [offline, org-roles]
+observe: true
+variables: {plan: enterprise}
+steps:
+  - name: unknown-base-role
+    fragments:
+      roles: ["orgs.newOrgRole('{{ p }}-r1') { base_role: 'super' }"]
+    validate:
+      ok: false
+      errors: 1
+      exit_code: 1
+      contains:
+        - >-
+          org_role[name="{{ p }}-r1"] has 'base_role' of value 'super', while only values ('none' | 'read' |
+          'triage' | 'write' | 'maintain' | 'admin') are allowed.
+  - name: none-with-permissions
+    fragments:
+      roles: ["orgs.newOrgRole('{{ p }}-r2') { base_role: 'none', permissions: ['read_audit_logs'] }"]
+    validate:
+      ok: false
+      errors: 1
+      exit_code: 1
+      contains:
+        - >-
+          org_role[name="{{ p }}-r2"] has 'base_role' of value 'none', and specified additional permissions, which
+          is not allowed.
+  - name: valid-roles
+    base_fragments: {}
+    fragments:
+      roles:
+        - "orgs.newOrgRole('{{ p }}-none')"
+        - "orgs.newOrgRole('{{ p }}-read') { description: 'auditors', base_role: 'read', permissions: ['read_audit_logs'] }"
+        - "orgs.newOrgRole('{{ p }}-triage') { base_role: 'triage' }"
+        - "orgs.newOrgRole('{{ p }}-write') { base_role: 'write' }"
+        - "orgs.newOrgRole('{{ p }}-maintain') { base_role: 'maintain' }"
+        - "orgs.newOrgRole('{{ p }}-admin') { base_role: 'admin' }"
+    validate:
+      ok: true
+      errors: 0
+      exit_code: 0
+      contains: ["Validation succeeded"]
+      not_contains: ["Error:", "Warning:"]
+    plan:
+      expect: changes
+      counts: {add: 6, change: 0, delete: 0}
+      contains:
+        - '+ add org_role[name="{{ p }}-none"]'
+        - '+ add org_role[name="{{ p }}-read"]'
+        - '+ add org_role[name="{{ p }}-triage"]'
+        - '+ add org_role[name="{{ p }}-write"]'
+        - '+ add org_role[name="{{ p }}-maintain"]'
+        - '+ add org_role[name="{{ p }}-admin"]'
+        - '+ "read_audit_logs"'

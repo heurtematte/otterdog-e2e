@@ -1,0 +1,55 @@
+# Offline tier (SPEC 19): local-plan from an empty organization (BASE) to a configuration with new objects.
+id: O-LPLAN-ADD
+title: local-plan lists every added object and counts them
+description: >-
+  local-plan compares the configuration with its -BASE copy without GitHub. Starting from an organization without
+  any object, every new object must appear as its own '+ add' block (organization variable, secret, webhook and
+  custom property; the repository and each object nested in it) and the 'Plan:' line must count them (nested objects
+  of a new repository are counted separately). This is the diff engine used by plan, apply and the webapp's PR
+  validation, so a change in what is added or counted shows here first. The secrets are 'pass:' references (never
+  resolved by local-plan), not dummies: how local-plan treats the dummy '********' is KB-056
+  (O-LPLAN-FORCED-SECRETS), which this P0 contract must not depend on (BAT-15).
+priority: P0
+tags: [offline, repo, secrets, variables, webhooks, bpr, environments, custom-properties]
+observe: true
+variables: {plan: free}
+steps:
+  - name: add
+    base_fragments: {}
+    fragments:
+      custom_properties:
+        - "orgs.newCustomProperty('{{ p }}-tier') { value_type: 'single_select', allowed_values: ['gold', 'silver'] }"
+      secrets:
+        - "orgs.newOrgSecret('{{ P }}_ORG_SECRET') { value: 'pass:e2e/org-secret' }"
+      variables:
+        - "orgs.newOrgVariable('{{ P }}_ORG_VAR') { value: 'organization value' }"
+      webhooks:
+        - "orgs.newOrgWebhook('{{ hook_base }}org-hook') { events+: ['repository'], content_type: 'json' }"
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-added') {
+            description: "otterdog e2e: added repository",
+            topics: ["e2e"],
+            secrets: [orgs.newRepoSecret('{{ P }}_REPO_SECRET') { value: "pass:e2e/repo-secret" }],
+            variables: [orgs.newRepoVariable('{{ P }}_REPO_VAR') { value: "one" }],
+            webhooks: [orgs.newRepoWebhook('{{ hook_base }}repo-hook') { events+: ["push"], content_type: "json" }],
+            branch_protection_rules: [orgs.newBranchProtectionRule('main') { required_approving_review_count: 1 }],
+            environments: [
+              orgs.newEnvironment('{{ p }}-env') { wait_timer: 5, deployment_branch_policy: "selected", branch_policies+: ["main"] },
+            ],
+          }
+    validate: {ok: true, errors: 0}
+    plan:
+      expect: changes
+      contains:
+        - 'add custom_property[name="{{ p }}-tier"]'
+        - 'add org_secret[name="{{ P }}_ORG_SECRET"]'
+        - 'add org_variable[name="{{ P }}_ORG_VAR"]'
+        - 'add org_webhook[url="{{ hook_base }}org-hook"]'
+        - 'add repository[name="{{ p }}-added"]'
+        - 'add repo_secret[name="{{ P }}_REPO_SECRET", repository={{ p }}-added]'
+        - 'add repo_variable[name="{{ P }}_REPO_VAR", repository={{ p }}-added]'
+        - 'add repo_webhook[url="{{ hook_base }}repo-hook", repository={{ p }}-added]'
+        - 'add branch_protection_rule[pattern="main", repository={{ p }}-added]'
+        - 'add environment[name="{{ p }}-env", repository={{ p }}-added]'
+      counts: {add: 10, change: 0, delete: 0}

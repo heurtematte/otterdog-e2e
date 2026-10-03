@@ -1,0 +1,104 @@
+# custom-properties.true-false and custom-properties.remove (P2): true_false values and removing a definition.
+id: cli.custom-property.flag
+title: true_false custom property and removing a property definition
+tier: cli
+description: |
+  A value_type true_false custom property (otterdog/models/custom_property.py:52-59) holds the strings 'true' and
+  'false' on repositories: the run repository gets 'true', then 'false', each read back by the oracle and
+  converging. A second (string) property is then removed from the configuration together with its repository value
+  and applied with -d: the plan removes the definition ('- remove custom_property[...]'), GitHub drops the values of
+  the deleted property, and the repository converges without it. A repository value alone cannot be removed
+  (one-way diff of custom_properties, KB-005), which is why the value goes away with its definition here. Property
+  names use '-' (KB-016). Definitions are org-level objects with the run prefix: the guarded -d cleanup removes them.
+priority: P2
+requires: [custom_properties]
+tags: [custom-properties, repo]
+steps:
+  - name: create
+    fragments:
+      custom_properties: &properties
+        - |
+          orgs.newCustomProperty('{{ p }}-flag') {
+            value_type: "true_false",
+            values_editable_by: "org_actors",
+            description: "otterdog e2e: flag",
+          }
+        - |
+          orgs.newCustomProperty('{{ p }}-note') {
+            value_type: "string",
+            values_editable_by: "org_actors",
+          }
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-flag-repo') {
+            description: "otterdog e2e: true_false custom property",
+            custom_properties: {"{{ p }}-flag": "true", "{{ p }}-note": "otterdog-e2e"},
+          }
+    plan:
+      expect: changes
+      contains:
+        - '+ add custom_property[name="{{ p }}-flag"]'
+        - '+ add custom_property[name="{{ p }}-note"]'
+        - '+ add repository[name="{{ p }}-flag-repo"]'
+      counts: {add: 3, delete: 0}
+    state:
+      - kind: custom_property
+        name: "{{ p }}-flag"
+        match: {property_name: "{{ p }}-flag", value_type: true_false, required: false}
+      - kind: repo_custom_properties
+        repo: "{{ p }}-flag-repo"
+        match: {"{{ p }}-flag": "true", "{{ p }}-note": otterdog-e2e}
+
+  - name: flag-false
+    fragments:
+      custom_properties: *properties
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-flag-repo') {
+            description: "otterdog e2e: true_false custom property",
+            custom_properties: {"{{ p }}-flag": "false", "{{ p }}-note": "otterdog-e2e"},
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ repository[name="{{ p }}-flag-repo"]'
+        - '"true" -> "false"'
+      counts: {add: 0, delete: 0}
+    state:
+      - kind: repo_custom_properties
+        repo: "{{ p }}-flag-repo"
+        match: {"{{ p }}-flag": "false"}
+
+  - name: remove-definition
+    fragments:
+      custom_properties:
+        - |
+          orgs.newCustomProperty('{{ p }}-flag') {
+            value_type: "true_false",
+            values_editable_by: "org_actors",
+            description: "otterdog e2e: flag",
+          }
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-flag-repo') {
+            description: "otterdog e2e: true_false custom property",
+            custom_properties: {"{{ p }}-flag": "false"},
+          }
+    plan:
+      expect: changes
+      contains:
+        - '- remove custom_property[name="{{ p }}-note"]'
+      not_contains:
+        - '- remove custom_property[name="{{ p }}-flag"]'
+      counts: {add: 0, delete: 1}
+    apply: {delete: true}
+    state:
+      - kind: custom_property
+        name: "{{ p }}-note"
+        absent: true
+      - kind: custom_property
+        name: "{{ p }}-flag"
+        absent: false
+      - kind: repo_custom_properties
+        repo: "{{ p }}-flag-repo"
+        match: {"{{ p }}-flag": "false", "{{ p }}-note": {$exists: false}}

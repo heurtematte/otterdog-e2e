@@ -1,0 +1,161 @@
+# Offline tier (battery, plan semantics): repository values coerced by organization settings.
+id: O-LPLAN-COERCE-SIGNOFF
+tier: offline
+title: Organization settings make repository fields unmanaged or forced (signoff, projects, Pages, discussions)
+description: >-
+  While the organization requires commit signoff, a repository's web_commit_signoff_required is unmanaged; turning
+  the organization setting off re-applies the value of every non-archived repository ('~ x = v -> v'). Repository
+  has_projects is unmanaged while organization projects are off and gh_pages_visibility below the enterprise plan;
+  the discussion source repository is always planned with has_discussions true and the source is ignored while
+  discussions are off. default_code_security_configurations_disabled can only disable (true -> false is dropped).
+  Control steps show the same fields managed when nothing coerces them.
+priority: P0
+tags: [offline, repo, org-settings]
+observe: true
+variables: {plan: free}
+steps:
+  - name: organization-signoff-off
+    base_fragments:
+      settings: ["web_commit_signoff_required: true"]
+      repositories: &signoff
+        - "orgs.newRepo('{{ p }}-signoff')"
+        - "orgs.newRepo('{{ p }}-archived') { archived: true }"
+    fragments:
+      settings: ["web_commit_signoff_required: false"]
+      repositories: *signoff
+    validate: {ok: true, errors: 0}
+    plan:
+      expect: changes
+      counts: {add: 0, change: 2, delete: 0}
+      contains:
+        - '~ settings {'
+        - '~ web_commit_signoff_required = true -> false'
+        - '~ repository[name="{{ p }}-signoff"] {'
+        - '~ web_commit_signoff_required = true -> true'
+      not_contains: ['repository[name="{{ p }}-archived"]']
+  - name: organization-signoff-off-repository-false
+    base_fragments:
+      settings: ["web_commit_signoff_required: true"]
+      repositories: ["orgs.newRepo('{{ p }}-signoff') { web_commit_signoff_required: false }"]
+    fragments:
+      settings: ["web_commit_signoff_required: false"]
+      repositories: ["orgs.newRepo('{{ p }}-signoff') { web_commit_signoff_required: false }"]
+    plan:
+      expect: changes
+      counts: {add: 0, change: 2, delete: 0}
+      contains:
+        - '~ web_commit_signoff_required = true -> false'
+        - '~ web_commit_signoff_required = false -> false'
+  - name: repository-signoff-unmanaged
+    base_fragments:
+      repositories: ["orgs.newRepo('{{ p }}-signoff') { web_commit_signoff_required: true }"]
+    fragments:
+      repositories: ["orgs.newRepo('{{ p }}-signoff') { web_commit_signoff_required: false }"]
+    plan:
+      expect: noop
+      counts: {add: 0, change: 0, delete: 0}
+      not_contains: ['~ repository[']
+  - name: repository-signoff-managed
+    base_fragments:
+      settings: ["web_commit_signoff_required: false"]
+      repositories: ["orgs.newRepo('{{ p }}-signoff') { web_commit_signoff_required: true }"]
+    fragments:
+      settings: ["web_commit_signoff_required: false"]
+      repositories: ["orgs.newRepo('{{ p }}-signoff') { web_commit_signoff_required: false }"]
+    plan:
+      expect: changes
+      counts: {add: 0, change: 1, delete: 0}
+      contains: ['~ repository[name="{{ p }}-signoff"] {', '~ web_commit_signoff_required = true -> false']
+      not_contains: ['~ settings {']
+  - name: projects-unmanaged
+    base_fragments:
+      settings: ["has_organization_projects: false"]
+      repositories: ["orgs.newRepo('{{ p }}-projects') { has_projects: true }"]
+    fragments:
+      settings: ["has_organization_projects: false"]
+      repositories: ["orgs.newRepo('{{ p }}-projects') { has_projects: false }"]
+    plan:
+      expect: noop
+      counts: {add: 0, change: 0, delete: 0}
+  - name: projects-managed
+    base_fragments:
+      repositories: ["orgs.newRepo('{{ p }}-projects') { has_projects: true }"]
+    fragments:
+      repositories: ["orgs.newRepo('{{ p }}-projects') { has_projects: false }"]
+    plan:
+      expect: changes
+      counts: {add: 0, change: 1, delete: 0}
+      contains: ['~ has_projects = true -> false']
+  - name: pages-visibility-unmanaged
+    base_fragments:
+      repositories:
+        - "orgs.newRepo('{{ p }}-pages') { gh_pages_build_type: 'workflow', gh_pages_visibility: 'public', environments: [orgs.newEnvironment('github-pages')] }"
+    fragments:
+      repositories:
+        - "orgs.newRepo('{{ p }}-pages') { gh_pages_build_type: 'workflow', gh_pages_visibility: 'private', environments: [orgs.newEnvironment('github-pages')] }"
+    plan:
+      expect: noop
+      counts: {add: 0, change: 0, delete: 0}
+      not_contains: ['gh_pages_visibility']
+  - name: discussion-source-ignored
+    base_fragments:
+      settings: ["has_discussions: false", "discussion_source_repository: '{{ org }}/{{ p }}-a'"]
+    fragments:
+      settings: ["has_discussions: false", "discussion_source_repository: '{{ org }}/{{ p }}-b'"]
+    plan:
+      expect: noop
+      counts: {add: 0, change: 0, delete: 0}
+  - name: discussion-source-forced
+    base_fragments: &discussions
+      settings: ["has_discussions: true", "discussion_source_repository: '{{ org }}/{{ p }}-discussions'"]
+      repositories: ["orgs.newRepo('{{ p }}-discussions') { has_discussions: false }"]
+    fragments: *discussions
+    plan:
+      expect: noop
+      counts: {add: 0, change: 0, delete: 0}
+  - name: discussion-source-enabled
+    base_fragments:
+      repositories: ["orgs.newRepo('{{ p }}-discussions')"]
+    fragments:
+      settings: ["has_discussions: true", "discussion_source_repository: '{{ org }}/{{ p }}-discussions'"]
+      repositories: ["orgs.newRepo('{{ p }}-discussions')"]
+    plan:
+      expect: changes
+      counts: {add: 0, change: 3, delete: 0}
+      contains:
+        - '-> "{{ org }}/{{ p }}-discussions"'
+        - '= false -> true'
+        - '~ repository[name="{{ p }}-discussions"] {'
+        - '~ has_discussions = false -> true'
+  - name: discussion-source-moved
+    base_fragments:
+      settings: ["has_discussions: true", "discussion_source_repository: '{{ org }}/{{ p }}-discussions'"]
+      repositories: ["orgs.newRepo('{{ p }}-discussions')"]
+    fragments:
+      settings: ["has_discussions: true", "discussion_source_repository: '{{ org }}/{{ p }}-forum'"]
+      repositories: ["orgs.newRepo('{{ p }}-discussions')", "orgs.newRepo('{{ p }}-forum')"]
+    plan:
+      expect: changes
+      counts: {add: 1, change: 2, delete: 0}
+      contains:
+        - '~ discussion_source_repository = "{{ org }}/{{ p }}-discussions" -> "{{ org }}/{{ p }}-forum"'
+        - '~ has_discussions = true -> false'
+        - '+ add repository[name="{{ p }}-forum"] {'
+  - name: code-security-enable-dropped
+    base_fragments:
+      settings: ["default_code_security_configurations_disabled: true"]
+    fragments:
+      settings: ["default_code_security_configurations_disabled: false"]
+    plan:
+      expect: noop
+      counts: {add: 0, change: 0, delete: 0}
+      not_contains: ['default_code_security_configurations_disabled']
+  - name: code-security-disable
+    base_fragments:
+      settings: ["default_code_security_configurations_disabled: false"]
+    fragments:
+      settings: ["default_code_security_configurations_disabled: true"]
+    plan:
+      expect: changes
+      counts: {add: 0, change: 1, delete: 0}
+      contains: ['~ default_code_security_configurations_disabled = false -> true']

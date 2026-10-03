@@ -1,0 +1,35 @@
+# PR manifest (SPEC 14) of a LOCAL change without an upstream PR (pr: 0): the uncommitted feature in the maintainer's
+# otterdog checkout (here ../otterdog, next to this project), branch feat/check-merge-command.
+#
+# The branch has no commit of its own (HEAD == merge base == v1.6.0 = 831c9cf2); the feature lives in the working
+# tree: new webapp tasks check_merge.py, update_branch.py and automerge_state.py, the comment templates
+# check_merge_comment.txt, update_branch_comment.txt and outdated_branch_note.txt, and changes to the comment handlers,
+# help/auto-merge/validation comments, graphql.py and rest/commit_client.py. The dirty: SUT exports exactly that
+# (read-only on the checkout; only DIRTY_ALLOW paths are copied, so local files such as values*.yaml never are).
+#
+# Usage (`base` below is the default --base-sut of `run --pr-manifest`):
+#   otterdog-e2e run --sut dirty:../otterdog \
+#     --pr-manifest scenarios/otterdog-prs/local-check-merge.yaml --suite offline,differential[,webapp --target free]
+# The comparison is against v1.6.0, not upstream main: until the feature is rebased the build lacks #767 #770 #771
+# #773 #775 #779 #790 #791, so the PR-specific scenario only looks at the new commands.
+pr: 0
+title: "feat: /otterdog check-merge and /otterdog update-branch commands (local, uncommitted)"
+base: tag:v1.6.0
+template: own
+tags: [webapp]
+scenarios: [W-CMD-CHECK-MERGE]
+expected_deltas:
+  - scenario: W-CMD-CHECK-MERGE
+    note: >-
+      head answers '/otterdog check-merge' with a '<!-- Otterdog Comment: check-merge -->' comment (eligible, not
+      eligible, closed/merged variants; previous ones minimized) and never merges; base (v1.6.0) has no such command
+      and posts nothing
+markers:
+  check-merge: "<!-- Otterdog Comment: check-merge -->"
+notes: >-
+  Besides the webapp (and dev/skaffold.yaml, tests) the feature changes two GitHub provider modules (graphql.py,
+  rest/commit_client.py) that offline commands never call, so every offline scenario must be unchanged between
+  v1.6.0 and the working tree (any offline delta is unexpected). The help comment of head also lists the
+  new commands (CM-01 in the research notes); a dedicated scenario for it is future work. The comment marker
+  'update-branch' ('<!-- Otterdog Comment: update-branch -->') belongs to the second new command, which no scenario
+  of this manifest exercises yet.

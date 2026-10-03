@@ -1,0 +1,129 @@
+# webhooks.repo.settings (P1): every setting of a repository webhook, changed and changed back.
+id: cli.repo.webhook-settings
+title: Repository webhook settings (events, content_type, active, insecure_ssl)
+tier: cli
+description: |
+  The settings otterdog sends as the hook and its config (otterdog/models/webhook.py:43-47, :113-141: events,
+  active, config.content_type and config.insecure_ssl; url is the key and never diffed). A run repository gets a
+  hook under the never-resolving hook base (GitHub records failed deliveries, nothing is reached), every setting is
+  then changed at once (active false, insecure_ssl '1', form content, two events) and changed back; after each apply
+  the oracle reads the hook (GET /repos/{org}/{repo}/hooks, matched by config.url) and the plan converges. The last
+  step removes the hook from the still existing repository (nested removal, apply -d). cli.repo.webhook covers the
+  ping deliveries.
+priority: P1
+tags: [webhooks, repo]
+steps:
+  - name: create
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-hookset') {
+            description: "otterdog e2e: repository webhook settings",
+            webhooks: [
+              orgs.newRepoWebhook('{{ hook_base }}settings') {
+                active: true,
+                content_type: "json",
+                insecure_ssl: "0",
+                events+: ["push"],
+              },
+            ],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '+ add repository[name="{{ p }}-hookset"]'
+        - '+ add repo_webhook[url="{{ hook_base }}settings", repository={{ p }}-hookset]'
+      counts: {add: 2, change: 0, delete: 0}
+    state:
+      - kind: repo_webhook
+        repo: "{{ p }}-hookset"
+        url: "{{ hook_base }}settings"
+        match:
+          active: true
+          events: [push]
+          config: {url: "{{ hook_base }}settings", content_type: json, insecure_ssl: "0"}
+
+  - name: inactive-insecure
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-hookset') {
+            description: "otterdog e2e: repository webhook settings",
+            webhooks: [
+              orgs.newRepoWebhook('{{ hook_base }}settings') {
+                active: false,
+                content_type: "form",
+                insecure_ssl: "1",
+                events+: ["push", "issues"],
+              },
+            ],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ repo_webhook[url="{{ hook_base }}settings", repository={{ p }}-hookset]'
+        - "true -> false"
+        - '"json" -> "form"'
+        - '"0" -> "1"'
+        - '+ "issues"'
+      counts: {add: 0, delete: 0}
+    state:
+      - kind: repo_webhook
+        repo: "{{ p }}-hookset"
+        url: "{{ hook_base }}settings"
+        match:
+          active: false
+          events: {$unordered: [push, issues]}
+          config: {url: "{{ hook_base }}settings", content_type: form, insecure_ssl: "1"}
+
+  - name: restore
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-hookset') {
+            description: "otterdog e2e: repository webhook settings",
+            webhooks: [
+              orgs.newRepoWebhook('{{ hook_base }}settings') {
+                active: true,
+                content_type: "json",
+                insecure_ssl: "0",
+                events+: ["push"],
+              },
+            ],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ repo_webhook[url="{{ hook_base }}settings", repository={{ p }}-hookset]'
+        - "false -> true"
+        - '"form" -> "json"'
+        - '"1" -> "0"'
+        - '- "issues"'
+      counts: {add: 0, delete: 0}
+    state:
+      - kind: repo_webhook
+        repo: "{{ p }}-hookset"
+        url: "{{ hook_base }}settings"
+        match:
+          active: true
+          events: [push]
+          config: {content_type: json, insecure_ssl: "0"}
+
+  - name: remove-hook
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-hookset') {
+            description: "otterdog e2e: repository webhook settings",
+          }
+    plan:
+      expect: changes
+      contains:
+        - '- remove repo_webhook[url="{{ hook_base }}settings", repository={{ p }}-hookset]'
+      counts: {add: 0, delete: 1}
+    apply: {delete: true}
+    state:
+      - kind: repo_webhook
+        repo: "{{ p }}-hookset"
+        url: "{{ hook_base }}settings"
+        absent: true

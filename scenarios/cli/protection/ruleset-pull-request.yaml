@@ -1,0 +1,129 @@
+# Pull request rule of a ruleset (coverage: rulesets.pull-request).
+id: cli.ruleset.pull-request
+tier: cli
+title: Ruleset pull request parameters and removal of the rule
+description: |
+  required_pull_request (orgs.newPullRequest, models/ruleset.py:49-119) becomes the pull_request rule of a repository
+  ruleset; otterdog renames its parameters (dismisses_stale_reviews -> dismiss_stale_reviews_on_push,
+  requires_code_owner_review -> require_code_owner_review, requires_last_push_approval ->
+  require_last_push_approval, requires_review_thread_resolution -> required_review_thread_resolution). The values are
+  merged over the template's newPullRequest() with 'required_pull_request+:', so every parameter GitHub requires is set
+  (a partial object is never reported and crashes the apply: KB-031). The strict step uses the boundary review count 0
+  with every flag on, the update step 3 approvals with every flag off, the last step sets required_pull_request to
+  null, which removes the pull_request rule from the live ruleset. The status check rule is left out (KB-021); each
+  step converges.
+priority: P1
+min_plan: free
+tags: [rulesets, repo]
+steps:
+  - name: strict
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-rs-pr') {
+            description: "otterdog e2e: ruleset pull request",
+            rulesets: [
+              orgs.newRepoRuleset('{{ p }}-rs-pr') {
+                include_refs+: ["~DEFAULT_BRANCH"],
+                required_status_checks: null,
+                required_pull_request+: {
+                  required_approving_review_count: 0,
+                  dismisses_stale_reviews: true,
+                  requires_code_owner_review: true,
+                  requires_last_push_approval: true,
+                  requires_review_thread_resolution: true,
+                },
+              },
+            ],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '+ add repo_ruleset[name="{{ p }}-rs-pr", repository={{ p }}-rs-pr]'
+      counts: {add: 2, change: 0, delete: 0}
+    state:
+      - kind: repo_ruleset
+        repo: "{{ p }}-rs-pr"
+        name: "{{ p }}-rs-pr"
+        match:
+          rules:
+            $unordered:
+              - {type: creation}
+              - {type: deletion}
+              - {type: non_fast_forward}
+              - type: pull_request
+                parameters:
+                  required_approving_review_count: 0
+                  dismiss_stale_reviews_on_push: true
+                  require_code_owner_review: true
+                  require_last_push_approval: true
+                  required_review_thread_resolution: true
+
+  - name: relaxed
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-rs-pr') {
+            description: "otterdog e2e: ruleset pull request",
+            rulesets: [
+              orgs.newRepoRuleset('{{ p }}-rs-pr') {
+                include_refs+: ["~DEFAULT_BRANCH"],
+                required_status_checks: null,
+                required_pull_request+: {
+                  required_approving_review_count: 3,
+                  dismisses_stale_reviews: false,
+                  requires_code_owner_review: false,
+                  requires_last_push_approval: false,
+                  requires_review_thread_resolution: false,
+                },
+              },
+            ],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ repo_ruleset[name="{{ p }}-rs-pr", repository={{ p }}-rs-pr]'
+      counts: {add: 0, change: 1, delete: 0}
+    state:
+      - kind: repo_ruleset
+        repo: "{{ p }}-rs-pr"
+        name: "{{ p }}-rs-pr"
+        match:
+          rules:
+            $unordered:
+              - {type: creation}
+              - {type: deletion}
+              - {type: non_fast_forward}
+              - type: pull_request
+                parameters:
+                  required_approving_review_count: 3
+                  dismiss_stale_reviews_on_push: false
+                  require_code_owner_review: false
+                  require_last_push_approval: false
+                  required_review_thread_resolution: false
+
+  - name: remove-rule
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-rs-pr') {
+            description: "otterdog e2e: ruleset pull request",
+            rulesets: [
+              orgs.newRepoRuleset('{{ p }}-rs-pr') {
+                include_refs+: ["~DEFAULT_BRANCH"],
+                required_status_checks: null,
+                required_pull_request: null,
+              },
+            ],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ repo_ruleset[name="{{ p }}-rs-pr", repository={{ p }}-rs-pr]'
+      counts: {add: 0, change: 1, delete: 0}
+    state:
+      - kind: repo_ruleset
+        repo: "{{ p }}-rs-pr"
+        name: "{{ p }}-rs-pr"
+        match:
+          rules: {$unordered: [{type: creation}, {type: deletion}, {type: non_fast_forward}]}

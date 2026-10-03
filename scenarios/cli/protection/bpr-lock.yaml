@@ -1,0 +1,66 @@
+# Branch lock (coverage: branch-protection.lock-branch).
+id: cli.bpr.lock
+tier: cli
+title: Lock branches matching a branch protection rule
+description: |
+  lock_branch makes the matching branches read-only, lock_allows_fetch_and_merge keeps them in sync with their
+  upstream (fork syncing) while locked (models/branch_protection_rule.py:53-54, GraphQL lockBranch and
+  lockAllowsFetchAndMerge). A public run repository gets a rule on 'locked/*' (no such branch has to exist) without
+  pull request requirement; the lock step enables both, the unlock step disables both (two changed attributes;
+  validation warns when lock_allows_fetch_and_merge stays enabled without a lock, :222-229, so both go off together).
+  The oracle reads the rule through GraphQL; both steps converge.
+priority: P2
+min_plan: free
+tags: [bpr, repo]
+steps:
+  - name: lock
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-bpr-lock') {
+            description: "otterdog e2e: locked branches",
+            branch_protection_rules: [
+              orgs.newBranchProtectionRule('locked/*') {
+                requires_pull_request: false,
+                required_approving_review_count: null,
+                lock_branch: true,
+                lock_allows_fetch_and_merge: true,
+              },
+            ],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '+ add branch_protection_rule[pattern="locked/*", repository={{ p }}-bpr-lock]'
+      counts: {add: 2, change: 0, delete: 0}
+    state:
+      - kind: bpr
+        repo: "{{ p }}-bpr-lock"
+        pattern: locked/*
+        match: {pattern: locked/*, requiresApprovingReviews: false, lockBranch: true, lockAllowsFetchAndMerge: true}
+
+  - name: unlock
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-bpr-lock') {
+            description: "otterdog e2e: locked branches",
+            branch_protection_rules: [
+              orgs.newBranchProtectionRule('locked/*') {
+                requires_pull_request: false,
+                required_approving_review_count: null,
+                lock_branch: false,
+                lock_allows_fetch_and_merge: false,
+              },
+            ],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ branch_protection_rule[pattern="locked/*", repository={{ p }}-bpr-lock]'
+      counts: {add: 0, change: 2, delete: 0}
+    state:
+      - kind: bpr
+        repo: "{{ p }}-bpr-lock"
+        pattern: locked/*
+        match: {lockBranch: false, lockAllowsFetchAndMerge: false}

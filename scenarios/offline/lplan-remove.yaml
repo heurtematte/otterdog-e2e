@@ -1,0 +1,50 @@
+# Offline tier (SPEC 19): local-plan when objects disappear from the configuration.
+id: O-LPLAN-REMOVE
+title: local-plan lists removed objects (a removed repository counts once)
+description: >-
+  -BASE holds an organization variable and webhook, a repository that stays (with a variable and a webhook that are
+  dropped) and a repository that disappears with its nested objects. local-plan must show a '- remove' block for
+  each dropped organization-level object and each dropped nested object of the kept repository, ONE block for the
+  removed repository (its nested objects are not listed nor counted), and count the removals in 'Plan:'. Removals
+  drive 'apply -d', whose guard (BaselineManager) relies on exactly this output.
+priority: P0
+tags: [offline, repo, variables, webhooks]
+observe: true
+variables: {plan: free}
+steps:
+  - name: remove
+    base_fragments:
+      variables:
+        - "orgs.newOrgVariable('{{ P }}_ORG_VAR') { value: 'gone' }"
+      webhooks:
+        - "orgs.newOrgWebhook('{{ hook_base }}org-hook') { events+: ['repository'], content_type: 'json' }"
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-kept') {
+            description: "otterdog e2e: kept repository",
+            variables: [orgs.newRepoVariable('{{ P }}_KEPT_VAR') { value: "gone" }],
+            webhooks: [orgs.newRepoWebhook('{{ hook_base }}kept-hook') { events+: ["push"], content_type: "json" }],
+          }
+        - |-
+          orgs.newRepo('{{ p }}-gone') {
+            description: "otterdog e2e: removed repository",
+            variables: [orgs.newRepoVariable('{{ P }}_GONE_VAR') { value: "gone" }],
+            branch_protection_rules: [orgs.newBranchProtectionRule('main')],
+          }
+    fragments:
+      repositories:
+        - "orgs.newRepo('{{ p }}-kept') { description: 'otterdog e2e: kept repository' }"
+    validate: {ok: true, errors: 0}
+    plan:
+      expect: changes
+      contains:
+        - '- remove org_variable[name="{{ P }}_ORG_VAR"]'
+        - '- remove org_webhook[url="{{ hook_base }}org-hook"]'
+        - '- remove repo_variable[name="{{ P }}_KEPT_VAR", repository={{ p }}-kept]'
+        - '- remove repo_webhook[url="{{ hook_base }}kept-hook", repository={{ p }}-kept]'
+        - '- remove repository[name="{{ p }}-gone"]'
+      not_contains:
+        - 'repo_variable[name="{{ P }}_GONE_VAR"'
+        - 'branch_protection_rule[pattern="main", repository={{ p }}-gone]'
+        - '~ repository[name="{{ p }}-kept"]'
+      counts: {add: 0, change: 0, delete: 5}

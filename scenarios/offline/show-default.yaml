@@ -1,0 +1,20 @@
+# Offline tier (SPEC 19): the defaults the base template gives every object.
+id: O-SHOW-DEFAULT
+title: show-default prints the template defaults of every object type
+description: >-
+  show-default evaluates the base template (vendored, --local) and prints the default jsonnet of each object type
+  (organization, repository, branch protection rule, rulesets, webhooks, secrets, variables, environments, ...). The
+  output documents what users get when they call orgs.new*() and must keep working for every template the SUT
+  ships; differential runs show default changes introduced by a PR to examples/template or to the models.
+priority: P0
+tags: [offline, template]
+observe: true
+steps:
+  - name: defaults
+    fragments: {}
+    commands:
+      show-default:
+        exit_code: 0
+        contains:
+          - "orgs.newOrg('<project-name>', '<github-id>')"
+          - "orgs.newRepo('<repo-name>')"

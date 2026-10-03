@@ -1,0 +1,126 @@
+# C-CUSTOM-PROPERTY (SPEC 19, P1): org custom property definitions and repository values.
+id: cli.custom-property
+title: Custom properties (definitions and repository values)
+description: |
+  Three organization custom properties (single_select, multi_select, string) and a run repository holding values
+  for them. Property names use '-' (naming.prop): names containing '_' cannot hold multi_select values because of
+  otterdog's repository schema (KB-016, scenario cli.kb.custom-property-underscore). Definitions are org-level
+  objects rendered inside settings.custom_properties (OC-05); their names carry the run prefix, so the guarded -d
+  cleanup removes them. The string property also covers #653 (no allowed_values sent for string properties,
+  known-bad < 1.3.4). values_editable_by is set explicitly: the template default null is nullable in GitHub's API
+  and its stored default is undocumented, which is not what this scenario is about. The update step adds an
+  allowed value and changes every repository value (removing a value is not used: removals from repository
+  custom_properties are not detected, KB-005).
+priority: P1
+min_plan: free
+requires: [custom_properties]
+tags: [custom-properties, repo]
+steps:
+  - name: create
+    fragments:
+      custom_properties:
+        - |
+          orgs.newCustomProperty('{{ p }}-tier') {
+            value_type: "single_select",
+            values_editable_by: "org_actors",
+            allowed_values: ["gold", "silver"],
+            description: "otterdog e2e: tier",
+          }
+        - |
+          orgs.newCustomProperty('{{ p }}-tags') {
+            value_type: "multi_select",
+            values_editable_by: "org_actors",
+            allowed_values: ["alpha", "beta", "gamma"],
+          }
+        - |
+          orgs.newCustomProperty('{{ p }}-owner') {
+            value_type: "string",
+            values_editable_by: "org_actors",
+          }
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-props') {
+            description: "otterdog e2e: custom property values",
+            custom_properties: {
+              "{{ p }}-tier": "gold",
+              "{{ p }}-tags": ["alpha", "beta"],
+              "{{ p }}-owner": "otterdog-e2e",
+            },
+          }
+    plan:
+      expect: changes
+      contains:
+        - '+ add custom_property[name="{{ p }}-tier"]'
+        - '+ add custom_property[name="{{ p }}-tags"]'
+        - '+ add custom_property[name="{{ p }}-owner"]'
+        - '+ add repository[name="{{ p }}-props"]'
+      counts: {add: 4, delete: 0}
+    state:
+      - kind: custom_property
+        name: "{{ p }}-tier"
+        match:
+          property_name: "{{ p }}-tier"
+          value_type: single_select
+          allowed_values: {$unordered: [gold, silver]}
+          required: false
+          values_editable_by: org_actors
+      - kind: custom_property
+        name: "{{ p }}-tags"
+        match: {value_type: multi_select, allowed_values: {$unordered: [alpha, beta, gamma]}}
+      - kind: custom_property
+        name: "{{ p }}-owner"
+        match: {value_type: string}
+      - kind: repo_custom_properties
+        repo: "{{ p }}-props"
+        match:
+          "{{ p }}-tier": gold
+          "{{ p }}-tags": {$unordered: [alpha, beta]}
+          "{{ p }}-owner": otterdog-e2e
+
+  - name: update
+    fragments:
+      custom_properties:
+        - |
+          orgs.newCustomProperty('{{ p }}-tier') {
+            value_type: "single_select",
+            values_editable_by: "org_actors",
+            allowed_values: ["gold", "silver", "bronze"],
+            description: "otterdog e2e: tier",
+          }
+        - |
+          orgs.newCustomProperty('{{ p }}-tags') {
+            value_type: "multi_select",
+            values_editable_by: "org_actors",
+            allowed_values: ["alpha", "beta", "gamma"],
+          }
+        - |
+          orgs.newCustomProperty('{{ p }}-owner') {
+            value_type: "string",
+            values_editable_by: "org_actors",
+          }
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-props') {
+            description: "otterdog e2e: custom property values",
+            custom_properties: {
+              "{{ p }}-tier": "bronze",
+              "{{ p }}-tags": ["gamma"],
+              "{{ p }}-owner": "otterdog-e2e-updated",
+            },
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ custom_property[name="{{ p }}-tier"]'
+        - '~ repository[name="{{ p }}-props"]'
+      counts: {add: 0, delete: 0}
+    state:
+      - kind: custom_property
+        name: "{{ p }}-tier"
+        match: {allowed_values: {$unordered: [gold, silver, bronze]}}
+      - kind: repo_custom_properties
+        repo: "{{ p }}-props"
+        match:
+          "{{ p }}-tier": bronze
+          "{{ p }}-tags": [gamma]
+          "{{ p }}-owner": otterdog-e2e-updated

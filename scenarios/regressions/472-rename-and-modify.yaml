@@ -1,0 +1,63 @@
+# Regression #472 (v1.1.1): rename a repository and change its settings in one operation.
+id: regression.472-rename-and-modify
+title: "#472: rename a repository (aliases) and modify it in one apply"
+description: |
+  Issue https://github.com/eclipse-csi/otterdog/issues/472 ("Fix renaming a repository and modifying settings in a
+  single operation"): with aliases: ['<old name>'] otterdog matches the live repository by its previous name and
+  plans ONE change (PATCH of the old name including the new name, then the topics PUT on the new name) instead of a
+  remove + add, which would delete the repository and its data.
+  Known-bad: v1.1.0 - the topics/settings update was sent to the old name after the rename and failed.
+  The rename step must plan a change (no add of the new name, no removal of the old one), apply cleanly, show the
+  new name with the new settings and converge; the alias is then dropped and the plan must stay a no-op.
+priority: P1
+min_plan: free
+tags: [repo, regression, rename, pr-472]
+steps:
+  - name: create
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-r472-old') {
+            description: "otterdog e2e: #472 before rename",
+            topics: ["before-rename"],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '+ add repository[name="{{ p }}-r472-old"]'
+    state:
+      - {kind: repo, name: "{{ p }}-r472-old", match: {name: "{{ p }}-r472-old"}}
+
+  - name: rename
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-r472-new') {
+            aliases: ["{{ p }}-r472-old"],
+            description: "otterdog e2e: #472 after rename",
+            topics: ["after-rename"],
+          }
+    plan:
+      expect: changes
+      not_contains:
+        - '+ add repository[name="{{ p }}-r472-new"]'
+        - '- remove repository[name="{{ p }}-r472-old"]'
+      counts: {add: 0, delete: 0}
+    state:
+      - kind: repo
+        name: "{{ p }}-r472-new"
+        match: {name: "{{ p }}-r472-new", description: "otterdog e2e: #472 after rename"}
+      - kind: repo_topics
+        name: "{{ p }}-r472-new"
+        equals: [after-rename]
+
+  - name: drop-alias
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-r472-new') {
+            description: "otterdog e2e: #472 after rename",
+            topics: ["after-rename"],
+          }
+    plan:
+      expect: noop

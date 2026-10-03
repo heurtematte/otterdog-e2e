@@ -1,0 +1,32 @@
+# Known bug KB-037: the team privacy error lists ('secret' | 'closed'), the accepted values are 'secret' | 'visible'.
+id: cli.kb.team-privacy-message
+title: Team privacy validation message names the accepted values (known bug KB-037)
+tier: cli
+description: |
+  otterdog accepts a team privacy of 'secret' or 'visible' (GitHub's 'closed'), but its validation error for any other
+  value says "while only values ('secret' | 'closed') are allowed." (otterdog/models/team.py:77-83), so a user who
+  wrote GitHub's 'closed' is told that 'closed' is allowed. The step asserts the message with the accepted values and
+  carries known_bug KB-037: an expected failure while the bug exists, a regression guard once it is fixed. The
+  refusal itself (one error, exit code 1) is asserted strictly by cli.validate.teams. Team validation lists the org
+  members, so it runs live only; validate only (plan null), nothing is applied.
+priority: P2
+tags: [teams, known-bug]
+steps:
+  - name: privacy-message
+    known_bug: KB-037
+    fragments:
+      teams:
+        - |
+          orgs.newTeam('{{ p }}-t1') {
+            description: "otterdog e2e: team validation",
+            privacy: "closed",
+            members: [],
+          }
+    validate:
+      ok: false
+      errors: 1
+      contains:
+        - >-
+          Error: team[name="{{ p }}-t1"] has 'privacy' of value 'closed', while only values ('secret' | 'visible')
+          are allowed.
+    plan: null

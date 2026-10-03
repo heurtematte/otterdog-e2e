@@ -1,0 +1,57 @@
+# Repository Actions cache storage limit (coverage: repo-workflows.cache-size).
+id: cli.repo.cache-limit
+tier: cli
+title: Repository Actions cache storage limit
+description: |
+  workflows.max_cache_size_gb of a public run repository, written with PUT
+  /repos/{owner}/{repo}/actions/cache/storage-limit (providers/github/rest/repo_client.py:1232-1264) and read back by
+  the oracle from the same endpoint. Runs only where otterdog can manage the limit (capability actions_cache_limit:
+  the repository endpoint and the organization path otterdog calls answer 200, docs/capability-matrix.md); elsewhere
+  the renderer hides the field and otterdog would send the PUT although its GET reported the setting unavailable
+  (KB-007), so the scenario is skipped there instead. The field is written with ':::' so that it stays visible
+  whatever the renderer hides. The create step sets the limit with the new repository (the ADD path sends the whole
+  workflows block), the update step changes it (one changed attribute: the embedded workflows block); both converge.
+priority: P2
+min_plan: free
+requires: [actions_cache_limit]
+tags: [repo, workflows]
+steps:
+  - name: create
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-cache') {
+            description: "otterdog e2e: actions cache limit",
+            workflows+: {
+              max_cache_size_gb::: 5,
+            },
+          }
+    plan:
+      expect: changes
+      contains:
+        - '+ add repository[name="{{ p }}-cache"]'
+      counts: {add: 1, change: 0, delete: 0}
+    state:
+      - kind: repo_cache_storage_limit
+        repo: "{{ p }}-cache"
+        match: {max_cache_size_gb: 5}
+
+  - name: update
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-cache') {
+            description: "otterdog e2e: actions cache limit",
+            workflows+: {
+              max_cache_size_gb::: 8,
+            },
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ repository[name="{{ p }}-cache"]'
+      counts: {add: 0, change: 1, delete: 0}
+    state:
+      - kind: repo_cache_storage_limit
+        repo: "{{ p }}-cache"
+        match: {max_cache_size_gb: 8}

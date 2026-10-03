@@ -1,0 +1,7 @@
+Validating organization configurations:
+
+Project e2e-test-org[github_id=e2e-test-org] (1/1)
+╷                                                                                                                                          
+│ Error:   repository[name="e2e-t3c7z8a5-rs", repository=e2e-t3c7z8a5-rs] has not set required parameter 'required_status_checks.strict'.  
+╵                                                                                                                                          
+  Validation failed: 0 info(s), 0 warning(s), 1 error(s)

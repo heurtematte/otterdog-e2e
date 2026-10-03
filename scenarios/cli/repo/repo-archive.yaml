@@ -1,0 +1,97 @@
+# Archiving and unarchiving a repository (coverage: repositories.archive).
+id: cli.repo.archive
+tier: cli
+title: Archive a repository, ignore changes while archived, unarchive it
+description: |
+  A public run repository is archived in the same step as a description change: otterdog sends both in the
+  repository's PATCH, the patch that makes an object read-only being applied after every other patch of the plan
+  (operations/apply.py:130-137, LivePatch.changes_object_to_readonly), and the oracle must show the new description on
+  the archived repository. While the repository stays archived, otterdog ignores the settings GitHub refuses on
+  archived repositories (Repository._unavailable_fields_in_archived_repos through is_key_valid_for_diff_computation,
+  models/repository.py:783-790) and does not compare its branch protection rules (models/repository.py:1310-1328): a
+  new description and a new branch protection rule plan nothing, and validate -v reports the ignored rule as an Info.
+  Unarchiving is a plain change of 'archived' that converges. The cleanup deletes the repository (archived
+  repositories can be deleted).
+priority: P0
+min_plan: free
+tags: [repo, bpr]
+steps:
+  - name: create
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-archive') {
+            description: "otterdog e2e: archive v1",
+          }
+    plan:
+      expect: changes
+      contains:
+        - '+ add repository[name="{{ p }}-archive"]'
+      counts: {add: 1, change: 0, delete: 0}
+    state:
+      - kind: repo
+        name: "{{ p }}-archive"
+        match: {archived: false, description: "otterdog e2e: archive v1"}
+
+  - name: archive
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-archive') {
+            description: "otterdog e2e: archive v2",
+            archived: true,
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ repository[name="{{ p }}-archive"]'
+      counts: {add: 0, change: 2, delete: 0}
+    state:
+      - kind: repo
+        name: "{{ p }}-archive"
+        match: {archived: true, description: "otterdog e2e: archive v2"}
+
+  - name: archived-change
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-archive') {
+            description: "otterdog e2e: archive v3 (ignored while archived)",
+            archived: true,
+            branch_protection_rules: [
+              orgs.newBranchProtectionRule('main') {
+                required_approving_review_count: 1,
+              },
+            ],
+          }
+    validate:
+      verbose: true
+      ok: true
+      contains:
+        - 'Info: repository[name="{{ p }}-archive"] is archived but has branch_protection_rules which will be ignored.'
+    plan:
+      expect: noop
+      not_contains:
+        - 'branch_protection_rule[pattern="main", repository={{ p }}-archive]'
+    state:
+      - kind: repo
+        name: "{{ p }}-archive"
+        match: {archived: true, description: "otterdog e2e: archive v2"}
+      - {kind: bpr, repo: "{{ p }}-archive", pattern: main, absent: true}
+
+  - name: unarchive
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-archive') {
+            description: "otterdog e2e: archive v2",
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ repository[name="{{ p }}-archive"]'
+      counts: {add: 0, change: 1, delete: 0}
+    state:
+      - kind: repo
+        name: "{{ p }}-archive"
+        match: {archived: false, description: "otterdog e2e: archive v2"}

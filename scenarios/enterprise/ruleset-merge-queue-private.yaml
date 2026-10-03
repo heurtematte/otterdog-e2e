@@ -1,0 +1,122 @@
+# Merge queue of a private repository (coverage: rulesets.merge-queue; plan-dependent: Enterprise Cloud).
+id: enterprise.ruleset-merge-queue-private
+title: Ruleset requiring a merge queue on a private repository (Enterprise)
+description: |
+  The positive private counterpart of cli.ruleset.merge-queue: GitHub offers merge queues on private repositories
+  with Enterprise Cloud only (capability merge_queue_private; public repositories: every plan) and rulesets on private
+  repositories from Team on (private_repo_rulesets). A private run repository (allow_forking false, no wiki) gets a
+  default-branch ruleset whose only extra rule is a merge queue built from orgs.newMergeQueue() (all seven parameters
+  set, KB-031), with rebase merges and HEADGREEN grouping; the update step switches to squash merges. The oracle
+  checks the merge_queue rule parameters, both steps converge.
+  The repository is created PUBLIC in a first step and made private by the next one: otterdog before 1.7.0.dev14
+  cannot create a private repository on an organization without Code Security (the code scanning default setup
+  PATCH of new repositories fails, #791; regression.791-731-private-repo covers that path).
+priority: P2
+min_plan: enterprise
+requires: [private_repo_rulesets, merge_queue_private]
+tags: [rulesets, repo, enterprise, private]
+steps:
+  - name: public
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-ent-mq') {
+            description: "otterdog e2e: private merge queue",
+            has_wiki: false,
+          }
+    plan:
+      expect: changes
+      contains:
+        - '+ add repository[name="{{ p }}-ent-mq"]'
+      counts: {add: 1, delete: 0}
+    state:
+      - kind: repo
+        name: "{{ p }}-ent-mq"
+        match: {private: false}
+
+  - name: create
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-ent-mq') {
+            description: "otterdog e2e: private merge queue",
+            private: true,
+            allow_forking: false,
+            has_wiki: false,
+            rulesets: [
+              orgs.newRepoRuleset('{{ p }}-ent-mq') {
+                include_refs+: ["~DEFAULT_BRANCH"],
+                required_pull_request: null,
+                required_status_checks: null,
+                required_merge_queue: orgs.newMergeQueue() {
+                  merge_method: "REBASE",
+                  requires_all_group_entries_to_pass_required_checks: false,
+                },
+              },
+            ],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ repository[name="{{ p }}-ent-mq"]'
+        - '+ add repo_ruleset[name="{{ p }}-ent-mq", repository={{ p }}-ent-mq]'
+      not_contains:
+        - '+ add repository[name="{{ p }}-ent-mq"]'
+      counts: {add: 1, delete: 0}
+    state:
+      - kind: repo_ruleset
+        repo: "{{ p }}-ent-mq"
+        name: "{{ p }}-ent-mq"
+        match:
+          rules:
+            $unordered:
+              - {type: creation}
+              - {type: deletion}
+              - {type: non_fast_forward}
+              - type: merge_queue
+                parameters:
+                  merge_method: REBASE
+                  max_entries_to_build: 5
+                  min_entries_to_merge: 1
+                  max_entries_to_merge: 5
+                  min_entries_to_merge_wait_minutes: 5
+                  check_response_timeout_minutes: 60
+                  grouping_strategy: HEADGREEN
+
+  - name: update
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-ent-mq') {
+            description: "otterdog e2e: private merge queue",
+            private: true,
+            allow_forking: false,
+            has_wiki: false,
+            rulesets: [
+              orgs.newRepoRuleset('{{ p }}-ent-mq') {
+                include_refs+: ["~DEFAULT_BRANCH"],
+                required_pull_request: null,
+                required_status_checks: null,
+                required_merge_queue: orgs.newMergeQueue() {
+                  merge_method: "SQUASH",
+                  requires_all_group_entries_to_pass_required_checks: false,
+                },
+              },
+            ],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ repo_ruleset[name="{{ p }}-ent-mq", repository={{ p }}-ent-mq]'
+      counts: {add: 0, change: 1, delete: 0}
+    state:
+      - kind: repo_ruleset
+        repo: "{{ p }}-ent-mq"
+        name: "{{ p }}-ent-mq"
+        match:
+          rules:
+            $unordered:
+              - {type: creation}
+              - {type: deletion}
+              - {type: non_fast_forward}
+              - {type: merge_queue, parameters: {merge_method: SQUASH, grouping_strategy: HEADGREEN}}

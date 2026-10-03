@@ -1,0 +1,213 @@
+# Offline tier (battery, validation): the JSON schema check that runs before the model validation.
+id: O-VAL-SCHEMA
+tier: offline
+title: Unknown properties and schema violations of the configuration
+description: >-
+  GitHubOrganization._validate_org_config checks the evaluated configuration against otterdog's JSON schemas before
+  any model rule. An unknown key of an additionalProperties object (organization, settings, repository, branch
+  protection rule, environment, webhook, custom property) is only logged as a warning and ignored (#718); an unknown
+  key of an unevaluatedProperties object (secrets, variables, rulesets, roles, Actions settings) and a type
+  violation abort the command like a crash (exit 2, no validation summary). Known defects run as expected failures of
+  their own steps: team_permissions values are rejected by the schema before the model can report them, uppercase
+  aliases included (KB-032), and a property name with '_' cannot hold a multi_select value (KB-016).
+priority: P1
+tags: [offline, repo, secrets, variables, rulesets, org-roles, workflows, custom-properties, webhooks, template]
+observe: true
+variables: {plan: free}
+steps:
+  - name: unknown-properties-ignored
+    base_fragments: {}
+    fragments:
+      settings: ["has_repository_projects: true"]
+      custom_properties: ["orgs.newCustomProperty('{{ p }}-cp') { foo_cp: 1 }"]
+      webhooks: ["orgs.newOrgWebhook('{{ hook_base }}unknown') { foo_hook: 1 }"]
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-unknown') {
+            foo_repo: 1,
+            branch_protection_rules: [orgs.newBranchProtectionRule('main') { foo_bpr: 1 }],
+            environments: [orgs.newEnvironment('{{ p }}-env') { foo_env: 1 }],
+          }
+    validate:
+      ok: true
+      errors: 0
+      exit_code: 0
+      contains:
+        - "Validation succeeded"
+        - "ignoring unknown properties found while validating organization config: Additional properties are not allowed ('has_repository_projects' was unexpected)"
+        - "ignoring unknown properties found while validating organization config: Additional properties are not allowed ('foo_cp' was unexpected)"
+        - "ignoring unknown properties found while validating organization config: Additional properties are not allowed ('foo_hook' was unexpected)"
+        - "ignoring unknown properties found while validating organization config: Additional properties are not allowed ('foo_repo' was unexpected)"
+        - "ignoring unknown properties found while validating organization config: Additional properties are not allowed ('foo_bpr' was unexpected)"
+        - "ignoring unknown properties found while validating organization config: Additional properties are not allowed ('foo_env' was unexpected)"
+    plan:
+      expect: changes
+      counts: {add: 5, change: 0, delete: 0}
+      contains:
+        - "ignoring unknown properties found while validating organization config"
+        - '+ add repository[name="{{ p }}-unknown"]'
+      not_contains: ["+ foo_repo", "+ foo_bpr", "+ foo_env", "+ foo_hook", "+ foo_cp", "has_repository_projects ="]
+  - name: unknown-repository-secret-key
+    fragments:
+      repositories:
+        - "orgs.newRepo('{{ p }}-unknown') { secrets: [orgs.newRepoSecret('{{ P }}_X') { value: '********', foo: 1 }] }"
+    validate:
+      ok: false
+      exit_code: 2
+      contains:
+        - "Error: Unevaluated properties are not allowed ('foo' was unexpected)"
+        - "['repositories']['items']['properties']['secrets']['items']"
+      not_contains: ["Validation failed", "Validation succeeded"]
+  - name: unknown-org-variable-key
+    fragments:
+      variables: ["orgs.newOrgVariable('{{ P }}_V') { value: 'x', foo: 1 }"]
+    validate:
+      ok: false
+      exit_code: 2
+      contains:
+        - "Error: Unevaluated properties are not allowed ('foo' was unexpected)"
+        - "schema['properties']['variables']['items']"
+      not_contains: ["Validation failed", "Validation succeeded"]
+  - name: unknown-ruleset-key
+    fragments:
+      repositories:
+        - "orgs.newRepo('{{ p }}-unknown') { rulesets: [orgs.newRepoRuleset('{{ p }}-rs') { foo: 1 }] }"
+    validate:
+      ok: false
+      exit_code: 2
+      contains:
+        - "Error: Unevaluated properties are not allowed ('foo' was unexpected)"
+        - "['repositories']['items']['properties']['rulesets']['items']"
+      not_contains: ["Validation failed", "Validation succeeded"]
+  - name: unknown-role-key
+    fragments:
+      roles: ["orgs.newOrgRole('{{ p }}-role') { foo: 1 }"]
+    validate:
+      ok: false
+      exit_code: 2
+      contains:
+        - "Error: Unevaluated properties are not allowed ('foo' was unexpected)"
+        - "schema['properties']['roles']['items']"
+      not_contains: ["Validation failed", "use of organization roles requires"]
+  - name: unknown-org-workflows-key
+    fragments:
+      settings: ["workflows+: { foo: 1 }"]
+    validate:
+      ok: false
+      exit_code: 2
+      contains:
+        - "Error: Unevaluated properties are not allowed ('foo' was unexpected)"
+        - "schema['properties']['settings']['properties']['workflows']"
+      not_contains: ["Validation failed", "Validation succeeded"]
+  - name: unknown-repository-workflows-key
+    fragments:
+      repositories: ["orgs.newRepo('{{ p }}-unknown') { workflows+: { foo: 1 } }"]
+    validate:
+      ok: false
+      exit_code: 2
+      contains:
+        - "Error: Unevaluated properties are not allowed ('foo' was unexpected)"
+        - "['repositories']['items']['properties']['workflows']"
+      not_contains: ["Validation failed", "Validation succeeded"]
+  - name: wrong-type
+    base_fragments: {}
+    fragments:
+      repositories: ["orgs.newRepo('{{ p }}-types') { has_wiki: 123 }"]
+    validate:
+      ok: false
+      exit_code: 2
+      contains:
+        - "Error: 123 is not of type 'boolean'"
+        - "['repositories']['items']['properties']['has_wiki']"
+      not_contains: ["Validation failed", "Validation succeeded"]
+    plan:
+      expect: validation_error
+      exit_code: 2
+      contains: ["123 is not of type 'boolean'"]
+      not_contains: ["Plan: "]
+  - name: secret-without-value
+    fragments:
+      repositories: ["orgs.newRepo('{{ p }}-types') { secrets: [orgs.newRepoSecret('{{ P }}_NO_VALUE')] }"]
+    validate:
+      ok: false
+      exit_code: 2
+      contains:
+        - "Error: None is not of type 'string'"
+        - "['secrets']['items']['properties']['value']"
+  - name: values-editable-by
+    fragments:
+      custom_properties: ["orgs.newCustomProperty('{{ p }}-editable') { values_editable_by: 'anyone' }"]
+    validate:
+      ok: false
+      exit_code: 2
+      contains:
+        - "Error: 'anyone' is not valid under any of the given schemas"
+        - "['custom_properties']['items']['properties']['values_editable_by']"
+  - name: team-permission-value
+    known_bug: KB-032
+    fragments:
+      repositories: ["orgs.newRepo('{{ p }}-perms') { team_permissions: { '{{ p }}-team': 'super' } }"]
+    validate:
+      ok: false
+      errors: 1
+      exit_code: 1
+      contains:
+        - >-
+          invalid permission 'super' for team '{{ p }}-team', allowed values are ('read/pull' | 'triage' |
+          'write/push' | 'maintain' | 'admin').
+      not_contains: ["is not one of ['pull', 'triage', 'push', 'maintain', 'admin']"]
+  - name: team-permission-uppercase-alias
+    known_bug: KB-032
+    fragments:
+      repositories: ["orgs.newRepo('{{ p }}-perms') { team_permissions: { '{{ p }}-team': 'WRITE' } }"]
+    validate:
+      ok: true
+      errors: 0
+      exit_code: 0
+      not_contains: ["is not one of"]
+  - name: team-permission-values
+    base_fragments: {}
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-perms') {
+            team_permissions: {
+              '{{ p }}-pull': 'pull',
+              '{{ p }}-triage': 'triage',
+              '{{ p }}-push': 'push',
+              '{{ p }}-maintain': 'maintain',
+              '{{ p }}-admin': 'admin',
+            },
+          }
+    validate:
+      ok: true
+      errors: 0
+      exit_code: 0
+      contains: ["Validation succeeded"]
+    plan:
+      expect: changes
+      counts: {add: 1, change: 0, delete: 0}
+      contains: ['+ add repository[name="{{ p }}-perms"]', '+ {{ p }}-maintain']
+  - name: multi-select-property-with-underscore
+    known_bug: KB-016
+    fragments:
+      custom_properties:
+        - "orgs.newCustomProperty('{{ P }}_TAGS') { value_type: 'multi_select', allowed_values: ['a', 'b'] }"
+      repositories:
+        - "orgs.newRepo('{{ p }}-props') { custom_properties: { '{{ P }}_TAGS': ['a', 'b'] } }"
+    validate:
+      ok: true
+      errors: 0
+      exit_code: 0
+      not_contains: ["is not valid under any of the given schemas"]
+  - name: multi-select-property-without-underscore
+    fragments:
+      custom_properties:
+        - "orgs.newCustomProperty('{{ p }}-tags') { value_type: 'multi_select', allowed_values: ['a', 'b'] }"
+      repositories:
+        - "orgs.newRepo('{{ p }}-props') { custom_properties: { '{{ p }}-tags': ['a', 'b'] } }"
+    validate:
+      ok: true
+      errors: 0
+      exit_code: 0
+      contains: ["Validation succeeded"]

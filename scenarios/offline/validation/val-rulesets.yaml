@@ -1,0 +1,159 @@
+# Offline tier (battery, validation): repository rulesets.
+id: O-VAL-RULESETS
+tier: offline
+title: Repository ruleset target, enforcement, ref patterns and deployment rules are validated
+description: >-
+  Ruleset.validate accepts target branch | tag | push and enforcement active | disabled | evaluate, checks every
+  include/exclude ref pattern against the target (refs/heads/*, ~DEFAULT_BRANCH or ~ALL for branches and pushes,
+  refs/tags/* or ~ALL for tags), requires a repository environment per required deployment environment and warns
+  about deployment environments without requires_deployments. Every rule is asserted with the ruleset header, then
+  valid rulesets of every target validate and are planned. An unknown role in bypass_actors passes validation and
+  crashes the apply (KB-039): that step expects a validation error.
+priority: P1
+tags: [offline, rulesets, environments]
+observe: true
+variables: {plan: free}
+steps:
+  - name: target-and-enforcement
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-rs') {
+            rulesets: [
+              orgs.newRepoRuleset('{{ p }}-target') { target: 'tags' },
+              orgs.newRepoRuleset('{{ p }}-enforcement') { enforcement: 'on' },
+            ],
+          }
+    validate:
+      ok: false
+      errors: 2
+      contains:
+        - >-
+          Error: repo_ruleset[name="{{ p }}-target", repository={{ p }}-rs] has 'target' of value 'tags', while only
+          values ('branch' | 'tag' | 'push') are allowed.
+        - >-
+          Error: repo_ruleset[name="{{ p }}-enforcement", repository={{ p }}-rs] has 'enforcement' of value 'on',
+          while only values ('active' | 'disabled' | 'evaluate') are allowed.
+  - name: branch-and-push-patterns
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-rs') {
+            rulesets: [
+              orgs.newRepoRuleset('{{ p }}-branch') { include_refs: ['main'], exclude_refs: ['refs/tags/v1'] },
+              orgs.newRepoRuleset('{{ p }}-push') { target: 'push', include_refs: ['~ALL'], exclude_refs: ['v2'] },
+            ],
+          }
+    validate:
+      ok: false
+      errors: 3
+      contains:
+        - >-
+          Error: repo_ruleset[name="{{ p }}-branch", repository={{ p }}-rs] has an invalid 'include_refs' pattern
+          'main', while only values ('refs/heads/*', '~DEFAULT_BRANCH', '~ALL') are allowed
+        - >-
+          Error: repo_ruleset[name="{{ p }}-branch", repository={{ p }}-rs] has an invalid 'exclude_refs' pattern
+          'refs/tags/v1', while only values ('refs/heads/*', '~DEFAULT_BRANCH', '~ALL') are allowed
+        - >-
+          Error: repo_ruleset[name="{{ p }}-push", repository={{ p }}-rs] has an invalid 'exclude_refs' pattern 'v2',
+          while only values ('refs/heads/*', '~DEFAULT_BRANCH', '~ALL') are allowed
+  - name: tag-patterns
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-rs') {
+            rulesets: [
+              orgs.newRepoRuleset('{{ p }}-tag') { target: 'tag', include_refs: ['refs/heads/x'], exclude_refs: ['~DEFAULT_BRANCH'] },
+            ],
+          }
+    validate:
+      ok: false
+      errors: 2
+      contains:
+        - >-
+          Error: repo_ruleset[name="{{ p }}-tag", repository={{ p }}-rs] has an invalid 'include_refs' pattern
+          'refs/heads/x', while only values ('refs/tags/*', '~ALL') are allowed
+        - >-
+          Error: repo_ruleset[name="{{ p }}-tag", repository={{ p }}-rs] has an invalid 'exclude_refs' pattern
+          '~DEFAULT_BRANCH', while only values ('refs/tags/*', '~ALL') are allowed
+  - name: deployment-environments
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-rs') {
+            environments: [orgs.newEnvironment('{{ p }}-staging')],
+            rulesets: [
+              orgs.newRepoRuleset('{{ p }}-deploy') {
+                include_refs: ['~DEFAULT_BRANCH'],
+                requires_deployments: true,
+                required_deployment_environments: ['{{ p }}-prod', '{{ p }}-staging'],
+              },
+              orgs.newRepoRuleset('{{ p }}-deploy-off') {
+                include_refs: ['~DEFAULT_BRANCH'],
+                required_deployment_environments: ['{{ p }}-staging'],
+              },
+            ],
+          }
+    validate:
+      ok: false
+      errors: 1
+      warnings_min: 1
+      exit_code: 1
+      contains:
+        - >-
+          Error: repo_ruleset[name="{{ p }}-deploy", repository={{ p }}-rs] requires deployment environment
+          '{{ p }}-prod' which is not defined in the repository itself.
+        - >-
+          Warning: repo_ruleset[name="{{ p }}-deploy-off", repository={{ p }}-rs] has 'requires_deployments'
+          disabled but 'required_deployment_environments' is set to '['{{ p }}-staging']', setting will be ignored.
+  - name: valid-rulesets
+    base_fragments: {}
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-rs') {
+            environments: [orgs.newEnvironment('{{ p }}-staging')],
+            rulesets: [
+              orgs.newRepoRuleset('{{ p }}-branch') {
+                enforcement: 'disabled',
+                include_refs: ['~DEFAULT_BRANCH', 'refs/heads/release/*'],
+                exclude_refs: ['refs/heads/release/old'],
+                bypass_actors: ['#RepositoryAdmin', '#Maintain:pull_request', '@{{ org }}/{{ p }}-maintainers', '{{ app_slug }}'],
+              },
+              orgs.newRepoRuleset('{{ p }}-tag') { target: 'tag', include_refs: ['refs/tags/v*', '~ALL'] },
+              orgs.newRepoRuleset('{{ p }}-push') { target: 'push', include_refs: ['~ALL'] },
+              orgs.newRepoRuleset('{{ p }}-deploy') {
+                include_refs: ['~DEFAULT_BRANCH'],
+                requires_deployments: true,
+                required_deployment_environments: ['{{ p }}-staging'],
+              },
+            ],
+          }
+    validate:
+      ok: true
+      errors: 0
+      exit_code: 0
+      contains: ["Validation succeeded"]
+      not_contains: ["Error:", "Warning:"]
+    plan:
+      expect: changes
+      counts: {add: 6, change: 0, delete: 0}
+      contains:
+        - '+ add repo_ruleset[name="{{ p }}-branch", repository={{ p }}-rs]'
+        - '+ add repo_ruleset[name="{{ p }}-tag", repository={{ p }}-rs]'
+        - '+ add repo_ruleset[name="{{ p }}-push", repository={{ p }}-rs]'
+        - '+ add repo_ruleset[name="{{ p }}-deploy", repository={{ p }}-rs]'
+        - '+ "#Maintain:pull_request"'
+  - name: unknown-bypass-role
+    known_bug: KB-039
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-rs') {
+            rulesets: [orgs.newRepoRuleset('{{ p }}-bypass') { include_refs: ['~DEFAULT_BRANCH'], bypass_actors: ['#Admin'] }],
+          }
+    validate:
+      ok: false
+      errors: 1
+      exit_code: 1
+      contains: ["#Admin"]

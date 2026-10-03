@@ -1,0 +1,94 @@
+# Repository feature flags and merge settings (coverage: repositories.features, repositories.merge-methods).
+id: cli.repo.features
+tier: cli
+title: Repository features and merge settings round trip
+description: |
+  Every feature flag (has_issues, has_wiki, has_projects, has_discussions) and every merge setting
+  (allow_merge_commit, allow_rebase_merge, allow_squash_merge, allow_auto_merge, allow_update_branch,
+  delete_branch_on_merge) of a public run repository is created with the opposite of the template default where the
+  plan allows it, read back from GET /repos/{org}/{repo} by the oracle and converged; the update step flips every flag
+  but allow_squash_merge (GitHub requires one merge method), so the plan is one change of exactly nine attributes.
+  has_projects is managed because the template enables has_organization_projects (models/repository.py:287-288 makes
+  it unmanaged otherwise); has_discussions is plain here since the organization uses no discussion source repository.
+  The scenario cleanup removes the repository.
+priority: P0
+min_plan: free
+tags: [repo]
+steps:
+  - name: create
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-features') {
+            description: "otterdog e2e: repository features",
+            has_issues: false,
+            has_wiki: false,
+            has_projects: false,
+            has_discussions: true,
+            allow_merge_commit: true,
+            allow_rebase_merge: false,
+            allow_squash_merge: true,
+            allow_auto_merge: true,
+            allow_update_branch: false,
+            delete_branch_on_merge: false,
+          }
+    plan:
+      expect: changes
+      contains:
+        - '+ add repository[name="{{ p }}-features"]'
+      counts: {add: 1, change: 0, delete: 0}
+    state:
+      - kind: repo
+        name: "{{ p }}-features"
+        match:
+          private: false
+          has_issues: false
+          has_wiki: false
+          has_projects: false
+          has_discussions: true
+          allow_merge_commit: true
+          allow_rebase_merge: false
+          allow_squash_merge: true
+          allow_auto_merge: true
+          allow_update_branch: false
+          delete_branch_on_merge: false
+
+  - name: flip
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-features') {
+            description: "otterdog e2e: repository features",
+            has_issues: true,
+            has_wiki: true,
+            has_projects: true,
+            has_discussions: false,
+            allow_merge_commit: false,
+            allow_rebase_merge: true,
+            allow_squash_merge: true,
+            allow_auto_merge: false,
+            allow_update_branch: true,
+            delete_branch_on_merge: true,
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ repository[name="{{ p }}-features"]'
+      not_contains:
+        - '+ add repository[name="{{ p }}-features"]'
+        - '- remove repository[name="{{ p }}-features"]'
+      counts: {add: 0, change: 9, delete: 0}
+    state:
+      - kind: repo
+        name: "{{ p }}-features"
+        match:
+          has_issues: true
+          has_wiki: true
+          has_projects: true
+          has_discussions: false
+          allow_merge_commit: false
+          allow_rebase_merge: true
+          allow_squash_merge: true
+          allow_auto_merge: false
+          allow_update_branch: true
+          delete_branch_on_merge: true

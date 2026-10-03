@@ -1,0 +1,64 @@
+# Offline tier (battery, validation): Info messages and the -v flag.
+id: O-VAL-INFOS
+tier: offline
+title: Info messages are hidden without -v and printed with -v (archived repositories, ignored review count)
+description: >-
+  Validation infos are only printed with -v: without it validate prints 'Validation succeeded' followed by a hint
+  and local-plan prints how many infos it hid; with -v both commands print every 'Info:' box. The infos used here are
+  an archived repository with branch protection rules (they are ignored, and local-plan does not plan them, while
+  the rule of a repository that is not archived is planned) and a review count ignored because the rule does not
+  require pull requests.
+priority: P2
+tags: [offline, repo, bpr]
+observe: true
+variables: {plan: free}
+steps:
+  - name: infos-hidden
+    base_fragments: {}
+    fragments: &infos
+      repositories:
+        - "orgs.newRepo('{{ p }}-archived') { archived: true, branch_protection_rules: [orgs.newBranchProtectionRule('main')] }"
+        - "orgs.newRepo('{{ p }}-review') { branch_protection_rules: [orgs.newBranchProtectionRule('main') { requires_pull_request: false }] }"
+    validate:
+      ok: true
+      errors: 0
+      exit_code: 0
+      contains:
+        - "Validation succeeded"
+        - "in order to print validation infos, enable printing info messages by adding '-v' flag."
+      not_contains: ["Info:", "is archived but has branch_protection_rules"]
+    plan:
+      expect: changes
+      counts: {add: 3, change: 0, delete: 0}
+      contains:
+        - "there have been 2 validation infos, enable verbose output to display them."
+        - '+ add repository[name="{{ p }}-archived"]'
+        - '+ add branch_protection_rule[pattern="main", repository={{ p }}-review]'
+      not_contains: ["Info:", 'branch_protection_rule[pattern="main", repository={{ p }}-archived]']
+  - name: infos-verbose
+    base_fragments: {}
+    fragments: *infos
+    validate:
+      verbose: true
+      ok: true
+      errors: 0
+      infos: 2
+      exit_code: 0
+      contains:
+        - >-
+          Info: repository[name="{{ p }}-archived"] is archived but has branch_protection_rules which will be
+          ignored.
+        - >-
+          Info: branch_protection_rule[pattern="main", repository={{ p }}-review] has 'requires_pull_request'
+          disabled, but 'required_approving_review_count' is set to '2', setting will be ignored.
+      not_contains: ["in order to print validation infos"]
+    plan:
+      expect: changes
+      verbose: true
+      counts: {add: 3, change: 0, delete: 0}
+      contains:
+        - >-
+          Info: repository[name="{{ p }}-archived"] is archived but has branch_protection_rules which will be
+          ignored.
+        - "Info: branch_protection_rule[pattern=\"main\", repository={{ p }}-review] has 'requires_pull_request' disabled"
+      not_contains: ["there have been", 'branch_protection_rule[pattern="main", repository={{ p }}-archived]']

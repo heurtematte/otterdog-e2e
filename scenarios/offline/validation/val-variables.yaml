@@ -1,0 +1,73 @@
+# Offline tier (battery, validation): repository and environment variables.
+id: O-VAL-VARIABLES
+tier: offline
+title: Repository and environment variable names are validated
+description: >-
+  Variable.validate refuses variable names that are not upper case and names with the reserved GITHUB_ prefix, for
+  repository variables (header with the repository) and environment variables (header with the environment). The
+  four errors are asserted together with their exact messages; upper-case names validate and are planned as one
+  addition each. Organization variables are never validated (KB-028, O-VAL-ORGVAR).
+priority: P1
+tags: [offline, variables, environments]
+observe: true
+variables: {plan: free}
+steps:
+  - name: invalid-names
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-vars') {
+            variables: [
+              orgs.newRepoVariable('{{ P | lower }}_lower') { value: 'x' },
+              orgs.newRepoVariable('GITHUB_{{ P }}_REPO') { value: 'x' },
+            ],
+            environments: [
+              orgs.newEnvironment('{{ p }}-env') {
+                variables: [
+                  orgs.newEnvVariable('{{ P | lower }}_env') { value: 'x' },
+                  orgs.newEnvVariable('GITHUB_{{ P }}_ENV') { value: 'x' },
+                ],
+              },
+            ],
+          }
+    validate:
+      ok: false
+      errors: 4
+      contains:
+        - >-
+          Error: repo_variable[name="{{ P | lower }}_lower", repository={{ p }}-vars] has 'name' of value
+          '{{ P | lower }}_lower' which is not uppercase, while only uppercase names are allowed for variables.
+        - >-
+          Error: repo_variable[name="GITHUB_{{ P }}_REPO", repository={{ p }}-vars] starts with prefix 'GITHUB_',
+          which is not allowed for variables.
+        - >-
+          Error: env_variable[name="{{ P | lower }}_env", environment={{ p }}-env] has 'name' of value
+          '{{ P | lower }}_env' which is not uppercase, while only uppercase names are allowed for variables.
+        - >-
+          Error: env_variable[name="GITHUB_{{ P }}_ENV", environment={{ p }}-env] starts with prefix 'GITHUB_',
+          which is not allowed for variables.
+  - name: valid-names
+    base_fragments: {}
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-vars') {
+            variables: [orgs.newRepoVariable('{{ P }}_REPO') { value: 'x' }],
+            environments: [
+              orgs.newEnvironment('{{ p }}-env') {
+                variables: [orgs.newEnvVariable('{{ P }}_ENV') { value: 'y' }],
+              },
+            ],
+          }
+    validate:
+      ok: true
+      errors: 0
+      exit_code: 0
+      contains: ["Validation succeeded"]
+    plan:
+      expect: changes
+      counts: {add: 4, change: 0, delete: 0}
+      contains:
+        - '+ add repo_variable[name="{{ P }}_REPO", repository={{ p }}-vars]'
+        - '+ add env_variable[name="{{ P }}_ENV", environment={{ p }}-env]'
+        - '+ add environment[name="{{ p }}-env", repository={{ p }}-vars]'

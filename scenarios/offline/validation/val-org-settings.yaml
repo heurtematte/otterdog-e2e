@@ -1,0 +1,83 @@
+# Offline tier (battery, validation): the rules of the organization settings.
+id: O-VAL-ORG-SETTINGS
+tier: offline
+title: Organization settings rules (description, discussions source, default permission)
+description: >-
+  OrganizationSettings.validate refuses a description longer than 160 characters, has_discussions without a source
+  repository, a discussion_source_repository that is not '<owner>/<repo-name>' (checked whether discussions are on
+  or not) and a default_repository_permission outside none | read | write | admin. One error per step with the exact
+  message and exit status 1, local-plan refusing to plan such a configuration, and a control step at the limits.
+priority: P1
+tags: [offline, org-settings]
+observe: true
+variables: {plan: free}
+steps:
+  - name: description-too-long
+    base_fragments: {}
+    fragments:
+      settings: ["description: std.repeat('d', 161)"]
+    validate:
+      ok: false
+      errors: 1
+      exit_code: 1
+      contains: ["setting 'description' exceeds maximum allowed length of 160 chars."]
+    plan:
+      expect: validation_error
+      exit_code: 1
+      contains:
+        - "setting 'description' exceeds maximum allowed length of 160 chars."
+        - "Planning aborted due to validation errors."
+  - name: discussions-without-source
+    fragments:
+      settings: ["has_discussions: true", "discussion_source_repository: null"]
+    validate:
+      ok: false
+      errors: 1
+      exit_code: 1
+      contains:
+        - "enabling 'has_discussions' requires setting a valid repository in 'discussion_source_repository'."
+  - name: discussion-source-format
+    fragments:
+      settings: ["has_discussions: true", "discussion_source_repository: 'noslash'"]
+    validate:
+      ok: false
+      errors: 1
+      exit_code: 1
+      contains:
+        - "setting 'discussion_source_repository' requires a repository in '<owner>/<repo-name>' format."
+      not_contains: ["enabling 'has_discussions' requires"]
+  - name: discussion-source-format-without-discussions
+    fragments:
+      settings: ["has_discussions: false", "discussion_source_repository: 'noslash'"]
+    validate:
+      ok: false
+      errors: 1
+      exit_code: 1
+      contains:
+        - "setting 'discussion_source_repository' requires a repository in '<owner>/<repo-name>' format."
+  - name: default-repository-permission
+    fragments:
+      settings: ["default_repository_permission: 'maintain'"]
+    validate:
+      ok: false
+      errors: 1
+      exit_code: 1
+      contains:
+        - >-
+          'default_repository_permission' has value 'maintain', while only values ('none' | 'read' | 'write' |
+          'admin') are allowed.
+  - name: limits
+    fragments:
+      settings:
+        - "description: std.repeat('d', 160)"
+        - "has_discussions: true"
+        - "discussion_source_repository: '{{ org }}/{{ p }}-discussions'"
+        - "default_repository_permission: 'none'"
+      repositories:
+        - "orgs.newRepo('{{ p }}-discussions') { has_discussions: true }"
+    validate:
+      ok: true
+      errors: 0
+      exit_code: 0
+      contains: ["Validation succeeded"]
+      not_contains: ["Error:", "Warning:"]

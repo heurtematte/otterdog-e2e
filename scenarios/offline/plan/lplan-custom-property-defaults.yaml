@@ -1,0 +1,97 @@
+# Offline tier (battery, plan semantics): custom property defaults and immutable value types.
+id: O-LPLAN-CUSTOM-PROPERTY-DEFAULTS
+tier: offline
+title: Required custom property defaults fill repositories; a value_type change aborts planning
+description: >-
+  A repository without a value for a required custom property gets its default_value at load: a new repository is
+  planned with it, an explicit value equal to the default is no change, and a new default changes the definition
+  and the effective value of such repositories. default_value of an optional property and allowed_values of a string
+  property are not diffed. Changing value_type aborts local-plan with 'planning aborted' (exit 1, no Plan line).
+  A required property without default crashes loading as soon as a repository exists (KB-030): that step expects
+  the validation error.
+priority: P2
+tags: [offline, custom-properties, repo]
+observe: true
+variables: {plan: free}
+steps:
+  - name: default-on-new-repository
+    base_fragments:
+      custom_properties: ["orgs.newCustomProperty('{{ p }}-req') { required: true, default_value: 'dflt' }"]
+    fragments:
+      custom_properties: ["orgs.newCustomProperty('{{ p }}-req') { required: true, default_value: 'dflt' }"]
+      repositories: ["orgs.newRepo('{{ p }}-props')"]
+    validate: {ok: true, errors: 0}
+    plan:
+      expect: changes
+      counts: {add: 1, change: 0, delete: 0}
+      contains: ['+ add repository[name="{{ p }}-props"] {', '+ {{ p }}-req', '= "dflt"']
+      not_contains: ['custom_property[']
+  - name: explicit-default-value
+    base_fragments:
+      custom_properties: ["orgs.newCustomProperty('{{ p }}-req') { required: true, default_value: 'dflt' }"]
+      repositories: ["orgs.newRepo('{{ p }}-props') { custom_properties: { '{{ p }}-req': 'dflt' } }"]
+    fragments:
+      custom_properties: ["orgs.newCustomProperty('{{ p }}-req') { required: true, default_value: 'dflt' }"]
+      repositories: ["orgs.newRepo('{{ p }}-props')"]
+    plan:
+      expect: noop
+      counts: {add: 0, change: 0, delete: 0}
+  - name: new-default
+    base_fragments:
+      custom_properties: ["orgs.newCustomProperty('{{ p }}-req') { required: true, default_value: 'dflt' }"]
+      repositories: ["orgs.newRepo('{{ p }}-props')"]
+    fragments:
+      custom_properties: ["orgs.newCustomProperty('{{ p }}-req') { required: true, default_value: 'other' }"]
+      repositories: ["orgs.newRepo('{{ p }}-props')"]
+    plan:
+      expect: changes
+      counts: {add: 0, change: 2, delete: 0}
+      contains:
+        - '~ custom_property[name="{{ p }}-req"] {'
+        - '~ default_value = "dflt" -> "other"'
+        - '~ repository[name="{{ p }}-props"] {'
+        - '"dflt" -> "other"'
+  - name: fields-not-diffed
+    base_fragments:
+      custom_properties:
+        - "orgs.newCustomProperty('{{ p }}-opt') { required: false, default_value: null }"
+        - "orgs.newCustomProperty('{{ p }}-str') { allowed_values: [] }"
+    fragments:
+      custom_properties:
+        - "orgs.newCustomProperty('{{ p }}-opt') { required: false, default_value: '' }"
+        - "orgs.newCustomProperty('{{ p }}-str') { allowed_values: ['x'] }"
+    plan:
+      expect: noop
+      counts: {add: 0, change: 0, delete: 0}
+  - name: value-type-change
+    base_fragments:
+      custom_properties: ["orgs.newCustomProperty('{{ p }}-type') { value_type: 'string' }"]
+    fragments:
+      custom_properties: ["orgs.newCustomProperty('{{ p }}-type') { value_type: 'true_false' }"]
+    validate: {ok: true, errors: 0}
+    plan:
+      expect: error
+      exit_code: 1
+      contains:
+        - >-
+          planning aborted: trying to change 'value_type' to 'true_false' for custom_property[name="{{ p }}-type"]
+          which is not supported.
+      not_contains: ["Plan: "]
+  - name: required-without-default
+    known_bug: KB-030
+    base_fragments: {}
+    fragments:
+      custom_properties: ["orgs.newCustomProperty('{{ p }}-req') { required: true, default_value: null }"]
+      repositories: ["orgs.newRepo('{{ p }}-props')"]
+    validate:
+      ok: false
+      errors: 1
+      exit_code: 1
+      contains:
+        - >-
+          custom_property[name="{{ p }}-req"] has 'required' set to 'true', but no property 'default_value' is
+          specified.
+    plan:
+      expect: validation_error
+      exit_code: 1
+      contains: ["Planning aborted due to validation errors."]

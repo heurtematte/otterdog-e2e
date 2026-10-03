@@ -1,0 +1,204 @@
+# Offline tier (battery, validation): branch protection rules.
+id: O-VAL-BPR
+tier: offline
+title: Branch protection rule dependencies are validated (errors, warnings, infos)
+description: >-
+  BranchProtectionRule.validate requires a non-negative review count when pull requests are required and a
+  repository environment for every required deployment environment; it warns about settings that their disabled
+  toggle makes ineffective (review settings without requires_pull_request, push restrictions and blocks_creations
+  without restricts_pushes, lock_allows_fetch_and_merge without lock_branch, deployment environments without
+  requires_deployments) and, with -v, informs about the ignored review count, review dismissal allowances, force-push
+  bypass allowances and status checks. Each group is asserted message by message, then a rule with every toggle on
+  validates without any notice.
+priority: P1
+tags: [offline, bpr, environments]
+observe: true
+variables: {plan: free}
+steps:
+  - name: review-count-required
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-bpr') {
+            branch_protection_rules: [
+              orgs.newBranchProtectionRule('main') { required_approving_review_count: null },
+              orgs.newBranchProtectionRule('release/*') { required_approving_review_count: -1 },
+            ],
+          }
+    validate:
+      ok: false
+      errors: 2
+      contains:
+        - >-
+          Error: branch_protection_rule[pattern="main", repository={{ p }}-bpr] has 'requires_pull_request' enabled,
+          but 'required_approving_review_count' is not set (must be set to a non negative number).
+        - >-
+          Error: branch_protection_rule[pattern="release/*", repository={{ p }}-bpr] has 'requires_pull_request'
+          enabled, but 'required_approving_review_count' is not set (must be set to a non negative number).
+  - name: pull-request-dependents
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-bpr') {
+            branch_protection_rules: [
+              orgs.newBranchProtectionRule('main') {
+                requires_pull_request: false,
+                dismisses_stale_reviews: true,
+                requires_code_owner_reviews: true,
+                require_last_push_approval: true,
+                restricts_review_dismissals: true,
+                bypass_pull_request_allowances: ['@{{ org }}/{{ p }}-bypass'],
+                review_dismissal_allowances: ['@{{ org }}/{{ p }}-dismiss'],
+              },
+            ],
+          }
+    validate:
+      verbose: true
+      ok: true
+      errors: 0
+      infos: 1
+      warnings_min: 6
+      exit_code: 0
+      contains:
+        - "Validation succeeded': 1 info(s), 6 warning(s), 0 error(s)"
+        - >-
+          Info: branch_protection_rule[pattern="main", repository={{ p }}-bpr] has 'requires_pull_request' disabled,
+          but 'required_approving_review_count' is set to '2', setting will be ignored.
+        - "has 'requires_pull_request' disabled, but 'dismisses_stale_reviews' is enabled, setting will be ignored."
+        - "has 'requires_pull_request' disabled, but 'requires_code_owner_reviews' is enabled, setting will be ignored."
+        - "has 'requires_pull_request' disabled, but 'require_last_push_approval' is enabled, setting will be ignored."
+        - "has 'requires_pull_request' disabled, but 'restricts_review_dismissals' is enabled, setting will be ignored."
+        - >-
+          Warning: branch_protection_rule[pattern="main", repository={{ p }}-bpr] has 'requires_pull_request'
+          disabled, but 'bypass_pull_request_allowances' is set to '['@{{ org }}/{{ p }}-bypass']', setting will be
+          ignored.
+        - >-
+          Warning: branch_protection_rule[pattern="main", repository={{ p }}-bpr] has 'requires_pull_request'
+          disabled, but 'review_dismissal_allowances' is set to '['@{{ org }}/{{ p }}-dismiss']', setting will be
+          ignored.
+  - name: deployment-environments
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-bpr') {
+            environments: [orgs.newEnvironment('{{ p }}-staging')],
+            branch_protection_rules: [
+              orgs.newBranchProtectionRule('main') {
+                requires_deployments: true,
+                required_deployment_environments: ['{{ p }}-prod', '{{ p }}-staging'],
+              },
+              orgs.newBranchProtectionRule('release/*') { required_deployment_environments: ['{{ p }}-staging'] },
+            ],
+          }
+    validate:
+      ok: false
+      errors: 1
+      warnings_min: 1
+      exit_code: 1
+      contains:
+        - >-
+          Error: branch_protection_rule[pattern="main", repository={{ p }}-bpr] requires deployment environment
+          '{{ p }}-prod' which is not defined in the repository itself.
+        - >-
+          Warning: branch_protection_rule[pattern="release/*", repository={{ p }}-bpr] has 'requires_deployments'
+          disabled, but 'required_deployment_environments' is set to '['{{ p }}-staging']', setting will be ignored.
+      not_contains: ["deployment environment '{{ p }}-staging' which is not defined"]
+  - name: push-and-lock-dependents
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-bpr') {
+            branch_protection_rules: [
+              orgs.newBranchProtectionRule('main') { push_restrictions: ['@{{ org }}/{{ p }}-pushers'], blocks_creations: true },
+              orgs.newBranchProtectionRule('release/*') { lock_allows_fetch_and_merge: true },
+            ],
+          }
+    validate:
+      ok: true
+      errors: 0
+      warnings_min: 3
+      exit_code: 0
+      contains:
+        - "Validation succeeded': 0 info(s), 3 warning(s), 0 error(s)"
+        - >-
+          Warning: branch_protection_rule[pattern="main", repository={{ p }}-bpr] has 'restricts_pushes' disabled but
+          'push_restrictions' is set to '['@{{ org }}/{{ p }}-pushers']', setting will be ignored.
+        - >-
+          Warning: branch_protection_rule[pattern="main", repository={{ p }}-bpr] has 'restricts_pushes' disabled but
+          'blocks_creations' is set to 'True', setting will be ignored.
+        - >-
+          Warning: branch_protection_rule[pattern="release/*", repository={{ p }}-bpr] has 'lock_branch' disabled but
+          'lock_allows_fetch_and_merge' enabled, setting will be ignored.
+  - name: ignored-allowances
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-bpr') {
+            branch_protection_rules: [
+              orgs.newBranchProtectionRule('main') { review_dismissal_allowances: ['@{{ org }}/{{ p }}-dismiss'] },
+              orgs.newBranchProtectionRule('release/*') { allows_force_pushes: true, bypass_force_push_allowances: ['@{{ org }}/{{ p }}-force'] },
+              orgs.newBranchProtectionRule('develop') { requires_status_checks: false, required_status_checks: ['any:ci'] },
+            ],
+          }
+    validate:
+      verbose: true
+      ok: true
+      errors: 0
+      infos: 3
+      exit_code: 0
+      contains:
+        - >-
+          Info: branch_protection_rule[pattern="main", repository={{ p }}-bpr] has 'restricts_review_dismissals'
+          disabled, but 'review_dismissal_allowances' is set to '['@{{ org }}/{{ p }}-dismiss']', setting will be
+          ignored.
+        - >-
+          Info: branch_protection_rule[pattern="release/*", repository={{ p }}-bpr] has 'allows_force_pushes'
+          enabled, but 'bypass_force_push_allowances' is set to '['@{{ org }}/{{ p }}-force']', setting will be
+          ignored.
+        - >-
+          Info: branch_protection_rule[pattern="develop", repository={{ p }}-bpr] has 'requires_status_checks'
+          disabled, but 'required_status_checks' is set to '['any:ci']', setting will be ignored.
+      not_contains: ["Warning:"]
+  - name: every-toggle-on
+    base_fragments: {}
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-bpr') {
+            environments: [orgs.newEnvironment('{{ p }}-staging')],
+            branch_protection_rules: [
+              orgs.newBranchProtectionRule('main') {
+                required_approving_review_count: 0,
+                dismisses_stale_reviews: true,
+                requires_code_owner_reviews: true,
+                require_last_push_approval: true,
+                restricts_review_dismissals: true,
+                review_dismissal_allowances: ['@{{ org }}/{{ p }}-dismiss'],
+                bypass_pull_request_allowances: ['@{{ org }}/{{ p }}-bypass'],
+                bypass_force_push_allowances: ['@{{ org }}/{{ p }}-force'],
+                restricts_pushes: true,
+                push_restrictions: ['@{{ org }}/{{ p }}-pushers'],
+                blocks_creations: true,
+                lock_branch: true,
+                lock_allows_fetch_and_merge: true,
+                required_status_checks: ['any:ci'],
+                requires_deployments: true,
+                required_deployment_environments: ['{{ p }}-staging'],
+              },
+            ],
+          }
+    validate:
+      verbose: true
+      ok: true
+      errors: 0
+      infos: 0
+      exit_code: 0
+      contains: ["Validation succeeded"]
+      not_contains: ["Info:", "Warning:", "Error:"]
+    plan:
+      expect: changes
+      counts: {add: 3, change: 0, delete: 0}
+      contains:
+        - '+ add branch_protection_rule[pattern="main", repository={{ p }}-bpr]'
+        - '+ "{{ p }}-staging"'
+        - '+ "any:ci"'

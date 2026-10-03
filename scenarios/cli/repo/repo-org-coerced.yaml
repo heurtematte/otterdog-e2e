@@ -1,0 +1,87 @@
+# Repository settings managed only while the organization allows them (coverage: repositories.signoff,
+# repo-workflows.default-permissions).
+id: cli.repo.org-coerced
+tier: cli
+title: Repository signoff and default workflow permissions under a permissive organization
+description: |
+  web_commit_signoff_required and workflows.default_workflow_permissions of a repository are managed only while the
+  organization does not impose them (Repository.coerce_from_org_settings, models/repository.py:284-316,
+  RepositoryWorkflowSettings.coerce_from_org_settings, models/repo_workflow_settings.py:38-65); the template's
+  organization imposes both (signoff required, 'read'), which cli.org.signoff and cli.org.workflow-permissions cover
+  together with the coercion. Here the first step relaxes the organization (no signoff requirement, 'write' allowed)
+  and creates the repository stricter than the organization: no signoff, 'read' workflow permissions and no pull
+  request approvals by GitHub Actions; organization settings come first in the plan, so the repository values are
+  applied once the organization allows them and validation reports no ignored repository value. The managed step
+  turns the repository's own signoff on and its permissions to 'write' with approvals allowed, which otterdog now
+  applies too. org_level: unfiltered plans (no counts asserted, the raw numbers include the whole organization)
+  and a full baseline reset as cleanup restores the organization.
+priority: P0
+min_plan: free
+org_level: true
+tags: [repo, workflows, org-settings]
+steps:
+  - name: relaxed
+    fragments:
+      settings:
+        - "web_commit_signoff_required: false"
+        - "workflows+: { default_workflow_permissions: 'write' }"
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-coerced') {
+            description: "otterdog e2e: settings the organization allows",
+            web_commit_signoff_required: false,
+            workflows+: {
+              default_workflow_permissions: "read",
+              actions_can_approve_pull_request_reviews: false,
+            },
+          }
+    validate:
+      verbose: true
+      ok: true
+      not_contains:
+        - "has 'default_workflow_permissions' of value"
+    plan:
+      expect: changes
+      contains:
+        - "~ settings {"
+        - '+ add repository[name="{{ p }}-coerced"]'
+    state:
+      - kind: org
+        match: {web_commit_signoff_required: false}
+      - kind: org_workflow_permissions
+        match: {default_workflow_permissions: write}
+      - kind: repo
+        name: "{{ p }}-coerced"
+        match: {web_commit_signoff_required: false}
+      - kind: repo_workflow_permissions
+        name: "{{ p }}-coerced"
+        match: {default_workflow_permissions: read, can_approve_pull_request_reviews: false}
+
+  - name: managed
+    fragments:
+      settings:
+        - "web_commit_signoff_required: false"
+        - "workflows+: { default_workflow_permissions: 'write' }"
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-coerced') {
+            description: "otterdog e2e: settings the organization allows",
+            web_commit_signoff_required: true,
+            workflows+: {
+              default_workflow_permissions: "write",
+              actions_can_approve_pull_request_reviews: true,
+            },
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ repository[name="{{ p }}-coerced"]'
+      not_contains:
+        - '+ add repository[name="{{ p }}-coerced"]'
+    state:
+      - kind: repo
+        name: "{{ p }}-coerced"
+        match: {web_commit_signoff_required: true}
+      - kind: repo_workflow_permissions
+        name: "{{ p }}-coerced"
+        match: {default_workflow_permissions: write, can_approve_pull_request_reviews: true}

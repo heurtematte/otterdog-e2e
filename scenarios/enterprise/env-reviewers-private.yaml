@@ -1,0 +1,104 @@
+# E-ENV-REVIEWERS-PRIVATE (SPEC 19, enterprise): environment protection rules on a private repository.
+id: enterprise.env-reviewers-private
+title: Environment with required reviewers and wait timer on a private repository
+description: |
+  Deployment protection rules other than branch policies (wait timer, required reviewers, prevent self review) are
+  available on private repositories only with GitHub Enterprise (Cap.PRIVATE_REPO_ENV_PROTECTION_RULES; on Free and
+  Team only on public repositories, GH-06). A private run repository gets an environment whose required reviewer is
+  the admin identity (declared login, an org owner with access to the repository), with prevent_self_review and a
+  wait timer. The oracle checks the protection rules of the environment; the update step raises the wait timer.
+  The repository is created PUBLIC in a first step and made private by the next one: otterdog before 1.7.0.dev14
+  cannot create a private repository on an organization without Code Security (the code scanning default setup
+  PATCH of new repositories fails, #791; regression.791-731-private-repo covers that path).
+priority: P0
+min_plan: enterprise
+requires: [private_repo_environments, private_repo_env_protection_rules]
+tags: [environments, repo, enterprise, private]
+steps:
+  - name: public
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-ent-env') {
+            description: "otterdog e2e: private environment reviewers",
+            has_wiki: false,
+          }
+    plan:
+      expect: changes
+      contains:
+        - '+ add repository[name="{{ p }}-ent-env"]'
+      counts: {add: 1, delete: 0}
+    state:
+      - kind: repo
+        name: "{{ p }}-ent-env"
+        match: {private: false}
+
+  - name: create
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-ent-env') {
+            description: "otterdog e2e: private environment reviewers",
+            private: true,
+            allow_forking: false,
+            has_wiki: false,
+            environments: [
+              orgs.newEnvironment('e2e-production') {
+                wait_timer: 5,
+                reviewers: ["@{{ logins.admin }}"],
+                prevent_self_review: true,
+              },
+            ],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ repository[name="{{ p }}-ent-env"]'
+        - '+ add environment[name="e2e-production", repository={{ p }}-ent-env]'
+      not_contains:
+        - '+ add repository[name="{{ p }}-ent-env"]'
+      counts: {add: 1, delete: 0}
+    state:
+      - kind: environment
+        repo: "{{ p }}-ent-env"
+        name: e2e-production
+        match:
+          name: e2e-production
+          protection_rules:
+            $unordered:
+              - {type: wait_timer, wait_timer: 5}
+              - type: required_reviewers
+                prevent_self_review: true
+                reviewers: [{type: User, reviewer: {login: "{{ logins.admin }}"}}]
+
+  - name: update
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-ent-env') {
+            description: "otterdog e2e: private environment reviewers",
+            private: true,
+            allow_forking: false,
+            has_wiki: false,
+            environments: [
+              orgs.newEnvironment('e2e-production') {
+                wait_timer: 15,
+                reviewers: ["@{{ logins.admin }}"],
+                prevent_self_review: true,
+              },
+            ],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ environment[name="e2e-production", repository={{ p }}-ent-env]'
+      counts: {add: 0, delete: 0}
+    state:
+      - kind: environment
+        repo: "{{ p }}-ent-env"
+        name: e2e-production
+        match:
+          protection_rules:
+            $unordered:
+              - {type: wait_timer, wait_timer: 15}
+              - {type: required_reviewers, prevent_self_review: true}

@@ -1,0 +1,101 @@
+# Offline tier (battery, validation): deployment environments.
+id: O-VAL-ENVIRONMENTS
+tier: offline
+title: Environment wait timer, branch policy and reviewer settings are validated
+description: >-
+  Environment.validate refuses a wait_timer outside [0, 43200] and a deployment_branch_policy other than
+  all | protected | selected (the template comment still lists 'protected_branches', KB-036: the value it suggests
+  is refused here), warns that branch_policies are ignored unless the policy is 'selected' and that
+  prevent_self_review without reviewers is ignored. Every message is asserted with the environment header, then the
+  limits and the documented values validate and are planned.
+priority: P1
+tags: [offline, environments]
+observe: true
+variables: {plan: free}
+steps:
+  - name: wait-timer-range
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-env') {
+            environments: [
+              orgs.newEnvironment('{{ p }}-long') { wait_timer: 43201 },
+              orgs.newEnvironment('{{ p }}-negative') { wait_timer: -1 },
+            ],
+          }
+    validate:
+      ok: false
+      errors: 2
+      contains:
+        - >-
+          Error: environment[name="{{ p }}-long", repository={{ p }}-env] has 'wait_timer' of value '43201' outside
+          of supported range (0, 43200).
+        - >-
+          Error: environment[name="{{ p }}-negative", repository={{ p }}-env] has 'wait_timer' of value '-1'
+          outside of supported range (0, 43200).
+  - name: template-comment-policy
+    fragments:
+      repositories:
+        - "orgs.newRepo('{{ p }}-env') { environments: [orgs.newEnvironment('{{ p }}-policy') { deployment_branch_policy: 'protected_branches' }] }"
+    validate:
+      ok: false
+      errors: 1
+      exit_code: 1
+      contains:
+        - >-
+          Error: environment[name="{{ p }}-policy", repository={{ p }}-env] has 'deployment_branch_policy' of value
+          'protected_branches', while only values ('all' | 'protected' | 'selected') are allowed.
+  - name: ignored-settings
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-env') {
+            environments: [
+              orgs.newEnvironment('{{ p }}-all') { deployment_branch_policy: 'all', branch_policies: ['main'] },
+              orgs.newEnvironment('{{ p }}-protected') { deployment_branch_policy: 'protected', branch_policies: ['main'] },
+              orgs.newEnvironment('{{ p }}-review') { prevent_self_review: true },
+            ],
+          }
+    validate:
+      ok: true
+      errors: 0
+      warnings_min: 3
+      exit_code: 0
+      contains:
+        - "Validation succeeded': 0 info(s), 3 warning(s), 0 error(s)"
+        - >-
+          Warning: environment[name="{{ p }}-all", repository={{ p }}-env] has 'deployment_branch_policy' set to
+          'all', but 'branch_policies' is set to '['main']', setting will be ignored.
+        - >-
+          Warning: environment[name="{{ p }}-protected", repository={{ p }}-env] has 'deployment_branch_policy' set
+          to 'protected', but 'branch_policies' is set to '['main']', setting will be ignored.
+        - >-
+          Warning: environment[name="{{ p }}-review", repository={{ p }}-env] has 'prevent_self_review' set to
+          'True', but 'reviewers' is empty, setting will be ignored.
+  - name: valid-environments
+    base_fragments: {}
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-env') {
+            environments: [
+              orgs.newEnvironment('{{ p }}-max') { wait_timer: 43200 },
+              orgs.newEnvironment('{{ p }}-protected') { wait_timer: 0, deployment_branch_policy: 'protected' },
+              orgs.newEnvironment('{{ p }}-selected') { deployment_branch_policy: 'selected', branch_policies: ['main', 'release/*'] },
+              orgs.newEnvironment('{{ p }}-review') { prevent_self_review: true, reviewers: ['@{{ org }}/{{ p }}-reviewers'] },
+            ],
+          }
+    validate:
+      ok: true
+      errors: 0
+      exit_code: 0
+      contains: ["Validation succeeded"]
+      not_contains: ["Error:", "Warning:"]
+    plan:
+      expect: changes
+      counts: {add: 5, change: 0, delete: 0}
+      contains:
+        - '+ add environment[name="{{ p }}-max", repository={{ p }}-env]'
+        - '+ add environment[name="{{ p }}-selected", repository={{ p }}-env]'
+        - '+ "release/*"'
+        - '= 43200'

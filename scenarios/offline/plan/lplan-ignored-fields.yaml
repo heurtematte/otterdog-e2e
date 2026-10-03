@@ -1,0 +1,192 @@
+# Offline tier (battery, plan semantics): fields excluded from diffs by other settings.
+id: O-LPLAN-IGNORED-FIELDS
+tier: offline
+title: Fields made irrelevant by other settings are not diffed (security, Pages, code scanning, Actions)
+description: >-
+  include_field_for_diff_computation drops fields that other settings make irrelevant: the security analysis of
+  private repositories, the Pages source and visibility while Pages are disabled (the source while they are built by
+  a workflow), the code scanning suite while the default setup is off, model-only creation fields
+  (fork_default_branch_only, forked_repository, auto_init), and the Actions fields the allowed_actions or
+  enabled_repositories value make unused, for the organization and for a repository. Each ignored change plans
+  nothing; each control step flips the toggle and shows the change.
+priority: P1
+tags: [offline, repo, workflows, org-settings]
+observe: true
+variables: {plan: free}
+steps:
+  - name: private-security-ignored
+    base_fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-private') {
+            private: true, allow_forking: false, has_wiki: false,
+            secret_scanning: 'enabled', secret_scanning_push_protection: 'enabled',
+            dependabot_security_updates_enabled: false, private_vulnerability_reporting_enabled: false,
+          }
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-private') {
+            private: true, allow_forking: false, has_wiki: false,
+            secret_scanning: 'disabled', secret_scanning_push_protection: 'disabled',
+            dependabot_security_updates_enabled: true, private_vulnerability_reporting_enabled: true,
+          }
+    validate: {ok: true, errors: 0}
+    plan:
+      expect: noop
+      counts: {add: 0, change: 0, delete: 0}
+  - name: public-security-managed
+    base_fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-public') {
+            secret_scanning: 'enabled', secret_scanning_push_protection: 'enabled',
+            dependabot_security_updates_enabled: false, private_vulnerability_reporting_enabled: false,
+          }
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-public') {
+            secret_scanning: 'disabled', secret_scanning_push_protection: 'disabled',
+            dependabot_security_updates_enabled: true, private_vulnerability_reporting_enabled: true,
+          }
+    plan:
+      expect: changes
+      counts: {add: 0, change: 4, delete: 0}
+      contains:
+        - '~ repository[name="{{ p }}-public"] {'
+        - 'secret_scanning '
+        - 'secret_scanning_push_protection '
+        - 'dependabot_security_updates_enabled '
+        - 'private_vulnerability_reporting_enabled '
+  - name: pages-disabled-ignored
+    base_fragments:
+      repositories: ["orgs.newRepo('{{ p }}-pages') { gh_pages_source_branch: 'a', gh_pages_source_path: '/' }"]
+    fragments:
+      repositories: ["orgs.newRepo('{{ p }}-pages') { gh_pages_source_branch: 'b', gh_pages_source_path: '/docs' }"]
+    plan:
+      expect: noop
+      counts: {add: 0, change: 0, delete: 0}
+  - name: pages-workflow-source-ignored
+    base_fragments:
+      repositories:
+        - "orgs.newRepo('{{ p }}-pages') { gh_pages_build_type: 'workflow', gh_pages_source_branch: 'a', gh_pages_source_path: '/', environments: [orgs.newEnvironment('github-pages')] }"
+    fragments:
+      repositories:
+        - "orgs.newRepo('{{ p }}-pages') { gh_pages_build_type: 'workflow', gh_pages_source_branch: 'b', gh_pages_source_path: '/docs', environments: [orgs.newEnvironment('github-pages')] }"
+    plan:
+      expect: noop
+      counts: {add: 0, change: 0, delete: 0}
+  - name: pages-legacy-source-managed
+    base_fragments:
+      repositories:
+        - "orgs.newRepo('{{ p }}-pages') { gh_pages_build_type: 'legacy', gh_pages_source_branch: 'a', gh_pages_source_path: '/', environments: [orgs.newEnvironment('github-pages')] }"
+    fragments:
+      repositories:
+        - "orgs.newRepo('{{ p }}-pages') { gh_pages_build_type: 'legacy', gh_pages_source_branch: 'b', gh_pages_source_path: '/docs', environments: [orgs.newEnvironment('github-pages')] }"
+    plan:
+      expect: changes
+      counts: {add: 0, change: 2, delete: 0}
+      contains: ['"a" -> "b"', '"/" -> "/docs"']
+  - name: code-scanning-suite-ignored
+    base_fragments:
+      repositories: ["orgs.newRepo('{{ p }}-scan') { code_scanning_default_query_suite: 'default' }"]
+    fragments:
+      repositories: ["orgs.newRepo('{{ p }}-scan') { code_scanning_default_query_suite: 'extended' }"]
+    plan:
+      expect: noop
+      counts: {add: 0, change: 0, delete: 0}
+  - name: code-scanning-suite-managed
+    base_fragments:
+      repositories: ["orgs.newRepo('{{ p }}-scan') { code_scanning_default_setup_enabled: true, code_scanning_default_query_suite: 'default' }"]
+    fragments:
+      repositories: ["orgs.newRepo('{{ p }}-scan') { code_scanning_default_setup_enabled: true, code_scanning_default_query_suite: 'extended' }"]
+    plan:
+      expect: changes
+      counts: {add: 0, change: 1, delete: 0}
+      contains: ['~ code_scanning_default_query_suite = "default" -> "extended"']
+  - name: model-only-fields-ignored
+    base_fragments:
+      repositories:
+        - "orgs.newRepo('{{ p }}-fork') { forked_repository: 'octocat/Hello-World', fork_default_branch_only: true, auto_init: true }"
+    fragments:
+      repositories:
+        - "orgs.newRepo('{{ p }}-fork') { forked_repository: 'octocat/Spoon-Knife', fork_default_branch_only: false, auto_init: false }"
+    plan:
+      expect: noop
+      counts: {add: 0, change: 0, delete: 0}
+  - name: organization-actions-ignored
+    base_fragments:
+      settings: ["workflows+: { allowed_actions: 'all', allow_action_patterns: [], enabled_repositories: 'all', selected_repositories: [] }"]
+    fragments:
+      settings:
+        - |-
+          workflows+: {
+            allowed_actions: 'all',
+            allow_action_patterns: ['actions/*@*'],
+            allow_github_owned_actions: false,
+            allow_verified_creator_actions: false,
+            enabled_repositories: 'all',
+            selected_repositories: ['{{ p }}-wf'],
+          }
+    validate:
+      ok: true
+      errors: 0
+      warnings_min: 2
+    plan:
+      expect: noop
+      counts: {add: 0, change: 0, delete: 0}
+  - name: organization-actions-disabled
+    base_fragments:
+      settings: ["workflows+: { enabled_repositories: 'none', default_workflow_permissions: 'read' }"]
+    fragments:
+      settings: ["workflows+: { enabled_repositories: 'none', default_workflow_permissions: 'write', allowed_actions: 'local_only' }"]
+    plan:
+      expect: noop
+      counts: {add: 0, change: 0, delete: 0}
+  - name: organization-actions-managed
+    base_fragments:
+      settings: ["workflows+: { allowed_actions: 'selected', allow_action_patterns: [] }"]
+    fragments:
+      settings: ["workflows+: { allowed_actions: 'selected', allow_action_patterns: ['actions/*@*'] }"]
+    plan:
+      expect: changes
+      counts: {add: 0, change: 1, delete: 0}
+      contains: ['~ settings {', '~ workflows', '~ allow_action_patterns', '+ "actions/*@*"']
+  - name: repository-actions-ignored
+    base_fragments:
+      settings: ["workflows+: { allowed_actions: 'selected' }"]
+      repositories: ["orgs.newRepo('{{ p }}-wf') { workflows+: { allowed_actions: 'local_only', allow_action_patterns: [] } }"]
+    fragments:
+      settings: ["workflows+: { allowed_actions: 'selected' }"]
+      repositories: ["orgs.newRepo('{{ p }}-wf') { workflows+: { allowed_actions: 'local_only', allow_action_patterns: ['actions/*@*'] } }"]
+    plan:
+      expect: noop
+      counts: {add: 0, change: 0, delete: 0}
+  - name: repository-actions-disabled
+    base_fragments:
+      repositories: ["orgs.newRepo('{{ p }}-wf') { workflows+: { enabled: false, allowed_actions: 'selected' } }"]
+    fragments:
+      repositories: ["orgs.newRepo('{{ p }}-wf') { workflows+: { enabled: false, allowed_actions: 'local_only' } }"]
+    plan:
+      expect: noop
+      counts: {add: 0, change: 0, delete: 0}
+  - name: repository-actions-disabled-by-organization
+    base_fragments:
+      settings: ["workflows+: { enabled_repositories: 'none' }"]
+      repositories: ["orgs.newRepo('{{ p }}-wf') { workflows+: { enabled: true } }"]
+    fragments:
+      settings: ["workflows+: { enabled_repositories: 'none' }"]
+      repositories: ["orgs.newRepo('{{ p }}-wf') { workflows+: { enabled: false } }"]
+    plan:
+      expect: noop
+      counts: {add: 0, change: 0, delete: 0}
+  - name: repository-actions-managed
+    base_fragments:
+      repositories: ["orgs.newRepo('{{ p }}-wf') { workflows+: { allowed_actions: 'selected', allow_action_patterns: [] } }"]
+    fragments:
+      repositories: ["orgs.newRepo('{{ p }}-wf') { workflows+: { allowed_actions: 'selected', allow_action_patterns: ['actions/*@*'] } }"]
+    plan:
+      expect: changes
+      counts: {add: 0, change: 1, delete: 0}
+      contains: ['~ repository[name="{{ p }}-wf"] {', '~ workflows', '+ "actions/*@*"']

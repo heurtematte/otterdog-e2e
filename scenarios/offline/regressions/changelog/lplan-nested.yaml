@@ -1,0 +1,73 @@
+# Offline tier (battery, regressions): otterdog v1.3.0 "Fix printing of changes for nested dicts"
+# (scenarios/offline/regressions/<group>: the tier is that of offline/, the directory right below scenarios/).
+id: O-LPLAN-NESTED
+tier: offline
+title: Changes inside nested settings and dicts print as nested blocks with old and new values
+description: >-
+  Regression guard of the v1.3.0 fix of the printing of nested dict changes: a change of repository workflows
+  (allowed_actions), of organization workflows (default_workflow_permissions) and of a repository team_permissions
+  value must print a nested '~ <key> = {' block holding '~ <inner key> = <old> -> <new>' and its closing '~ }',
+  each counted as one changed attribute, instead of a flat or missing line; an added team_permissions entry prints
+  as a nested addition.
+priority: P2
+tags: [offline, repo, workflows, org-settings, teams]
+observe: true
+variables: {plan: free}
+steps:
+  - name: repository-workflows
+    base_fragments:
+      repositories: ["orgs.newRepo('{{ p }}-n')"]
+    fragments:
+      repositories: ["orgs.newRepo('{{ p }}-n') { workflows+: { allowed_actions: 'local_only' } }"]
+    validate: {ok: true, errors: 0}
+    plan:
+      expect: changes
+      counts: {add: 0, change: 1, delete: 0}
+      contains:
+        - '~ repository[name="{{ p }}-n"] {'
+        - "~ workflows"
+        - '"all" -> "local_only"'
+        - "~ allowed_actions"
+        - "~ }"
+  - name: organization-workflows
+    base_fragments: {}
+    fragments:
+      settings: ["workflows+: { default_workflow_permissions: 'write' }"]
+    validate: {ok: true, errors: 0}
+    plan:
+      expect: changes
+      counts: {add: 0, change: 1, delete: 0}
+      contains:
+        - "~ settings {"
+        - "~ workflows"
+        - "~ default_workflow_permissions"
+        - '"read" -> "write"'
+  - name: team-permissions-value
+    base_fragments:
+      repositories: ["orgs.newRepo('{{ p }}-t') { team_permissions: { '{{ p }}-team': 'push' } }"]
+    fragments:
+      repositories: ["orgs.newRepo('{{ p }}-t') { team_permissions: { '{{ p }}-team': 'admin' } }"]
+    validate: {ok: true, errors: 0}
+    plan:
+      expect: changes
+      counts: {add: 0, change: 1, delete: 0}
+      contains:
+        - '~ repository[name="{{ p }}-t"] {'
+        - "~ team_permissions"
+        - "~ {{ p }}-team"
+        - '"push" -> "admin"'
+  - name: team-permissions-entry-added
+    base_fragments:
+      repositories: ["orgs.newRepo('{{ p }}-t') { team_permissions: { '{{ p }}-team': 'push' } }"]
+    fragments:
+      repositories:
+        - "orgs.newRepo('{{ p }}-t') { team_permissions: { '{{ p }}-team': 'push', '{{ p }}-other': 'pull' } }"
+    validate: {ok: true, errors: 0}
+    plan:
+      expect: changes
+      counts: {add: 0, change: 1, delete: 0}
+      contains:
+        - "~ team_permissions"
+        - '+ {{ p }}-other'
+        - '"pull"'
+      not_contains: ['"push" ->']

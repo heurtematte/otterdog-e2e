@@ -1,0 +1,71 @@
+[project]
+name = "otterdog-e2e"
+description = "End-to-end test harness for otterdog (CLI, GitHub App webapp and webhooks) against real GitHub organizations."
+requires-python = ">=3.11,<4.0"
+license = { text = "EPL-2.0" }
+readme = "README.md"
+dynamic = ["version"]
+dependencies = [
+    "click (>=8.1,<9.0)",
+    "requests (>=2.32,<3.0)",
+    "pyjwt[crypto] (>=2.9,<3.0)",
+    "pyyaml (>=6.0,<7.0)",
+    "jinja2 (>=3.1,<4.0)",
+    "filelock (>=3.15,<4.0)",
+    "pytest (>=8.3)",
+    "pytest-timeout (>=2.3)",
+]
+
+[project.optional-dependencies]
+mongo = ["pymongo (>=4.8,<5.0)"]
+
+[project.scripts]
+otterdog-e2e = "otterdog_e2e.cli:main"
+
+[project.entry-points.pytest11]
+otterdog_e2e = "otterdog_e2e.pytest_plugin"
+
+[tool.poetry]
+version = "0.1.0"
+packages = [{ include = "otterdog_e2e", from = "src" }]
+# package data loaded with importlib.resources.files("otterdog_e2e") / "resources" / name
+include = [{ path = "src/otterdog_e2e/resources/*", format = ["sdist", "wheel"] }]
+
+[tool.poetry.group.dev.dependencies]
+ruff = ">=0.6"
+mypy = ">=1.11"
+responses = ">=0.25"
+types-requests = ">=2.32"
+types-pyyaml = ">=6.0"
+
+[build-system]
+requires = ["poetry-core>=2.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = "-ra --strict-markers --import-mode=importlib"
+log_cli = false
+log_level = "INFO"
+timeout = 1800
+# markers are registered by otterdog_e2e.pytest_plugin
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+extend-select = ["B", "C4", "I", "N", "PIE", "RUF", "S", "SIM", "UP", "T20"]
+ignore = ["S101", "S603", "S607", "S311", "RUF012"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S105", "S106", "S108"]
+
+[tool.mypy]
+python_version = "3.11"
+packages = ["otterdog_e2e"]
+mypy_path = "src"
+ignore_missing_imports = true
+warn_unused_ignores = true

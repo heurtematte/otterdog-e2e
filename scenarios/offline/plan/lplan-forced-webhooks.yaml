@@ -1,0 +1,96 @@
+# Offline tier (battery, plan semantics): webhook secrets in local-plan and --update-webhooks / --update-filter.
+id: O-LPLAN-FORCED-WEBHOOKS
+tier: offline
+title: Webhook secrets and --update-webhooks / --update-filter in local-plan
+description: >-
+  A webhook secret is only diffed for its presence and for differing references: adding a secret is a change,
+  removing one is a change followed by 'Warning: removing secret for webhook with url ...', a changed reference is
+  'old -> new' and a dummy '********' is shown as '<DUMMY>' (plan and apply skip a hook with a dummy secret
+  entirely). --update-webhooks forces a '!' update (every key 'v -> v', all counted) of each organization and
+  repository webhook with a secret, never of a hook without secret, and --update-filter restricts it to the matching
+  urls.
+priority: P1
+tags: [offline, webhooks]
+observe: true
+variables: {plan: free}
+steps:
+  - name: update-webhooks
+    base_fragments: &hooks
+      webhooks:
+        - "orgs.newOrgWebhook('{{ hook_base }}org-secret') { events+: ['push'], secret: 'pass:e2e/hook' }"
+        - "orgs.newOrgWebhook('{{ hook_base }}org-plain') { events+: ['push'] }"
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-hooks') {
+            webhooks: [orgs.newRepoWebhook('{{ hook_base }}repo-secret') { events+: ['push'], secret: 'pass:e2e/repo-hook' }],
+          }
+    fragments: *hooks
+    validate: {ok: true, errors: 0}
+    plan:
+      expect: changes
+      update_webhooks: true
+      counts: {add: 0, change: 14, delete: 0}
+      contains:
+        - '! org_webhook[url="{{ hook_base }}org-secret"] {'
+        - '= "pass:e2e/hook" -> "pass:e2e/hook"'
+        - '= "{{ hook_base }}org-secret" -> "{{ hook_base }}org-secret"'
+        - '! repo_webhook[url="{{ hook_base }}repo-secret", repository={{ p }}-hooks] {'
+      not_contains: ['org_webhook[url="{{ hook_base }}org-plain"]', '+ add ', '- remove ']
+  - name: update-filter
+    base_fragments: *hooks
+    fragments: *hooks
+    plan:
+      expect: changes
+      update_webhooks: true
+      update_filter: "{{ hook_base }}repo-*"
+      counts: {add: 0, change: 7, delete: 0}
+      contains: ['! repo_webhook[url="{{ hook_base }}repo-secret", repository={{ p }}-hooks] {']
+      not_contains: ['! org_webhook[']
+  - name: secret-added
+    base_fragments:
+      webhooks: ["orgs.newOrgWebhook('{{ hook_base }}hook') { events+: ['push'] }"]
+    fragments:
+      webhooks: ["orgs.newOrgWebhook('{{ hook_base }}hook') { events+: ['push'], secret: 'pass:e2e/x' }"]
+    plan:
+      expect: changes
+      counts: {add: 0, change: 1, delete: 0}
+      contains: ['~ org_webhook[url="{{ hook_base }}hook"] {', '~ secret = null -> "pass:e2e/x"']
+  - name: secret-reference-changed
+    base_fragments:
+      webhooks: ["orgs.newOrgWebhook('{{ hook_base }}hook') { events+: ['push'], secret: 'pass:e2e/x' }"]
+    fragments:
+      webhooks: ["orgs.newOrgWebhook('{{ hook_base }}hook') { events+: ['push'], secret: 'pass:e2e/y' }"]
+    plan:
+      expect: changes
+      counts: {add: 0, change: 1, delete: 0}
+      contains: ['~ secret = "pass:e2e/x" -> "pass:e2e/y"']
+  - name: secret-removed
+    base_fragments:
+      webhooks: ["orgs.newOrgWebhook('{{ hook_base }}hook') { events+: ['push'], secret: 'pass:e2e/x' }"]
+      repositories:
+        - "orgs.newRepo('{{ p }}-hooks') { webhooks: [orgs.newRepoWebhook('{{ hook_base }}repo-hook') { events+: ['push'], secret: 'pass:e2e/r' }] }"
+    fragments:
+      webhooks: ["orgs.newOrgWebhook('{{ hook_base }}hook') { events+: ['push'], secret: null }"]
+      repositories:
+        - "orgs.newRepo('{{ p }}-hooks') { webhooks: [orgs.newRepoWebhook('{{ hook_base }}repo-hook') { events+: ['push'] }] }"
+    plan:
+      expect: changes
+      counts: {add: 0, change: 2, delete: 0}
+      contains:
+        - '~ org_webhook[url="{{ hook_base }}hook"] {'
+        - '- secret = "pass:e2e/x"'
+        - "Warning: removing secret for webhook with url '{{ hook_base }}hook'"
+        - '~ repo_webhook[url="{{ hook_base }}repo-hook", repository={{ p }}-hooks] {'
+        - "Warning: removing secret for webhook with url '{{ hook_base }}repo-hook'"
+  - name: dummy-secret
+    base_fragments: {}
+    fragments:
+      webhooks: ["orgs.newOrgWebhook('{{ hook_base }}dummy') { events+: ['push'], secret: '********' }"]
+    plan:
+      expect: changes
+      counts: {add: 1, change: 0, delete: 0}
+      contains:
+        - '+ add org_webhook[url="{{ hook_base }}dummy"] {'
+        - '= "<DUMMY>"'
+        - 'there have been 1 validation infos, enable verbose output to display them.'
+      not_contains: ['"********"']

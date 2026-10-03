@@ -1,0 +1,113 @@
+# Required deployments rule of a ruleset (coverage: rulesets.deployments).
+id: cli.ruleset.deployments
+tier: cli
+title: Ruleset requiring successful deployments
+description: |
+  requires_deployments with required_deployment_environments becomes the required_deployments rule with the
+  environments as its parameter (models/ruleset.py:426-449 validation, the rule mapping in
+  Ruleset.get_mapping_to_provider); the environments must be environments of the repository itself. The create step
+  adds a public run repository, its environment e2e-staging and a default-branch ruleset requiring a deployment to
+  it, in one apply (environments are planned before the rulesets of their repository); the drop step stops
+  requiring deployments (one changed attribute: the environment list leaves the diff with requires_deployments
+  false), which removes the rule while the environment stays; both converge. The last step is validation only: an
+  environment the repository does not define is a validation error and nothing is planned. The pull request and
+  status check rules are left out (KB-021 for the template's empty status checks).
+priority: P2
+min_plan: free
+tags: [rulesets, environments, repo]
+steps:
+  - name: create
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-rs-deploy') {
+            description: "otterdog e2e: required deployments (ruleset)",
+            environments: [
+              orgs.newEnvironment('e2e-staging'),
+            ],
+            rulesets: [
+              orgs.newRepoRuleset('{{ p }}-rs-deploy') {
+                include_refs+: ["~DEFAULT_BRANCH"],
+                required_pull_request: null,
+                required_status_checks: null,
+                requires_deployments: true,
+                required_deployment_environments: ["e2e-staging"],
+              },
+            ],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '+ add environment[name="e2e-staging", repository={{ p }}-rs-deploy]'
+        - '+ add repo_ruleset[name="{{ p }}-rs-deploy", repository={{ p }}-rs-deploy]'
+      counts: {add: 3, change: 0, delete: 0}
+    state:
+      - kind: repo_ruleset
+        repo: "{{ p }}-rs-deploy"
+        name: "{{ p }}-rs-deploy"
+        match:
+          rules:
+            $unordered:
+              - {type: creation}
+              - {type: deletion}
+              - {type: non_fast_forward}
+              - {type: required_deployments, parameters: {required_deployment_environments: [e2e-staging]}}
+
+  - name: drop
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-rs-deploy') {
+            description: "otterdog e2e: required deployments (ruleset)",
+            environments: [
+              orgs.newEnvironment('e2e-staging'),
+            ],
+            rulesets: [
+              orgs.newRepoRuleset('{{ p }}-rs-deploy') {
+                include_refs+: ["~DEFAULT_BRANCH"],
+                required_pull_request: null,
+                required_status_checks: null,
+              },
+            ],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ repo_ruleset[name="{{ p }}-rs-deploy", repository={{ p }}-rs-deploy]'
+      counts: {add: 0, change: 1, delete: 0}
+    state:
+      - kind: repo_ruleset
+        repo: "{{ p }}-rs-deploy"
+        name: "{{ p }}-rs-deploy"
+        match:
+          rules: {$unordered: [{type: creation}, {type: deletion}, {type: non_fast_forward}]}
+      - {kind: environment, repo: "{{ p }}-rs-deploy", name: e2e-staging, absent: false}
+
+  - name: undefined-environment
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-rs-deploy') {
+            description: "otterdog e2e: required deployments (ruleset)",
+            environments: [
+              orgs.newEnvironment('e2e-staging'),
+            ],
+            rulesets: [
+              orgs.newRepoRuleset('{{ p }}-rs-deploy') {
+                include_refs+: ["~DEFAULT_BRANCH"],
+                required_pull_request: null,
+                required_status_checks: null,
+                requires_deployments: true,
+                required_deployment_environments: ["e2e-missing"],
+              },
+            ],
+          }
+    validate:
+      ok: false
+      errors: 1
+      contains:
+        - "requires deployment environment 'e2e-missing' which is not defined in the repository itself."
+    plan:
+      expect: validation_error
+    apply: null
+    converge: false

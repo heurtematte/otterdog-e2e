@@ -1,0 +1,48 @@
+# E-ORG-RULESET, known bug KB-008: #790 crashes for ORG rulesets whose status checks lack 'strict'.
+id: enterprise.org-ruleset.790-missing-strict
+title: "Org ruleset status checks without 'strict' (known bug KB-008, #790 AttributeError)"
+description: |
+  #790 (9bdeb75) validates required_status_checks of rulesets through StatusCheckSettings.validate, which builds its
+  message with parent_object.get_model_header(parent_object) (otterdog/models/ruleset.py:128-136). For an ORG ruleset
+  the parent object is GitHubOrganization, a plain dataclass without get_model_header, so validation raises
+  AttributeError "'GitHubOrganization' object has no attribute 'get_model_header'": the CLI exits 2 ("Error: ...")
+  and the webapp shows the generic "Validation failed while evaluating the configuration" (FACTS tests.json #27).
+  Reachable only with settings.plan == 'enterprise' (other plans reject org rulesets first). This validate-only
+  scenario asserts the expected behaviour - one ordinary validation error naming the missing parameter - and is
+  expected to fail (xfail) while the bug exists. Nothing is applied. SUTs before #790 (1.7.0.dev15, release:latest
+  among them) do not require 'strict' at all and are skipped (fixed_in): their clean validation is not KB-008.
+priority: P1
+min_plan: enterprise
+requires: [otterdog_org_rulesets]
+fixed_in: "1.7.0.dev15"
+known_bug: KB-008
+tags: [rulesets, enterprise, known-bug, pr-790]
+steps:
+  - name: validate
+    fragments:
+      rulesets:
+        - |
+          orgs.newOrgRuleset('{{ p }}-org-790') {
+            include_repo_names: ["{{ p }}-ors-790"],
+            include_refs+: ["~DEFAULT_BRANCH"],
+            required_pull_request: null,
+            required_status_checks: {
+              status_checks: ["e2e-ci"],
+            },
+          }
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-ors-790') {
+            description: "otterdog e2e: org ruleset #790 target",
+          }
+    validate:
+      ok: false
+      errors: 1
+      contains:
+        - "has not set required parameter 'required_status_checks.strict'"
+      not_contains:
+        - "object has no attribute 'get_model_header'"
+    plan:
+      expect: validation_error
+    apply: null
+    converge: false

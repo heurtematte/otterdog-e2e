@@ -1,0 +1,100 @@
+# Deployment environments of a private repository (coverage: environments.lifecycle, environments.branch-policies;
+# plan-dependent: Team and Enterprise).
+id: cli.environment.private
+tier: cli
+title: Environment with branch and tag policies on a private repository (Team and Enterprise)
+description: |
+  GitHub offers environments, environment secrets and deployment branch policies on private repositories with GitHub
+  Team and Enterprise Cloud only (capability private_repo_environments, docs/capability-matrix.md); required reviewers
+  and wait timers on private repositories need Enterprise (enterprise.env-reviewers-private), so this environment uses
+  deployment branch policies only. otterdog does not validate the plan here, and it reads the environments of a
+  private repository leniently (a failing listing is an empty list, providers/github/rest/repo_client.py:724-740). A
+  private run repository (allow_forking false and no wiki, as the template's organization requires) gets an
+  environment restricted to main and the v* tags, then to protected branches; both steps converge. The cleanup removes
+  the repository.
+  The repository is created PUBLIC in a first step and made private by the next one: otterdog before 1.7.0.dev14
+  cannot create a private repository on an organization without Code Security (the code scanning default setup
+  PATCH of new repositories fails, #791; regression.791-731-private-repo covers that path).
+priority: P2
+min_plan: team
+requires: [private_repo_environments]
+tags: [environments, repo, private]
+steps:
+  - name: public
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-env-private') {
+            description: "otterdog e2e: environment of a private repository",
+            has_wiki: false,
+          }
+    plan:
+      expect: changes
+      contains:
+        - '+ add repository[name="{{ p }}-env-private"]'
+      counts: {add: 1, delete: 0}
+    state:
+      - kind: repo
+        name: "{{ p }}-env-private"
+        match: {private: false}
+
+  - name: selected
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-env-private') {
+            description: "otterdog e2e: environment of a private repository",
+            private: true,
+            allow_forking: false,
+            has_wiki: false,
+            environments: [
+              orgs.newEnvironment('e2e-release') {
+                deployment_branch_policy: "selected",
+                branch_policies: ["main", "tag:v*"],
+              },
+            ],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ repository[name="{{ p }}-env-private"]'
+        - '+ add environment[name="e2e-release", repository={{ p }}-env-private]'
+      not_contains:
+        - '+ add repository[name="{{ p }}-env-private"]'
+      counts: {add: 1, delete: 0}
+    state:
+      - {kind: repo, name: "{{ p }}-env-private", match: {private: true}}
+      - kind: environment
+        repo: "{{ p }}-env-private"
+        name: e2e-release
+        match: {deployment_branch_policy: {protected_branches: false, custom_branch_policies: true}}
+      - kind: env_branch_policies
+        repo: "{{ p }}-env-private"
+        env: e2e-release
+        match: {$unordered: [{name: main, type: branch}, {name: "v*", type: tag}]}
+
+  - name: protected
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-env-private') {
+            description: "otterdog e2e: environment of a private repository",
+            private: true,
+            allow_forking: false,
+            has_wiki: false,
+            environments: [
+              orgs.newEnvironment('e2e-release') {
+                deployment_branch_policy: "protected",
+              },
+            ],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ environment[name="e2e-release", repository={{ p }}-env-private]'
+      counts: {add: 0, change: 1, delete: 0}
+    state:
+      - kind: environment
+        repo: "{{ p }}-env-private"
+        name: e2e-release
+        match: {deployment_branch_policy: {protected_branches: true, custom_branch_policies: false}}

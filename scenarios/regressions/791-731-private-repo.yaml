@@ -1,0 +1,49 @@
+# Regressions #791 (b5f7bb1), #731 (v1.5.0) and #635 (v1.3.1): a private repository with template defaults.
+id: regression.791-731-private-repo
+title: "#791/#731/#635: create and re-plan a private repository with the template defaults"
+description: |
+  A private run repository with the example template defaults (code scanning default setup not configured, fork PR
+  approval policy set) must be created by one clean apply and then converge, on every plan including Free:
+  - PR https://github.com/eclipse-csi/otterdog/pull/791 ("disable code scanning of new repos only when configured"):
+    known-bad f055d51 (#779, b5f7bb1^) - the apply failed with 'failed to update code scanning config' /
+    'Code Security must be enabled for this repository to use code scanning.' on private repos without GHAS.
+  - PR https://github.com/eclipse-csi/otterdog/pull/731 ("fix ruleset on private repo regarding paid plan"): reading
+    rulesets of a private repository answers 403/404 on Free and must be tolerated (repo_client.py returns []).
+    Known-bad: v1.4.0 - plans of orgs with private repositories failed (or skipped private repo rulesets).
+  - Issue https://github.com/eclipse-csi/otterdog/issues/635 (v1.3.1): fork PR approval calls are skipped for private
+    repositories (GitHub answers 422). Known-bad: v1.3.0.
+  allow_forking false / has_wiki false: the template disables members_can_fork_private_repositories (validation
+  error otherwise) and wikis on private repos need GitHub Team (warning on Free).
+  Not released yet: b5f7bb1 is otterdog 1.7.0.dev14 (v1.6.1 + 14 commits), so
+  fixed_in skips the scenario on older SUTs such as release:latest (ScenarioEngine.skip_reason).
+priority: P1
+min_plan: free
+fixed_in: "1.7.0.dev14"
+tags: [repo, rulesets, regression, private, pr-791, pr-731, pr-635]
+steps:
+  - name: create
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-r791') {
+            description: "otterdog e2e: #791/#731 private repository",
+            private: true,
+            allow_forking: false,
+            has_wiki: false,
+          }
+    plan:
+      expect: changes
+      contains:
+        - '+ add repository[name="{{ p }}-r791"]'
+      not_contains:
+        - "failed retrieving rulesets"
+      counts: {add: 1, delete: 0}
+    apply:
+      expect: ok
+      not_contains:
+        - "failed to update code scanning config"
+        - "Code Security must be enabled"
+    state:
+      - kind: repo
+        name: "{{ p }}-r791"
+        match: {name: "{{ p }}-r791", private: true, allow_forking: false}

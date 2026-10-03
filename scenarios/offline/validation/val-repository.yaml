@@ -1,0 +1,154 @@
+# Offline tier (battery, validation): repository rules that need no other object.
+id: O-VAL-REPO
+tier: offline
+title: Repository rules (description, topics, forking, secret scanning, template, fork, properties, code scanning)
+description: >-
+  Repository.validate refuses a description over 350 characters, more than 20 topics and topics outside
+  [a-z0-9-], warns about a public repository that disables forking, refuses a private repository that allows forking
+  while the organization forbids private forks, refuses secret scanning disabled with push protection enabled (not on
+  archived repositories), template_repository together with forked_repository, a forked_repository that is not
+  '<owner>/<repo>' (the message says 'the the'), an undefined custom property, an unknown code scanning query
+  suite and an unknown code scanning language (validated offline when the default setup is disabled: the language
+  detection only reads GitHub for an enabled setup). One rule per step, then a control step at every limit (every
+  supported language included).
+priority: P1
+tags: [offline, repo, custom-properties]
+observe: true
+variables: {plan: free}
+steps:
+  - name: description-too-long
+    fragments:
+      repositories: ["orgs.newRepo('{{ p }}-desc') { description: std.repeat('x', 351) }"]
+    validate:
+      ok: false
+      errors: 1
+      exit_code: 1
+      contains:
+        - "Error: repository[name=\"{{ p }}-desc\"] has 'description' that exceeds the maximum allowed length of 350 chars."
+  - name: too-many-topics
+    fragments:
+      repositories: ["orgs.newRepo('{{ p }}-topics') { topics: ['t%d' % i for i in std.range(1, 21)] }"]
+    validate:
+      ok: false
+      errors: 1
+      exit_code: 1
+      contains: ["Error: repository[name=\"{{ p }}-topics\"] has more than 20 'topics' defined."]
+  - name: invalid-topics
+    fragments:
+      repositories: ["orgs.newRepo('{{ p }}-topics') { topics: ['Bad Topic', 'under_score', 'ok-1'] }"]
+    validate:
+      ok: false
+      errors: 2
+      contains:
+        - >-
+          Error: repository[name="{{ p }}-topics"] has defined an invalid topic 'Bad Topic'. Only lower-case, numbers
+          and '-' are allowed characters.
+        - >-
+          Error: repository[name="{{ p }}-topics"] has defined an invalid topic 'under_score'. Only lower-case,
+          numbers and '-' are allowed characters.
+      not_contains: ["invalid topic 'ok-1'"]
+  - name: forking
+    fragments:
+      repositories:
+        - "orgs.newRepo('{{ p }}-pub') { allow_forking: false }"
+        - "orgs.newRepo('{{ p }}-priv') { private: true, has_wiki: false }"
+    validate:
+      ok: false
+      errors: 1
+      warnings_min: 1
+      exit_code: 1
+      contains:
+        - "Warning: public repository[name=\"{{ p }}-pub\"] has 'allow_forking' disabled which is not permitted."
+        - >-
+          Error: private repository[name="{{ p }}-priv"] has 'allow_forking' enabled, while the organization disables
+          'members_can_fork_private_repositories'.
+  - name: secret-scanning
+    fragments:
+      repositories:
+        - "orgs.newRepo('{{ p }}-ss') { secret_scanning: 'disabled' }"
+        - "orgs.newRepo('{{ p }}-ss-archived') { secret_scanning: 'disabled', archived: true }"
+        - "orgs.newRepo('{{ p }}-ss-off') { secret_scanning: 'disabled', secret_scanning_push_protection: 'disabled' }"
+    validate:
+      ok: false
+      errors: 1
+      exit_code: 1
+      contains:
+        - >-
+          Error: repository[name="{{ p }}-ss"] has 'secret_scanning' disabled, while 'secret_scanning_push_protection'
+          is enabled.
+      not_contains: ["repository[name=\"{{ p }}-ss-archived\"] has", "repository[name=\"{{ p }}-ss-off\"] has"]
+  - name: template-and-fork
+    fragments:
+      repositories:
+        - "orgs.newRepo('{{ p }}-both') { template_repository: '{{ org }}/{{ p }}-tpl', forked_repository: 'octocat/Hello-World' }"
+        - "orgs.newRepo('{{ p }}-fork') { forked_repository: 'foo' }"
+    validate:
+      ok: false
+      errors: 2
+      contains:
+        - "Error: repository[name=\"{{ p }}-both\"] has 'template_repository' and 'forked_repository' set at the same time."
+        - >-
+          Error: repository[name="{{ p }}-fork"] has 'forked_repository' with value 'foo', which does not match the
+          the required format '<owner>/<repo>'.
+  - name: unknown-custom-property
+    fragments:
+      repositories: ["orgs.newRepo('{{ p }}-cp') { custom_properties: { '{{ p }}-nope': 'x' } }"]
+    validate:
+      ok: false
+      errors: 1
+      exit_code: 1
+      contains: ["Error: repository[name=\"{{ p }}-cp\"] defines an unknown custom property with key '{{ p }}-nope'."]
+  - name: code-scanning-query-suite
+    fragments:
+      repositories: ["orgs.newRepo('{{ p }}-cs') { code_scanning_default_query_suite: 'full' }"]
+    validate:
+      ok: false
+      errors: 1
+      exit_code: 1
+      contains:
+        - >-
+          Error: repository[name="{{ p }}-cs"] has 'code_scanning_default_query_suite' set to value 'full', while
+          only values ['default' | 'extended'] are allowed.
+  - name: code-scanning-language
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-lang') {
+            code_scanning_default_setup_enabled: false,
+            code_scanning_default_languages: ['cobol'],
+          }
+    validate:
+      ok: false
+      errors: 1
+      exit_code: 1
+      contains:
+        # the allowed values are a Python set: only the stable prefix is asserted (KB-038)
+        - >-
+          Error: repository[name="{{ p }}-lang"] has defined an invalid code scanning language 'cobol', only values (
+      not_contains: ["could not validate 'code_scanning_default_languages'"]
+  - name: limits
+    fragments:
+      settings: ["members_can_fork_private_repositories: true"]
+      custom_properties: ["orgs.newCustomProperty('{{ p }}-tier')"]
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-limits') {
+            description: std.repeat('x', 350),
+            topics: ['t%d' % i for i in std.range(1, 18)] + ['ok-1', 'e2e'],
+            custom_properties: { '{{ p }}-tier': 'gold' },
+            code_scanning_default_query_suite: 'extended',
+          }
+        - "orgs.newRepo('{{ p }}-priv') { private: true, has_wiki: false }"
+        - "orgs.newRepo('{{ p }}-fork') { forked_repository: 'octocat/Hello-World', fork_default_branch_only: false }"
+        - "orgs.newRepo('{{ p }}-ss-archived') { secret_scanning: 'disabled', archived: true }"
+        - |-
+          orgs.newRepo('{{ p }}-langs') {
+            code_scanning_default_setup_enabled: false,
+            code_scanning_default_languages: ['actions', 'c-cpp', 'csharp', 'go', 'java-kotlin', 'javascript-typescript', 'python', 'ruby', 'rust', 'swift'],
+          }
+    validate:
+      ok: true
+      errors: 0
+      exit_code: 0
+      contains: ["Validation succeeded"]
+      not_contains: ["Error:", "Warning:"]

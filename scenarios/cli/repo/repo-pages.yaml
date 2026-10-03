@@ -1,0 +1,114 @@
+# GitHub Pages of a repository (coverage: repositories.pages, regression.450-pages-required-fields).
+id: cli.repo.pages
+tier: cli
+title: GitHub Pages from a branch, from a workflow, then disabled
+description: |
+  GitHub Pages of a public run repository (available on public repositories of every plan), read back by the oracle
+  from GET /repos/{owner}/{repo}/pages. The legacy step creates the repository with a branch source (main, '/'):
+  otterdog POSTs .../pages once the repository has its branch (providers/github/rest/repo_client.py:487-566). The
+  source-path step changes ONLY gh_pages_source_path: issue https://github.com/eclipse-csi/otterdog/issues/450 (fixed
+  in v1.1.0) - GitHub needs source.branch and source.path together, so otterdog completes the patch with the unchanged
+  branch (Repository._include_gh_pages_patch_required_properties, models/repository.py:1357-1376); the apply must
+  succeed with one changed attribute. The workflow step switches the build type to 'workflow' together with the
+  'github-pages' environment restricted to main; GitHub may already have created that environment for the branch
+  builds, so only the repository change is asserted in the plan. While Pages are enabled otterdog never plans the
+  removal of an unconfigured 'github-pages' environment (models/environment.py:161-173), which the converge of the
+  first steps relies on. The disabled step turns Pages off (DELETE .../pages) and removes the environment (apply -d).
+priority: P1
+min_plan: free
+tags: [repo, environments]
+steps:
+  - name: legacy
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-pages') {
+            description: "otterdog e2e: GitHub Pages",
+            gh_pages_build_type: "legacy",
+            gh_pages_source_branch: "main",
+            gh_pages_source_path: "/",
+          }
+    plan:
+      expect: changes
+      contains:
+        - '+ add repository[name="{{ p }}-pages"]'
+      counts: {add: 1, change: 0, delete: 0}
+    state:
+      - kind: pages
+        repo: "{{ p }}-pages"
+        match: {build_type: legacy, source: {branch: main, path: /}}
+
+  - name: source-path
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-pages') {
+            description: "otterdog e2e: GitHub Pages",
+            gh_pages_build_type: "legacy",
+            gh_pages_source_branch: "main",
+            gh_pages_source_path: "/docs",
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ repository[name="{{ p }}-pages"]'
+      counts: {add: 0, change: 1, delete: 0}
+    apply:
+      expect: ok
+      not_contains:
+        - "failed to update github pages config"
+    state:
+      - kind: pages
+        repo: "{{ p }}-pages"
+        match: {build_type: legacy, source: {branch: main, path: /docs}}
+
+  - name: workflow
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-pages') {
+            description: "otterdog e2e: GitHub Pages",
+            gh_pages_build_type: "workflow",
+            environments: [
+              orgs.newEnvironment('github-pages') {
+                deployment_branch_policy: "selected",
+                branch_policies: ["main"],
+              },
+            ],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ repository[name="{{ p }}-pages"]'
+      counts: {delete: 0}
+    state:
+      - kind: pages
+        repo: "{{ p }}-pages"
+        match: {build_type: workflow}
+      - kind: environment
+        repo: "{{ p }}-pages"
+        name: github-pages
+        match: {deployment_branch_policy: {protected_branches: false, custom_branch_policies: true}}
+      - kind: env_branch_policies
+        repo: "{{ p }}-pages"
+        env: github-pages
+        match: {$unordered: [{name: main}]}
+
+  - name: disabled
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-pages') {
+            description: "otterdog e2e: GitHub Pages",
+            gh_pages_build_type: "disabled",
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ repository[name="{{ p }}-pages"]'
+        - '- remove environment[name="github-pages", repository={{ p }}-pages]'
+      counts: {add: 0, delete: 1}
+    apply: {delete: true}
+    state:
+      - {kind: pages, repo: "{{ p }}-pages", absent: true}
+      - {kind: environment, repo: "{{ p }}-pages", name: github-pages, absent: true}

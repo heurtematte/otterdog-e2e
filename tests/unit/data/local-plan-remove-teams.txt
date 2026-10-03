@@ -1,0 +1,31 @@
+Printing local diff:
+
+Actions are indicated with the following symbols:
+  + create
+  ~ modify
+  ! forced update
+  - delete
+
+Project e2e-test-org[github_id=e2e-test-org] (1/1)
+
+  - remove team[name="e2e-t3c7z8a5-team"] {
+    - description   = ""
+    - members       = [
+      - "e2e-author"
+    - ],
+    - name          = "e2e-t3c7z8a5-team"
+    - notifications = true
+    - privacy       = "visible"
+  - }
+
+  - remove team[name="otterdog-admins"] {
+    - description   = ""
+    - members       = [
+      - "e2e-admin"
+    - ],
+    - name          = "otterdog-admins"
+    - notifications = true
+    - privacy       = "visible"
+  - }
+  
+  Plan: 0 to add, 0 to change, 2 to delete.

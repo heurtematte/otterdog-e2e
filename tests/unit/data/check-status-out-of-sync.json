@@ -1,0 +1,18 @@
+[
+  {
+    "org_id": "e2e-test-org",
+    "is_archived": false,
+    "validation_status": {
+      "is_valid": true,
+      "infos": 0,
+      "warnings": 0,
+      "errors": 0
+    },
+    "sync_status": {
+      "in_sync": false,
+      "additions": 1,
+      "changes": 0,
+      "deletions": 0
+    }
+  }
+]

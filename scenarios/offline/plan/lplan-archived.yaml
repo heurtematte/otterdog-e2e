@@ -1,0 +1,82 @@
+# Offline tier (battery, plan semantics): archived repositories.
+id: O-LPLAN-ARCHIVED
+tier: offline
+title: Archived repositories ignore read-only fields and their rules; archiving plans the other changes too
+description: >-
+  While a repository stays archived, the fields GitHub cannot change on an archived repository (description,
+  homepage, features, merge settings, security, signoff, Actions) are not diffed and its branch protection rules and
+  rulesets are not planned. A step that archives the repository plans archived = false -> true together with the
+  other changes and its new rules (the apply archives last); unarchiving plans the other changes again. A new
+  archived repository is added without its rules.
+priority: P0
+tags: [offline, repo, bpr, rulesets]
+observe: true
+variables: {plan: free}
+steps:
+  - name: stays-archived
+    base_fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-archived') {
+            archived: true,
+            description: 'a',
+            homepage: 'https://example.org/a',
+            has_wiki: true,
+            allow_squash_merge: true,
+            dependabot_alerts_enabled: true,
+            branch_protection_rules: [orgs.newBranchProtectionRule('main')],
+          }
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-archived') {
+            archived: true,
+            description: 'b',
+            homepage: 'https://example.org/b',
+            has_wiki: false,
+            allow_squash_merge: false,
+            dependabot_alerts_enabled: false,
+            branch_protection_rules: [
+              orgs.newBranchProtectionRule('main') { required_approving_review_count: 1 },
+              orgs.newBranchProtectionRule('release/*'),
+            ],
+            rulesets: [orgs.newRepoRuleset('{{ p }}-archived-rs') { include_refs+: ['~DEFAULT_BRANCH'] }],
+          }
+    validate: {ok: true, errors: 0}
+    plan:
+      expect: noop
+      counts: {add: 0, change: 0, delete: 0}
+      not_contains: ['repository[name="{{ p }}-archived"]', 'branch_protection_rule[', 'repo_ruleset[']
+  - name: archive-with-changes
+    base_fragments:
+      repositories: ["orgs.newRepo('{{ p }}-archived') { description: 'a' }"]
+    fragments:
+      repositories:
+        - "orgs.newRepo('{{ p }}-archived') { archived: true, description: 'b', branch_protection_rules: [orgs.newBranchProtectionRule('main')] }"
+    plan:
+      expect: changes
+      counts: {add: 1, change: 2, delete: 0}
+      contains:
+        - '~ repository[name="{{ p }}-archived"] {'
+        - '= false -> true'
+        - '= "a" -> "b"'
+        - '+ add branch_protection_rule[pattern="main", repository={{ p }}-archived] {'
+  - name: unarchive-with-changes
+    base_fragments:
+      repositories: ["orgs.newRepo('{{ p }}-archived') { archived: true, description: 'a' }"]
+    fragments:
+      repositories: ["orgs.newRepo('{{ p }}-archived') { archived: false, description: 'b' }"]
+    plan:
+      expect: changes
+      counts: {add: 0, change: 2, delete: 0}
+      contains: ['= true -> false', '= "a" -> "b"']
+  - name: new-archived-repository
+    base_fragments: {}
+    fragments:
+      repositories:
+        - "orgs.newRepo('{{ p }}-archived') { archived: true, branch_protection_rules: [orgs.newBranchProtectionRule('main')] }"
+    plan:
+      expect: changes
+      counts: {add: 1, change: 0, delete: 0}
+      contains: ['+ add repository[name="{{ p }}-archived"] {']
+      not_contains: ['branch_protection_rule[']

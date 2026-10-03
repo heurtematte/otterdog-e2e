@@ -1,0 +1,50 @@
+# Offline tier (battery, cli): what `show --local` prints (scenarios/offline/cli/output: the tier is that of offline/,
+# the directory right below scenarios/).
+id: O-SHOW
+tier: offline
+title: show prints the organization settings and every model object as key = value blocks
+description: >-
+  show --local evaluates the configuration and prints, after 'Showing organization resources:' and the project
+  header, one block per model object (settings, organization webhook, repository, repository variable, branch
+  protection rule, environment) headed like the plan headers and holding every attribute with its value, nested
+  objects keyed by their parent. Nothing is compared or planned: no '+ add', '~' or 'Plan:' line appears, and the
+  output is observed on both sides of differential runs, so attribute renames or new defaults of a SUT show up there.
+priority: P2
+tags: [offline, cli, repo, webhooks, variables, bpr, environments]
+observe: true
+variables: {plan: free}
+steps:
+  - name: objects
+    fragments:
+      webhooks:
+        - "orgs.newOrgWebhook('{{ hook_base }}org') { events+: ['repository'] }"
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-shown') {
+            description: 'e2e shown',
+            topics: ['e2e-show'],
+            variables: [orgs.newRepoVariable('{{ P }}_MODE') { value: 'on' }],
+            branch_protection_rules: [orgs.newBranchProtectionRule('main') { required_approving_review_count: 2 }],
+            environments: [orgs.newEnvironment('{{ p }}-env') { wait_timer: 5 }],
+          }
+    validate: {ok: true, errors: 0, exit_code: 0}
+    commands:
+      show:
+        exit_code: 0
+        contains:
+          - "Showing organization resources:"
+          - "Project {{ org }}[github_id={{ org }}] (1/1)"
+          - "settings {"
+          - '"[otterdog-e2e] offline organization"'
+          - '"free"'
+          - 'org_webhook[url="{{ hook_base }}org"] {'
+          - '"{{ hook_base }}org"'
+          - '"repository"'
+          - 'repository[name="{{ p }}-shown"] {'
+          - '"e2e shown"'
+          - '"e2e-show"'
+          - 'repo_variable[name="{{ P }}_MODE", repository={{ p }}-shown] {'
+          - '"on"'
+          - 'branch_protection_rule[pattern="main", repository={{ p }}-shown] {'
+          - 'environment[name="{{ p }}-env", repository={{ p }}-shown] {'
+        not_contains: ["+ add ", "~ ", "Plan: ", "Error:", "Warning:"]

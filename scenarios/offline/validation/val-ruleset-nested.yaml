@@ -1,0 +1,118 @@
+# Offline tier (battery, validation): the nested settings of repository rulesets.
+id: O-VAL-RULESET-NESTED
+tier: offline
+title: Ruleset pull request and merge queue settings are validated
+description: >-
+  The embedded ruleset settings validate their own values: a pull request review count in [0, 10], a merge queue
+  method MERGE | SQUASH | REBASE and non-negative merge queue numbers. Their messages name the repository twice
+  instead of the ruleset (repository[name="r", repository=r], KB-055), so only the stable part
+  after the header is asserted. Missing keys of a pull request or merge queue object replacing the template default
+  are never reported although GitHub requires them (KB-031): those steps expect the 'has not set required parameter'
+  errors that status checks get since #790 (O-VAL-790).
+priority: P1
+tags: [offline, rulesets]
+observe: true
+variables: {plan: free}
+steps:
+  - name: review-count-range
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-nested') {
+            rulesets: [
+              orgs.newRepoRuleset('{{ p }}-eleven') { include_refs: ['~DEFAULT_BRANCH'], required_pull_request+: { required_approving_review_count: 11 } },
+              orgs.newRepoRuleset('{{ p }}-negative') { include_refs: ['~DEFAULT_BRANCH'], required_pull_request+: { required_approving_review_count: -1 } },
+            ],
+          }
+    validate:
+      ok: false
+      errors: 2
+      contains:
+        - >-
+          has 'required_pull_request.required_approving_review_count' of value '11' while only integers in the range
+          [0, 10] are allowed.
+        - >-
+          has 'required_pull_request.required_approving_review_count' of value '-1' while only integers in the range
+          [0, 10] are allowed.
+  - name: merge-queue-values
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-nested') {
+            rulesets: [
+              orgs.newRepoRuleset('{{ p }}-queue') {
+                include_refs: ['~DEFAULT_BRANCH'],
+                required_merge_queue: orgs.newMergeQueue() { merge_method: 'FAST', build_concurrency: -1, status_check_timeout: -5 },
+              },
+            ],
+          }
+    validate:
+      ok: false
+      errors: 3
+      contains:
+        - "has 'required_merge_queue.merge_method' of value 'FAST', only values ('MERGE' | 'SQUASH' | 'REBASE') are allowed."
+        - "has 'required_merge_queue.build_concurrency' of value '-1' while only non-negative integers are allowed."
+        - "has 'required_merge_queue.status_check_timeout' of value '-5' while only non-negative integers are allowed."
+  - name: valid-limits
+    base_fragments: {}
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-nested') {
+            rulesets: [
+              orgs.newRepoRuleset('{{ p }}-ten') { include_refs: ['~DEFAULT_BRANCH'], required_pull_request+: { required_approving_review_count: 10 } },
+              orgs.newRepoRuleset('{{ p }}-zero') { include_refs: ['~DEFAULT_BRANCH'], required_pull_request+: { required_approving_review_count: 0 } },
+              orgs.newRepoRuleset('{{ p }}-squash') {
+                include_refs: ['~DEFAULT_BRANCH'],
+                required_merge_queue: orgs.newMergeQueue() { merge_method: 'SQUASH', build_concurrency: 0, wait_time_for_minimum_group_size: 0 },
+              },
+              orgs.newRepoRuleset('{{ p }}-rebase') { include_refs: ['~DEFAULT_BRANCH'], required_merge_queue: orgs.newMergeQueue() { merge_method: 'REBASE' } },
+              orgs.newRepoRuleset('{{ p }}-bare') { include_refs: ['~DEFAULT_BRANCH'], required_pull_request: null, required_status_checks: null },
+            ],
+          }
+    validate:
+      ok: true
+      errors: 0
+      exit_code: 0
+      contains: ["Validation succeeded"]
+      not_contains: ["Error:", "Warning:"]
+    plan:
+      expect: changes
+      counts: {add: 6, change: 0, delete: 0}
+      contains:
+        - '+ add repo_ruleset[name="{{ p }}-squash", repository={{ p }}-nested]'
+        - '= "SQUASH"'
+        - '= "REBASE"'
+  - name: pull-request-missing-keys
+    known_bug: KB-031
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-nested') {
+            rulesets: [
+              orgs.newRepoRuleset('{{ p }}-pr') { include_refs: ['~DEFAULT_BRANCH'], required_pull_request: { requires_code_owner_review: true } },
+            ],
+          }
+    validate:
+      ok: false
+      contains:
+        - "has not set required parameter 'required_pull_request.required_approving_review_count'."
+  - name: merge-queue-missing-keys
+    known_bug: KB-031
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-nested') {
+            rulesets: [
+              orgs.newRepoRuleset('{{ p }}-queue') { include_refs: ['~DEFAULT_BRANCH'], required_merge_queue: { merge_method: 'MERGE' } },
+            ],
+          }
+    validate:
+      ok: false
+      contains:
+        - "has not set required parameter 'required_merge_queue.build_concurrency'."
+        - "has not set required parameter 'required_merge_queue.min_group_size'."
+        - "has not set required parameter 'required_merge_queue.max_group_size'."
+        - "has not set required parameter 'required_merge_queue.wait_time_for_minimum_group_size'."
+        - "has not set required parameter 'required_merge_queue.status_check_timeout'."
+        - "has not set required parameter 'required_merge_queue.requires_all_group_entries_to_pass_required_checks'."

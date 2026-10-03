@@ -1,0 +1,27 @@
+# Offline tier (extension of SPEC 19, P1): the organization-ruleset side of eclipse-csi/otterdog#790.
+id: O-VAL-790-ORG
+title: Org ruleset status checks without 'strict' on an enterprise plan (#790 follow-up)
+description: >-
+  #790 validates the required status checks of every ruleset. For an ORGANIZATION ruleset (enterprise plan, so the
+  plan gate lets it through) whose required_status_checks has no 'strict', SUTs that contain #790 do not report the
+  missing parameter: validation crashes with "'GitHubOrganization' object has no attribute 'get_model_header'" (exit
+  2; the webapp shows a generic "Validation failed while evaluating the configuration"), because the parent object of
+  an org ruleset is the organization, not a repository. Older SUTs validate the configuration (and fail at apply
+  time). The outcome is SUT-dependent, so the YAML only records it: tests/offline/test_scenarios.py expects success
+  on SUTs without #790, a validation error naming the parameter on fixed SUTs and reports the crash as an expected
+  failure (known defect) until upstream fixes it. In the #790 differential it is deliberately NOT an expected delta:
+  the change head makes here is a crash, not the intended validation error.
+priority: P1
+tags: [offline, rulesets, org-settings]
+observe: true
+variables: {plan: enterprise}
+steps:
+  - name: org-no-strict
+    fragments:
+      rulesets:
+        - |-
+          orgs.newOrgRuleset('{{ p }}-org-rs') {
+            include_refs+: ['~DEFAULT_BRANCH'],
+            include_repo_names+: ['~ALL'],
+            required_status_checks: { status_checks: ['ci'] },
+          }

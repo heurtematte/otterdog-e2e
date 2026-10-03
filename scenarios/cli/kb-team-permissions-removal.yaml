@@ -1,0 +1,79 @@
+# Known bug KB-005: removing a team from team_permissions is not detected (one-way dict diffs).
+id: cli.kb.team-permissions-removal
+title: Removing a team permission from a repository (known bug KB-005)
+description: |
+  otterdog compares dict values one way only: utils.is_different_ignoring_order iterates the EXPECTED dict
+  (otterdog/utils.py:105-124, called from models/__init__.py:472), so a key that exists live but no longer in the
+  configuration is invisible. Removing a team from a repository's team_permissions (while the team itself stays)
+  therefore produces no plan change and the team keeps its access. This scenario asserts the expected behaviour
+  (a change is planned and the second team loses access) and is expected to fail (xfail) while the bug exists. Only
+  the 'remove-permission' step declares the bug: the 'create' step and the cleanup stay strict (BAT-03).
+priority: P2
+min_plan: free
+tags: [teams, repo, known-bug]
+steps:
+  - name: create
+    fragments:
+      teams:
+        - |
+          orgs.newTeam('{{ p }}-tp-a') {
+            description: "otterdog e2e: team permission a",
+            privacy: "visible",
+            members: [],
+          }
+        - |
+          orgs.newTeam('{{ p }}-tp-b') {
+            description: "otterdog e2e: team permission b",
+            privacy: "visible",
+            members: [],
+          }
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-tp-repo') {
+            description: "otterdog e2e: team permission removal",
+            team_permissions: {
+              "{{ p }}-tp-a": "push",
+              "{{ p }}-tp-b": "pull",
+            },
+          }
+    plan:
+      expect: changes
+      contains:
+        - '+ add team[name="{{ p }}-tp-a"]'
+        - '+ add team[name="{{ p }}-tp-b"]'
+        - '+ add repository[name="{{ p }}-tp-repo"]'
+    state:
+      - {kind: team_repo_permission, slug: "{{ p }}-tp-a", repo: "{{ p }}-tp-repo", equals: push}
+      - {kind: team_repo_permission, slug: "{{ p }}-tp-b", repo: "{{ p }}-tp-repo", equals: pull}
+
+  - name: remove-permission
+    known_bug: KB-005
+    fragments:
+      teams:
+        - |
+          orgs.newTeam('{{ p }}-tp-a') {
+            description: "otterdog e2e: team permission a",
+            privacy: "visible",
+            members: [],
+          }
+        - |
+          orgs.newTeam('{{ p }}-tp-b') {
+            description: "otterdog e2e: team permission b",
+            privacy: "visible",
+            members: [],
+          }
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-tp-repo') {
+            description: "otterdog e2e: team permission removal",
+            team_permissions: {
+              "{{ p }}-tp-a": "push",
+            },
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ repository[name="{{ p }}-tp-repo"]'
+    state:
+      - {kind: team_repo_permission, slug: "{{ p }}-tp-a", repo: "{{ p }}-tp-repo", equals: push}
+      - {kind: team_repo_permission, slug: "{{ p }}-tp-b", repo: "{{ p }}-tp-repo", absent: true}

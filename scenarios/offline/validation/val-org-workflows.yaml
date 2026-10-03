@@ -1,0 +1,120 @@
+# Offline tier (battery, validation): the organization Actions settings (settings.workflows).
+id: O-VAL-ORG-WORKFLOWS
+tier: offline
+title: Organization Actions settings are validated (enums and ignored settings)
+description: >-
+  settings.workflows accepts allowed_actions all | local_only | selected, default_workflow_permissions read | write,
+  the three fork_pr_approval_policy values and enabled_repositories all | none | selected; action patterns outside
+  'selected' and selected repositories outside 'selected' are warnings (ignored settings). The fork policy message
+  prints a Python set whose order changes between runs (KB-038), so only its stable parts are asserted. An invalid
+  allowed_actions crashes validation as soon as a repository exists (KB-029): that step expects the documented
+  error and runs as an expected failure.
+priority: P1
+tags: [offline, workflows, org-settings]
+observe: true
+variables: {plan: free}
+steps:
+  - name: allowed-actions
+    fragments:
+      settings: ["workflows+: { allowed_actions: 'some' }"]
+    validate:
+      ok: false
+      errors: 1
+      exit_code: 1
+      contains:
+        - >-
+          settings has 'workflows.allowed_actions' of value 'some', while only values ('all' | 'local_only' |
+          'selected') are allowed.
+  - name: action-patterns-ignored
+    fragments:
+      settings: ["workflows+: { allowed_actions: 'all', allow_action_patterns: ['actions/*@*'] }"]
+    validate:
+      ok: true
+      errors: 0
+      warnings_min: 1
+      exit_code: 0
+      contains:
+        - >-
+          Warning: settings has 'workflows.allowed_actions' set to 'all', but 'allow_action_patterns' is set to
+          '['actions/*@*']', setting will be ignored.
+  - name: workflow-permissions
+    fragments:
+      settings: ["workflows+: { default_workflow_permissions: 'admin' }"]
+    validate:
+      ok: false
+      errors: 1
+      exit_code: 1
+      contains:
+        - >-
+          settings has 'workflows.default_workflow_permissions' of value 'admin', while only values ('read' |
+          'write') are allowed.
+  - name: fork-pr-approval-policy
+    fragments:
+      settings: ["workflows+: { fork_pr_approval_policy: 'nobody' }"]
+    validate:
+      ok: false
+      errors: 1
+      exit_code: 1
+      contains:
+        - "settings has 'workflows.fork_pr_approval_policy' of value 'nobody', while only values {"
+        - "'first_time_contributors'"
+        - "'first_time_contributors_new_to_github'"
+        - "'all_external_contributors'"
+        - "} are allowed."
+  - name: enabled-repositories
+    fragments:
+      settings: ["workflows+: { enabled_repositories: 'some' }"]
+    validate:
+      ok: false
+      errors: 1
+      exit_code: 1
+      contains:
+        - >-
+          settings has 'enabled_repositories' of value 'some', while only values ('all' | 'none' | 'selected') are
+          allowed.
+  - name: selected-repositories-ignored
+    fragments:
+      settings: ["workflows+: { enabled_repositories: 'all', selected_repositories: ['{{ p }}-wf'] }"]
+    validate:
+      ok: true
+      errors: 0
+      warnings_min: 1
+      exit_code: 0
+      contains:
+        - >-
+          Warning: settings has 'enabled_repositories' set to 'all', but 'selected_repositories' is set to
+          '['{{ p }}-wf']', setting will be ignored.
+  - name: valid-selected
+    fragments:
+      settings:
+        - |-
+          workflows+: {
+            enabled_repositories: 'selected',
+            selected_repositories: ['{{ p }}-wf'],
+            allowed_actions: 'selected',
+            allow_action_patterns: ['actions/*@*'],
+            default_workflow_permissions: 'write',
+            fork_pr_approval_policy: 'all_external_contributors',
+          }
+      repositories:
+        - "orgs.newRepo('{{ p }}-wf')"
+    validate:
+      ok: true
+      errors: 0
+      exit_code: 0
+      contains: ["Validation succeeded"]
+      not_contains: ["Error:", "Warning:"]
+  - name: allowed-actions-with-repository
+    known_bug: KB-029
+    fragments:
+      settings: ["workflows+: { allowed_actions: 'some' }"]
+      repositories:
+        - "orgs.newRepo('{{ p }}-wf')"
+    validate:
+      ok: false
+      errors: 1
+      exit_code: 1
+      contains:
+        - >-
+          settings has 'workflows.allowed_actions' of value 'some', while only values ('all' | 'local_only' |
+          'selected') are allowed.

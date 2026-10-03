@@ -1,0 +1,47 @@
+# Known bug KB-020: a ruleset status check written as 'any:<context>' never converges.
+id: cli.kb.ruleset-any-status-check
+title: Ruleset status check with the 'any:' prefix (known bug KB-020)
+description: |
+  docs/reference/organization/repository/status-check.md says that for rulesets 'any:' "is not needed ... and will
+  give the same result as omitting it". otterdog sends 'any:e2e-ci' as {"context": "e2e-ci"} (models/ruleset.py
+  StatusCheckSettings.get_mapping_to_provider: app 'any' -> no integration id) but reads it back as plain 'e2e-ci'
+  (get_mapping_from_provider), and the list diff compares 'any:e2e-ci' with 'e2e-ci': every plan shows a change of
+  required_status_checks. This scenario asserts that the ruleset converges and is expected to fail (xfail) while
+  the bug exists. Branch protection rules are not affected (cli.bpr.public uses 'any:').
+priority: P2
+min_plan: free
+known_bug: KB-020
+tags: [rulesets, repo, known-bug]
+steps:
+  - name: create
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-rs-any') {
+            description: "otterdog e2e: ruleset any: status check",
+            rulesets: [
+              orgs.newRepoRuleset('{{ p }}-any') {
+                include_refs+: ["~DEFAULT_BRANCH"],
+                required_pull_request: null,
+                required_status_checks+: {
+                  strict: true,
+                  status_checks+: ["any:e2e-ci"],
+                },
+              },
+            ],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '+ add repo_ruleset[name="{{ p }}-any", repository={{ p }}-rs-any]'
+    state:
+      - kind: repo_ruleset
+        repo: "{{ p }}-rs-any"
+        name: "{{ p }}-any"
+        match:
+          rules:
+            $unordered:
+              - {type: creation}
+              - {type: deletion}
+              - {type: non_fast_forward}
+              - {type: required_status_checks, parameters: {required_status_checks: [{context: e2e-ci}]}}

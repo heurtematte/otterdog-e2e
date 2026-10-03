@@ -1,0 +1,8 @@
+Validating organization configurations:
+
+Project e2e-test-org[github_id=e2e-test-org] (1/1)
+╷                                                                                                                                                                                                                         
+│ Error:   Validation failed                                                                                                                                                                                              
+│          failed to load configuration: failed to evaluate jsonnet file: syntax error: expected one of "[", "}", <identifier>, <string>, ['"'], ['\''], got "]"                                                          
+│              /tmp/otterdog-e2e-capture/validate-syntax/orgs/e2e-test-org/e2e-test-org.jsonnet:47:3  
+╵                                                                                                                                                                                                                         

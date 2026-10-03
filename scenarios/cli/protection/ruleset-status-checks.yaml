@@ -1,0 +1,138 @@
+# Status check rule of a ruleset without the e2e App (coverage: rulesets.status-checks,
+# regression.695-700-491-status-check-mapping).
+id: cli.ruleset.status-checks
+tier: cli
+title: Ruleset status checks with do_not_enforce_on_create and an integration id
+description: |
+  required_status_checks (orgs.newStatusChecks, models/ruleset.py:122-227) becomes the required_status_checks rule:
+  strict -> strict_required_status_checks_policy, do_not_enforce_on_create as is, and each check either a plain
+  context (any source) or '<source>:<context>'. A numeric source is sent as integration_id without resolving it as an
+  app slug (#700, fixed in v1.4.0, StatusCheckSettings.get_mapping_to_provider); 15368 is GitHub Actions, which is
+  not an installation of the organization, so otterdog reads it back as '15368:<context>' (only the integration ids
+  of installed apps are mapped back to slugs, models/github_organization.py:810-816) and the check converges. The
+  e2e App's own slug and id are tested by cli.protection.app-checks. Checks never carry the 'any:' prefix here
+  (KB-020) and the pull request rule is left out. The strict step enables do_not_enforce_on_create and the strict
+  policy with both kinds of checks; the update step disables both flags and keeps the integration-bound check only.
+  The last step spells the same source with its app slug ('github-actions:<context>', the documented App format):
+  otterdog sends integration_id 15368 but reads the check back as '15368:<context>' (GitHub Actions is no
+  installation of the organization), so it never converges: an expected failure of that step while KB-054 exists.
+priority: P1
+min_plan: free
+tags: [rulesets, repo]
+steps:
+  - name: strict
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-rs-checks') {
+            description: "otterdog e2e: ruleset status checks",
+            rulesets: [
+              orgs.newRepoRuleset('{{ p }}-rs-checks') {
+                include_refs+: ["~DEFAULT_BRANCH"],
+                required_pull_request: null,
+                required_status_checks: orgs.newStatusChecks() {
+                  strict: true,
+                  do_not_enforce_on_create: true,
+                  status_checks: ["e2e-plain", "15368:e2e/actions"],
+                },
+              },
+            ],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '+ add repo_ruleset[name="{{ p }}-rs-checks", repository={{ p }}-rs-checks]'
+      counts: {add: 2, change: 0, delete: 0}
+    state:
+      - kind: repo_ruleset
+        repo: "{{ p }}-rs-checks"
+        name: "{{ p }}-rs-checks"
+        match:
+          rules:
+            $unordered:
+              - {type: creation}
+              - {type: deletion}
+              - {type: non_fast_forward}
+              - type: required_status_checks
+                parameters:
+                  strict_required_status_checks_policy: true
+                  do_not_enforce_on_create: true
+                  required_status_checks:
+                    $unordered:
+                      - {context: e2e-plain}
+                      - {context: e2e/actions, integration_id: 15368}
+
+  - name: relaxed
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-rs-checks') {
+            description: "otterdog e2e: ruleset status checks",
+            rulesets: [
+              orgs.newRepoRuleset('{{ p }}-rs-checks') {
+                include_refs+: ["~DEFAULT_BRANCH"],
+                required_pull_request: null,
+                required_status_checks: orgs.newStatusChecks() {
+                  strict: false,
+                  do_not_enforce_on_create: false,
+                  status_checks: ["15368:e2e/actions"],
+                },
+              },
+            ],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ repo_ruleset[name="{{ p }}-rs-checks", repository={{ p }}-rs-checks]'
+      counts: {add: 0, change: 1, delete: 0}
+    state:
+      - kind: repo_ruleset
+        repo: "{{ p }}-rs-checks"
+        name: "{{ p }}-rs-checks"
+        match:
+          rules:
+            $unordered:
+              - {type: creation}
+              - {type: deletion}
+              - {type: non_fast_forward}
+              - type: required_status_checks
+                parameters:
+                  strict_required_status_checks_policy: false
+                  do_not_enforce_on_create: false
+                  required_status_checks: [{context: e2e/actions, integration_id: 15368}]
+
+  - name: actions-slug
+    known_bug: {id: KB-054, phases: [converge]}  # plan, apply and state stay strict
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-rs-checks') {
+            description: "otterdog e2e: ruleset status checks",
+            rulesets: [
+              orgs.newRepoRuleset('{{ p }}-rs-checks') {
+                include_refs+: ["~DEFAULT_BRANCH"],
+                required_pull_request: null,
+                required_status_checks: orgs.newStatusChecks() {
+                  strict: false,
+                  status_checks: ["github-actions:e2e/actions-slug"],
+                },
+              },
+            ],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ repo_ruleset[name="{{ p }}-rs-checks", repository={{ p }}-rs-checks]'
+    state:
+      - kind: repo_ruleset
+        repo: "{{ p }}-rs-checks"
+        name: "{{ p }}-rs-checks"
+        match:
+          rules:
+            $unordered:
+              - {type: creation}
+              - {type: deletion}
+              - {type: non_fast_forward}
+              - type: required_status_checks
+                parameters:
+                  required_status_checks: [{context: e2e/actions-slug, integration_id: 15368}]

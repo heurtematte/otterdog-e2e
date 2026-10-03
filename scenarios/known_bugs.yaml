@@ -1,0 +1,937 @@
+# Known otterdog defects (SPEC 12.5), mirrored and explained in docs/known-issues.md.
+#
+# Evidence paths are relative to the otterdog repository at main 9bdeb75 (after v1.6.1) unless prefixed: "chart:" =
+# Helm chart otterdog-1.5.4 (eclipse-csi/helm-charts), "openapi:" = GitHub REST OpenAPI description (api.github.com),
+# "e2e:" = a file of this project that reproduces the bug (offline scenarios detect it without listing it in
+# `scenarios`, which would xfail them on SUTs that do not have the bug).
+# status: confirmed = reproduced OFFLINE with the otterdog 1.7.0.dev19 CLI or the snapshot code (reproduction commands
+# in docs/known-issues.md); suspected = established from the source and docs but not reproduced (needs a live org).
+# scenarios: scenario ids exercising the bug; each such test item is marked xfail(strict=False) at collection, so
+# an XPASS reveals a fix (then set status: fixed and fixed_in). Ids may be YAML scenario ids or the scenario(id)
+# marker of a Python test (tests/offline, tests/cli, tests/enterprise, tests/webhooks, tests/webapp, tests/web_ui); a
+# Python known-bug test has a scenario id of its own (cli.kb.<name>, O-KB-<NAME>, W-<NAME>), and a bug declared by a
+# step of a YAML scenario never lists that scenario (only that step is an expected failure).
+# KB-028..KB-040 are the findings F-01..F-13 of scenarios/coverage.yaml, KB-041 the web-UI tier's finding, KB-042..
+# KB-077 the findings of the test battery; features of the coverage matrix reference them in their `known_bugs`.
+
+- id: KB-001
+  title: apply exits 0 (and the webapp reports success) when validation fails
+  status: confirmed
+  evidence:
+    - otterdog/operations/plan.py:121-126
+    - otterdog/operations/plan.py:128-139
+    - otterdog/operations/apply.py:97-108
+    - otterdog/webapp/tasks/apply_changes.py:139-143
+    - otterdog/webapp/tasks/apply_changes.py:209-211
+  upstream: null
+  fixed_in: null
+  scenarios: [cli.kb.apply-exit-code]
+
+- id: KB-002
+  title: install-app/uninstall-app resolve token-only credentials but need a web login (username not available)
+  status: suspected
+  evidence:
+    - otterdog/operations/install_app.py:55
+    - otterdog/operations/install_app.py:71
+    - otterdog/operations/uninstall_app.py:55
+    - otterdog/operations/uninstall_app.py:68
+    - otterdog/credentials/env_provider.py:113-116
+    - otterdog/credentials/__init__.py:39-41
+    - otterdog/providers/github/web.py:600
+  upstream: null
+  fixed_in: null
+  scenarios: [webui.cmd.install-app]
+
+- id: KB-003
+  title: organization, repository and environment variables are read without pagination (10 per page)
+  status: suspected
+  evidence:
+    - otterdog/providers/github/rest/org_client.py:386-390
+    - otterdog/providers/github/rest/repo_client.py:1109-1116
+    - otterdog/providers/github/rest/repo_client.py:868-877
+    - "openapi: GET /repos/{owner}/{repo}/actions/variables per_page default 10, max 30"
+  upstream: null
+  fixed_in: null
+  scenarios: [cli.kb.variables-pagination]
+
+- id: KB-004
+  title: a webhook URL change through 'aliases' is never applied (url is excluded from diffs)
+  status: confirmed
+  evidence:
+    - otterdog/models/webhook.py:65-70
+    - docs/userguide/renaming.md:29-50
+    - docs/reference/organization/webhook.md:7
+    - "e2e: scenarios/offline/plan/lplan-rename.yaml (step webhook-alias-url declares the bug)"
+    - "e2e: scenarios/cli/kb-webhook-url-alias.yaml (step rename-url declares the bug)"
+  upstream: null
+  fixed_in: null
+  scenarios: [H-ORG-HOOK-ALIAS]
+
+- id: KB-005
+  title: dict values diff one way only (removing a team_permissions or custom_properties entry is not detected)
+  status: confirmed
+  evidence:
+    - otterdog/utils.py:105-124
+    - otterdog/models/__init__.py:437-475
+    - "e2e: scenarios/offline/plan/lplan-dict-one-way.yaml (steps team-permission-removed and custom-property-removed declare the bug)"
+    - "e2e: scenarios/cli/kb-team-permissions-removal.yaml (step remove-permission declares the bug)"
+  upstream: null
+  fixed_in: null
+  scenarios: []
+
+- id: KB-006
+  title: the organization Actions cache storage-limit endpoint is called on /orgs/{org}/... instead of /organizations/{org}/...
+  status: suspected
+  evidence:
+    - otterdog/providers/github/rest/org_client.py:562-569
+    - otterdog/providers/github/rest/org_client.py:581-591
+    - "openapi: only /organizations/{org}/actions/cache/storage-limit (GET, PUT) exists"
+  upstream: null
+  fixed_in: null
+  scenarios: []
+
+- id: KB-007
+  title: the cache storage-limit PUT is sent on repo creation and workflow changes although the GET reported it unavailable
+  status: suspected
+  evidence:
+    - otterdog/providers/github/rest/__init__.py:156-181
+    - otterdog/models/repository.py:1493-1509
+    - otterdog/models/repository.py:1531-1536
+    - otterdog/providers/github/rest/repo_client.py:1227-1229
+    - otterdog/providers/github/rest/repo_client.py:1252-1262
+    - otterdog/providers/github/rest/org_client.py:557-558
+  upstream: null
+  fixed_in: null
+  scenarios: []
+
+- id: KB-008
+  title: org ruleset validation raises AttributeError for incomplete nested rules (no get_model_header, #790) and for deployment rules (no environments)
+  status: confirmed
+  evidence:
+    - otterdog/models/ruleset.py:128-136
+    - otterdog/models/ruleset.py:57-65
+    - otterdog/models/ruleset.py:240-247
+    - otterdog/models/ruleset.py:451-458
+    - otterdog/models/github_organization.py:84-85
+    - otterdog/models/github_organization.py:226-227
+    - otterdog/models/__init__.py:566
+    - "e2e: scenarios/offline/val-790-org.yaml (O-VAL-790-ORG, tests/offline: exit 2 on 9bdeb75 and d0d3b08)"
+    - otterdog/models/ruleset.py:436-447
+    - "e2e: scenarios/offline/validation/val-org-rulesets.yaml (steps review-count-range and deployment-rule declare the bug)"
+  upstream: https://github.com/eclipse-csi/otterdog/pull/790
+  fixed_in: null
+  scenarios: [enterprise.org-ruleset.790-missing-strict]
+
+- id: KB-009
+  title: organization rulesets are rejected unless settings.plan is enterprise, although GitHub Team supports them
+  status: confirmed
+  evidence:
+    - otterdog/models/github_organization.py:219-227
+    - "e2e: scenarios/offline/validation/val-plan-gates-team.yaml (step org-rulesets-on-team declares the bug)"
+  upstream: https://github.com/eclipse-csi/otterdog/issues/776
+  fixed_in: null
+  scenarios: []
+
+- id: KB-010
+  title: canonical-diff labels are inverted ('--- canonical' shows the original file)
+  status: confirmed
+  evidence:
+    - otterdog/operations/canonical_diff.py:73-74
+    - otterdog/operations/canonical_diff.py:86-100
+    - "e2e: scenarios/offline/canonical-diff.yaml (step labels declares the bug)"
+  upstream: null
+  fixed_in: null
+  scenarios: []
+
+- id: KB-011
+  title: check-status exits 0 even when the configuration is invalid or out of sync
+  status: confirmed
+  evidence:
+    - otterdog/operations/check_status.py:50-78
+    - otterdog/operations/check_status.py:80-81
+  upstream: null
+  fixed_in: null
+  scenarios: [cli.kb.check-status-exit-code]
+
+- id: KB-012
+  title: the Helm chart sets WEBHOOK_ENDPOINT (with a stray '""' in the default) while the webapp reads GITHUB_WEBHOOK_ENDPOINT
+  status: confirmed
+  evidence:
+    - "chart: templates/deployment.yaml:125-126"
+    - "chart: values.yaml:90"
+    - otterdog/webapp/config.py:87
+    - otterdog/webapp/webhook/github_webhook.py:33
+  upstream: null
+  fixed_in: null
+  scenarios: []
+
+- id: KB-013
+  title: GITHUB_ADMIN_TEAMS entries are split on ',' without stripping, so 'a, b' never matches team b
+  status: confirmed
+  evidence:
+    - otterdog/webapp/utils.py:315-334
+    - otterdog/webapp/utils.py:337-338
+    - otterdog/webapp/utils.py:342
+    - otterdog/webapp/utils.py:366
+    - otterdog/webapp/tasks/__init__.py:280-284
+  upstream: null
+  fixed_in: null
+  scenarios: [W-RT-ADMIN-TEAMS-SPACES]
+
+- id: KB-014
+  title: FetchAllPullRequestsTask only imports pull requests targeting a branch named 'main'
+  status: suspected
+  evidence:
+    - otterdog/webapp/tasks/fetch_all_pull_requests.py:39-41
+  upstream: null
+  fixed_in: null
+  scenarios: []
+
+- id: KB-015
+  title: otterdog.json is not reloaded when the push to the configs repo arrives as an App delivery
+  status: suspected
+  evidence:
+    - otterdog/webapp/webhook/__init__.py:262-317
+    - otterdog/webapp/webhook/__init__.py:319-334
+  upstream: null
+  fixed_in: null
+  scenarios: [W-BP-GLOBAL-PUSH]
+
+- id: KB-016
+  title: a custom property whose name contains '_' cannot hold a multi_select value (repository schema)
+  status: confirmed
+  evidence:
+    - otterdog/resources/schemas/types.json:32-41
+    - otterdog/resources/schemas/repository.json:58
+    - "e2e: scenarios/offline/validation/val-schema.yaml (step multi-select-property-with-underscore declares the bug)"
+  upstream: null
+  fixed_in: null
+  scenarios: [cli.kb.custom-property-underscore]
+
+- id: KB-017
+  title: GitHub's author_association FIRST_TIMER is not accepted (enum value 'FIRST_TIME'), the event is dropped
+  status: confirmed
+  evidence:
+    - otterdog/webapp/webhook/github_models.py:134-145
+    - otterdog/webapp/webhook/github_models.py:81
+    - otterdog/webapp/webhook/github_models.py:156
+  upstream: null
+  fixed_in: null
+  scenarios: []
+
+- id: KB-018
+  title: a stale webhook snapshot can overwrite the status of a merged pull request (e.g. back to open)
+  status: suspected
+  evidence:
+    - otterdog/webapp/db/service.py:505-564
+    - otterdog/webapp/tasks/check_sync.py:73-133
+  upstream: https://github.com/eclipse-csi/otterdog/pull/792
+  fixed_in: null
+  scenarios: []
+
+- id: KB-019
+  title: the sync status is 'success' even when the configuration is out of sync (informational by design)
+  status: suspected
+  evidence:
+    - otterdog/webapp/tasks/check_sync.py:236-257
+  upstream: null
+  fixed_in: null
+  scenarios: []
+
+- id: KB-020
+  title: a ruleset status check written as 'any:<context>' never converges (read back without the prefix)
+  status: confirmed
+  evidence:
+    - otterdog/models/ruleset.py:141-160
+    - otterdog/models/ruleset.py:163-224
+    - otterdog/models/__init__.py:248-272
+    - docs/reference/organization/repository/status-check.md:10-13
+  upstream: null
+  fixed_in: null
+  scenarios: [cli.kb.ruleset-any-status-check]
+
+- id: KB-021
+  title: a ruleset with the template's empty newStatusChecks() never converges (no rule is sent, null is read back)
+  status: confirmed
+  evidence:
+    - otterdog/models/ruleset.py:171-173
+    - otterdog/models/ruleset.py:584-588
+    - otterdog/models/ruleset.py:714-728
+    - otterdog/models/__init__.py:457-473
+    - examples/template/otterdog-defaults.libsonnet:166-170
+  upstream: null
+  fixed_in: null
+  scenarios: [cli.kb.ruleset-default-status-checks]
+
+- id: KB-022
+  title: an org variable/secret selecting a repository created by the same apply fails (org-level patches run first)
+  status: suspected
+  evidence:
+    - otterdog/models/github_organization.py:529-545
+    - otterdog/models/organization_variable.py:91-93
+    - otterdog/providers/github/__init__.py:477-482
+    - otterdog/operations/apply.py:135-151
+    - "e2e: scenarios/cli/org/kb-org-secret-same-apply.yaml (step same-apply declares the bug)"
+  upstream: null
+  fixed_in: null
+  scenarios: [cli.kb.org-variable-same-apply]
+
+- id: KB-023
+  title: org ruleset include/exclude_repo_names patterns after the first one warn spuriously (exhausted generator)
+  status: confirmed
+  evidence:
+    - otterdog/models/organization_ruleset.py:45-69
+    - "e2e: scenarios/offline/validation/val-org-rulesets.yaml (step second-pattern declares the bug)"
+  upstream: null
+  fixed_in: null
+  scenarios: [enterprise.kb.org-ruleset-repo-patterns]
+
+- id: KB-024
+  title: an imported Free organization can fail validation (members_can_create_private_pages true is enterprise-only)
+  status: suspected
+  evidence:
+    - otterdog/models/organization_settings.py:126-130
+    - otterdog/resources/schemas/settings.json:74-77
+  upstream: null
+  fixed_in: null
+  scenarios: [cli.import.validate]
+
+- id: KB-025
+  title: a secret value containing two or more ':' crashes validation and apply (ValueError, exit 2)
+  status: confirmed
+  evidence:
+    - otterdog/models/secret.py:50-53
+    - otterdog/config.py:234-236
+    - "e2e: scenarios/offline/validation/val-secrets.yaml (step two-colons declares the bug)"
+  upstream: null
+  fixed_in: null
+  scenarios: [O-KB-SECRET-WITH-COLONS]
+
+- id: KB-026
+  title: plain secret values are echoed in validate/plan output and in the webapp's validation comments
+  status: confirmed
+  evidence:
+    - otterdog/models/secret.py:56-61
+    - otterdog/models/webhook.py:85-95
+    - otterdog/webapp/tasks/validate_pull_request.py:157-181
+    - otterdog/webapp/tasks/validate_pull_request.py:207-211
+    - "e2e: scenarios/offline/validation/val-secrets.yaml (step plain-value-not-echoed declares the bug)"
+    - "e2e: scenarios/offline/validation/val-webhooks.yaml (step plain-secret-not-echoed declares the bug)"
+  upstream: null
+  fixed_in: null
+  scenarios: []
+
+- id: KB-027
+  title: auto-merge eligibility compares GraphQL team names with the admin team slugs and approval patterns
+  status: suspected
+  evidence:
+    - otterdog/webapp/tasks/retrieve_team_membership.py:86-89
+    - otterdog/webapp/tasks/update_pull_request.py:62-70
+    - otterdog/webapp/tasks/__init__.py:280-297
+    - otterdog/webapp/utils.py:384-392
+    - otterdog/resources/graphql/get-team-membership.gql:1-15
+  upstream: null
+  fixed_in: null
+  scenarios: []
+
+- id: KB-028
+  title: organization variables are never validated (lowercase and GITHUB_ names, an invalid or plan-gated visibility all pass)
+  status: confirmed
+  evidence:
+    - otterdog/models/github_organization.py:196-234
+    - otterdog/models/organization_variable.py:40-63
+    - otterdog/models/variable.py:29-42
+    - "e2e: scenarios/offline/validation/val-org-variables.yaml (step invalid-variables declares the bug)"
+  upstream: null
+  fixed_in: null
+  scenarios: []
+
+- id: KB-029
+  title: an invalid workflows.allowed_actions crashes validation with a KeyError as soon as a repository exists (exit 2)
+  status: confirmed
+  evidence:
+    - otterdog/models/workflow_settings.py:94-99
+    - otterdog/models/workflow_settings.py:101-106
+    - otterdog/models/repo_workflow_settings.py:99-105
+    - otterdog/models/workflow_settings.py:115-123
+    - otterdog/cli.py:999-1001
+    - "e2e: scenarios/offline/validation/val-org-workflows.yaml (step allowed-actions-with-repository declares the bug)"
+    - "e2e: scenarios/offline/validation/val-repo-workflows.yaml (step unknown-allowed-actions declares the bug)"
+  upstream: null
+  fixed_in: null
+  scenarios: []
+
+- id: KB-030
+  title: a required custom property without default_value crashes loading ('unexpected None value', exit 2) when a repository exists
+  status: confirmed
+  evidence:
+    - otterdog/models/repository.py:296-303
+    - otterdog/models/github_organization.py:349-351
+    - otterdog/models/custom_property.py:83-90
+    - "e2e: scenarios/offline/validation/val-custom-properties.yaml (step required-without-default-with-repository declares the bug)"
+    - "e2e: scenarios/offline/plan/lplan-custom-property-defaults.yaml (step required-without-default declares the bug)"
+  upstream: null
+  fixed_in: null
+  scenarios: []
+
+- id: KB-031
+  title: missing keys of required_pull_request / required_merge_queue are never reported, and the apply then crashes (UNSET in the payload, BendingException)
+  status: confirmed
+  evidence:
+    - otterdog/models/ruleset.py:57-65
+    - otterdog/models/ruleset.py:240-248
+    - otterdog/models/__init__.py:329-350
+    - otterdog/models/ruleset.py:128-136
+    - otterdog/models/ruleset.py:698-712
+    - otterdog/models/ruleset.py:296-312
+    - otterdog/models/ruleset.py:746-760
+    - otterdog/providers/github/rest/requester.py:123-125
+    - otterdog/operations/apply.py:146-153
+    - "openapi: repository-rule-pull-request parameters require required_approving_review_count; repository-rule-merge-queue requires all seven parameters"
+    - "e2e: scenarios/offline/validation/val-ruleset-nested.yaml (steps pull-request-missing-keys and merge-queue-missing-keys declare the bug)"
+  upstream: null
+  fixed_in: null
+  scenarios: []
+
+- id: KB-032
+  title: team_permissions values are checked by the schema first, so an invalid value (or the uppercase READ/WRITE the model accepts) is an uncaught jsonschema error (exit 2)
+  status: confirmed
+  evidence:
+    - otterdog/resources/schemas/team-permission.json:1-11
+    - otterdog/resources/schemas/repository.json:89-95
+    - otterdog/models/github_organization.py:285-296
+    - otterdog/models/repository.py:194-205
+    - otterdog/models/repository.py:491-499
+    - "e2e: scenarios/offline/validation/val-schema.yaml (steps team-permission-value and team-permission-uppercase-alias declare the bug)"
+  upstream: null
+  fixed_in: null
+  scenarios: []
+
+- id: KB-033
+  title: repository rules that depend on organization settings never fire, because repositories are coerced at load (has_projects, web_commit_signoff_required, the discussion source's has_discussions, gh_pages_visibility below enterprise)
+  status: confirmed
+  evidence:
+    - otterdog/models/github_organization.py:349-351
+    - otterdog/models/repository.py:284-316
+    - otterdog/models/repository.py:436-465
+    - otterdog/models/repository.py:583-600
+    - "e2e: scenarios/offline/validation/val-coerced.yaml (four steps declare the bug)"
+  upstream: null
+  fixed_in: null
+  scenarios: []
+
+- id: KB-034
+  title: validate and plan exit with the number of validation errors (2 errors exit 2 like a crash, 256 errors exit 0)
+  status: confirmed
+  evidence:
+    - otterdog/operations/validate.py:102
+    - otterdog/operations/plan.py:121-139
+    - otterdog/cli.py:993-997
+    - otterdog/cli.py:999-1001
+    - "e2e: scenarios/offline/validation/val-merge-settings.yaml (step exit-status-of-two-errors declares the bug)"
+  upstream: null
+  fixed_in: null
+  scenarios: [O-KB-EXIT-STATUS-ERROR-COUNT]
+
+- id: KB-035
+  title: the environment reference docs use orgs.newEnvironmentSecret / newEnvironmentVariable, the template defines newEnvSecret / newEnvVariable
+  status: confirmed
+  evidence:
+    - docs/reference/organization/repository/environment/index.md:45-54
+    - examples/template/otterdog-defaults.libsonnet:288-292
+  upstream: null
+  fixed_in: null
+  scenarios: []
+
+- id: KB-036
+  title: the template comment of deployment_branch_policy lists all, protected_branches, branch_policies; validation accepts only 'all' | 'protected' | 'selected'
+  status: confirmed
+  evidence:
+    - examples/template/otterdog-defaults.libsonnet:281-282
+    - otterdog/models/environment.py:128-135
+    - docs/reference/organization/repository/environment/index.md:9
+  upstream: null
+  fixed_in: null
+  scenarios: []
+
+- id: KB-037
+  title: the team privacy error lists ('secret' | 'closed') while the accepted values are 'secret' | 'visible'
+  status: confirmed
+  evidence:
+    - otterdog/models/team.py:77-83
+    - docs/reference/organization/team.md:7
+    - "e2e: scenarios/cli/org/kb-team-privacy-message.yaml (step privacy-message declares the bug)"
+  upstream: null
+  fixed_in: null
+  scenarios: []
+
+- id: KB-038
+  title: two validation messages print Python sets, so their values come in a different order from run to run (fork_pr_approval_policy, code scanning languages)
+  status: confirmed
+  evidence:
+    - otterdog/models/workflow_settings.py:30-34
+    - otterdog/models/workflow_settings.py:143-150
+    - otterdog/models/repository.py:611-618
+    - otterdog/models/repository.py:731-732
+    - "e2e: scenarios/offline/validation/val-org-workflows.yaml (fork_pr_approval_policy message asserted without the value order)"
+  upstream: null
+  fixed_in: null
+  scenarios: []
+
+- id: KB-039
+  title: an unknown role in ruleset bypass_actors (e.g. '#Admin') passes validation and makes the apply crash with an uncaught KeyError
+  status: confirmed
+  evidence:
+    - otterdog/models/ruleset.py:360-361
+    - otterdog/models/ruleset.py:648-654
+    - otterdog/models/repo_ruleset.py:48-53
+    - otterdog/operations/apply.py:146-153
+    - "e2e: scenarios/offline/validation/val-rulesets.yaml (step unknown-bypass-role declares the bug)"
+    - "e2e: scenarios/cli/protection/ruleset-bypass.yaml (step unknown-role declares the bug)"
+  upstream: null
+  fixed_in: null
+  scenarios: []
+
+- id: KB-040
+  title: a crashing sync check posts a failure status described as 'otterdog detected out of sync changes, but they will not prevent a successful merge'
+  status: confirmed
+  evidence:
+    - otterdog/webapp/tasks/check_sync.py:135-139
+    - otterdog/webapp/tasks/check_sync.py:225-234
+    - otterdog/webapp/tasks/__init__.py:67-78
+  upstream: null
+  fixed_in: null
+  scenarios: [W-SYNC-FAILURE]
+
+- id: KB-041
+  title: two_factor_requirement is never read through the web UI (its page definition is named 'two_factor_required'), so plan, import and show-live never see it
+  status: confirmed
+  evidence:
+    - otterdog/resources/github-web-settings.jsonnet:40-42
+    - otterdog/resources/schemas/settings.json:102-105
+    - otterdog/providers/github/__init__.py:33-35
+    - otterdog/providers/github/__init__.py:116-120
+    - otterdog/providers/github/web.py:93-99
+    - otterdog/models/organization_settings.py:68
+    - "e2e: src/otterdog_e2e/webui/mapping.py (EXPECTED_UNREAD: the web-UI tier reads it through REST and never toggles it)"
+  upstream: null
+  fixed_in: null
+  scenarios: [webui.kb.import-two-factor]
+
+- id: KB-042
+  title: list-blueprints and approve-blueprints crash with ModuleNotFoundError unless the webapp package and its 'app' dependencies are installed
+  status: confirmed
+  evidence:
+    - otterdog/operations/list_blueprints.py:17
+    - otterdog/operations/approve_blueprints.py:16
+    - otterdog/cli.py:384
+    - otterdog/cli.py:395
+    - otterdog/webapp/__init__.py:18
+    - "e2e: tests/cli/test_commands_blueprints.py (pyproject.toml excludes otterdog/webapp from the distribution; quart, odmantic are the optional app group)"
+  upstream: null
+  fixed_in: null
+  scenarios: [cli.kb.blueprint-commands-without-webapp]
+
+- id: KB-043
+  title: delete-file crashes with an UnboundLocalError when GitHub refuses the deletion instead of printing 'failure deleting file' (exit 2 instead of 1)
+  status: confirmed
+  evidence:
+    - otterdog/operations/delete_file.py:85-104
+    - otterdog/providers/github/rest/content_client.py:145-149
+  upstream: null
+  fixed_in: null
+  scenarios: [cli.kb.delete-file-refused]
+
+- id: KB-044
+  title: delete-file reports 'succeeded' for a file that does not exist
+  status: confirmed
+  evidence:
+    - otterdog/operations/delete_file.py:96-99
+    - otterdog/providers/github/rest/content_client.py:130-139
+  upstream: null
+  fixed_in: null
+  scenarios: [cli.kb.delete-file-missing]
+
+- id: KB-045
+  title: dispatch-workflow exits 0 when GitHub refuses the dispatch ('failed to dispatch workflow')
+  status: confirmed
+  evidence:
+    - otterdog/operations/dispatch_workflow.py:61-69
+    - otterdog/providers/github/rest/repo_client.py:1361-1366
+  upstream: null
+  fixed_in: null
+  scenarios: [cli.kb.dispatch-workflow-exit-code]
+
+- id: KB-046
+  title: push-config of an invalid configuration prints 'no changes, nothing pushed' and exits 0
+  status: confirmed
+  evidence:
+    - otterdog/operations/push_config.py:186-192
+    - otterdog/operations/push_config.py:138-141
+  upstream: null
+  fixed_in: null
+  scenarios: [cli.kb.push-config-invalid-exit-code]
+
+- id: KB-047
+  title: install-deps exits 0 when the Playwright browser installation fails
+  status: confirmed
+  evidence:
+    - otterdog/cli.py:953-969
+  upstream: null
+  fixed_in: null
+  scenarios: [webui.kb.install-deps-exit-code]
+
+- id: KB-048
+  title: a re-import drops the secret of a webhook whose URL is masked in the previous configuration (secrets are copied by exact URL before the URLs are masked)
+  status: confirmed
+  evidence:
+    - otterdog/operations/import_configuration.py:103-117
+    - otterdog/models/repository.py:1044-1049
+    - otterdog/models/github_organization.py:365-369
+  upstream: null
+  fixed_in: null
+  scenarios: [cli.kb.import-masked-webhook-secret]
+
+- id: KB-049
+  title: fetch-config -r <ref> reports 'organization definition fetched from default branch'
+  status: confirmed
+  evidence:
+    - otterdog/operations/fetch_config.py:80-91
+    - otterdog/operations/fetch_config.py:104-109
+  upstream: null
+  fixed_in: null
+  scenarios: [cli.kb.fetch-config-ref-message]
+
+- id: KB-050
+  title: free text is printed as rich markup (list-advisories CSV rows, show --markdown link texts, validation messages, the configuration written by canonical-diff and import), so bracketed words vanish and '[/]' crashes
+  status: confirmed
+  evidence:
+    - otterdog/operations/list_advisories.py:140-146
+    - otterdog/operations/show.py:177-182
+    - otterdog/operations/show.py:207
+    - otterdog/utils.py:301-315
+    - otterdog/logging.py:174-198
+    - otterdog/utils.py:173-221
+    - otterdog/models/github_organization.py:394-395
+    - otterdog/operations/canonical_diff.py:68
+    - otterdog/operations/import_configuration.py:122
+    - "e2e: scenarios/offline/canonical-diff.yaml (step bracketed-description declares the bug)"
+  upstream: null
+  fixed_in: null
+  scenarios: [cli.kb.list-advisories-markup, O-KB-SHOW-MARKDOWN-LINKS, O-KB-VALIDATION-MARKUP]
+
+- id: KB-051
+  title: GitHub App installations of an organization are read without pagination (first 30 only), so list-apps and the app slug map of loaded rulesets miss the others
+  status: suspected
+  evidence:
+    - otterdog/providers/github/rest/org_client.py:484-491
+    - otterdog/models/github_organization.py:574-578
+    - otterdog/operations/list_apps.py:66
+    - "openapi: GET /orgs/{org}/installations per_page default 30, max 100"
+  upstream: null
+  fixed_in: null
+  scenarios: []
+
+- id: KB-052
+  title: a ruleset bypass actor written with the documented explicit mode '<actor>:always' is read back without the suffix and never converges
+  status: confirmed
+  evidence:
+    - otterdog/models/ruleset.py:565-567
+    - otterdog/models/ruleset.py:636-645
+    - docs/reference/organization/repository/bypass-actor.md:20-30
+    - "e2e: scenarios/cli/protection/ruleset-bypass.yaml (step explicit-always declares the bug)"
+  upstream: null
+  fixed_in: null
+  scenarios: []
+
+- id: KB-053
+  title: a change of merge_commit_message alone is sent without merge_commit_title, which GitHub requires with it (only the squash pair is completed)
+  status: suspected
+  evidence:
+    - otterdog/models/repository.py:1330-1355
+    - otterdog/models/repository.py:1514-1519
+    - "openapi: PATCH /repos/{owner}/{repo} merge_commit_title: Required when using merge_commit_message"
+    - "e2e: scenarios/cli/repo/repo-merge-messages.yaml (step merge-message declares the bug)"
+  upstream: null
+  fixed_in: null
+  scenarios: []
+
+- id: KB-054
+  title: ruleset status checks bound to an app never converge when written as '<slug>:<ctx>' of an app the org has not installed or '<integration id>:<ctx>' of an installed one
+  status: confirmed
+  evidence:
+    - otterdog/models/github_organization.py:810-816
+    - otterdog/models/ruleset.py:145-151
+    - otterdog/models/ruleset.py:177-211
+    - docs/reference/organization/repository/status-check.md:7
+    - "e2e: scenarios/cli/protection/ruleset-status-checks.yaml (step actions-slug declares the bug)"
+    - "e2e: scenarios/cli/protection/app-checks.yaml (step app-id declares the bug)"
+  upstream: null
+  fixed_in: null
+  scenarios: []
+
+- id: KB-055
+  title: validation messages of nested repository ruleset settings name the repository twice instead of the ruleset ('repository[name="r", repository=r]')
+  status: confirmed
+  evidence:
+    - otterdog/models/ruleset.py:57-73
+    - otterdog/models/ruleset.py:128-136
+    - otterdog/models/ruleset.py:240-272
+    - otterdog/models/ruleset.py:451-458
+    - "e2e: scenarios/offline/validation/val-ruleset-nested.yaml (asserts the messages after the header)"
+  upstream: null
+  fixed_in: null
+  scenarios: []
+
+- id: KB-056
+  title: local-plan diffs webhooks and secrets whose value is the dummy '********' (as '<DUMMY>'), so it shows their changes and forced updates that plan, apply and local-apply skip
+  status: confirmed
+  evidence:
+    - otterdog/operations/local_plan.py:82-87
+    - otterdog/models/secret.py:69-72
+    - otterdog/models/secret.py:87-88
+    - otterdog/models/secret.py:125-147
+    - otterdog/models/webhook.py:80-81
+    - otterdog/models/webhook.py:155-157
+    - otterdog/webapp/tasks/validate_pull_request.py:159
+    - "e2e: scenarios/offline/plan/lplan-forced-secrets.yaml (step dummy-skipped declares the bug)"
+  upstream: null
+  fixed_in: null
+  scenarios: [O-KB-LPLAN-DUMMY-SECRETS]
+
+- id: KB-057
+  title: webhook secrets get a weaker check than secrets (an unknown provider prefix validates silently and is applied literally; several ':' crash the apply)
+  status: confirmed
+  evidence:
+    - otterdog/models/webhook.py:83-93
+    - otterdog/models/secret.py:51-62
+    - otterdog/config.py:230-243
+  upstream: null
+  fixed_in: null
+  scenarios: []
+
+- id: KB-058
+  title: topics of a repository that stays archived are still planned and sent (PUT /repos/{o}/{r}/topics on a read-only repository)
+  status: suspected
+  evidence:
+    - otterdog/models/repository.py:137-163
+    - otterdog/models/repository.py:782-790
+    - otterdog/providers/github/rest/repo_client.py:119
+    - otterdog/providers/github/rest/repo_client.py:139-140
+  upstream: null
+  fixed_in: null
+  scenarios: []
+
+- id: KB-059
+  title: without GitHub OAuth configuration the login-required page /myprojects answers 500 (KeyError 'QUART_AUTH') instead of 401
+  status: confirmed
+  evidence:
+    - otterdog/webapp/__init__.py:42-64
+    - otterdog/webapp/home/routes.py:153-166
+    - otterdog/webapp/templates/home/page-401.html:3
+  upstream: null
+  fixed_in: null
+  scenarios: [O-KB-WEB-LOGIN-REQUIRED]
+
+- id: KB-060
+  title: a correctly signed form-encoded webhook delivery without a 'payload' field raises KeyError and answers 500 instead of 400
+  status: confirmed
+  evidence:
+    - otterdog/webapp/webhook/github_webhook.py:83-87
+  upstream: null
+  fixed_in: null
+  scenarios: [O-KB-WEB-FORM-WITHOUT-PAYLOAD]
+
+- id: KB-061
+  title: a webapp that refuses its configuration at boot (#712 fail-fast) exits with status 0
+  status: confirmed
+  evidence:
+    - otterdog/webapp/config.py:47-52
+    - otterdog/webapp/config.py:115
+  upstream: null
+  fixed_in: null
+  scenarios: [O-KB-WEB-BOOT-EXIT-STATUS]
+
+- id: KB-062
+  title: the custom property value type 'url' of GitHub is refused (and require_explicit_values is not modelled), so an organization holding one cannot be validated or imported cleanly
+  status: confirmed
+  evidence:
+    - otterdog/models/custom_property.py:52-58
+    - otterdog/models/custom_property.py:32-46
+    - "openapi: components/schemas/custom-property value_type enum [string, single_select, multi_select, true_false, url]"
+  upstream: null
+  fixed_in: null
+  scenarios: []
+
+- id: KB-063
+  title: plan output shows a replaced list element as 'old -> new' only when the replacement starts at the first element; elsewhere it prints a removal and an addition
+  status: confirmed
+  evidence:
+    - otterdog/operations/__init__.py:392-410
+  upstream: null
+  fixed_in: null
+  scenarios: []
+
+- id: KB-064
+  title: clearing a value sends JSON null where GitHub documents strings (org profile fields, webhook secrets), which GitHub may refuse or ignore
+  status: suspected
+  evidence:
+    - otterdog/models/__init__.py:610-617
+    - otterdog/models/webhook.py:126-141
+    - "openapi: PATCH /orgs/{org} company, email, location, twitter_username, blog of type string"
+    - "openapi: components/schemas/webhook-config-secret type string"
+  upstream: null
+  fixed_in: null
+  scenarios: []
+
+- id: KB-065
+  title: allow_forking, allow_update_branch and has_discussions are only sent in the body of POST /orgs/{org}/repos, which does not document them, and are not re-applied after the creation
+  status: suspected
+  evidence:
+    - otterdog/providers/github/rest/repo_client.py:254-265
+    - otterdog/providers/github/rest/repo_client.py:286-296
+    - "openapi: POST /orgs/{org}/repos request body has no allow_forking, allow_update_branch, has_discussions"
+  upstream: null
+  fixed_in: null
+  scenarios: []
+
+- id: KB-066
+  title: a sync status copied to a new commit always reads 'otterdog sync check completed successfully' and sets in_sync true, even when the copied result was out of sync
+  status: suspected
+  evidence:
+    - otterdog/webapp/tasks/check_sync.py:100-124
+    - otterdog/webapp/tasks/check_sync.py:236-257
+  upstream: null
+  fixed_in: null
+  scenarios: [W-SYNC-PROPAGATION-DRIFT]
+
+- id: KB-067
+  title: the sync check of a main that fails validation (or fails to load) reports the configuration as in sync
+  status: confirmed
+  evidence:
+    - otterdog/webapp/tasks/check_sync.py:163-169
+    - otterdog/operations/plan.py:121-126
+    - otterdog/operations/diff_operation.py:160-176
+    - otterdog/operations/diff_operation.py:225-230
+  upstream: null
+  fixed_in: null
+  scenarios: [W-SYNC-INVALID-MAIN]
+
+- id: KB-068
+  title: applying a change to a webhook declared with a wildcard url sends the pattern itself as config.url (and a null secret), overwriting the live url
+  status: confirmed
+  evidence:
+    - otterdog/models/__init__.py:825-839
+    - otterdog/models/repo_webhook.py:64-72
+    - otterdog/models/organization_webhook.py:58-65
+    - otterdog/models/webhook.py:126-141
+  upstream: null
+  fixed_in: null
+  scenarios: [W-MERGE-TEAM-HOOK]
+
+- id: KB-069
+  title: one unreadable blueprint or policy definition file fails the whole definition fetch, so no org definition is (re)loaded
+  status: confirmed
+  evidence:
+    - otterdog/webapp/tasks/fetch_policies.py:70-85
+    - otterdog/webapp/tasks/fetch_blueprints.py:78-93
+    - otterdog/webapp/policies/__init__.py:67-74
+    - otterdog/webapp/blueprints/__init__.py:116-124
+    - otterdog/webapp/utils.py:249-263
+    - otterdog/webapp/utils.py:294-310
+  upstream: null
+  fixed_in: null
+  scenarios: [W-BP-LOAD-YAML, W-POL-LOAD-MALFORMED]
+
+- id: KB-070
+  title: a blueprint definition change touching several fields is stored one field per FetchBlueprintsTask (the update chain short-circuits)
+  status: confirmed
+  evidence:
+    - otterdog/webapp/db/service.py:943-958
+  upstream: null
+  fixed_in: null
+  scenarios: [W-BP-UPDATE]
+
+- id: KB-071
+  title: every FetchBlueprintsTask overwrites recheck_needed, so a second fetch before the next check drops the recheck of a changed definition
+  status: confirmed
+  evidence:
+    - otterdog/webapp/db/service.py:958
+    - otterdog/webapp/internal/routes.py:83-89
+    - otterdog/webapp/blueprints/__init__.py:84-91
+  upstream: null
+  fixed_in: null
+  scenarios: [W-BP-RECHECK-LOST]
+
+- id: KB-072
+  title: a blueprint id whose type changes keeps its old type, after which /internal/check answers 500 on every call and no blueprint is evaluated any more
+  status: confirmed
+  evidence:
+    - otterdog/webapp/db/models.py:245-258
+    - otterdog/webapp/db/service.py:925-961
+    - otterdog/webapp/internal/routes.py:61-93
+    - otterdog/webapp/blueprints/__init__.py:173-181
+  upstream: null
+  fixed_in: null
+  scenarios: [W-BP-TYPE-CHANGE]
+
+- id: KB-073
+  title: pin_workflow never pins a workflow that also references a docker:// action (StopIteration turned into RuntimeError, the whole file is skipped)
+  status: confirmed
+  evidence:
+    - otterdog/webapp/tasks/blueprints/pinning/actions.py:44-46
+    - otterdog/webapp/tasks/blueprints/pin_workflow.py:53-61
+    - otterdog/webapp/tasks/blueprints/pin_workflow.py:99-110
+    - otterdog/webapp/tasks/blueprints/check_scorecard_integration.py:47-79
+  upstream: null
+  fixed_in: null
+  scenarios: [W-BP-PIN]
+
+- id: KB-074
+  title: /internal/init (FetchAllPullRequestsTask) records every merged pull request as completed, overwriting partially_applied and not_applied
+  status: suspected
+  evidence:
+    - otterdog/webapp/tasks/fetch_all_pull_requests.py:50-62
+    - otterdog/webapp/db/service.py:538-539
+    - otterdog/webapp/tasks/complete_pull_request.py:60-66
+    - otterdog/webapp/tasks/apply_changes.py:95-101
+    - otterdog/webapp/internal/routes.py:38-46
+  upstream: null
+  fixed_in: null
+  scenarios: [W-RT-INIT-APPLY-STATUS]
+
+- id: KB-075
+  title: the updated_at of a blueprint status is only set when the row is created, so the remediation and dismissal listings show and sort by the creation time
+  status: suspected
+  evidence:
+    - otterdog/webapp/db/models.py:280-285
+    - otterdog/webapp/db/service.py:1021-1040
+    - otterdog/webapp/tasks/blueprints/update_blueprint_status.py:44-65
+    - otterdog/webapp/db/service.py:1046-1052
+  upstream: null
+  fixed_in: null
+  scenarios: []
+
+- id: KB-076
+  title: global blueprints are de-duplicated by type, although the docs define blueprints as additive (several of one type, told apart by id)
+  status: suspected
+  evidence:
+    - otterdog/webapp/utils.py:303-308
+    - docs/reference/blueprints/index.md:6-8
+  upstream: null
+  fixed_in: null
+  scenarios: []
+
+- id: KB-077
+  title: local-plan and local-apply ignore -r/--repo-filter for repositories that exist only in the other configuration (their removal is planned, and applied with -d)
+  status: confirmed
+  evidence:
+    - otterdog/models/__init__.py:669-675
+    - otterdog/models/__init__.py:827-839
+    - otterdog/models/github_organization.py:905-916
+    - otterdog/operations/local_plan.py:68-80
+    - otterdog/models/repository.py:793-796
+    - "e2e: scenarios/offline/plan/lplan-repo-filter.yaml (step removal-outside-the-filter declares the bug)"
+  upstream: null
+  fixed_in: null
+  scenarios: []

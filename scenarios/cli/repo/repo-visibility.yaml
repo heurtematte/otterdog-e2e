@@ -1,0 +1,78 @@
+# Repository visibility and forking (coverage: repositories.visibility-forking).
+id: cli.repo.visibility
+tier: cli
+title: Switch an existing repository between public and private
+description: |
+  A public run repository becomes private and then public again through the 'private' flag. otterdog must plan each
+  switch as a change of the existing repository (never a removal and a new repository, which would delete its
+  content) and converge. A private repository needs allow_forking false with the template, which disables
+  members_can_fork_private_repositories (validation error otherwise, models/repository.py:453-458), and the wiki is
+  disabled throughout (a private wiki needs a paid plan). While the repository is private the security analysis
+  fields are left out of the diff and of the patch (models/repository.py:734-739, 940-947), so converging there
+  shows that otterdog ignores them; the way back to public may re-enable them, hence no exact change count for that
+  step. Private repositories exist on every plan, so the scenario runs on Free too.
+priority: P1
+min_plan: free
+tags: [repo, private]
+steps:
+  - name: public
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-visibility') {
+            description: "otterdog e2e: repository visibility",
+            has_wiki: false,
+          }
+    plan:
+      expect: changes
+      contains:
+        - '+ add repository[name="{{ p }}-visibility"]'
+      counts: {add: 1, change: 0, delete: 0}
+    state:
+      - kind: repo
+        name: "{{ p }}-visibility"
+        match: {private: false, visibility: public, allow_forking: true}
+
+  - name: private
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-visibility') {
+            description: "otterdog e2e: repository visibility",
+            has_wiki: false,
+            private: true,
+            allow_forking: false,
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ repository[name="{{ p }}-visibility"]'
+      not_contains:
+        - '- remove repository[name="{{ p }}-visibility"]'
+        - '+ add repository[name="{{ p }}-visibility"]'
+      counts: {add: 0, change: 2, delete: 0}
+    state:
+      - kind: repo
+        name: "{{ p }}-visibility"
+        match: {private: true, visibility: private, allow_forking: false}
+
+  - name: public-again
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-visibility') {
+            description: "otterdog e2e: repository visibility",
+            has_wiki: false,
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ repository[name="{{ p }}-visibility"]'
+      not_contains:
+        - '- remove repository[name="{{ p }}-visibility"]'
+        - '+ add repository[name="{{ p }}-visibility"]'
+      counts: {add: 0, delete: 0}
+    state:
+      - kind: repo
+        name: "{{ p }}-visibility"
+        match: {private: false, visibility: public, allow_forking: true}

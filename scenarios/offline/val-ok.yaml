@@ -1,0 +1,45 @@
+# Offline tier (SPEC 19): validate --local of a valid configuration; show --local must print it.
+id: O-VAL-OK
+title: A valid configuration passes validation without notices
+description: >-
+  Baseline of the validation layer: validate --local of a configuration that exercises the common model objects
+  (a public repository with topics, a dummy repository secret, a repository variable, a repository webhook, a branch
+  protection rule, a ruleset built with orgs.newRepoRuleset and strict status checks, an environment with a branch
+  policy, plus an organization variable and webhook) must report "Validation succeeded" with no error and no warning,
+  and show --local must print the organization. A regression here means otterdog started to reject, or to warn about,
+  configurations that every organization uses.
+priority: P0
+tags: [offline, smoke, repo, secrets, variables, webhooks, bpr, rulesets, environments]
+observe: true
+variables: {plan: free}
+steps:
+  - name: validate
+    fragments:
+      variables:
+        - "orgs.newOrgVariable('{{ P }}_ORG_VAR') { value: 'organization value' }"
+      webhooks:
+        - "orgs.newOrgWebhook('{{ hook_base }}org-hook') { events+: ['repository'], content_type: 'json' }"
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-valid') {
+            description: "otterdog e2e: valid configuration",
+            topics: ["e2e", "otterdog"],
+            secrets: [orgs.newRepoSecret('{{ P }}_REPO_SECRET') { value: "********" }],
+            variables: [orgs.newRepoVariable('{{ P }}_REPO_VAR') { value: "repository value" }],
+            webhooks: [orgs.newRepoWebhook('{{ hook_base }}repo-hook') { events+: ["push"], content_type: "json" }],
+            branch_protection_rules: [orgs.newBranchProtectionRule('main') { required_approving_review_count: 1 }],
+            rulesets: [
+              orgs.newRepoRuleset('{{ p }}-valid-main') {
+                include_refs+: ['~DEFAULT_BRANCH'],
+                required_status_checks+: { strict: true, status_checks+: ['ci'] },
+              },
+            ],
+            environments: [
+              orgs.newEnvironment('{{ p }}-env') { deployment_branch_policy: "selected", branch_policies+: ["main"] },
+            ],
+          }
+    validate:
+      ok: true
+      errors: 0
+      contains: ["Validation succeeded"]
+      not_contains: ["Warning:", "Error:"]

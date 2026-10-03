@@ -1,0 +1,65 @@
+# Offline tier (battery, models): orgs.extendRepo and the merge of _repositories by name.
+id: O-EXTEND-REPO
+tier: offline
+title: extendRepo merges into the repository of the same name (later entries win)
+description: >-
+  The template turns _repositories into repositories with mergeByKey(name): an orgs.extendRepo(name) entry is merged
+  into the orgs.newRepo entry of the same name (this is how Eclipse configurations extend '.eclipsefdn'). Later
+  entries win field by field and lists are replaced unless they use '+:', the merged repository is planned once, an
+  extension listed first is overridden by the definition after it, and an extension without any definition lacks
+  the required 'private' key, which the schema refuses (exit 2).
+priority: P2
+tags: [offline, repo, template]
+observe: true
+variables: {plan: free}
+steps:
+  - name: extension-after-definition
+    base_fragments: {}
+    fragments:
+      repositories:
+        - "orgs.newRepo('{{ p }}-ext') { description: 'a', homepage: 'https://example.org/ext', topics: ['a'] }"
+        - "orgs.extendRepo('{{ p }}-ext') { description: 'b', topics: ['t'] }"
+    validate: {ok: true, errors: 0}
+    plan:
+      expect: changes
+      counts: {add: 1, change: 0, delete: 0}
+      contains: ['+ add repository[name="{{ p }}-ext"] {', '= "https://example.org/ext"', '= "b"', '+ "t"']
+      not_contains: ['= "a"', '+ "a"']
+    commands:
+      show:
+        exit_code: 0
+        contains: ['repository[name="{{ p }}-ext"] {', '"t"']
+        not_contains: ['"a"']
+  - name: extension-before-definition
+    base_fragments: {}
+    fragments:
+      repositories:
+        - "orgs.extendRepo('{{ p }}-ext') { description: 'b' }"
+        - "orgs.newRepo('{{ p }}-ext') { description: 'a' }"
+    plan:
+      expect: changes
+      counts: {add: 1, change: 0, delete: 0}
+      contains: ['+ add repository[name="{{ p }}-ext"] {', '= "a"']
+      not_contains: ['= "b"']
+  - name: extension-appends-nested-objects
+    base_fragments: {}
+    fragments:
+      repositories:
+        - "orgs.newRepo('{{ p }}-ext') { variables: [orgs.newRepoVariable('{{ P }}_A') { value: 'a' }] }"
+        - "orgs.extendRepo('{{ p }}-ext') { variables+: [orgs.newRepoVariable('{{ P }}_B') { value: 'b' }] }"
+    plan:
+      expect: changes
+      counts: {add: 3, change: 0, delete: 0}
+      contains:
+        - '+ add repository[name="{{ p }}-ext"] {'
+        - '+ add repo_variable[name="{{ P }}_A", repository={{ p }}-ext] {'
+        - '+ add repo_variable[name="{{ P }}_B", repository={{ p }}-ext] {'
+  - name: extension-without-definition
+    fragments:
+      repositories: ["orgs.extendRepo('{{ p }}-only') { description: 'b' }"]
+    validate:
+      ok: false
+      exit_code: 2
+      contains:
+        - "Error: 'private' is a required property"
+        - "schema['properties']['repositories']['items']"

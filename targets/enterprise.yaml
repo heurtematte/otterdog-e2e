@@ -1,0 +1,77 @@
+# otterdog-e2e target: a DEDICATED GitHub Enterprise Cloud test organization on github.com (SPEC 6.2).
+#
+# Only GitHub Enterprise Cloud on github.com is supported (otterdog hard-codes api.github.com): no GHES, no ghe.com,
+# no Enterprise Managed Users. With SAML SSO enforced, every classic PAT must be SSO-authorized for the org.
+#
+# Values come from the environment: ${VAR} or ${VAR:-default} (expanded after YAML parsing, never re-expanded).
+# Secrets are never written here: *_env keys hold the NAME of the environment variable that carries the secret.
+# Env files loaded without overriding the environment: ~/.config/otterdog-e2e/enterprise.env,
+# <root>/.env.e2e.enterprise, <root>/.env.e2e. Every identity MUST be a dedicated machine account that only belongs
+# to test organizations (github.allowed_org_ids); classic PATs need the read:org scope.
+# Note: inside {flow, mappings} a ${...} value must be quoted ("${VAR}"), otherwise YAML reads '{' as syntax.
+name: enterprise
+description: Dedicated GitHub Enterprise Cloud test organization
+github:
+  org: ${E2E_ORG}                       # exact-case login
+  org_id: ${E2E_ORG_ID}                 # REQUIRED numeric id (GET /orgs/{org} .id) - pins the org (SEC-02)
+  allowed_org_ids: ${E2E_ALLOWED_ORG_IDS:-}   # comma list of ids the machine accounts may belong to (default: org_id)
+  expected_plan: enterprise             # free | team | enterprise
+  marker: "[otterdog-e2e]"              # must be contained in the org description
+  # SAML SSO enforced on the org (or its enterprise)? otterdog's web client cannot log in through SSO: set it to
+  # true and the web-UI tier is skipped (docs/web-ui-testing.md); the token tiers work with SSO-authorized PATs.
+  saml_sso: false
+  # Capability overrides, applied last (after the plan matrix and the probes; names = otterdog_e2e.capabilities.Cap
+  # values). A GHEC TRIAL org has no larger runners but includes Code Security / Secret Protection, so use:
+  #   capabilities: {add: [ghas_private], remove: [larger_runners]}
+  # GHAS_PRIVATE is never probed: add it only when GitHub Advanced Security / Code Security covers private repos.
+  capabilities: {add: [], remove: []}
+config:
+  configs_repo: ${E2E_CONFIGS_REPO:-otterdog-e2e-configs}     # in the test org: otterdog.json (webapp), lease + ledger refs
+  org_config_repo: ${E2E_ORG_CONFIG_REPO:-auto}               # auto => per-session repo "e2e-<run>-config" (F10); or a fixed name (".otterdog")
+  defaults_repo: ${E2E_DEFAULTS_REPO:-otterdog-e2e-defaults}  # public repo receiving published templates
+  template:
+    mode: ${E2E_TEMPLATE_MODE:-auto}    # auto (upstream for release/tag/branch, publish otherwise) | upstream | publish | url
+    url: ${E2E_TEMPLATE_URL:-}
+identities:                             # login = public, non-secret (F8); *_env = NAME of the env var holding the secret
+  admin:         {login: "${E2E_ADMIN_LOGIN}", token_env: E2E_ADMIN_TOKEN}
+  # web-UI tier (docs/web-ui-testing.md): the admin bot's web login is read from E2E_ADMIN_USERNAME (optional,
+  # default: the admin login), E2E_ADMIN_PASSWORD and E2E_ADMIN_TOTP_SEED; other variable names can be declared:
+  # admin: {login: "${E2E_ADMIN_LOGIN}", token_env: E2E_ADMIN_TOKEN, username_env: E2E_ADMIN_USERNAME,
+  #         password_env: E2E_ADMIN_PASSWORD, totp_seed_env: E2E_ADMIN_TOTP_SEED}
+  oracle:        {login: "${E2E_ORACLE_LOGIN:-}", token_env: E2E_ORACLE_TOKEN}            # optional, defaults to admin
+  author:        {login: "${E2E_AUTHOR_LOGIN:-}", token_env: E2E_AUTHOR_TOKEN}            # optional: member, contributors team only
+  approver:      {login: "${E2E_APPROVER_LOGIN:-}", token_env: E2E_APPROVER_TOKEN}        # optional: approval team member
+  outsider:      {login: "${E2E_OUTSIDER_LOGIN:-}", token_env: E2E_OUTSIDER_TOKEN}        # optional: not an org member
+  config_reader: {login: "${E2E_CONFIG_READER_LOGIN:-}", token_env: E2E_CONFIG_READ_TOKEN} # optional: fine-grained public read-only (webapp OTTERDOG_CONFIG_TOKEN)
+app:
+  id_env: E2E_APP_ID
+  private_key_env: E2E_APP_PRIVATE_KEY
+  private_key_file_env: E2E_APP_PRIVATE_KEY_FILE
+  webhook_secret_env: E2E_APP_WEBHOOK_SECRET
+  slug: ${E2E_APP_SLUG:-}
+teams:                                  # names must equal slugs: ^[a-z0-9][a-z0-9-]*$ (webapp compares GraphQL names with slugs)
+  admin: ${E2E_ADMIN_TEAM:-otterdog-admins}
+  approval: ${E2E_APPROVAL_TEAM:-project-leads}
+  contributors: ${E2E_CONTRIBUTORS_TEAM:-e2e-contributors}
+webapp:
+  transport: ${E2E_TRANSPORT:-relay}    # relay (compose stack + pull relay) | external (loopback URL, e.g. kubectl port-forward of make dev-webapp) | none
+  external_url: ${E2E_EXTERNAL_URL:-}   # must be http(s)://127.0.0.1|localhost:port unless --e2e-allow-remote-webapp
+  external_init_url: ${E2E_EXTERNAL_INIT_URL:-}
+  validation_context: ${E2E_VALIDATION_CONTEXT:-e2e/otterdog-validate}
+  sync_context: ${E2E_SYNC_CONTEXT:-e2e/otterdog-sync}
+  workers: ${E2E_WEBAPP_WORKERS:-1}
+  port: ${E2E_WEBAPP_PORT:-5000}
+fixtures:
+  repos: [otterdog-e2e-fixture-a]       # permanent PUBLIC fixture repos (declared in the baseline)
+  extra_protected_repos: []             # guard-only list (never rendered)
+baseline:
+  # extra org settings overrides; dict values rendered with `key+:` (merge); null leaves a template default
+  # unmanaged (`key:: null`), e.g. {members_can_create_private_pages: null} when a Free org keeps reporting it
+  # pending (true on GitHub, false in the template; declaring true is an enterprise-only validation error).
+  # The harness always pins workflows.fork_pr_approval_policy: first_time_contributors (GitHub's default, unset in
+  # the template); a `workflows:` mapping here is merged over it.
+  settings: {}
+# web-UI tier (docs/web-ui-testing.md), optional: a harmless GitHub App of the test org (no permissions, no events)
+# that the tier installs and uninstalls with otterdog install-app / uninstall-app; never the e2e App.
+# web_ui:
+#   probe_app_slug: e2e-probe-app

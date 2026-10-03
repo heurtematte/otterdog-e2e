@@ -1,0 +1,95 @@
+# C-TEAM (SPEC 19, P0): an org team with team_permissions on a run repository; the creator is not a member.
+id: cli.team
+title: Team with repository permissions
+description: |
+  A team named with the run prefix (name == slug, lowercase with hyphens) is created together with a run repository
+  that grants it push access through team_permissions (keyed by team slug). GitHub adds the creating user to a new
+  team; otterdog removes every member that is not declared, so the admin identity must NOT be a member afterwards
+  (providers: team_client removes auto-added members). The update step lowers the permission to pull and changes
+  the description; the last step removes team and repository with apply -d (teams are org-level objects: -r does
+  not scope them, the guarded removal check accepts them because their name carries this run's id).
+priority: P0
+min_plan: free
+tags: [teams, repo]
+steps:
+  - name: create
+    fragments:
+      teams:
+        - |
+          orgs.newTeam('{{ p }}-team') {
+            description: "otterdog e2e: team",
+            privacy: "visible",
+            members: [],
+          }
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-team-repo') {
+            description: "otterdog e2e: team permissions",
+            team_permissions: {
+              "{{ p }}-team": "push",
+            },
+          }
+    plan:
+      expect: changes
+      contains:
+        - '+ add team[name="{{ p }}-team"]'
+        - '+ add repository[name="{{ p }}-team-repo"]'
+      counts: {add: 2, change: 0, delete: 0}
+    state:
+      - kind: team
+        slug: "{{ p }}-team"
+        match: {name: "{{ p }}-team", slug: "{{ p }}-team", description: "otterdog e2e: team", privacy: closed}
+      - kind: team_members
+        slug: "{{ p }}-team"
+        equals: []
+      - kind: team_repo_permission
+        slug: "{{ p }}-team"
+        repo: "{{ p }}-team-repo"
+        equals: push
+
+  - name: update
+    fragments:
+      teams:
+        - |
+          orgs.newTeam('{{ p }}-team') {
+            description: "otterdog e2e: team (updated)",
+            privacy: "visible",
+            members: [],
+          }
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-team-repo') {
+            description: "otterdog e2e: team permissions",
+            team_permissions: {
+              "{{ p }}-team": "pull",
+            },
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ team[name="{{ p }}-team"]'
+        - '~ repository[name="{{ p }}-team-repo"]'
+      counts: {add: 0, delete: 0}
+    state:
+      - kind: team
+        slug: "{{ p }}-team"
+        match: {description: "otterdog e2e: team (updated)", privacy: closed}
+      - kind: team_members
+        slug: "{{ p }}-team"
+        equals: []
+      - kind: team_repo_permission
+        slug: "{{ p }}-team"
+        repo: "{{ p }}-team-repo"
+        equals: pull
+
+  - name: remove
+    plan:
+      expect: changes
+      contains:
+        - '- remove team[name="{{ p }}-team"]'
+        - '- remove repository[name="{{ p }}-team-repo"]'
+      counts: {add: 0, delete: 2}
+    apply: {delete: true}
+    state:
+      - {kind: team, slug: "{{ p }}-team", absent: true}
+      - {kind: repo, name: "{{ p }}-team-repo", absent: true}

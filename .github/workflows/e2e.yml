@@ -1,0 +1,422 @@
+# One end-to-end session against a dedicated test organization (SPEC 17, SEC-14/15/16/17).
+#
+# classify (no secrets): validates the inputs and runs `otterdog-e2e sut classify` (trust + normalized specs; for an
+#   untrusted SUT the PR title, author, head repo, sha and risky changed files go to the step summary for the reviewer).
+# e2e: runs in the environment `e2e-<target>` (trusted SUTs: no reviewers, main only) or `e2e-<target>-untrusted`
+#   (required reviewers, prevent self-review, main only). Secrets are mapped on the harness steps only; the final
+#   janitor step sweeps exactly this run; artifacts are uploaded only after `otterdog-e2e scrub-artifacts` succeeded.
+#
+# Values never reach `run:` scripts as `${{ }}` expressions: they are passed through `env:` and always quoted.
+name: e2e
+run-name: "e2e ${{ inputs.target }} ${{ inputs.sut }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Target (targets/<name>.yaml)"
+        type: choice
+        options: [free, team, enterprise]
+        default: free
+        required: true
+      sut:
+        description: "SUT spec: release:latest, tag:vX.Y.Z, branch:main, sha:<hex> or pr:<N>@<40-hex sha>"
+        type: string
+        default: release:latest
+        required: true
+      base_sut:
+        description: "Base SUT for the differential tier (empty: none, auto: merge base of the SUT)"
+        type: string
+        default: ""
+      suites:
+        description: "Comma separated tiers (empty: the harness default; auto: only for pr: SUTs)"
+        type: string
+        default: ""
+      tags:
+        description: "Comma separated scenario tags (live tiers; ANDed with scenario)"
+        type: string
+        default: ""
+      scenario:
+        description: "Comma separated scenario id globs"
+        type: string
+        default: ""
+      k:
+        description: "pytest -k expression"
+        type: string
+        default: ""
+      lane:
+        description: "Lane recorded in run.json (budgets)"
+        type: choice
+        options: [nightly-full, pr-fast]
+        default: nightly-full
+      strict_diff:
+        description: "Fail on unexpected differential deltas"
+        type: boolean
+        default: false
+  workflow_call:
+    inputs:
+      target:
+        type: string
+        required: true
+      sut:
+        type: string
+        default: release:latest
+      base_sut:
+        type: string
+        default: ""
+      suites:
+        type: string
+        default: ""
+      tags:
+        type: string
+        default: ""
+      scenario:
+        type: string
+        default: ""
+      k:
+        type: string
+        default: ""
+      lane:
+        type: string
+        default: nightly-full
+      strict_diff:
+        type: boolean
+        default: false
+
+permissions: {}
+
+# the harness never uses the Actions cache: tool venvs and the upstream mirror are rebuilt in every run (SEC-16)
+cache-mode: none
+
+jobs:
+  classify:
+    name: classify the SUT (no secrets)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    outputs:
+      trust: ${{ steps.classify.outputs.trust }}
+      sut: ${{ steps.classify.outputs.sut }}
+      base_sut: ${{ steps.classify.outputs.base_sut }}
+    steps:
+      - name: Validate the inputs
+        env:
+          TARGET: ${{ inputs.target }}
+          SUT: ${{ inputs.sut }}
+          BASE_SUT: ${{ inputs.base_sut }}
+          SUITES: ${{ inputs.suites }}
+          TAGS: ${{ inputs.tags }}
+          SCENARIO: ${{ inputs.scenario }}
+          PYTEST_K: ${{ inputs.k }}
+          LANE: ${{ inputs.lane }}
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$1"; exit 1; }
+          case "$TARGET" in free | team | enterprise) ;; *) fail "target must be free, team or enterprise" ;; esac
+          case "$LANE" in pr-fast | nightly-full) ;; *) fail "lane must be pr-fast or nightly-full" ;; esac
+          spec_re='^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,119}$'
+          [[ "$SUT" =~ $spec_re ]] || fail "sut is not a SUT spec"
+          [[ -z "$BASE_SUT" || "$BASE_SUT" =~ $spec_re ]] || fail "base_sut is not a SUT spec"
+          for spec in "$SUT" "$BASE_SUT"; do
+            case "$spec" in path:* | dirty:*) fail "path: and dirty: SUTs only exist on the operator's machine" ;; esac
+          done
+          [[ "$SUITES" =~ ^[a-z,]{0,120}$ ]] || fail "suites must be a comma separated list"
+          IFS=',' read -r -a suites <<< "$SUITES"
+          for suite in "${suites[@]}"; do
+            case "$suite" in
+              "" | unit | offline | cli | webhooks | webapp | enterprise | differential) ;;
+              auto) [[ "$SUT" == pr:* ]] || fail "suites=auto needs a pr: SUT" ;;
+              *) fail "unknown suite: $suite" ;;
+            esac
+          done
+          [[ "$TAGS" =~ ^[a-z0-9_.,-]{0,200}$ ]] || fail "tags must match [a-z0-9_.,-]"
+          scenario_re='^[]A-Za-z0-9_.,*?[-]{0,200}$'
+          [[ "$SCENARIO" =~ $scenario_re ]] || fail "scenario must be comma separated id globs"
+          k_re='^[]A-Za-z0-9_ .:()[-]{0,200}$'
+          [[ "$PYTEST_K" =~ $k_re ]] || fail "k must be a plain pytest -k expression"
+      - name: Check out the harness
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Prepare the harness directories
+        run: |
+          set -euo pipefail
+          {
+            echo "E2E_CACHE_DIR=$RUNNER_TEMP/otterdog-e2e-cache"
+            echo "E2E_ARTIFACTS=$RUNNER_TEMP/otterdog-e2e-artifacts"
+          } >> "$GITHUB_ENV"
+      - name: Install the harness
+        env:
+          POETRY_VERSION: "2.5.1"
+          POETRY_VIRTUALENVS_IN_PROJECT: "true"
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --no-input "poetry==${POETRY_VERSION}"
+          poetry install --no-interaction --only main
+      - name: Classify the SUT
+        id: classify
+        env:
+          SUT: ${{ inputs.sut }}
+          BASE_SUT: ${{ inputs.base_sut }}
+        run: |
+          set -euo pipefail
+          # the CLI also writes trust/sut/base_sut lines to GITHUB_OUTPUT: this step writes its own (combined) ones
+          classify() { GITHUB_OUTPUT=/dev/null .venv/bin/otterdog-e2e sut classify "$1"; }
+          head="$(classify "$SUT")"
+          trust="$(jq -r .trust <<< "$head")"
+          sut="$(jq -r .sut <<< "$head")"
+          base=""
+          if [[ "$BASE_SUT" == auto ]]; then
+            base=auto # the merge base of the SUT with upstream: a trusted upstream commit
+          elif [[ -n "$BASE_SUT" ]]; then
+            base_json="$(classify "$BASE_SUT")"
+            base="$(jq -r .sut <<< "$base_json")"
+            # an untrusted base SUT runs untrusted code too: the job needs the untrusted environment
+            if [[ "$(jq -r .trust <<< "$base_json")" != trusted ]]; then trust=untrusted; fi
+          fi
+          spec_re='^[a-z]+:[A-Za-z0-9._/@+-]+$'
+          [[ "$sut" =~ $spec_re ]] || { echo "::error::unexpected normalized SUT"; exit 1; }
+          [[ -z "$base" || "$base" == auto || "$base" =~ $spec_re ]] || { echo "::error::unexpected base SUT"; exit 1; }
+          case "$trust" in trusted | untrusted) ;; *) echo "::error::unexpected trust value"; exit 1 ;; esac
+          {
+            echo "trust=$trust"
+            echo "sut=$sut"
+            echo "base_sut=$base"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo "### SUT classification"
+            echo
+            echo "- SUT: \`$sut\` (${trust})"
+            echo "- base SUT: \`${base:-none}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  e2e:
+    name: e2e ${{ inputs.target }} (${{ needs.classify.outputs.sut }}, ${{ needs.classify.outputs.trust }})
+    needs: classify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    permissions:
+      contents: read
+    environment: ${{ needs.classify.outputs.trust == 'trusted' && format('e2e-{0}', inputs.target) || format('e2e-{0}-untrusted', inputs.target) }}
+    concurrency:
+      # one session per test org at a time (the org lease also covers local runs); queued runs wait, never cancel
+      group: e2e-${{ inputs.target }}
+      cancel-in-progress: false
+      queue: max
+    env:
+      E2E_LANE: ${{ inputs.lane }}
+      # seconds to wait for the org lease held by another session (a local run, for example)
+      E2E_LEASE_WAIT: "900"
+    steps:
+      - name: Check out the harness
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Prepare the harness directories
+        run: |
+          set -euo pipefail
+          {
+            echo "E2E_CACHE_DIR=$RUNNER_TEMP/otterdog-e2e-cache"
+            echo "E2E_ARTIFACTS=$RUNNER_TEMP/otterdog-e2e-artifacts"
+          } >> "$GITHUB_ENV"
+      - name: Enable the offline sandbox (unprivileged user namespaces)
+        run: |
+          set -euo pipefail
+          if ! unshare -rn true 2>/dev/null; then
+            # Ubuntu 24.04 restricts unprivileged user namespaces through AppArmor; with CI set the harness refuses
+            # to run offline otterdog commands without the `unshare -rn` network sandbox
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+          unshare -rn true
+      - name: Install the harness
+        env:
+          POETRY_VERSION: "2.5.1"
+          POETRY_VIRTUALENVS_IN_PROJECT: "true"
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --no-input "poetry==${POETRY_VERSION}"
+          poetry install --no-interaction --only main
+      - name: Load the target configuration (environment variables, no secrets)
+        env:
+          E2E_ORG: ${{ vars.E2E_ORG }}
+          E2E_ORG_ID: ${{ vars.E2E_ORG_ID }}
+          E2E_ALLOWED_ORG_IDS: ${{ vars.E2E_ALLOWED_ORG_IDS }}
+          E2E_ADMIN_LOGIN: ${{ vars.E2E_ADMIN_LOGIN }}
+          E2E_ORACLE_LOGIN: ${{ vars.E2E_ORACLE_LOGIN }}
+          E2E_AUTHOR_LOGIN: ${{ vars.E2E_AUTHOR_LOGIN }}
+          E2E_APPROVER_LOGIN: ${{ vars.E2E_APPROVER_LOGIN }}
+          E2E_OUTSIDER_LOGIN: ${{ vars.E2E_OUTSIDER_LOGIN }}
+          E2E_CONFIG_READER_LOGIN: ${{ vars.E2E_CONFIG_READER_LOGIN }}
+          E2E_APP_ID: ${{ vars.E2E_APP_ID }}
+          E2E_APP_SLUG: ${{ vars.E2E_APP_SLUG }}
+          E2E_CONFIGS_REPO: ${{ vars.E2E_CONFIGS_REPO }}
+          E2E_ORG_CONFIG_REPO: ${{ vars.E2E_ORG_CONFIG_REPO }}
+          E2E_DEFAULTS_REPO: ${{ vars.E2E_DEFAULTS_REPO }}
+          E2E_TEMPLATE_MODE: ${{ vars.E2E_TEMPLATE_MODE }}
+          E2E_TEMPLATE_URL: ${{ vars.E2E_TEMPLATE_URL }}
+          E2E_ADMIN_TEAM: ${{ vars.E2E_ADMIN_TEAM }}
+          E2E_APPROVAL_TEAM: ${{ vars.E2E_APPROVAL_TEAM }}
+          E2E_CONTRIBUTORS_TEAM: ${{ vars.E2E_CONTRIBUTORS_TEAM }}
+          E2E_VALIDATION_CONTEXT: ${{ vars.E2E_VALIDATION_CONTEXT }}
+          E2E_SYNC_CONTEXT: ${{ vars.E2E_SYNC_CONTEXT }}
+          E2E_WEBAPP_WORKERS: ${{ vars.E2E_WEBAPP_WORKERS }}
+          E2E_WEBAPP_PORT: ${{ vars.E2E_WEBAPP_PORT }}
+          E2E_MIN_RATE_REMAINING: ${{ vars.E2E_MIN_RATE_REMAINING }}
+        run: |
+          set -euo pipefail
+          # environment-level variables -> GITHUB_ENV, so the harness and the janitor steps see the same target
+          while IFS= read -r name; do
+            value="${!name}"
+            if [[ -z "$value" ]]; then continue; fi
+            if [[ "$value" == *$'\n'* || "$value" == *$'\r'* ]]; then
+              echo "::error::variable $name contains a line break"
+              exit 1
+            fi
+            printf '%s=%s\n' "$name" "$value" >> "$GITHUB_ENV"
+          done < <(compgen -e | grep -E '^E2E_')
+      - name: Run the e2e session
+        id: run
+        timeout-minutes: 120
+        env:
+          TARGET: ${{ inputs.target }}
+          SUT: ${{ needs.classify.outputs.sut }}
+          BASE_SUT: ${{ needs.classify.outputs.base_sut }}
+          SUITES: ${{ inputs.suites }}
+          TAGS: ${{ inputs.tags }}
+          SCENARIO: ${{ inputs.scenario }}
+          PYTEST_K: ${{ inputs.k }}
+          STRICT_DIFF: ${{ inputs.strict_diff }}
+          E2E_ADMIN_TOKEN: ${{ secrets.E2E_ADMIN_TOKEN }}
+          E2E_ORACLE_TOKEN: ${{ secrets.E2E_ORACLE_TOKEN }}
+          E2E_AUTHOR_TOKEN: ${{ secrets.E2E_AUTHOR_TOKEN }}
+          E2E_APPROVER_TOKEN: ${{ secrets.E2E_APPROVER_TOKEN }}
+          E2E_OUTSIDER_TOKEN: ${{ secrets.E2E_OUTSIDER_TOKEN }}
+          E2E_CONFIG_READ_TOKEN: ${{ secrets.E2E_CONFIG_READ_TOKEN }}
+          E2E_APP_PRIVATE_KEY: ${{ secrets.E2E_APP_PRIVATE_KEY }}
+          E2E_APP_WEBHOOK_SECRET: ${{ secrets.E2E_APP_WEBHOOK_SECRET }}
+        run: |
+          set -euo pipefail
+          if [[ "$SUT" == pr:* ]]; then
+            # otterdog PR: the `pr` command derives tags from the changed files, loads
+            # scenarios/otterdog-prs/<N>.yaml and compares with the manifest base (default: merge base)
+            spec="${SUT#pr:}"
+            args=(pr "${spec%@*}" --sha "${spec#*@}" --target "$TARGET" --suite "${SUITES:-auto}")
+          else
+            args=(run --target "$TARGET" --sut "$SUT")
+            if [[ -n "$BASE_SUT" ]]; then args+=(--base-sut "$BASE_SUT"); fi
+            if [[ -n "$SUITES" ]]; then args+=(--suite "$SUITES"); fi
+            if [[ -n "$TAGS" ]]; then args+=(--tags "$TAGS"); fi
+            if [[ -n "$SCENARIO" ]]; then args+=(--scenario "$SCENARIO"); fi
+            if [[ -n "$PYTEST_K" ]]; then args+=(-k "$PYTEST_K"); fi
+          fi
+          if [[ "$STRICT_DIFF" == true ]]; then args+=(--strict-diff); fi
+          .venv/bin/otterdog-e2e "${args[@]}"
+      - name: Locate the run artifacts
+        if: always()
+        env:
+          LABEL: ${{ inputs.target }}-${{ needs.classify.outputs.sut }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          ids=()
+          for file in "${E2E_ARTIFACTS:-/nonexistent}"/*/run.json; do
+            id="${file%/run.json}"
+            id="${id##*/}"
+            if [[ "$id" =~ ^[0-9a-z]{6}[0-9a-f]{2}$ ]]; then ids+=("$id"); fi
+          done
+          label="$(printf '%s' "$LABEL" | tr -c 'A-Za-z0-9._-' '-' | cut -c1-60)"
+          {
+            echo "E2E_RUN_IDS=${ids[*]}"
+            echo "E2E_ARTIFACT_NAME=e2e-${label}-${ids[0]:-norun-${GITHUB_RUN_ATTEMPT}-${RANDOM}}"
+          } >> "$GITHUB_ENV"
+      - name: Sweep this run (janitor --run-id)
+        id: janitor
+        if: always()
+        timeout-minutes: 15
+        env:
+          TARGET: ${{ inputs.target }}
+          E2E_ADMIN_TOKEN: ${{ secrets.E2E_ADMIN_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${E2E_RUN_IDS:-}" ]]; then
+            echo "no run to sweep"
+            exit 0
+          fi
+          status=0
+          for id in $E2E_RUN_IDS; do
+            # run.json gets "org" once the session reached the test org (verified it, took the lease)
+            live="$(jq -r 'has("org")' "$E2E_ARTIFACTS/$id/run.json" 2> /dev/null || echo unknown)"
+            if [[ "$live" == false ]]; then
+              echo "run $id never reached the test organization: nothing to sweep"
+              continue
+            fi
+            # sweeps exactly this run (no age threshold) and takes over a lease the run may have left behind
+            .venv/bin/otterdog-e2e janitor --target "$TARGET" --run-id "$id" --apply || status=1
+          done
+          exit "$status"
+      - name: Scrub the artifacts (fails on leaked secrets)
+        id: scrub
+        if: always()
+        timeout-minutes: 5
+        # the secrets of this job, so the scan finds leaked values that have no token shape (webhook secret,
+        # password, TOTP seed) and the encoded variants of every secret: a separate step inherits no secret, and the
+        # session's own scrub never ran when the session step was killed (ISO-02)
+        env:
+          E2E_ADMIN_TOKEN: ${{ secrets.E2E_ADMIN_TOKEN }}
+          E2E_ORACLE_TOKEN: ${{ secrets.E2E_ORACLE_TOKEN }}
+          E2E_AUTHOR_TOKEN: ${{ secrets.E2E_AUTHOR_TOKEN }}
+          E2E_APPROVER_TOKEN: ${{ secrets.E2E_APPROVER_TOKEN }}
+          E2E_OUTSIDER_TOKEN: ${{ secrets.E2E_OUTSIDER_TOKEN }}
+          E2E_CONFIG_READ_TOKEN: ${{ secrets.E2E_CONFIG_READ_TOKEN }}
+          E2E_APP_PRIVATE_KEY: ${{ secrets.E2E_APP_PRIVATE_KEY }}
+          E2E_APP_WEBHOOK_SECRET: ${{ secrets.E2E_APP_WEBHOOK_SECRET }}
+        run: |
+          set -euo pipefail
+          if [[ ! -d "${E2E_ARTIFACTS:-/nonexistent}" ]]; then
+            echo "no artifacts to scrub"
+            exit 0
+          fi
+          .venv/bin/otterdog-e2e scrub-artifacts "$E2E_ARTIFACTS"
+      - name: Upload the artifacts
+        if: always() && steps.scrub.outcome == 'success'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ env.E2E_ARTIFACT_NAME }}
+          path: ${{ runner.temp }}/otterdog-e2e-artifacts
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Job summary
+        if: always()
+        env:
+          TARGET: ${{ inputs.target }}
+          SUT: ${{ needs.classify.outputs.sut }}
+          BASE_SUT: ${{ needs.classify.outputs.base_sut }}
+          TRUST: ${{ needs.classify.outputs.trust }}
+          RUN_OUTCOME: ${{ steps.run.outcome }}
+          SCRUB_OUTCOME: ${{ steps.scrub.outcome }}
+        run: |
+          set -euo pipefail
+          # the pytest session already appended its summary.md (results, budgets, differential, manual testing)
+          {
+            echo "### otterdog-e2e session"
+            echo
+            echo "| item | value |"
+            echo "|---|---|"
+            echo "| target | \`$TARGET\` |"
+            echo "| SUT | \`$SUT\` ($TRUST) |"
+            echo "| base SUT | \`${BASE_SUT:-none}\` |"
+            echo "| lane | \`${E2E_LANE:-}\` |"
+            echo "| run id(s) | \`${E2E_RUN_IDS:-none}\` |"
+            echo "| session | $RUN_OUTCOME |"
+            echo "| artifact scrub | $SCRUB_OUTCOME |"
+            echo "| artifact | \`${E2E_ARTIFACT_NAME:-none}\` (kept 7 days) |"
+          } >> "$GITHUB_STEP_SUMMARY"

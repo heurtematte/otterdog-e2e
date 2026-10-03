@@ -1,0 +1,103 @@
+# C-BPR-PUBLIC (SPEC 19, P1): branch protection rule lifecycle on a public run repository.
+id: cli.bpr.public
+title: Branch protection rule on a public repository
+description: |
+  A public run repository with a branch protection rule on main (required reviews, strict status checks with an
+  'any:' check, linear history, conversation resolution). The oracle reads the rule through GraphQL
+  (Oracle.branch_protection_rule: camelCase fields). The update step tightens the rule; the last step removes the
+  rule from the still existing repository (nested removal, apply -d). For branch protection rules 'any:<context>'
+  round-trips (otterdog maps GraphQL app null back to 'any:'), unlike rulesets (see cli.kb.ruleset-any-status-check).
+priority: P1
+min_plan: free
+tags: [bpr, repo]
+steps:
+  - name: create
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-bpr') {
+            description: "otterdog e2e: branch protection",
+            branch_protection_rules: [
+              orgs.newBranchProtectionRule('main') {
+                required_approving_review_count: 1,
+                requires_status_checks: true,
+                requires_strict_status_checks: true,
+                required_status_checks+: ["any:e2e-ci"],
+                requires_linear_history: true,
+                requires_conversation_resolution: true,
+              },
+            ],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '+ add repository[name="{{ p }}-bpr"]'
+        - '+ add branch_protection_rule[pattern="main", repository={{ p }}-bpr]'
+      counts: {add: 2, change: 0, delete: 0}
+    state:
+      - kind: bpr
+        repo: "{{ p }}-bpr"
+        pattern: main
+        match:
+          pattern: main
+          requiresApprovingReviews: true
+          requiredApprovingReviewCount: 1
+          requiresStatusChecks: true
+          requiresStrictStatusChecks: true
+          requiredStatusCheckContexts: [e2e-ci]
+          requiresLinearHistory: true
+          requiresConversationResolution: true
+          allowsForcePushes: false
+          allowsDeletions: false
+          isAdminEnforced: false
+          dismissesStaleReviews: false
+
+  - name: update
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-bpr') {
+            description: "otterdog e2e: branch protection",
+            branch_protection_rules: [
+              orgs.newBranchProtectionRule('main') {
+                required_approving_review_count: 2,
+                dismisses_stale_reviews: true,
+                is_admin_enforced: true,
+                requires_status_checks: true,
+                requires_strict_status_checks: true,
+                required_status_checks+: ["any:e2e-ci", "any:e2e-lint"],
+                requires_linear_history: true,
+                requires_conversation_resolution: true,
+              },
+            ],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ branch_protection_rule[pattern="main", repository={{ p }}-bpr]'
+      counts: {add: 0, delete: 0}
+    state:
+      - kind: bpr
+        repo: "{{ p }}-bpr"
+        pattern: main
+        match:
+          requiredApprovingReviewCount: 2
+          dismissesStaleReviews: true
+          isAdminEnforced: true
+          requiredStatusCheckContexts: {$unordered: [e2e-ci, e2e-lint]}
+
+  - name: remove-rule
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-bpr') {
+            description: "otterdog e2e: branch protection",
+          }
+    plan:
+      expect: changes
+      contains:
+        - '- remove branch_protection_rule[pattern="main", repository={{ p }}-bpr]'
+      counts: {add: 0, delete: 1}
+    apply: {delete: true}
+    state:
+      - {kind: bpr, repo: "{{ p }}-bpr", pattern: main, absent: true}

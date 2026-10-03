@@ -1,0 +1,51 @@
+# Offline tier (battery, models): the OrganizationRole fields without template defaults.
+id: O-SHOW-ROLE-FIELDS
+tier: offline
+title: Organization role visibility and selected_repositories cannot be configured
+description: >-
+  OrganizationRole declares visibility and selected_repositories, two fields neither the template nor GitHub's
+  organization role API define. The role schema (unevaluatedProperties) refuses both before the model is built
+  (exit 2), so a role is always planned and shown with its name, description, base role and permissions only and a
+  live apply never sends the two fields to POST /orgs/{org}/organization-roles.
+priority: P2
+tags: [offline, org-roles]
+observe: true
+variables: {plan: enterprise}
+steps:
+  - name: role-fields
+    base_fragments: {}
+    fragments:
+      roles: ["orgs.newOrgRole('{{ p }}-role') { description: 'auditors', base_role: 'read', permissions: ['read_audit_logs'] }"]
+    validate: {ok: true, errors: 0}
+    plan:
+      expect: changes
+      counts: {add: 1, change: 0, delete: 0}
+      contains:
+        - '+ add org_role[name="{{ p }}-role"] {'
+        - '+ base_role   = "read"'
+        - '+ description = "auditors"'
+        - '+ name        = "{{ p }}-role"'
+        - '+ permissions = ['
+      not_contains: ['visibility', 'selected_repositories']
+    commands:
+      show:
+        exit_code: 0
+        contains: ['org_role[name="{{ p }}-role"] {', 'base_role   = "read"', 'permissions = [']
+  - name: visibility-refused
+    fragments:
+      roles: ["orgs.newOrgRole('{{ p }}-role') { base_role: 'read', visibility: 'all' }"]
+    validate:
+      ok: false
+      exit_code: 2
+      contains:
+        - "Error: Unevaluated properties are not allowed ('visibility' was unexpected)"
+        - "schema['properties']['roles']['items']"
+  - name: selected-repositories-refused
+    fragments:
+      roles: ["orgs.newOrgRole('{{ p }}-role') { base_role: 'read', selected_repositories: ['{{ p }}-repo'] }"]
+    validate:
+      ok: false
+      exit_code: 2
+      contains:
+        - "Error: Unevaluated properties are not allowed ('selected_repositories' was unexpected)"
+        - "schema['properties']['roles']['items']"

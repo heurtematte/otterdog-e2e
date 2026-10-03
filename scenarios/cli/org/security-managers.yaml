@@ -1,0 +1,60 @@
+# org-settings.security-managers (P2, org_level): teams holding the security_manager organization role.
+id: cli.org.security-managers
+title: Security manager teams (assigned and removed to match)
+tier: cli
+description: |
+  settings.security_managers lists the team slugs that hold GitHub's predefined security_manager organization role:
+  otterdog reads them with GET /orgs/{org}/organization-roles/{id}/teams and assigns or removes the role per team
+  (PUT/DELETE /orgs/{org}/organization-roles/teams/{team}/{id}, otterdog/providers/github/rest/org_client.py:50-124)
+  until the list matches. The run team is created in the same apply as the assignment: teams are patched before the
+  settings (plan-semantics.patch-order). The oracle reads the role's teams independently (check kind
+  security_managers). The second step goes back to the template's empty list, which is the baseline: the team keeps
+  existing, loses the role, and the org has no security manager team left. Teams need the org member list for
+  validation, so the offline lint skips these steps. org_level: full baseline reset as cleanup (it removes the team).
+priority: P2
+org_level: true
+tags: [org-settings, teams]
+steps:
+  - name: assign
+    fragments:
+      teams: &team
+        - |
+          orgs.newTeam('{{ p }}-sec') {
+            description: "otterdog e2e: security managers",
+            privacy: "visible",
+            members: [],
+          }
+      settings:
+        - "security_managers+: ['{{ p }}-sec']"
+    plan:
+      expect: changes
+      contains:
+        - '+ add team[name="{{ p }}-sec"]'
+        - "~ settings {"
+        - "security_managers"
+        - '+ "{{ p }}-sec"'
+    state:
+      - kind: team
+        slug: "{{ p }}-sec"
+        match: {name: "{{ p }}-sec", slug: "{{ p }}-sec"}
+      - kind: security_managers
+        contains: ["{{ p }}-sec"]
+
+  - name: unassign
+    fragments:
+      teams: *team
+    plan:
+      expect: changes
+      contains:
+        - "~ settings {"
+        - "security_managers"
+        - '- "{{ p }}-sec"'
+      not_contains:
+        - 'team[name="{{ p }}-sec"]'
+    state:
+      - kind: team
+        slug: "{{ p }}-sec"
+        match: {name: "{{ p }}-sec"}
+      # the template's security_managers [] is the baseline: no security manager team is left
+      - kind: security_managers
+        equals: []

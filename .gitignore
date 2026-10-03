@@ -1,0 +1,28 @@
+# --- secrets: never commit them (env files with tokens, App keys, webhook secrets) ---
+.env
+.env.*
+!.env.example
+.env.e2e*
+*.pem
+*.key
+*.webhook-secret
+secrets/
+
+# --- harness outputs ---
+# run artifacts (redacted text only, but still per-run data) and any local harness cache
+artifacts/
+.cache/
+
+# --- Python tooling ---
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+*.egg-info/
+
+# poetry.toml stays tracked: it only sets the in-project virtualenv (.venv) used by the Makefile and the workflows

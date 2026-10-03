@@ -1,0 +1,60 @@
+# Offline tier (SPEC 19): local-plan between two versions of the same objects.
+id: O-LPLAN-CHANGE
+title: local-plan shows attribute changes and counts changed attributes
+description: >-
+  The same repository, nested objects and organization variable exist in -BASE and in the configuration, with
+  different attribute values. local-plan must show one '~' block per changed object with 'old -> new' values (lists
+  as element additions) and add nothing, delete nothing; the 'Plan:' change count is the number of changed
+  attributes, not of objects. Unchanged objects (the webhook) must not appear.
+priority: P0
+tags: [offline, repo, variables, webhooks, bpr, environments]
+observe: true
+variables: {plan: free}
+steps:
+  - name: change
+    base_fragments:
+      variables:
+        - "orgs.newOrgVariable('{{ P }}_ORG_VAR') { value: 'before' }"
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-changed') {
+            description: "otterdog e2e: before",
+            topics: ["e2e"],
+            variables: [orgs.newRepoVariable('{{ P }}_REPO_VAR') { value: "one" }],
+            webhooks: [orgs.newRepoWebhook('{{ hook_base }}repo-hook') { events+: ["push"], content_type: "json" }],
+            branch_protection_rules: [orgs.newBranchProtectionRule('main') { required_approving_review_count: 1 }],
+            environments: [orgs.newEnvironment('{{ p }}-env') { wait_timer: 5 }],
+          }
+    fragments:
+      variables:
+        - "orgs.newOrgVariable('{{ P }}_ORG_VAR') { value: 'after' }"
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-changed') {
+            description: "otterdog e2e: after",
+            topics: ["e2e", "changed"],
+            variables: [orgs.newRepoVariable('{{ P }}_REPO_VAR') { value: "two" }],
+            webhooks: [orgs.newRepoWebhook('{{ hook_base }}repo-hook') { events+: ["push"], content_type: "json" }],
+            branch_protection_rules: [
+              orgs.newBranchProtectionRule('main') { required_approving_review_count: 2, requires_linear_history: true },
+            ],
+            environments: [orgs.newEnvironment('{{ p }}-env') { wait_timer: 10 }],
+          }
+    validate: {ok: true, errors: 0}
+    plan:
+      expect: changes
+      contains:
+        - '~ org_variable[name="{{ P }}_ORG_VAR"]'
+        - 'value = "before" -> "after"'
+        - '~ repository[name="{{ p }}-changed"]'
+        - 'description = "otterdog e2e: before" -> "otterdog e2e: after"'
+        - '~ repo_variable[name="{{ P }}_REPO_VAR", repository={{ p }}-changed]'
+        - '~ branch_protection_rule[pattern="main", repository={{ p }}-changed]'
+        - 'required_approving_review_count = 1 -> 2'
+        - '~ environment[name="{{ p }}-env", repository={{ p }}-changed]'
+        - 'wait_timer = 5 -> 10'
+      not_contains:
+        - 'repo_webhook[url="{{ hook_base }}repo-hook"'
+        - '+ add '
+        - '- remove '
+      counts: {add: 0, change: 7, delete: 0}

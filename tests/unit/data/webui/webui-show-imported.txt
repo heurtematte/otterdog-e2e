@@ -1,0 +1,49 @@
+Showing organization resources:
+
+Project e2e-test-org[github_id=e2e-test-org] (1/1)
+
+  settings {
+    billing_email                                 = "billing@example.org"
+    blog                                          = "https://example.org"
+    company                                       = null
+    default_branch_name                           = "trunk"
+    default_code_security_configurations_disabled = true
+    default_repository_permission                 = "read"
+    deploy_keys_enabled_for_repositories          = true
+    description                                   = "[otterdog-e2e] Dedicated otterdog e2e test organization"
+    discussion_source_repository                  = null
+    email                                         = null
+    has_discussions                               = false
+    has_organization_projects                     = true
+    location                                      = null
+    members_can_change_project_visibility         = true
+    members_can_change_repo_visibility            = false
+    members_can_create_private_pages              = false
+    members_can_create_private_repositories       = false
+    members_can_create_public_pages               = true
+    members_can_create_public_repositories        = false
+    members_can_create_teams                      = true
+    members_can_delete_issues                     = false
+    members_can_delete_repositories               = true
+    members_can_fork_private_repositories         = false
+    name                                          = "E2E Test Org"
+    packages_containers_internal                  = false
+    packages_containers_public                    = true
+    plan                                          = "free"
+    readers_can_create_discussions                = true
+    security_managers                             = []
+    twitter_username                              = null
+    two_factor_requirement                        = true
+    web_commit_signoff_required                   = false
+    workflows                                     = {
+      actions_can_approve_pull_request_reviews      = true
+      allow_action_patterns                         = []
+      allow_github_owned_actions                    = true
+      allow_verified_creator_actions                = true
+      allowed_actions                               = "all"
+      default_workflow_permissions                  = "write"
+      enabled_repositories                          = "all"
+      max_cache_size_gb                             = 10
+      selected_repositories                         = []
+    }
+  }

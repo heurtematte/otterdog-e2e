@@ -1,0 +1,115 @@
+# Offline tier (battery, validation): the plan gates of otterdog's validation on the free plan.
+id: O-VAL-PLAN-GATES
+tier: offline
+title: Plan-gated features are refused or flagged on the free plan
+description: >-
+  otterdog validates against the configured settings.plan, never against GitHub: organization roles, ruleset
+  enforcement 'evaluate' and members_can_create_private_pages need an 'enterprise' plan (one error each, naming the
+  current plan), a private repository with a wiki needs at least GitHub Team (a warning). Each gate is checked alone
+  with its exact message and exit status 1, then all gates together (they accumulate), and local-plan must refuse to
+  plan a configuration that fails a gate. O-VAL-PLAN-GATES-TEAM and O-VAL-PLAN-GATES-ENTERPRISE run the same objects
+  on the plans that include them.
+priority: P0
+tags: [offline, org-roles, rulesets, org-settings, repo, secrets]
+observe: true
+variables: {plan: free}
+steps:
+  - name: org-roles
+    base_fragments: {}
+    fragments:
+      roles:
+        - "orgs.newOrgRole('{{ p }}-role') { base_role: 'read' }"
+    validate:
+      ok: false
+      errors: 1
+      exit_code: 1
+      contains:
+        - "use of organization roles requires an 'enterprise' plan, while this organization is currently on a 'free' plan."
+    plan:
+      expect: validation_error
+      exit_code: 1
+      contains: ["Planning aborted due to validation errors."]
+      not_contains: ['add org_role[', 'Plan: ']
+  - name: ruleset-evaluate
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-gates') {
+            rulesets: [
+              orgs.newRepoRuleset('{{ p }}-eval') { enforcement: 'evaluate', include_refs+: ['~DEFAULT_BRANCH'] },
+            ],
+          }
+    validate:
+      ok: false
+      errors: 1
+      exit_code: 1
+      contains:
+        - >-
+          repo_ruleset[name="{{ p }}-eval", repository={{ p }}-gates] has 'enforcement' of value 'evaluate' which is
+          only available for an 'enterprise' plan.
+  - name: private-pages
+    fragments:
+      settings: ["members_can_create_private_pages: true"]
+    validate:
+      ok: false
+      errors: 1
+      exit_code: 1
+      contains: ["enabling 'members_can_create_private_pages' requires an 'enterprise' plan."]
+  - name: private-repo-wiki
+    fragments:
+      repositories:
+        - "orgs.newRepo('{{ p }}-priv') { private: true, allow_forking: false }"
+    validate:
+      ok: true
+      errors: 0
+      warnings_min: 1
+      exit_code: 0
+      contains:
+        - >-
+          Warning: private repository[name="{{ p }}-priv"] has 'has_wiki' enabled, which requires at least GitHub
+          Team billing, currently using 'free' plan.
+  - name: wiki-control
+    fragments:
+      repositories:
+        - "orgs.newRepo('{{ p }}-pub') { has_wiki: true }"
+        - "orgs.newRepo('{{ p }}-priv') { private: true, allow_forking: false, has_wiki: false }"
+    validate:
+      ok: true
+      errors: 0
+      exit_code: 0
+      contains: ["Validation succeeded"]
+      not_contains: ["Warning:", "requires at least GitHub Team billing"]
+  - name: all-gates
+    fragments:
+      settings: ["members_can_create_private_pages: true"]
+      roles:
+        - "orgs.newOrgRole('{{ p }}-role') { base_role: 'read' }"
+      rulesets:
+        - "orgs.newOrgRuleset('{{ p }}-org-rs') { include_refs+: ['~DEFAULT_BRANCH'], include_repo_names+: ['~ALL'] }"
+      secrets:
+        - "orgs.newOrgSecret('{{ P }}_PRIV') { value: '********', visibility: 'private' }"
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-priv') {
+            private: true,
+            allow_forking: false,
+            rulesets: [
+              orgs.newRepoRuleset('{{ p }}-eval') { enforcement: 'evaluate', include_refs+: ['~DEFAULT_BRANCH'] },
+            ],
+          }
+    validate:
+      ok: false
+      errors: 5
+      warnings_min: 1
+      contains:
+        - "Validation failed: 1 info(s), 1 warning(s), 5 error(s)"
+        - "enabling 'members_can_create_private_pages' requires an 'enterprise' plan."
+        - "use of organization roles requires an 'enterprise' plan, while this organization is currently on a 'free' plan."
+        - "use of organization rulesets requires an 'enterprise' plan, while this organization is currently on a 'free' plan."
+        - >-
+          org_secret[name="{{ P }}_PRIV"] has 'visibility' of value 'private', which is not available for an
+          organization with free plan.
+        - >-
+          repo_ruleset[name="{{ p }}-eval", repository={{ p }}-priv] has 'enforcement' of value 'evaluate' which is
+          only available for an 'enterprise' plan.
+        - "private repository[name=\"{{ p }}-priv\"] has 'has_wiki' enabled"

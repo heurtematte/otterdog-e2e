@@ -1,0 +1,7 @@
+# otterdog-e2e @RUN@: a blueprint definition without its mandatory 'type' (W-BP-LOAD).
+# FetchBlueprintsTask reports it ("failed reading blueprint from path ...") and loads the other definitions.
+id: @ID@
+name: e2e @RUN@ blueprint without type
+config:
+  repo_selector:
+    name_pattern: @NOMATCH@

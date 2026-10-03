@@ -1,0 +1,92 @@
+# Offline tier (battery, validation): repository rules made unreachable by the load-time coercion (KB-033).
+id: O-VAL-COERCED
+tier: offline
+title: Repository rules that depend on organization settings never fire (coercion at load)
+description: >-
+  GitHubOrganization.from_model_data coerces every repository with the organization settings before validation:
+  has_projects is dropped when organization projects are off, web_commit_signoff_required while the organization
+  requires signoff, gh_pages_visibility below the enterprise plan, and the discussion source repository is forced to
+  has_discussions true. The control step shows the coercion in 'show --local'; the documented warnings and errors of
+  repository.py (has_projects ignored, signoff ignored, discussions disabled on the source repository, an invalid
+  Pages visibility) therefore never print (KB-033, coverage finding F-06): each runs as an expected failure.
+priority: P2
+tags: [offline, repo, org-settings]
+observe: true
+variables: {plan: free}
+steps:
+  - name: coerced-at-load
+    fragments:
+      settings: ["has_organization_projects: false"]
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-coerced') {
+            has_projects: true,
+            web_commit_signoff_required: false,
+            gh_pages_build_type: 'workflow',
+            gh_pages_visibility: 'private',
+            environments: [orgs.newEnvironment('github-pages')],
+          }
+    commands:
+      show:
+        exit_code: 0
+        contains:
+          - 'repository[name="{{ p }}-coerced"] {'
+          - 'gh_pages_build_type'
+          - 'has_organization_projects'
+        not_contains: ['has_projects', 'gh_pages_visibility']
+  - name: has-projects-ignored
+    known_bug: KB-033
+    fragments:
+      settings: ["has_organization_projects: false"]
+      repositories: ["orgs.newRepo('{{ p }}-projects') { has_projects: true }"]
+    validate:
+      ok: true
+      errors: 0
+      warnings_min: 1
+      contains:
+        - >-
+          Warning: repository[name="{{ p }}-projects"] has 'has_projects' enabled, while the organization disables
+          'has_organization_projects', setting will be ignored.
+  - name: signoff-ignored
+    known_bug: KB-033
+    fragments:
+      repositories: ["orgs.newRepo('{{ p }}-signoff') { web_commit_signoff_required: false }"]
+    validate:
+      ok: true
+      errors: 0
+      warnings_min: 1
+      contains:
+        - >-
+          Warning: repository[name="{{ p }}-signoff"] has 'web_commit_signoff_required' disabled, while the
+          organization requires it, setting will be ignored.
+  - name: discussion-source-disabled
+    known_bug: KB-033
+    fragments:
+      settings: ["has_discussions: true", "discussion_source_repository: '{{ org }}/{{ p }}-discussions'"]
+      repositories: ["orgs.newRepo('{{ p }}-discussions') { has_discussions: false }"]
+    validate:
+      ok: false
+      errors: 1
+      exit_code: 1
+      contains:
+        - >-
+          Error: repository[name="{{ p }}-discussions"] has 'has_discussions' disabled, while the organization uses
+          this repo as source repository for discussions.
+  - name: pages-visibility-below-enterprise
+    known_bug: KB-033
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-pages') {
+            gh_pages_build_type: 'workflow',
+            gh_pages_visibility: 'hidden',
+            environments: [orgs.newEnvironment('github-pages')],
+          }
+    validate:
+      ok: false
+      errors: 1
+      exit_code: 1
+      contains:
+        - >-
+          Error: repository[name="{{ p }}-pages"] has 'gh_pages_visibility' set to value 'hidden', while only values
+          ['public' | 'private'] are allowed.

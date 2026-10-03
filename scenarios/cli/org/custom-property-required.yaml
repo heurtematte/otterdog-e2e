@@ -1,0 +1,78 @@
+# custom-properties.required-default (P2, org_level): a required custom property with its default value.
+id: cli.custom-property.required
+title: Required custom property with a default value
+tier: cli
+description: |
+  A required single_select custom property needs a default_value (validation error otherwise; a repository then
+  crashes the configuration loading, KB-030): GitHub gives every repository without a value the default, and otterdog
+  fills the same default into every repository that declares no value before diffing (otterdog/models/repository.py:
+  296-306), so the run repository created without a value is not changed and converges with the default, and so do
+  the baseline repositories (GitHub sets the default on them too). default_value is diffed only for required
+  properties (otterdog/models/custom_property.py:145-152). The second step gives the repository the other allowed
+  value. A required property applies to every repository of the organization, so the scenario is org_level (full
+  baseline reset as cleanup: the guarded -d of the run's objects removes the property, then the repository).
+priority: P2
+org_level: true
+requires: [custom_properties]
+tags: [custom-properties, repo]
+steps:
+  - name: default
+    fragments:
+      custom_properties: &property
+        - |
+          orgs.newCustomProperty('{{ p }}-req') {
+            value_type: "single_select",
+            allowed_values: ["a", "b"],
+            required: true,
+            default_value: "a",
+            values_editable_by: "org_actors",
+            description: "otterdog e2e: required property",
+          }
+      repositories:
+        - "orgs.newRepo('{{ p }}-req-repo') { description: 'otterdog e2e: repository without a value' }"
+    validate:
+      ok: true
+      not_contains:
+        - "but no property 'default_value' is specified"
+    plan:
+      expect: changes
+      contains:
+        - '+ add custom_property[name="{{ p }}-req"]'
+        - '+ add repository[name="{{ p }}-req-repo"]'
+    state:
+      - kind: custom_property
+        name: "{{ p }}-req"
+        match:
+          property_name: "{{ p }}-req"
+          value_type: single_select
+          required: true
+          default_value: a
+          allowed_values: {$unordered: [a, b]}
+          values_editable_by: org_actors
+      - kind: repo_custom_properties
+        repo: "{{ p }}-req-repo"
+        match: {"{{ p }}-req": a}
+
+  - name: value
+    fragments:
+      custom_properties: *property
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-req-repo') {
+            description: "otterdog e2e: repository without a value",
+            custom_properties: {"{{ p }}-req": "b"},
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ repository[name="{{ p }}-req-repo"]'
+        - '"a" -> "b"'
+      not_contains:
+        - 'custom_property[name="{{ p }}-req"] {'
+    state:
+      - kind: custom_property
+        name: "{{ p }}-req"
+        match: {required: true, default_value: a}
+      - kind: repo_custom_properties
+        repo: "{{ p }}-req-repo"
+        match: {"{{ p }}-req": b}

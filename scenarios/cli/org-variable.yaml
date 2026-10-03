@@ -1,0 +1,77 @@
+# C-ORG-VARIABLE (SPEC 19, P1, org_level): organization variable shared with selected repositories.
+id: cli.org.variable
+title: Organization variable with selected repositories
+description: |
+  An organization variable (run-prefixed name) visible to a selected run repository. The repository is created in a
+  first step on purpose: otterdog applies org secrets/variables BEFORE repositories, so a variable that selects a
+  repository created by the same apply cannot resolve its id (see known bug KB-022, scenario
+  cli.kb.org-variable-same-apply). The oracle checks the variable (GET .../actions/variables/{name}) and its selected
+  repositories (GH-07: GET .../variables/{name}/repositories). The update step changes the value and widens the
+  visibility to all repositories (otterdog 'public' == GitHub 'all'). Org-level object: the scenario is org_level, so
+  its plans are not filtered with -r and its cleanup is a full baseline reset.
+priority: P1
+min_plan: free
+org_level: true
+tags: [variables, repo]
+steps:
+  - name: repo
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-orgvar') {
+            description: "otterdog e2e: org variable consumer",
+          }
+    plan:
+      expect: changes
+      contains:
+        - '+ add repository[name="{{ p }}-orgvar"]'
+    state:
+      - {kind: repo, name: "{{ p }}-orgvar", match: {name: "{{ p }}-orgvar"}}
+
+  - name: variable
+    fragments:
+      variables:
+        - |
+          orgs.newOrgVariable('{{ P }}_ORG_VARIABLE') {
+            value: "org value one",
+            visibility: "selected",
+            selected_repositories: ["{{ p }}-orgvar"],
+          }
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-orgvar') {
+            description: "otterdog e2e: org variable consumer",
+          }
+    plan:
+      expect: changes
+      contains:
+        - '+ add org_variable[name="{{ P }}_ORG_VARIABLE"]'
+    state:
+      - kind: org_variable
+        name: "{{ P }}_ORG_VARIABLE"
+        match: {name: "{{ P }}_ORG_VARIABLE", value: "org value one", visibility: selected}
+      - kind: org_variable_repos
+        name: "{{ P }}_ORG_VARIABLE"
+        equals: ["{{ p }}-orgvar"]
+
+  - name: update
+    fragments:
+      variables:
+        - |
+          orgs.newOrgVariable('{{ P }}_ORG_VARIABLE') {
+            value: "org value two",
+            visibility: "public",
+          }
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-orgvar') {
+            description: "otterdog e2e: org variable consumer",
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ org_variable[name="{{ P }}_ORG_VARIABLE"]'
+    state:
+      - kind: org_variable
+        name: "{{ P }}_ORG_VARIABLE"
+        match: {value: "org value two", visibility: all}

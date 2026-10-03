@@ -1,0 +1,129 @@
+# Branch protection actor allowances (coverage: branch-protection.review-dismissal,
+# branch-protection.bypass-allowances, branch-protection.push-restrictions).
+id: cli.bpr.allowances
+tier: cli
+title: Branch protection allowances for users and teams
+description: |
+  The actor lists of branch protection rules (models/branch_protection_rule.py:305-331): otterdog resolves '@login'
+  (users) and '@org/team' (teams) to GraphQL node ids (GitHubProvider.get_actor_node_ids) and reads the allowances
+  back in the same notation (providers/github/graphql.py _transform_actors), which the oracle produces from its own
+  GraphQL query. A run team (no members: otterdog removes its creator) gets push access to a public run repository
+  through team_permissions, because GitHub only accepts actors with write access to the repository; the admin
+  identity is an organization owner. Rule main: review dismissals restricted to the team and the admin, pull request
+  bypass for the team, force push bypass for the admin. Rule 'release/*': pushes restricted to the team, branch
+  creation blocked too (push restrictions are available on public repositories of every plan). The update step
+  swaps the actors of every list and stops blocking creations; both steps converge. The scenario cleanup removes
+  the team and the repository.
+priority: P1
+min_plan: free
+tags: [bpr, teams, repo]
+steps:
+  - name: create
+    fragments:
+      teams:
+        - &team |
+          orgs.newTeam('{{ p }}-bpr-maint') {
+            description: "otterdog e2e: branch protection allowances",
+            privacy: "visible",
+            members: [],
+          }
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-bpr-allow') {
+            description: "otterdog e2e: branch protection allowances",
+            team_permissions: {
+              "{{ p }}-bpr-maint": "push",
+            },
+            branch_protection_rules: [
+              orgs.newBranchProtectionRule('main') {
+                required_approving_review_count: 1,
+                restricts_review_dismissals: true,
+                review_dismissal_allowances: ["@{{ org }}/{{ p }}-bpr-maint", "@{{ logins.admin }}"],
+                bypass_pull_request_allowances: ["@{{ org }}/{{ p }}-bpr-maint"],
+                bypass_force_push_allowances: ["@{{ logins.admin }}"],
+              },
+              orgs.newBranchProtectionRule('release/*') {
+                requires_pull_request: false,
+                required_approving_review_count: null,
+                restricts_pushes: true,
+                push_restrictions: ["@{{ org }}/{{ p }}-bpr-maint"],
+                blocks_creations: true,
+              },
+            ],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '+ add team[name="{{ p }}-bpr-maint"]'
+        - '+ add branch_protection_rule[pattern="main", repository={{ p }}-bpr-allow]'
+        - '+ add branch_protection_rule[pattern="release/*", repository={{ p }}-bpr-allow]'
+      counts: {add: 4, change: 0, delete: 0}
+    state:
+      - {kind: team_repo_permission, slug: "{{ p }}-bpr-maint", repo: "{{ p }}-bpr-allow", equals: push}
+      - kind: bpr
+        repo: "{{ p }}-bpr-allow"
+        pattern: main
+        match:
+          restrictsReviewDismissals: true
+          reviewDismissalAllowances: {$unordered: ["@{{ org }}/{{ p }}-bpr-maint", "@{{ logins.admin }}"]}
+          bypassPullRequestAllowances: ["@{{ org }}/{{ p }}-bpr-maint"]
+          allowsForcePushes: false
+          bypassForcePushAllowances: ["@{{ logins.admin }}"]
+      - kind: bpr
+        repo: "{{ p }}-bpr-allow"
+        pattern: release/*
+        match:
+          requiresApprovingReviews: false
+          restrictsPushes: true
+          pushAllowances: ["@{{ org }}/{{ p }}-bpr-maint"]
+          blocksCreations: true
+
+  - name: swap-actors
+    fragments:
+      teams:
+        - *team
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-bpr-allow') {
+            description: "otterdog e2e: branch protection allowances",
+            team_permissions: {
+              "{{ p }}-bpr-maint": "push",
+            },
+            branch_protection_rules: [
+              orgs.newBranchProtectionRule('main') {
+                required_approving_review_count: 1,
+                restricts_review_dismissals: true,
+                review_dismissal_allowances: ["@{{ org }}/{{ p }}-bpr-maint"],
+                bypass_pull_request_allowances: ["@{{ logins.admin }}"],
+                bypass_force_push_allowances: ["@{{ org }}/{{ p }}-bpr-maint"],
+              },
+              orgs.newBranchProtectionRule('release/*') {
+                requires_pull_request: false,
+                required_approving_review_count: null,
+                restricts_pushes: true,
+                push_restrictions: ["@{{ logins.admin }}", "@{{ org }}/{{ p }}-bpr-maint"],
+                blocks_creations: false,
+              },
+            ],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ branch_protection_rule[pattern="main", repository={{ p }}-bpr-allow]'
+        - '~ branch_protection_rule[pattern="release/*", repository={{ p }}-bpr-allow]'
+      counts: {add: 0, change: 5, delete: 0}
+    state:
+      - kind: bpr
+        repo: "{{ p }}-bpr-allow"
+        pattern: main
+        match:
+          reviewDismissalAllowances: ["@{{ org }}/{{ p }}-bpr-maint"]
+          bypassPullRequestAllowances: ["@{{ logins.admin }}"]
+          bypassForcePushAllowances: ["@{{ org }}/{{ p }}-bpr-maint"]
+      - kind: bpr
+        repo: "{{ p }}-bpr-allow"
+        pattern: release/*
+        match:
+          restrictsPushes: true
+          pushAllowances: {$unordered: ["@{{ logins.admin }}", "@{{ org }}/{{ p }}-bpr-maint"]}
+          blocksCreations: false

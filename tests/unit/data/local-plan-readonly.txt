@@ -1,0 +1,18 @@
+Printing local diff:
+
+Actions are indicated with the following symbols:
+  + create
+  ~ modify
+  ! forced update
+  - delete
+
+Project e2e-test-org[github_id=e2e-test-org] (1/1)
+
+  
+  ~ settings {
+    ~ plan = "free" -> "team"
+  ~ }
+  
+  Note: setting 'plan' is read-only, will be skipped.
+  
+  Plan: 0 to add, 0 to change, 0 to delete.

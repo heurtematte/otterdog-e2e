@@ -1,0 +1,73 @@
+# Offline tier (battery, plan semantics): read-only keys.
+id: O-LPLAN-READ-ONLY-KEYS
+tier: offline
+title: Read-only keys are shown with a note and never counted (plan, two_factor_requirement, template_repository)
+description: >-
+  Changes of read-only model keys (settings.plan, settings.two_factor_requirement, repository template_repository)
+  are printed with 'Note: setting <key> is read-only, will be skipped.' and left out of the Plan counts, so a plan
+  made only of them is a no-op; mixed with writable changes, only the writable keys are counted. A new repository
+  created from a template shows its template_repository in the addition. The first step compares with a -BASE file
+  on the 'team' plan (files/team-plan-base.jsonnet).
+priority: P1
+tags: [offline, org-settings, repo]
+observe: true
+variables: {plan: free}
+steps:
+  - name: plan
+    base_config: {file: files/team-plan-base.jsonnet}
+    fragments: {}
+    validate: {ok: true, errors: 0}
+    plan:
+      expect: noop
+      counts: {add: 0, change: 0, delete: 0}
+      contains:
+        - '~ settings {'
+        - '~ plan = "team" -> "free"'
+        - "Note: setting 'plan' is read-only, will be skipped."
+  - name: two-factor-requirement
+    base_fragments:
+      settings: ["two_factor_requirement: false"]
+    fragments:
+      settings: ["two_factor_requirement: true"]
+    plan:
+      expect: noop
+      counts: {add: 0, change: 0, delete: 0}
+      contains:
+        - '~ two_factor_requirement = false -> true'
+        - "Note: setting 'two_factor_requirement' is read-only, will be skipped."
+  - name: template-repository
+    base_fragments:
+      repositories: ["orgs.newRepo('{{ p }}-generated') { template_repository: '{{ org }}/{{ p }}-template-a' }"]
+    fragments:
+      repositories: ["orgs.newRepo('{{ p }}-generated') { template_repository: '{{ org }}/{{ p }}-template-b' }"]
+    plan:
+      expect: noop
+      counts: {add: 0, change: 0, delete: 0}
+      contains:
+        - '~ template_repository = "{{ org }}/{{ p }}-template-a" -> "{{ org }}/{{ p }}-template-b"'
+        - "Note: setting 'template_repository' is read-only, will be skipped."
+  - name: mixed-with-writable-keys
+    base_fragments:
+      settings: ["two_factor_requirement: false", "members_can_create_teams: false"]
+      repositories: ["orgs.newRepo('{{ p }}-generated') { template_repository: '{{ org }}/{{ p }}-template-a', description: 'a' }"]
+    fragments:
+      settings: ["two_factor_requirement: true", "members_can_create_teams: true"]
+      repositories: ["orgs.newRepo('{{ p }}-generated') { template_repository: '{{ org }}/{{ p }}-template-b', description: 'b' }"]
+    plan:
+      expect: changes
+      counts: {add: 0, change: 2, delete: 0}
+      contains:
+        - "Note: setting 'two_factor_requirement' is read-only, will be skipped."
+        - "Note: setting 'template_repository' is read-only, will be skipped."
+        - '= "a" -> "b"'
+        - 'members_can_create_teams'
+  - name: template-on-addition
+    base_fragments: {}
+    fragments:
+      repositories:
+        - "orgs.newRepo('{{ p }}-generated') { template_repository: '{{ org }}/{{ p }}-template-a', post_process_template_content: ['README.md'] }"
+    plan:
+      expect: changes
+      counts: {add: 1, change: 0, delete: 0}
+      contains: ['+ add repository[name="{{ p }}-generated"] {', '= "{{ org }}/{{ p }}-template-a"']
+      not_contains: ['Note:', 'post_process_template_content', 'README.md']

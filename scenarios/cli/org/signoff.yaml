@@ -1,0 +1,74 @@
+# org-settings.web-commit-signoff (P0, org_level): web commit signoff at org level and its coercion of repositories.
+id: cli.org.signoff
+title: Organization web commit signoff and the repositories that inherit it
+tier: cli
+description: |
+  web_commit_signoff_required at organization level (otterdog/models/organization_settings.py:69; the template
+  requires it). While the organization requires signoff, a repository's own value is unmanaged: the repository
+  object is coerced (UNSET, otterdog/models/repository.py:284-292), so a run repository declaring false creates no
+  change and GitHub enforces signoff on it. Turning the organization requirement off re-applies every
+  non-archived repository's own value in the same apply, printed as a 'false -> false' line on the run repository
+  (otterdog/models/repository.py:1238-1245): the repository then really stops requiring signoff. Turning it on
+  again (the template default, i.e. the baseline) makes the repository field unmanaged once more: no repository
+  change, GitHub reports the repository as requiring signoff, and both steps converge. org_level: unfiltered plans
+  (the re-application touches the baseline repositories too) and a full baseline reset as cleanup.
+priority: P0
+org_level: true
+tags: [org-settings, repo]
+steps:
+  - name: create
+    fragments:
+      repositories: &repo
+        - |
+          orgs.newRepo('{{ p }}-signoff') {
+            description: "otterdog e2e: repository signoff under the organization setting",
+            web_commit_signoff_required: false,
+          }
+    plan:
+      expect: changes
+      contains:
+        - '+ add repository[name="{{ p }}-signoff"]'
+      not_contains:
+        - "~ settings {"
+    state:
+      - kind: org
+        match: {web_commit_signoff_required: true}
+      - kind: repo
+        name: "{{ p }}-signoff"
+        match: {name: "{{ p }}-signoff"}
+
+  - name: org-off
+    fragments:
+      settings:
+        - "web_commit_signoff_required: false"
+      repositories: *repo
+    plan:
+      expect: changes
+      contains:
+        - "~ settings {"
+        - "web_commit_signoff_required"
+        - '~ repository[name="{{ p }}-signoff"]'
+        - "false -> false"
+    state:
+      - kind: org
+        match: {web_commit_signoff_required: false}
+      - kind: repo
+        name: "{{ p }}-signoff"
+        match: {web_commit_signoff_required: false}
+
+  - name: org-on
+    fragments:
+      repositories: *repo
+    plan:
+      expect: changes
+      contains:
+        - "~ settings {"
+        - "web_commit_signoff_required"
+      not_contains:
+        - '~ repository[name="{{ p }}-signoff"]'
+    state:
+      - kind: org
+        match: {web_commit_signoff_required: true}
+      - kind: repo
+        name: "{{ p }}-signoff"
+        match: {web_commit_signoff_required: true}

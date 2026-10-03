@@ -1,0 +1,92 @@
+# Offline tier (battery, plan semantics): renames through aliases.
+id: O-LPLAN-RENAME
+tier: offline
+title: Aliases turn a renamed repository or webhook into a change instead of remove + add
+description: >-
+  A repository whose aliases name its previous name is matched with the old object: local-plan shows one change
+  with '~ name = old -> new' plus the other changed fields, nested objects follow the new name, and nothing is
+  removed or added (the repository and its content are kept). Without the alias the same rename is a removal plus an
+  addition; an alias naming nothing is an ordinary addition. Webhook aliases associate the old hook too (only its
+  other changes are planned) but the url change itself is never planned although the docs show it (KB-004): that
+  step runs as an expected failure.
+priority: P1
+tags: [offline, repo, webhooks, variables]
+observe: true
+variables: {plan: free}
+steps:
+  - name: alias-with-changes
+    base_fragments:
+      repositories:
+        - "orgs.newRepo('{{ p }}-old') { description: 'a', variables: [orgs.newRepoVariable('{{ P }}_V') { value: 'x' }] }"
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-new') {
+            aliases: ['{{ p }}-old'],
+            description: 'b',
+            variables: [orgs.newRepoVariable('{{ P }}_V') { value: 'y' }],
+          }
+    validate: {ok: true, errors: 0}
+    plan:
+      expect: changes
+      counts: {add: 0, change: 3, delete: 0}
+      contains:
+        - '~ repository[name="{{ p }}-new"] {'
+        - '= "{{ p }}-old" -> "{{ p }}-new"'
+        - '= "a" -> "b"'
+        - '~ repo_variable[name="{{ P }}_V", repository={{ p }}-new] {'
+        - '~ value = "x" -> "y"'
+      not_contains: ['+ add ', '- remove ']
+  - name: alias-only
+    base_fragments:
+      repositories: ["orgs.newRepo('{{ p }}-old') { description: 'a' }"]
+    fragments:
+      repositories: ["orgs.newRepo('{{ p }}-new') { aliases: ['{{ p }}-old'], description: 'a' }"]
+    plan:
+      expect: changes
+      counts: {add: 0, change: 1, delete: 0}
+      contains: ['~ name = "{{ p }}-old" -> "{{ p }}-new"']
+      not_contains: ['+ add ', '- remove ', 'description']
+  - name: without-alias
+    base_fragments:
+      repositories: ["orgs.newRepo('{{ p }}-old') { description: 'a' }"]
+    fragments:
+      repositories: ["orgs.newRepo('{{ p }}-new') { description: 'b' }"]
+    plan:
+      expect: changes
+      counts: {add: 1, change: 0, delete: 1}
+      contains:
+        - '- remove repository[name="{{ p }}-old"] {'
+        - '+ add repository[name="{{ p }}-new"] {'
+      not_contains: ['~ repository[']
+  - name: alias-without-match
+    base_fragments: {}
+    fragments:
+      repositories: ["orgs.newRepo('{{ p }}-new') { aliases: ['{{ p }}-gone'], description: 'a' }"]
+    plan:
+      expect: changes
+      counts: {add: 1, change: 0, delete: 0}
+      contains: ['+ add repository[name="{{ p }}-new"] {']
+      not_contains: ['{{ p }}-gone', 'aliases']
+  - name: webhook-alias-association
+    base_fragments:
+      webhooks: ["orgs.newOrgWebhook('{{ hook_base }}old') { events+: ['push'] }"]
+    fragments:
+      webhooks: ["orgs.newOrgWebhook('{{ hook_base }}new') { aliases: ['{{ hook_base }}old'], events+: ['push', 'pull_request'] }"]
+    plan:
+      expect: changes
+      contains:
+        - '~ org_webhook[url="{{ hook_base }}new"] {'
+        - '+ "pull_request"'
+      not_contains: ['+ add ', '- remove ']
+  - name: webhook-alias-url
+    known_bug: KB-004
+    base_fragments:
+      webhooks: ["orgs.newOrgWebhook('{{ hook_base }}old') { events+: ['push'] }"]
+    fragments:
+      webhooks: ["orgs.newOrgWebhook('{{ hook_base }}new') { aliases: ['{{ hook_base }}old'], events+: ['push'] }"]
+    plan:
+      expect: changes
+      counts: {add: 0, change: 1, delete: 0}
+      contains: ['-> "{{ hook_base }}new"']
+      not_contains: ['+ add ', '- remove ']

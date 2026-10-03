@@ -1,0 +1,63 @@
+# Offline tier (battery, validation): organization variables (KB-028).
+id: O-VAL-ORGVAR
+tier: offline
+title: Organization variables should be validated like secrets and repository variables
+description: >-
+  OrganizationVariable.validate implements the rules of organization secrets and repository variables (a visibility
+  the plan does not offer, an unknown visibility, lowercase names, the reserved GITHUB_ prefix, selected_repositories
+  ignored outside 'selected'), but GitHubOrganization.validate never calls it (KB-028, coverage finding F-01): the
+  strict expectation runs as an expected failure of its own step, while the control step checks that valid
+  organization variables validate and are planned.
+priority: P1
+tags: [offline, variables]
+observe: true
+variables: {plan: free}
+steps:
+  - name: invalid-variables
+    known_bug: KB-028
+    fragments:
+      variables:
+        - "orgs.newOrgVariable('{{ P }}_PRIV') { value: 'x', visibility: 'private' }"
+        - "orgs.newOrgVariable('{{ P | lower }}_lower') { value: 'x' }"
+        - "orgs.newOrgVariable('GITHUB_{{ P }}') { value: 'x' }"
+        - "orgs.newOrgVariable('{{ P }}_VIS') { value: 'x', visibility: 'nonsense' }"
+        - "orgs.newOrgVariable('{{ P }}_SEL') { value: 'x', visibility: 'public', selected_repositories: ['{{ p }}-r'] }"
+    validate:
+      ok: false
+      errors: 4
+      warnings_min: 1
+      contains:
+        - >-
+          org_variable[name="{{ P }}_PRIV"] has 'visibility' of value 'private', which is not available for an
+          organization with free plan.
+        - >-
+          org_variable[name="{{ P | lower }}_lower"] has 'name' of value '{{ P | lower }}_lower' which is not
+          uppercase, while only uppercase names are allowed for variables.
+        - "org_variable[name=\"GITHUB_{{ P }}\"] starts with prefix 'GITHUB_', which is not allowed for variables."
+        - >-
+          org_variable[name="{{ P }}_VIS"] has 'visibility' of value 'nonsense', while only values ('public' |
+          'private' | 'selected') are allowed.
+        - >-
+          org_variable[name="{{ P }}_SEL"] has 'visibility' set to 'public', but 'selected_repositories' is set to
+          '['{{ p }}-r']', setting will be ignored.
+  - name: valid-variables
+    base_fragments: {}
+    fragments:
+      variables:
+        - "orgs.newOrgVariable('{{ P }}_PUBLIC') { value: 'everyone' }"
+        - "orgs.newOrgVariable('{{ P }}_SELECTED') { value: 'some', visibility: 'selected', selected_repositories: ['{{ p }}-r'] }"
+      repositories:
+        - "orgs.newRepo('{{ p }}-r')"
+    validate:
+      ok: true
+      errors: 0
+      exit_code: 0
+      contains: ["Validation succeeded"]
+      not_contains: ["Warning:"]
+    plan:
+      expect: changes
+      counts: {add: 3, change: 0, delete: 0}
+      contains:
+        - '+ add org_variable[name="{{ P }}_PUBLIC"]'
+        - '+ add org_variable[name="{{ P }}_SELECTED"]'
+        - '+ add repository[name="{{ p }}-r"]'

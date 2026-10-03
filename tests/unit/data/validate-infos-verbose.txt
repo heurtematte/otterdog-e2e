@@ -1,0 +1,10 @@
+Validating organization configurations:
+
+Project e2e-test-org[github_id=e2e-test-org] (1/1)
+╷                                                                                                       
+│ Info:   org_secret[name="E2E_T3C7Z8A5_ORG_SECRET"] only has a dummy value, resource will be skipped.  
+╵                                                                                                       
+╷                                                                                                    
+│ Info:   repo_secret[name="E2E_T3C7Z8A5_SECRET"] only has a dummy value, resource will be skipped.  
+╵                                                                                                    
+  Validation succeeded

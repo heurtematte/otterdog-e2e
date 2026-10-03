@@ -1,0 +1,173 @@
+# CI of the harness itself (SPEC 17): lint, types, unit tier and the offline tier of release:latest and branch:main.
+# No secrets and no environment: everything here runs against dummy credentials or without GitHub at all.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions: {}
+
+# the harness never uses the Actions cache (no cache poisoning between runs, SEC-16)
+cache-mode: none
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  lint:
+    name: ruff and mypy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the harness
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Install the harness (with the dev group)
+        env:
+          POETRY_VERSION: "2.5.1"
+          POETRY_VIRTUALENVS_IN_PROJECT: "true"
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --no-input "poetry==${POETRY_VERSION}"
+          poetry install --no-interaction --with dev
+      - name: ruff check
+        run: .venv/bin/ruff check src tests
+      - name: ruff format
+        run: .venv/bin/ruff format --check src tests
+      - name: mypy (non-blocking)
+        continue-on-error: true
+        run: .venv/bin/mypy src
+
+  unit:
+    name: unit tier
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the harness
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Prepare the harness directories
+        run: |
+          set -euo pipefail
+          {
+            echo "E2E_CACHE_DIR=$RUNNER_TEMP/otterdog-e2e-cache"
+            echo "E2E_ARTIFACTS=$RUNNER_TEMP/otterdog-e2e-artifacts"
+          } >> "$GITHUB_ENV"
+      - name: Install the harness (with the dev group)
+        env:
+          POETRY_VERSION: "2.5.1"
+          POETRY_VIRTUALENVS_IN_PROJECT: "true"
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --no-input "poetry==${POETRY_VERSION}"
+          poetry install --no-interaction --with dev
+      - name: Command line smoke test
+        run: .venv/bin/otterdog-e2e --help
+      - name: Unit tests
+        run: .venv/bin/python -m pytest -q -p no:cacheprovider tests/unit
+
+  offline:
+    name: offline tier (${{ matrix.sut }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    # upstream main may be broken by an otterdog change: report it without blocking harness changes
+    continue-on-error: ${{ matrix.sut == 'branch:main' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        sut: ["release:latest", "branch:main"]
+    steps:
+      - name: Check out the harness
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Prepare the harness directories
+        run: |
+          set -euo pipefail
+          {
+            echo "E2E_CACHE_DIR=$RUNNER_TEMP/otterdog-e2e-cache"
+            echo "E2E_ARTIFACTS=$RUNNER_TEMP/otterdog-e2e-artifacts"
+          } >> "$GITHUB_ENV"
+      - name: Enable the offline sandbox (unprivileged user namespaces)
+        run: |
+          set -euo pipefail
+          if ! unshare -rn true 2>/dev/null; then
+            # Ubuntu 24.04 restricts unprivileged user namespaces through AppArmor; with CI set the harness refuses
+            # to run offline otterdog commands without the `unshare -rn` network sandbox
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+          unshare -rn true
+      - name: Install the harness
+        env:
+          POETRY_VERSION: "2.5.1"
+          POETRY_VIRTUALENVS_IN_PROJECT: "true"
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --no-input "poetry==${POETRY_VERSION}"
+          poetry install --no-interaction --only main
+      - name: Offline tier
+        timeout-minutes: 35
+        env:
+          SUT: ${{ matrix.sut }}
+        run: .venv/bin/otterdog-e2e run --suite offline --sut "$SUT"
+      - name: Locate the run artifacts
+        if: always()
+        env:
+          LABEL: offline-${{ matrix.sut }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          ids=()
+          for file in "${E2E_ARTIFACTS:-/nonexistent}"/*/run.json; do
+            id="${file%/run.json}"
+            id="${id##*/}"
+            if [[ "$id" =~ ^[0-9a-z]{6}[0-9a-f]{2}$ ]]; then ids+=("$id"); fi
+          done
+          label="$(printf '%s' "$LABEL" | tr -c 'A-Za-z0-9._-' '-' | cut -c1-60)"
+          {
+            echo "E2E_RUN_IDS=${ids[*]}"
+            echo "E2E_ARTIFACT_NAME=e2e-${label}-${ids[0]:-norun-${GITHUB_RUN_ATTEMPT}-${RANDOM}}"
+          } >> "$GITHUB_ENV"
+      - name: Scrub the artifacts (fails on leaked secrets)
+        id: scrub
+        if: always()
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          if [[ ! -d "${E2E_ARTIFACTS:-/nonexistent}" ]]; then
+            echo "no artifacts to scrub"
+            exit 0
+          fi
+          .venv/bin/otterdog-e2e scrub-artifacts "$E2E_ARTIFACTS"
+      - name: Upload the artifacts
+        if: always() && steps.scrub.outcome == 'success'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ env.E2E_ARTIFACT_NAME }}
+          path: ${{ runner.temp }}/otterdog-e2e-artifacts
+          if-no-files-found: ignore
+          retention-days: 7

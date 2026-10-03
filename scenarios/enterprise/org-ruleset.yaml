@@ -1,0 +1,143 @@
+# E-ORG-RULESET (SPEC 19, enterprise): organization ruleset lifecycle restricted to this run's repositories.
+id: enterprise.org-ruleset
+title: Organization ruleset (create, evaluate, remove)
+description: |
+  An organization ruleset limited to repositories named '<run prefix>-ors-*' (never the harness repositories: an
+  active org ruleset on every default branch would block push-config and the webapp) on their default branch, with
+  linear history. otterdog validates org rulesets against the CONFIGURED plan (enterprise only); GitHub offers them
+  on Team too (KB-009). The status-check variant without 'strict' crashes validation (KB-008, scenario
+  enterprise.org-ruleset.790-missing-strict) and is kept separate so this lifecycle is never masked by it. The
+  update step switches to 'evaluate' (enterprise only); the repo-conditions step adds exclude_repo_names (a second run
+  repository matching the include pattern is excluded by name) and protect_repo_names (the repository_name condition's
+  'protected' flag: matching repositories cannot be renamed or deleted, models/organization_ruleset.py:96-97, :119-121),
+  two changed attributes; the extra include/exclude pattern triggers KB-023's spurious 'does not match any existing
+  repository' warning, which is not asserted here (enterprise.kb.org-ruleset-repo-patterns). The last step removes
+  the ruleset (apply -d); the cleanup removes the repositories.
+priority: P0
+min_plan: enterprise
+requires: [org_rulesets, otterdog_org_rulesets, ruleset_evaluate]
+tags: [rulesets, repo, enterprise]
+steps:
+  - name: create
+    fragments:
+      rulesets:
+        - |
+          orgs.newOrgRuleset('{{ p }}-org-rules') {
+            include_repo_names: ["{{ p }}-ors-*"],
+            include_refs+: ["~DEFAULT_BRANCH"],
+            requires_linear_history: true,
+            required_pull_request: null,
+            required_status_checks: null,
+          }
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-ors-target') {
+            description: "otterdog e2e: org ruleset target",
+          }
+    plan:
+      expect: changes
+      contains:
+        - '+ add org_ruleset[name="{{ p }}-org-rules"]'
+        - '+ add repository[name="{{ p }}-ors-target"]'
+      counts: {add: 2, delete: 0}
+    state:
+      - kind: org_ruleset
+        name: "{{ p }}-org-rules"
+        match:
+          name: "{{ p }}-org-rules"
+          target: branch
+          enforcement: active
+          conditions:
+            ref_name: {include: ["~DEFAULT_BRANCH"], exclude: []}
+            repository_name: {include: ["{{ p }}-ors-*"], exclude: []}
+          rules:
+            $unordered:
+              - {type: creation}
+              - {type: deletion}
+              - {type: non_fast_forward}
+              - {type: required_linear_history}
+
+  - name: evaluate
+    fragments:
+      rulesets:
+        - |
+          orgs.newOrgRuleset('{{ p }}-org-rules') {
+            enforcement: "evaluate",
+            include_repo_names: ["{{ p }}-ors-*"],
+            include_refs+: ["~DEFAULT_BRANCH"],
+            requires_linear_history: true,
+            required_pull_request: null,
+            required_status_checks: null,
+          }
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-ors-target') {
+            description: "otterdog e2e: org ruleset target",
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ org_ruleset[name="{{ p }}-org-rules"]'
+      counts: {add: 0, delete: 0}
+    state:
+      - kind: org_ruleset
+        name: "{{ p }}-org-rules"
+        match: {enforcement: evaluate}
+
+  - name: repo-conditions
+    fragments:
+      rulesets:
+        - |
+          orgs.newOrgRuleset('{{ p }}-org-rules') {
+            enforcement: "evaluate",
+            include_repo_names: ["{{ p }}-ors-*"],
+            exclude_repo_names: ["{{ p }}-ors-skip"],
+            protect_repo_names: true,
+            include_refs+: ["~DEFAULT_BRANCH"],
+            requires_linear_history: true,
+            required_pull_request: null,
+            required_status_checks: null,
+          }
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-ors-target') {
+            description: "otterdog e2e: org ruleset target",
+          }
+        - |
+          orgs.newRepo('{{ p }}-ors-skip') {
+            description: "otterdog e2e: org ruleset excluded repository",
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ org_ruleset[name="{{ p }}-org-rules"]'
+        - '+ add repository[name="{{ p }}-ors-skip"]'
+      counts: {add: 1, change: 2, delete: 0}
+    state:
+      - kind: org_ruleset
+        name: "{{ p }}-org-rules"
+        match:
+          enforcement: evaluate
+          conditions:
+            ref_name: {include: ["~DEFAULT_BRANCH"], exclude: []}
+            repository_name: {include: ["{{ p }}-ors-*"], exclude: ["{{ p }}-ors-skip"], protected: true}
+
+  - name: remove-ruleset
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-ors-target') {
+            description: "otterdog e2e: org ruleset target",
+          }
+        - |
+          orgs.newRepo('{{ p }}-ors-skip') {
+            description: "otterdog e2e: org ruleset excluded repository",
+          }
+    plan:
+      expect: changes
+      contains:
+        - '- remove org_ruleset[name="{{ p }}-org-rules"]'
+      counts: {add: 0, delete: 1}
+    apply: {delete: true}
+    state:
+      - {kind: org_ruleset, name: "{{ p }}-org-rules", absent: true}

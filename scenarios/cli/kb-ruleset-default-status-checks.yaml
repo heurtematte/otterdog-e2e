@@ -1,0 +1,40 @@
+# Known bug KB-021 (suspected): a ruleset with the template's empty newStatusChecks() never converges.
+id: cli.kb.ruleset-default-status-checks
+title: Ruleset with the default empty status checks (known bug KB-021)
+description: |
+  The template's newRepoRuleset uses newStatusChecks() = {do_not_enforce_on_create: false, strict: false,
+  status_checks: []}. Since #562 an empty list sends no required_status_checks rule at all (models/ruleset.py
+  StatusCheckSettings.get_mapping_to_provider returns {}), so GitHub has no such rule and otterdog reads
+  required_status_checks back as null (get_mapping_from_provider); ModelObject.get_difference_from then compares the
+  configured object with null and reports a change on every plan (models/__init__.py:449-473). import writes
+  'required_status_checks: null' for that reason. This scenario creates a ruleset with the template default and
+  asserts convergence; it is expected to fail (xfail) while the bug exists. Regression #562 itself (the apply
+  succeeds) is covered by regression.562-ruleset-empty-status-checks.
+priority: P2
+min_plan: free
+known_bug: KB-021
+tags: [rulesets, repo, known-bug]
+steps:
+  - name: create
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-rs-default') {
+            description: "otterdog e2e: ruleset default status checks",
+            rulesets: [
+              orgs.newRepoRuleset('{{ p }}-default') {
+                include_refs+: ["~DEFAULT_BRANCH"],
+                required_pull_request: null,
+              },
+            ],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '+ add repo_ruleset[name="{{ p }}-default", repository={{ p }}-rs-default]'
+    state:
+      - kind: repo_ruleset
+        repo: "{{ p }}-rs-default"
+        name: "{{ p }}-default"
+        match:
+          rules: {$unordered: [{type: creation}, {type: deletion}, {type: non_fast_forward}]}

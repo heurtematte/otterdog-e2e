@@ -1,0 +1,5 @@
+Validating organization configurations:
+
+Project e2e-test-org[github_id=e2e-test-org] (1/1)
+  Validation succeeded
+    in order to print validation infos, enable printing info messages by adding '-v' flag.

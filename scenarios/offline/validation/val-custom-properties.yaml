@@ -1,0 +1,202 @@
+# Offline tier (battery, validation): organization custom property definitions.
+id: O-VAL-CUSTOM-PROPERTIES
+tier: offline
+title: Custom property definitions are validated rule by rule
+description: >-
+  CustomProperty.validate checks the value_type (string | single_select | multi_select | true_false), that select
+  types define between 1 and 200 allowed_values, that a required property has a default_value and an optional one
+  none (string or list), that a default belongs to the allowed values (every element for multi_select) and that a
+  single_select default is not a list. One error per step with the exact message, then a control step at the limits
+  (200 values, every value type, both values_editable_by values) that validates and is planned. A required property
+  without default crashes loading as soon as a repository exists (KB-030): that step expects the validation error.
+priority: P1
+tags: [offline, custom-properties]
+observe: true
+variables: {plan: free}
+steps:
+  - name: value-type
+    fragments:
+      custom_properties: ["orgs.newCustomProperty('{{ p }}-num') { value_type: 'number' }"]
+    validate:
+      ok: false
+      errors: 1
+      exit_code: 1
+      contains:
+        - >-
+          custom_property[name="{{ p }}-num"] has 'value_type' set to 'number', while only values ('string' |
+          'single_select' | 'multi_select' | 'true_false') are allowed.
+  - name: select-without-values
+    fragments:
+      custom_properties: ["orgs.newCustomProperty('{{ p }}-sel') { value_type: 'single_select', allowed_values: [] }"]
+    validate:
+      ok: false
+      errors: 1
+      exit_code: 1
+      contains:
+        - >-
+          custom_property[name="{{ p }}-sel"] has 'value_type' set to 'single_select', but no 'allowed_values' are
+          defined.
+  - name: too-many-values
+    fragments:
+      custom_properties:
+        - |-
+          orgs.newCustomProperty('{{ p }}-multi') {
+            value_type: 'multi_select',
+            allowed_values: ['v%d' % i for i in std.range(1, 201)],
+          }
+    validate:
+      ok: false
+      errors: 1
+      exit_code: 1
+      contains:
+        - >-
+          custom_property[name="{{ p }}-multi"] has 'value_type' set to 'multi_select', but more than 200 elements
+          as 'allowed_values' are defined.
+  - name: required-without-default
+    fragments:
+      custom_properties: ["orgs.newCustomProperty('{{ p }}-req') { required: true, default_value: null }"]
+    validate:
+      ok: false
+      errors: 1
+      exit_code: 1
+      contains:
+        - >-
+          custom_property[name="{{ p }}-req"] has 'required' set to 'true', but no property 'default_value' is
+          specified.
+  - name: optional-with-default
+    fragments:
+      custom_properties: ["orgs.newCustomProperty('{{ p }}-opt') { required: false, default_value: 'x' }"]
+    validate:
+      ok: false
+      errors: 1
+      exit_code: 1
+      contains:
+        - >-
+          custom_property[name="{{ p }}-opt"] has 'required' set to 'false' but property 'default_value' is set to
+          a non-empty value.
+  - name: optional-with-default-list
+    fragments:
+      custom_properties:
+        - |-
+          orgs.newCustomProperty('{{ p }}-optl') {
+            value_type: 'multi_select',
+            allowed_values: ['a', 'b'],
+            required: false,
+            default_value: ['a'],
+          }
+    validate:
+      ok: false
+      errors: 1
+      exit_code: 1
+      contains:
+        - >-
+          custom_property[name="{{ p }}-optl"] has 'required' set to 'false' but property 'default_value' is set to
+          a non-empty list.
+  - name: default-not-allowed
+    fragments:
+      custom_properties:
+        - |-
+          orgs.newCustomProperty('{{ p }}-sel') {
+            value_type: 'single_select',
+            allowed_values: ['a'],
+            required: true,
+            default_value: 'b',
+          }
+    validate:
+      ok: false
+      errors: 1
+      exit_code: 1
+      contains:
+        - >-
+          custom_property[name="{{ p }}-sel"] has 'default_value' set to 'b', but it is not in the list of allowed
+          values '['a']'.
+  - name: single-select-list-default
+    fragments:
+      custom_properties:
+        - |-
+          orgs.newCustomProperty('{{ p }}-sel') {
+            value_type: 'single_select',
+            allowed_values: ['a'],
+            required: true,
+            default_value: ['a'],
+          }
+    validate:
+      ok: false
+      errors: 1
+      exit_code: 1
+      contains:
+        - >-
+          custom_property[name="{{ p }}-sel"] has 'value_type' set to 'single_select', but 'default_value' contains
+          a list of values '['a']'.
+  - name: multi-select-default-elements
+    fragments:
+      custom_properties:
+        - |-
+          orgs.newCustomProperty('{{ p }}-multi') {
+            value_type: 'multi_select',
+            allowed_values: ['a', 'b'],
+            required: true,
+            default_value: ['a', 'z'],
+          }
+    validate:
+      ok: false
+      errors: 1
+      exit_code: 1
+      contains:
+        - >-
+          custom_property[name="{{ p }}-multi"] has a 'default_value' set to '['a', 'z']', but some of its elements
+          are not in the list of allowed values '['a', 'b']'.
+  - name: limits
+    base_fragments: {}
+    fragments:
+      custom_properties:
+        - "orgs.newCustomProperty('{{ p }}-str') { description: 'a free text' }"
+        - |-
+          orgs.newCustomProperty('{{ p }}-sel') {
+            value_type: 'single_select',
+            allowed_values: ['a', 'b'],
+            required: true,
+            default_value: 'a',
+            values_editable_by: 'org_actors',
+          }
+        - |-
+          orgs.newCustomProperty('{{ p }}-multi') {
+            value_type: 'multi_select',
+            allowed_values: ['v%d' % i for i in std.range(1, 200)],
+            required: true,
+            default_value: ['v1', 'v200'],
+            values_editable_by: 'org_and_repo_actors',
+          }
+        - "orgs.newCustomProperty('{{ p }}-flag') { value_type: 'true_false' }"
+      repositories:
+        - "orgs.newRepo('{{ p }}-props') { custom_properties: { '{{ p }}-str': 'text', '{{ p }}-flag': 'true' } }"
+    validate:
+      ok: true
+      errors: 0
+      exit_code: 0
+      contains: ["Validation succeeded"]
+      not_contains: ["Error:", "Warning:"]
+    plan:
+      expect: changes
+      counts: {add: 5, change: 0, delete: 0}
+      contains:
+        - '+ add custom_property[name="{{ p }}-str"]'
+        - '+ add custom_property[name="{{ p }}-sel"]'
+        - '+ add custom_property[name="{{ p }}-multi"]'
+        - '+ add custom_property[name="{{ p }}-flag"]'
+        - '+ add repository[name="{{ p }}-props"]'
+  - name: required-without-default-with-repository
+    known_bug: KB-030
+    fragments:
+      custom_properties: ["orgs.newCustomProperty('{{ p }}-req') { required: true, default_value: null }"]
+      repositories:
+        - "orgs.newRepo('{{ p }}-props')"
+    validate:
+      ok: false
+      errors: 1
+      exit_code: 1
+      contains:
+        - >-
+          custom_property[name="{{ p }}-req"] has 'required' set to 'true', but no property 'default_value' is
+          specified.
+      not_contains: ["unexpected None value"]

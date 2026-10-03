@@ -1,0 +1,38 @@
+# Regression #751 (v1.6.0): disabled rulesets whose ref conditions come back null.
+id: regression.751-disabled-ruleset
+title: "#751: a disabled ruleset without ref conditions converges"
+description: |
+  PR https://github.com/eclipse-csi/otterdog/pull/751 ("Handle null ref conditions in disabled rulesets"): GitHub can
+  return a disabled ruleset with conditions = null; otterdog now normalizes absent/null ref filters to empty lists
+  (otterdog/models/ruleset.py Ruleset.get_mapping_from_provider, include_refs/exclude_refs) so live data compares
+  with the configured empty lists.
+  Known-bad: v1.5.0 - reading such a ruleset failed or produced a perpetual include_refs/exclude_refs diff.
+  A disabled ruleset without include/exclude refs is created and must converge. required_status_checks and
+  required_pull_request are null so that the suspected empty-status-checks bug (KB-021) cannot interfere.
+priority: P2
+min_plan: free
+tags: [rulesets, repo, regression, pr-751]
+steps:
+  - name: create
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-r751') {
+            description: "otterdog e2e: #751 disabled ruleset",
+            rulesets: [
+              orgs.newRepoRuleset('{{ p }}-r751') {
+                enforcement: "disabled",
+                required_pull_request: null,
+                required_status_checks: null,
+              },
+            ],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '+ add repo_ruleset[name="{{ p }}-r751", repository={{ p }}-r751]'
+    state:
+      - kind: repo_ruleset
+        repo: "{{ p }}-r751"
+        name: "{{ p }}-r751"
+        match: {name: "{{ p }}-r751", enforcement: disabled}

@@ -1,0 +1,5 @@
+# otterdog-e2e @RUN@: deliberately invalid YAML, an unclosed flow sequence (W-BP-LOAD-YAML).
+# The webapp has to skip this file like any other unreadable definition and load the valid ones.
+id: @ID@
+type: pin_workflow
+config: {repo_selector: {name_pattern: [@NOMATCH@}}

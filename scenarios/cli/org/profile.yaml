@@ -1,0 +1,79 @@
+# org-settings.profile (P0, org_level): the organization profile fields otterdog manages through PATCH /orgs/{org}.
+id: cli.org.profile
+title: Organization profile (name, blog, location, company, email, twitter_username)
+tier: cli
+description: |
+  The organization profile keys of settings (otterdog/models/organization_settings.py:54-62) are applied with
+  PATCH /orgs/{org} (otterdog/providers/github/rest/org_client.py:69-75), read back by the oracle (GET /orgs/{org})
+  and converge. Layer 1 of the rendered configuration pins the LIVE profile captured at session start, so a step
+  without settings fragments plans the way back: the 'restore' step applies the original values itself (null
+  included: otterdog then PATCHes JSON null, which GitHub's description of the endpoint only documents as strings,
+  so a failure there is a finding, not a harness problem) before the cleanup's baseline reset. The keys are written
+  with ':::' so they are managed even when layer 1 hides a key the live organization did not return.
+  description and billing_email are never changed live (the description holds the safety marker, the engine refuses
+  such a plan; billing_email is owner-only): the 160-character description rule is the offline validation case.
+  Contact fields (email, twitter_username) get a step of their own: a refused value fails that step only.
+priority: P0
+org_level: true
+tags: [org-settings]
+steps:
+  - name: profile
+    fragments:
+      settings:
+        - "name::: 'otterdog e2e {{ run }}'"
+        - "blog::: 'https://example.org/otterdog-e2e/{{ run }}'"
+        - "location::: 'otterdog-e2e {{ run }}'"
+        - "company::: 'otterdog-e2e {{ run }}'"
+    plan:
+      expect: changes
+      contains:
+        - "~ settings {"
+        - '-> "otterdog e2e {{ run }}"'
+        - '-> "https://example.org/otterdog-e2e/{{ run }}"'
+        - '-> "otterdog-e2e {{ run }}"'
+    state:
+      - kind: org
+        match:
+          name: "otterdog e2e {{ run }}"
+          blog: "https://example.org/otterdog-e2e/{{ run }}"
+          location: "otterdog-e2e {{ run }}"
+          company: "otterdog-e2e {{ run }}"
+
+  - name: contact
+    fragments:
+      settings:
+        - "name::: 'otterdog e2e {{ run }}'"
+        - "blog::: 'https://example.org/otterdog-e2e/{{ run }}'"
+        - "location::: 'otterdog-e2e {{ run }}'"
+        - "company::: 'otterdog-e2e {{ run }}'"
+        - "email::: 'otterdog-e2e-{{ run }}@example.org'"
+        - "twitter_username::: 'otterdog_e2e'"
+    plan:
+      expect: changes
+      contains:
+        - "~ settings {"
+        - '-> "otterdog-e2e-{{ run }}@example.org"'
+        - '-> "otterdog_e2e"'
+      not_contains:
+        - '-> "https://example.org/otterdog-e2e/{{ run }}"'
+    state:
+      - kind: org
+        match:
+          email: "otterdog-e2e-{{ run }}@example.org"
+          twitter_username: otterdog_e2e
+          blog: "https://example.org/otterdog-e2e/{{ run }}"
+
+  # no fragments: layer 1 (the profile of the session start) is the expected state; the converge plan of this step
+  # proves that GitHub holds the original values again (the oracle cannot know them). A key going back to null is
+  # printed as a removal ('- email = "...",'), any other as '~ key = "<run value>" -> "<original>"': the run's values
+  # are asserted, whatever the line looks like.
+  - name: restore
+    plan:
+      expect: changes
+      contains:
+        - "~ settings {"
+        - '"otterdog e2e {{ run }}"'
+        - '"https://example.org/otterdog-e2e/{{ run }}"'
+        - '"otterdog-e2e {{ run }}"'
+        - '"otterdog-e2e-{{ run }}@example.org"'
+        - '"otterdog_e2e"'

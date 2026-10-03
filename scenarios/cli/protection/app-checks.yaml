@@ -1,0 +1,214 @@
+# Protections bound to the e2e GitHub App (coverage: branch-protection.status-checks,
+# branch-protection.review-dismissal, branch-protection.bypass-allowances, branch-protection.push-restrictions,
+# rulesets.status-checks, rulesets.bypass-actors, regression.695-700-491-status-check-mapping).
+id: cli.protection.app-checks
+tier: cli
+title: Status checks, allowances and a bypass actor bound to an installed GitHub App
+description: |
+  App-bound protection settings in otterdog's notation, with the e2e App (template variables app_slug and app_id),
+  installed on the organization for all repositories with write access to contents (capability app). Branch
+  protection: '<app slug>:<context>' is sent with the App's GraphQL node id (GitHubProvider.get_app_node_ids) and read
+  back from requiredStatusChecks.app.slug (models/branch_protection_rule.py:270-290, :333-363), and the App is the
+  actor of every allowance list (review dismissals, pull request and force push bypass on main, push restrictions on
+  'release/*'), read back as its plain slug (providers/github/graphql.py _transform_actors). Ruleset: '<app
+  slug>:<context>' is sent as integration_id = the App id (StatusCheckSettings.get_mapping_to_provider, issue
+  https://github.com/eclipse-csi/otterdog/issues/695, fixed in v1.4.0) and the integration id is mapped back to the
+  slug through the organization's app installations (models/github_organization.py:810-816; #491, v1.1.1); the App is
+  also a ruleset bypass actor (actor_type Integration, read back through the same installations). The oracle shows the
+  App binding on every protection; the converge plans show that otterdog reads every binding back in the configured
+  spelling. The update step moves the checks to another context of the App and restricts the ruleset bypass to pull
+  requests (three changed attributes). The last step writes the ruleset check with the App's integration id ('<app
+  id>:<context>', the spelling #700 accepts): otterdog reads it back with the slug of the installed App and never
+  converges, an expected failure of that step while KB-054 exists.
+priority: P1
+min_plan: free
+requires: [app]
+tags: [bpr, rulesets, repo]
+steps:
+  - name: create
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-app-checks') {
+            description: "otterdog e2e: protections bound to the e2e App",
+            branch_protection_rules: [
+              orgs.newBranchProtectionRule('main') {
+                required_approving_review_count: 1,
+                requires_status_checks: true,
+                required_status_checks+: ["{{ app_slug }}:e2e/app-check"],
+                restricts_review_dismissals: true,
+                review_dismissal_allowances: ["{{ app_slug }}"],
+                bypass_pull_request_allowances: ["{{ app_slug }}"],
+                bypass_force_push_allowances: ["{{ app_slug }}"],
+              },
+              orgs.newBranchProtectionRule('release/*') {
+                requires_pull_request: false,
+                required_approving_review_count: null,
+                restricts_pushes: true,
+                push_restrictions: ["{{ app_slug }}"],
+              },
+            ],
+            rulesets: [
+              orgs.newRepoRuleset('{{ p }}-app-checks') {
+                include_refs+: ["~DEFAULT_BRANCH"],
+                bypass_actors: ["{{ app_slug }}"],
+                required_pull_request: null,
+                required_status_checks: orgs.newStatusChecks() {
+                  strict: true,
+                  status_checks: ["{{ app_slug }}:e2e/app-check"],
+                },
+              },
+            ],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '+ add branch_protection_rule[pattern="main", repository={{ p }}-app-checks]'
+        - '+ add branch_protection_rule[pattern="release/*", repository={{ p }}-app-checks]'
+        - '+ add repo_ruleset[name="{{ p }}-app-checks", repository={{ p }}-app-checks]'
+      counts: {add: 4, change: 0, delete: 0}
+    state:
+      - kind: bpr
+        repo: "{{ p }}-app-checks"
+        pattern: main
+        match:
+          requiresStatusChecks: true
+          requiredStatusChecks: [{context: e2e/app-check, app: {slug: "{{ app_slug }}"}}]
+          restrictsReviewDismissals: true
+          reviewDismissalAllowances: ["{{ app_slug }}"]
+          bypassPullRequestAllowances: ["{{ app_slug }}"]
+          bypassForcePushAllowances: ["{{ app_slug }}"]
+      - kind: bpr
+        repo: "{{ p }}-app-checks"
+        pattern: release/*
+        match: {restrictsPushes: true, pushAllowances: ["{{ app_slug }}"]}
+      - kind: repo_ruleset
+        repo: "{{ p }}-app-checks"
+        name: "{{ p }}-app-checks"
+        match:
+          bypass_actors: [{actor_type: Integration, bypass_mode: always}]
+          rules:
+            $unordered:
+              - {type: creation}
+              - {type: deletion}
+              - {type: non_fast_forward}
+              - type: required_status_checks
+                parameters:
+                  strict_required_status_checks_policy: true
+                  required_status_checks: [{context: e2e/app-check, integration_id: {$exists: true}}]
+
+  - name: update
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-app-checks') {
+            description: "otterdog e2e: protections bound to the e2e App",
+            branch_protection_rules: [
+              orgs.newBranchProtectionRule('main') {
+                required_approving_review_count: 1,
+                requires_status_checks: true,
+                required_status_checks+: ["{{ app_slug }}:e2e/app-check-2"],
+                restricts_review_dismissals: true,
+                review_dismissal_allowances: ["{{ app_slug }}"],
+                bypass_pull_request_allowances: ["{{ app_slug }}"],
+                bypass_force_push_allowances: ["{{ app_slug }}"],
+              },
+              orgs.newBranchProtectionRule('release/*') {
+                requires_pull_request: false,
+                required_approving_review_count: null,
+                restricts_pushes: true,
+                push_restrictions: ["{{ app_slug }}"],
+              },
+            ],
+            rulesets: [
+              orgs.newRepoRuleset('{{ p }}-app-checks') {
+                include_refs+: ["~DEFAULT_BRANCH"],
+                bypass_actors: ["{{ app_slug }}:pull_request"],
+                required_pull_request: null,
+                required_status_checks: orgs.newStatusChecks() {
+                  strict: true,
+                  status_checks: ["{{ app_slug }}:e2e/app-check-2"],
+                },
+              },
+            ],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ branch_protection_rule[pattern="main", repository={{ p }}-app-checks]'
+        - '~ repo_ruleset[name="{{ p }}-app-checks", repository={{ p }}-app-checks]'
+      counts: {add: 0, change: 3, delete: 0}
+    state:
+      - kind: bpr
+        repo: "{{ p }}-app-checks"
+        pattern: main
+        match:
+          requiredStatusChecks: [{context: e2e/app-check-2, app: {slug: "{{ app_slug }}"}}]
+      - kind: repo_ruleset
+        repo: "{{ p }}-app-checks"
+        name: "{{ p }}-app-checks"
+        match:
+          bypass_actors: [{actor_type: Integration, bypass_mode: pull_request}]
+          rules:
+            $unordered:
+              - {type: creation}
+              - {type: deletion}
+              - {type: non_fast_forward}
+              - type: required_status_checks
+                parameters:
+                  required_status_checks: [{context: e2e/app-check-2, integration_id: {$exists: true}}]
+
+  - name: app-id
+    known_bug: {id: KB-054, phases: [converge]}  # plan, apply and state stay strict
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-app-checks') {
+            description: "otterdog e2e: protections bound to the e2e App",
+            branch_protection_rules: [
+              orgs.newBranchProtectionRule('main') {
+                required_approving_review_count: 1,
+                requires_status_checks: true,
+                required_status_checks+: ["{{ app_slug }}:e2e/app-check-2"],
+                restricts_review_dismissals: true,
+                review_dismissal_allowances: ["{{ app_slug }}"],
+                bypass_pull_request_allowances: ["{{ app_slug }}"],
+                bypass_force_push_allowances: ["{{ app_slug }}"],
+              },
+              orgs.newBranchProtectionRule('release/*') {
+                requires_pull_request: false,
+                required_approving_review_count: null,
+                restricts_pushes: true,
+                push_restrictions: ["{{ app_slug }}"],
+              },
+            ],
+            rulesets: [
+              orgs.newRepoRuleset('{{ p }}-app-checks') {
+                include_refs+: ["~DEFAULT_BRANCH"],
+                bypass_actors: ["{{ app_slug }}:pull_request"],
+                required_pull_request: null,
+                required_status_checks: orgs.newStatusChecks() {
+                  strict: true,
+                  status_checks: ["{{ app_id }}:e2e/app-id"],
+                },
+              },
+            ],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ repo_ruleset[name="{{ p }}-app-checks", repository={{ p }}-app-checks]'
+    state:
+      - kind: repo_ruleset
+        repo: "{{ p }}-app-checks"
+        name: "{{ p }}-app-checks"
+        match:
+          rules:
+            $unordered:
+              - {type: creation}
+              - {type: deletion}
+              - {type: non_fast_forward}
+              - type: required_status_checks
+                parameters:
+                  required_status_checks: [{context: e2e/app-id, integration_id: {$exists: true}}]
+

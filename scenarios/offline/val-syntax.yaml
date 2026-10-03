@@ -1,0 +1,20 @@
+# Offline tier (SPEC 19): a configuration that is not valid jsonnet.
+id: O-VAL-SYNTAX
+title: A jsonnet syntax error fails validation with a load error
+description: >-
+  An organization configuration that does not parse (an object left open in a repository fragment) must make
+  validate --local fail with "failed to load configuration" and a non-zero exit code, instead of crashing or
+  validating a partial configuration. The message comes from the jsonnet binding the SUT locks, so differential runs
+  also show when a dependency bump changes what users see for broken configurations.
+priority: P0
+tags: [offline, smoke, template]
+observe: true
+steps:
+  - name: broken
+    fragments:
+      # the renderer closes the fragment with ',' and then ']': the object is never closed
+      repositories:
+        - "orgs.newRepo('{{ p }}-broken') { description: 'unterminated object'"
+    validate:
+      ok: false
+      contains: ["failed to load configuration"]

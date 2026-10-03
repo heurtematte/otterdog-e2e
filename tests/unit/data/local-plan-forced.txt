@@ -1,0 +1,36 @@
+Printing local diff:
+
+Actions are indicated with the following symbols:
+  + create
+  ~ modify
+  ! forced update
+  - delete
+
+Project e2e-test-org[github_id=e2e-test-org] (1/1)
+╷                                                                                                                                                                                        
+│ Warning:   repo_webhook[url="https://otterdog-e2e.invalid/t3c7z8a5/sec-hook", repository=e2e-t3c7z8a5-sec] has a secret 'e2e-dummy-efgh5678' that does not use a credential provider.  
+╵                                                                                                                                                                                        
+╷                                                                                                                              
+│ Warning:   repo_secret[name="E2E_T3C7Z8A5_PLAIN"] has a value 'e2e-dummy-abcd1234' that does not use a credential provider.  
+╵                                                                                                                              
+
+  
+  ! repo_webhook[url="https://otterdog-e2e.invalid/t3c7z8a5/sec-hook", repository=e2e-t3c7z8a5-sec] {
+    ! active       = true -> true
+    ! aliases      = [
+    ! ]
+    ! content_type = "form" -> "form"
+    ! events       = [
+    ! ]
+    ! insecure_ssl = "0" -> "0"
+    ! secret       = "e2e-dummy-efgh5678" -> "e2e-dummy-efgh5678"
+    ! url          = "https://otterdog-e2e.invalid/t3c7z8a5/sec-hook" -> "https://otterdog-e2e.invalid/t3c7z8a5/sec-hook"
+  ! }
+
+  
+  ! repo_secret[name="E2E_T3C7Z8A5_PLAIN", repository=e2e-t3c7z8a5-sec] {
+    ! name  = "E2E_T3C7Z8A5_PLAIN" -> "E2E_T3C7Z8A5_PLAIN"
+    ! value = "e2e-dummy-abcd1234" -> "e2e-dummy-abcd1234"
+  ! }
+  
+  Plan: 0 to add, 9 to change, 0 to delete.

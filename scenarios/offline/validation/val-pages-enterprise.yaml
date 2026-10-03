@@ -1,0 +1,121 @@
+# Offline tier (battery, validation): GitHub Pages visibility (enterprise plan).
+id: O-VAL-PAGES-ENTERPRISE
+tier: offline
+title: GitHub Pages visibility is validated on the enterprise plan
+description: >-
+  gh_pages_visibility is only managed on an enterprise plan (below it the field is dropped at load, see
+  O-VAL-COERCED). There it must be public | private, 'private' is refused on a public repository and on a private
+  repository while the organization disables members_can_create_private_pages. A private repository with private
+  Pages and the organization setting enabled validates and is planned with its visibility, and a visibility change
+  is planned (the same change is unmanaged below enterprise, see O-LPLAN-COERCE-SIGNOFF).
+priority: P1
+tags: [offline, repo, org-settings]
+observe: true
+variables: {plan: enterprise}
+steps:
+  - name: unknown-visibility
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-pages') {
+            gh_pages_build_type: 'workflow',
+            gh_pages_visibility: 'hidden',
+            environments: [orgs.newEnvironment('github-pages')],
+          }
+    validate:
+      ok: false
+      errors: 1
+      exit_code: 1
+      contains:
+        - >-
+          Error: repository[name="{{ p }}-pages"] has 'gh_pages_visibility' set to value 'hidden', while only values
+          ['public' | 'private'] are allowed.
+  - name: private-pages-on-public-repository
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-pages') {
+            gh_pages_build_type: 'workflow',
+            gh_pages_visibility: 'private',
+            environments: [orgs.newEnvironment('github-pages')],
+          }
+    validate:
+      ok: false
+      errors: 1
+      exit_code: 1
+      contains:
+        - >-
+          Error: repository[name="{{ p }}-pages"] has 'gh_pages_visibility' set to value 'private', but this setting
+          is only available for private repositories.
+  - name: private-pages-disabled-by-organization
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-pages') {
+            private: true,
+            allow_forking: false,
+            gh_pages_build_type: 'workflow',
+            gh_pages_visibility: 'private',
+            environments: [orgs.newEnvironment('github-pages')],
+          }
+    validate:
+      ok: false
+      errors: 1
+      exit_code: 1
+      contains:
+        - >-
+          Error: repository[name="{{ p }}-pages"] has 'gh_pages_visibility' set, but the organization setting
+          'members_can_create_private_pages' is disabled.
+  - name: private-pages
+    base_fragments:
+      settings: ["members_can_create_private_pages: true"]
+    fragments:
+      settings: ["members_can_create_private_pages: true"]
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-pages') {
+            private: true,
+            allow_forking: false,
+            gh_pages_build_type: 'workflow',
+            gh_pages_visibility: 'private',
+            environments: [orgs.newEnvironment('github-pages')],
+          }
+    validate:
+      ok: true
+      errors: 0
+      exit_code: 0
+      contains: ["Validation succeeded"]
+      not_contains: ["Error:", "Warning:"]
+    plan:
+      expect: changes
+      counts: {add: 2, change: 0, delete: 0}
+      contains:
+        - '+ add repository[name="{{ p }}-pages"]'
+        - '= "private"'
+  - name: visibility-managed
+    base_fragments:
+      settings: ["members_can_create_private_pages: true"]
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-pages') {
+            private: true,
+            allow_forking: false,
+            gh_pages_build_type: 'workflow',
+            gh_pages_visibility: 'public',
+            environments: [orgs.newEnvironment('github-pages')],
+          }
+    fragments:
+      settings: ["members_can_create_private_pages: true"]
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-pages') {
+            private: true,
+            allow_forking: false,
+            gh_pages_build_type: 'workflow',
+            gh_pages_visibility: 'private',
+            environments: [orgs.newEnvironment('github-pages')],
+          }
+    plan:
+      expect: changes
+      counts: {add: 0, change: 1, delete: 0}
+      contains: ['~ repository[name="{{ p }}-pages"] {', '~ gh_pages_visibility = "public" -> "private"']

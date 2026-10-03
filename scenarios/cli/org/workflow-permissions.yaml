@@ -1,0 +1,73 @@
+# org-workflows.default-permissions (P0, org_level): organization default workflow permissions and the approval flag.
+id: cli.org.workflow-permissions
+title: Organization default workflow permissions and pull request approvals by GitHub Actions
+tier: cli
+description: |
+  The organization's default GITHUB_TOKEN permissions (settings.workflows.default_workflow_permissions read | write)
+  and actions_can_approve_pull_request_reviews (GitHub: can_approve_pull_request_reviews) are applied with
+  PUT /orgs/{org}/actions/permissions/workflow (otterdog/providers/github/rest/org_client.py:641-659) and converge.
+  A run repository declares 'write': it is managed while the organization allows it, and coerced (UNSET, an Info of
+  validate -v) once the organization is back to the template's 'read' (otterdog/models/repo_workflow_settings.py:40-67),
+  so the plan converges although the repository still declares 'write'. While the organization forbids Actions to
+  approve pull requests, the repositories' template value true is ignored too (Info). Org-level settings: org_level
+  (unfiltered plans, full baseline reset as cleanup); the second step IS the template default, so it also checks that
+  the baseline restores the organization.
+priority: P0
+org_level: true
+tags: [workflows, org-settings, repo]
+steps:
+  - name: write
+    fragments:
+      settings:
+        - "workflows+: { default_workflow_permissions: 'write', actions_can_approve_pull_request_reviews: false }"
+      repositories: &repo
+        - |
+          orgs.newRepo('{{ p }}-wf') {
+            description: "otterdog e2e: workflow permissions",
+            workflows+: { default_workflow_permissions: "write" },
+          }
+    validate:
+      verbose: true
+      ok: true
+      contains:
+        - >-
+          Info: repository[name="{{ p }}-wf"] has 'actions_can_approve_pull_request_reviews' enabled, while on
+          organization level it is disabled, setting will be ignored.
+      not_contains:
+        - "has 'default_workflow_permissions' of value 'write', while on organization level it is restricted"
+    plan:
+      expect: changes
+      contains:
+        - "~ settings {"
+        - '"read" -> "write"'
+        - '+ add repository[name="{{ p }}-wf"]'
+    state:
+      - kind: org_workflow_permissions
+        match: {default_workflow_permissions: write, can_approve_pull_request_reviews: false}
+      - kind: repo_workflow_permissions
+        name: "{{ p }}-wf"
+        match: {default_workflow_permissions: write}
+
+  - name: read
+    fragments:
+      repositories: *repo
+    validate:
+      verbose: true
+      ok: true
+      contains:
+        - >-
+          Info: repository[name="{{ p }}-wf"] has 'default_workflow_permissions' of value 'write', while on
+          organization level it is restricted to 'read', setting will be ignored.
+      not_contains:
+        - "has 'actions_can_approve_pull_request_reviews' enabled, while on organization level it is disabled"
+    plan:
+      expect: changes
+      contains:
+        - "~ settings {"
+        - '"write" -> "read"'
+      # the repository's 'write' is coerced away: no '"read" -> "write"' re-application on any repository
+      not_contains:
+        - '"read" -> "write"'
+    state:
+      - kind: org_workflow_permissions
+        match: {default_workflow_permissions: read, can_approve_pull_request_reviews: true}

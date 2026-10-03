@@ -1,0 +1,113 @@
+# Test a proposed eclipse-csi/otterdog pull request, pinned to a reviewed head commit (SPEC 17, SEC-15).
+#
+# Dispatched by a maintainer (gh workflow run, the Actions UI, or the otterdog-side `/e2e` comment trigger documented
+# in docs/testing-an-otterdog-pr.md, which uses a GitHub App token limited to Actions: write on this repository).
+# `resolve` validates the inputs in bash and checks with the GitHub API that the PR belongs to eclipse-csi/otterdog and
+# that the pinned sha is reachable from its head. e2e.yml then classifies the SUT `pr:<N>@<sha>` as untrusted and waits
+# for an approval of the `e2e-<target>-untrusted` environment before any secret is used.
+name: e2e otterdog PR
+run-name: "e2e otterdog PR #${{ inputs.pr }} on ${{ inputs.target }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: "eclipse-csi/otterdog pull request number"
+        type: string
+        required: true
+      sha:
+        description: "Full 40-hex head commit to test (the commit you reviewed)"
+        type: string
+        required: true
+      target:
+        description: "Target (targets/<name>.yaml)"
+        type: choice
+        options: [free, team, enterprise]
+        default: free
+        required: true
+      suites:
+        description: "auto (offline + differential + live tiers, tags from the changed files) or a comma separated list"
+        type: string
+        default: auto
+      strict_diff:
+        description: "Fail on unexpected differential deltas"
+        type: boolean
+        default: false
+
+permissions: {}
+
+cache-mode: none
+
+jobs:
+  resolve:
+    name: resolve the pull request
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      sut: ${{ steps.check.outputs.sut }}
+      target: ${{ steps.check.outputs.target }}
+      suites: ${{ steps.check.outputs.suites }}
+    steps:
+      - name: Validate the inputs and the pin
+        id: check
+        env:
+          PR: ${{ inputs.pr }}
+          SHA: ${{ inputs.sha }}
+          TARGET: ${{ inputs.target }}
+          SUITES: ${{ inputs.suites }}
+          UPSTREAM: eclipse-csi/otterdog
+          # read-only API access to the public upstream repository (anonymous requests share a 60/h IP budget)
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$1"; exit 1; }
+          [[ "$PR" =~ ^[0-9]{1,7}$ ]] || fail "pr must be a pull request number"
+          [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || fail "sha must be the full 40-hex commit (lower case)"
+          case "$TARGET" in free | team | enterprise) ;; *) fail "target must be free, team or enterprise" ;; esac
+          [[ "$SUITES" =~ ^[a-z,]{1,120}$ ]] || fail "suites must be auto or a comma separated list"
+          if [[ "$SUITES" != auto ]]; then
+            IFS=',' read -r -a suites <<< "$SUITES"
+            for suite in "${suites[@]}"; do
+              case "$suite" in
+                unit | offline | cli | webhooks | webapp | enterprise | differential) ;;
+                *) fail "unknown suite: $suite" ;;
+              esac
+            done
+          fi
+          base_repo="$(gh api "repos/$UPSTREAM/pulls/$PR" --jq .base.repo.full_name)"
+          [[ "$base_repo" == "$UPSTREAM" ]] || fail "PR #$PR does not target $UPSTREAM"
+          head_sha="$(gh api "repos/$UPSTREAM/pulls/$PR" --jq .head.sha)"
+          # identical: the pin is the head; ahead: the head moved on, the pin is one of its ancestors
+          status="$(gh api "repos/$UPSTREAM/compare/$SHA...$head_sha" --jq .status)"
+          case "$status" in
+            identical | ahead) ;;
+            *) fail "sha $SHA is not reachable from the head of PR #$PR (compare status: $status)" ;;
+          esac
+          {
+            echo "sut=pr:$PR@$SHA"
+            echo "target=$TARGET"
+            echo "suites=$SUITES"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo "### otterdog PR #$PR"
+            echo
+            echo "- pinned commit: \`$SHA\` (current head: \`$head_sha\`, $status)"
+            echo "- target: \`$TARGET\`, suites: \`$SUITES\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  e2e:
+    name: e2e
+    needs: resolve
+    permissions:
+      contents: read
+    cache-mode: none
+    uses: ./.github/workflows/e2e.yml
+    with:
+      target: ${{ needs.resolve.outputs.target }}
+      sut: ${{ needs.resolve.outputs.sut }}
+      base_sut: auto
+      suites: ${{ needs.resolve.outputs.suites }}
+      lane: pr-fast
+      strict_diff: ${{ inputs.strict_diff }}

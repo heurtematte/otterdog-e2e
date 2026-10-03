@@ -1,0 +1,88 @@
+# Deployment branch policies and removal of an environment (coverage: environments.branch-policies,
+# environments.lifecycle).
+id: cli.environment.policies
+tier: cli
+title: Environment branch and tag policies, protected branches, environment removal
+description: |
+  deployment_branch_policy 'selected' with branch_policies maps to deployment_branch_policy {protected_branches:
+  false, custom_branch_policies: true} plus one deployment branch policy per entry, 'tag:<pattern>' entries becoming
+  policies of type tag (providers/github/rest/repo_client.py:971-1041, models/environment.py:190-209); 'protected'
+  maps to {protected_branches: true, custom_branch_policies: false} and drops the branch policies from the diff.
+  The selected step creates a public run repository with an environment restricted to main and the v* tags, the
+  protected step switches it to protected branches, the remove step drops the environment from the configuration
+  while the repository stays: one '- remove environment' block, applied with apply -d, and the environment is gone
+  (models/environment.py:347-420). Every step converges. The template comment still names 'protected_branches' and
+  'branch_policies' as values (KB-036): the configuration uses the values validation accepts.
+priority: P0
+min_plan: free
+tags: [environments, repo]
+steps:
+  - name: selected
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-env-policies') {
+            description: "otterdog e2e: environment policies",
+            environments: [
+              orgs.newEnvironment('e2e-release') {
+                deployment_branch_policy: "selected",
+                branch_policies: ["main", "tag:v*"],
+              },
+            ],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '+ add environment[name="e2e-release", repository={{ p }}-env-policies]'
+      counts: {add: 2, change: 0, delete: 0}
+    state:
+      - kind: environment
+        repo: "{{ p }}-env-policies"
+        name: e2e-release
+        match: {deployment_branch_policy: {protected_branches: false, custom_branch_policies: true}}
+      - kind: env_branch_policies
+        repo: "{{ p }}-env-policies"
+        env: e2e-release
+        match: {$unordered: [{name: main, type: branch}, {name: "v*", type: tag}]}
+
+  - name: protected
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-env-policies') {
+            description: "otterdog e2e: environment policies",
+            environments: [
+              orgs.newEnvironment('e2e-release') {
+                deployment_branch_policy: "protected",
+              },
+            ],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ environment[name="e2e-release", repository={{ p }}-env-policies]'
+      counts: {add: 0, change: 1, delete: 0}
+    state:
+      - kind: environment
+        repo: "{{ p }}-env-policies"
+        name: e2e-release
+        match: {deployment_branch_policy: {protected_branches: true, custom_branch_policies: false}}
+
+  - name: remove
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-env-policies') {
+            description: "otterdog e2e: environment policies",
+          }
+    plan:
+      expect: changes
+      contains:
+        - '- remove environment[name="e2e-release", repository={{ p }}-env-policies]'
+      not_contains:
+        - '- remove repository[name="{{ p }}-env-policies"]'
+      counts: {add: 0, change: 0, delete: 1}
+    apply: {delete: true}
+    state:
+      - {kind: environment, repo: "{{ p }}-env-policies", name: e2e-release, absent: true}
+      - {kind: repo, name: "{{ p }}-env-policies", absent: false}

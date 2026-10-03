@@ -1,0 +1,31 @@
+Printing local diff:
+
+Actions are indicated with the following symbols:
+  + create
+  ~ modify
+  ! forced update
+  - delete
+
+Project e2e-test-org[github_id=e2e-test-org] (1/1)
+
+  
+  ~ settings {
+    ~ default_branch_name                   = "main" -> "e2e-t3c7z8a5"
+    ~ discussion_source_repository          = null -> "e2e-test-org/otterdog-e2e-fixture-a"
+    ~ has_discussions                       = false -> true
+    ~ members_can_change_project_visibility = true -> false
+    ~ members_can_change_repo_visibility    = false -> true
+    ~ members_can_create_teams              = false -> true
+    ~ members_can_delete_issues             = false -> true
+    ~ members_can_delete_repositories       = false -> true
+    ~ packages_containers_internal          = true -> false
+    ~ packages_containers_public            = true -> false
+    ~ readers_can_create_discussions        = true -> false
+  ~ }
+
+  
+  ~ repository[name="otterdog-e2e-fixture-a"] {
+    ~ has_discussions = false -> true
+  ~ }
+  
+  Plan: 0 to add, 12 to change, 0 to delete.

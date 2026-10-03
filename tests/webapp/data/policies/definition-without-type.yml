@@ -1,0 +1,5 @@
+# otterdog-e2e @RUN@: a policy definition without its mandatory 'type' (W-POL-LOAD-MALFORMED).
+# The webapp has to report and skip this file and load the other policies of the organization.
+name: e2e @RUN@ policy without type
+config:
+  allowed: true

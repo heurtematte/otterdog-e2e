@@ -1,0 +1,6 @@
+Validating organization configurations:
+
+Project e2e-test-org[github_id=e2e-test-org] (1/1)
+╷                                                                                                                               
+│ Error:   configuration file './orgs/e2e-test-org/e2e-test-org.jsonnet' does not exist, run 'fetch-config' or 'import' first.  
+╵                                                                                                                               

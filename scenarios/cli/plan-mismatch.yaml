@@ -1,0 +1,24 @@
+# C-PLAN-MISMATCH (SPEC 19, P1): settings.plan differs from the live plan (variables.plan).
+id: cli.plan-mismatch
+title: Configured plan differs from the live plan
+description: |
+  The org configuration declares plan 'team' (variables.plan overrides the rendered settings.plan) while the target
+  org is on Free or Enterprise Cloud. otterdog validates against the CONFIGURED plan (models: plan gating reads
+  settings.plan, never GitHub) and reports the difference only as a read-only change of the settings object: the plan
+  must show '~ settings' with the plan change and the note "setting 'plan' is read-only, will be skipped." while
+  counting nothing to change (classified noop, so no apply runs). Targets on the Team plan see no mismatch with
+  this value: the engine skips the scenario there (a variables.plan equal to the live plan, BAT-16).
+priority: P1
+min_plan: free
+variables:
+  plan: team
+tags: [org-settings, template]
+steps:
+  - name: mismatch
+    plan:
+      expect: noop
+      contains:
+        - "~ settings {"
+        - '-> "team"'
+        - "Note: setting 'plan' is read-only, will be skipped."
+      counts: {add: 0, change: 0, delete: 0}

@@ -1,0 +1,89 @@
+# teams.members (P1): the exact member list of a team, then skip_members (members unmanaged).
+id: cli.team.members
+title: Team members (added, removed, then unmanaged with skip_members)
+tier: cli
+description: |
+  A team's members list is the exact membership (otterdog/providers/github/rest/team_client.py update_team_members:
+  missing members are added with PUT .../memberships/{login} role member, the others removed). Two org members of
+  the target (the author and approver identities) take turns: the oracle lists the active members after each
+  apply and checks the role of the membership. skip_members true makes the member list unmanaged
+  (otterdog/models/team.py:56-60): the configuration declares no member while the approver is still a member live,
+  and the plan is a no-op (nothing is removed). Both identities are existing org members, so GitHub never sends an
+  invitation. Teams need the org member list for validation, so the offline lint skips these steps; the guarded -d
+  cleanup removes the team.
+priority: P1
+identities: [author, approver]
+tags: [teams]
+steps:
+  - name: author
+    fragments:
+      teams:
+        - |
+          orgs.newTeam('{{ p }}-m') {
+            description: "otterdog e2e: team members",
+            privacy: "visible",
+            members: ["{{ logins.author }}"],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '+ add team[name="{{ p }}-m"]'
+      counts: {add: 1, delete: 0}
+    state:
+      - kind: team_members
+        slug: "{{ p }}-m"
+        equals: ["{{ logins.author }}"]
+      - kind: team_membership
+        slug: "{{ p }}-m"
+        login: "{{ logins.author }}"
+        match: {role: member, state: active}
+
+  - name: approver
+    fragments:
+      teams:
+        - |
+          orgs.newTeam('{{ p }}-m') {
+            description: "otterdog e2e: team members",
+            privacy: "visible",
+            members: ["{{ logins.approver }}"],
+          }
+    plan:
+      expect: changes
+      # a one-for-one member swap prints as '~ "<author>" -> "<approver>"' (sorted lists, otterdog/operations/
+      # __init__.py:362-416): both logins are asserted, not the line layout
+      contains:
+        - '~ team[name="{{ p }}-m"]'
+        - '"{{ logins.author }}"'
+        - '"{{ logins.approver }}"'
+      counts: {add: 0, delete: 0}
+    state:
+      - kind: team_members
+        slug: "{{ p }}-m"
+        equals: ["{{ logins.approver }}"]
+      - kind: team_membership
+        slug: "{{ p }}-m"
+        login: "{{ logins.author }}"
+        absent: true
+
+  - name: skip-members
+    fragments:
+      teams:
+        - |
+          orgs.newTeam('{{ p }}-m') {
+            description: "otterdog e2e: team members",
+            privacy: "visible",
+            members: [],
+            skip_members: true,
+          }
+    validate:
+      ok: true
+      not_contains:
+        - "has 'skip_members' enabled"
+    plan:
+      expect: noop
+      not_contains:
+        - 'team[name="{{ p }}-m"] {'
+    state:
+      - kind: team_members
+        slug: "{{ p }}-m"
+        equals: ["{{ logins.approver }}"]

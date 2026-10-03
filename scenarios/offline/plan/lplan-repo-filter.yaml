@@ -1,0 +1,97 @@
+# Offline tier (plan semantics): the repository filter -r/--repo-filter of local-plan.
+id: O-LPLAN-FILTER
+tier: offline
+title: The repository filter keeps other repositories out of the plan, organization objects stay planned
+description: >-
+  -r/--repo-filter is a shell pattern of the repositories otterdog loads and plans: the live plan only reads the
+  matching repositories from GitHub, local-plan only plans the matching repositories of the configuration, and the
+  organization-level objects (settings, secrets, variables, webhooks, rulesets) are always planned. A changed
+  repository outside the filter, its nested objects and an added repository outside the filter are not planned. A
+  repository that exists only on the other side (removed from the configuration) and does not match the filter
+  should not be planned either, but local-plan and local-apply plan its removal (and delete it with -d): KB-077, a
+  step of its own.
+priority: P0
+tags: [offline, repo, bpr, variables]
+observe: true
+variables: {plan: free}
+steps:
+  - name: one-repository
+    base_fragments: &base
+      variables: ["orgs.newOrgVariable('{{ P }}_V') { value: 'a' }"]
+      repositories:
+        - "orgs.newRepo('{{ p }}-a') { description: 'a' }"
+        - |-
+          orgs.newRepo('{{ p }}-b') {
+            description: 'a',
+            branch_protection_rules: [orgs.newBranchProtectionRule('main') { required_approving_review_count: 1 }],
+          }
+    fragments: &head
+      variables: ["orgs.newOrgVariable('{{ P }}_V') { value: 'b' }"]
+      repositories:
+        - "orgs.newRepo('{{ p }}-a') { description: 'b' }"
+        - |-
+          orgs.newRepo('{{ p }}-b') {
+            description: 'b',
+            branch_protection_rules: [orgs.newBranchProtectionRule('main') { required_approving_review_count: 2 }],
+          }
+    validate: {ok: true, errors: 0}
+    plan:
+      expect: changes
+      repo_filter: "{{ p }}-a"
+      counts: {add: 0, change: 2, delete: 0}
+      contains:
+        - '~ org_variable[name="{{ P }}_V"] {'
+        - '~ value = "a" -> "b"'
+        - '~ repository[name="{{ p }}-a"] {'
+      not_contains: ['{{ p }}-b']
+  - name: pattern
+    base_fragments: *base
+    fragments: *head
+    plan:
+      expect: changes
+      repo_filter: "{{ p }}-*"
+      counts: {add: 0, change: 4, delete: 0}
+      contains:
+        - '~ org_variable[name="{{ P }}_V"] {'
+        - '~ repository[name="{{ p }}-a"] {'
+        - '~ repository[name="{{ p }}-b"] {'
+        - '~ branch_protection_rule[pattern="main", repository={{ p }}-b] {'
+        - '~ required_approving_review_count = 1 -> 2'
+  - name: addition-outside-the-filter
+    base_fragments:
+      repositories: ["orgs.newRepo('{{ p }}-a') { description: 'a' }"]
+    fragments:
+      repositories:
+        - "orgs.newRepo('{{ p }}-a') { description: 'a' }"
+        - "orgs.newRepo('{{ p }}-new') { description: 'new' }"
+    plan:
+      expect: noop
+      repo_filter: "{{ p }}-a"
+      counts: {add: 0, change: 0, delete: 0}
+      not_contains: ['{{ p }}-new']
+  - name: addition-matching-the-filter
+    base_fragments:
+      repositories: ["orgs.newRepo('{{ p }}-a') { description: 'a' }"]
+    fragments:
+      repositories:
+        - "orgs.newRepo('{{ p }}-a') { description: 'a' }"
+        - "orgs.newRepo('{{ p }}-new') { description: 'new' }"
+    plan:
+      expect: changes
+      repo_filter: "{{ p }}-n*"
+      counts: {add: 1, change: 0, delete: 0}
+      contains: ['+ add repository[name="{{ p }}-new"] {']
+      not_contains: ['{{ p }}-a"']
+  - name: removal-outside-the-filter
+    known_bug: KB-077
+    base_fragments:
+      repositories:
+        - "orgs.newRepo('{{ p }}-a') { description: 'a' }"
+        - "orgs.newRepo('{{ p }}-old') { description: 'old' }"
+    fragments:
+      repositories: ["orgs.newRepo('{{ p }}-a') { description: 'a' }"]
+    plan:
+      expect: noop
+      repo_filter: "{{ p }}-a"
+      counts: {add: 0, change: 0, delete: 0}
+      not_contains: ['- remove repository[name="{{ p }}-old"]']

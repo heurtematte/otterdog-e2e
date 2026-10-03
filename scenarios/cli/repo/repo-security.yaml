@@ -1,0 +1,127 @@
+# Repository security analysis settings (coverage: repositories.security).
+id: cli.repo.security
+tier: cli
+title: Secret scanning, push protection, Dependabot and private vulnerability reporting
+description: |
+  The security settings of a public run repository and the endpoints otterdog writes them to
+  (providers/github/rest/repo_client.py:104-153 and :613-660): secret_scanning and secret_scanning_push_protection
+  through security_and_analysis of PATCH /repos/{owner}/{repo}, dependabot_security_updates_enabled through
+  security_and_analysis.dependabot_security_updates, dependabot_alerts_enabled through PUT/DELETE
+  .../vulnerability-alerts and private_vulnerability_reporting_enabled through PUT/DELETE
+  .../private-vulnerability-reporting. The oracle reads each setting from its own endpoint (security_and_analysis of
+  GET /repos/{owner}/{repo}, GET .../vulnerability-alerts 204/404, GET .../automated-security-fixes, GET
+  .../private-vulnerability-reporting). The repository is created with the template defaults (alerts on, security
+  updates off), then security updates and private vulnerability reporting are enabled while the alerts stay on;
+  the disable step turns push protection, the security updates, the alerts and private vulnerability reporting
+  off in one apply (RepoClient.update_repo sends the security_and_analysis PATCH before DELETE vulnerability-alerts,
+  the order GitHub needs: the security updates depend on the alerts). The last step creates a second repository with
+  the security updates enabled from the start; there the same order means that the security updates are requested
+  before PUT vulnerability-alerts enables the alerts of the new repository, and the result must still be both enabled
+  and converged. Secret scanning stays enabled throughout (GitHub offers it on public repositories of every plan).
+priority: P1
+min_plan: free
+requires: [secret_scanning_public]
+tags: [repo]
+steps:
+  - name: create
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-security') {
+            description: "otterdog e2e: security settings",
+          }
+    plan:
+      expect: changes
+      contains:
+        - '+ add repository[name="{{ p }}-security"]'
+      counts: {add: 1, change: 0, delete: 0}
+    state:
+      - kind: repo_security_and_analysis
+        repo: "{{ p }}-security"
+        match:
+          secret_scanning: {status: enabled}
+          secret_scanning_push_protection: {status: enabled}
+          dependabot_security_updates: {status: disabled}
+      - {kind: repo_vulnerability_alerts, repo: "{{ p }}-security", match: {enabled: true}}
+      - {kind: repo_automated_security_fixes, repo: "{{ p }}-security", match: {enabled: false}}
+      - {kind: repo_private_vulnerability_reporting, repo: "{{ p }}-security", match: {enabled: false}}
+
+  - name: enable
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-security') {
+            description: "otterdog e2e: security settings",
+            dependabot_security_updates_enabled: true,
+            private_vulnerability_reporting_enabled: true,
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ repository[name="{{ p }}-security"]'
+      counts: {add: 0, change: 2, delete: 0}
+    state:
+      - kind: repo_security_and_analysis
+        repo: "{{ p }}-security"
+        match:
+          secret_scanning: {status: enabled}
+          secret_scanning_push_protection: {status: enabled}
+          dependabot_security_updates: {status: enabled}
+      - {kind: repo_vulnerability_alerts, repo: "{{ p }}-security", match: {enabled: true}}
+      - {kind: repo_automated_security_fixes, repo: "{{ p }}-security", match: {enabled: true}}
+      - {kind: repo_private_vulnerability_reporting, repo: "{{ p }}-security", match: {enabled: true}}
+
+  - name: disable
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-security') {
+            description: "otterdog e2e: security settings",
+            secret_scanning_push_protection: "disabled",
+            dependabot_security_updates_enabled: false,
+            dependabot_alerts_enabled: false,
+            private_vulnerability_reporting_enabled: false,
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ repository[name="{{ p }}-security"]'
+      counts: {add: 0, change: 4, delete: 0}
+    state:
+      - kind: repo_security_and_analysis
+        repo: "{{ p }}-security"
+        match:
+          secret_scanning: {status: enabled}
+          secret_scanning_push_protection: {status: disabled}
+          dependabot_security_updates: {status: disabled}
+      - {kind: repo_vulnerability_alerts, repo: "{{ p }}-security", match: {enabled: false}}
+      - {kind: repo_automated_security_fixes, repo: "{{ p }}-security", match: {enabled: false}}
+      - {kind: repo_private_vulnerability_reporting, repo: "{{ p }}-security", match: {enabled: false}}
+
+  - name: create-with-updates
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-security') {
+            description: "otterdog e2e: security settings",
+            secret_scanning_push_protection: "disabled",
+            dependabot_security_updates_enabled: false,
+            dependabot_alerts_enabled: false,
+            private_vulnerability_reporting_enabled: false,
+          }
+        - |
+          orgs.newRepo('{{ p }}-security-new') {
+            description: "otterdog e2e: security updates from the start",
+            dependabot_security_updates_enabled: true,
+          }
+    plan:
+      expect: changes
+      contains:
+        - '+ add repository[name="{{ p }}-security-new"]'
+      counts: {add: 1, change: 0, delete: 0}
+    state:
+      - kind: repo_security_and_analysis
+        repo: "{{ p }}-security-new"
+        match: {dependabot_security_updates: {status: enabled}}
+      - {kind: repo_vulnerability_alerts, repo: "{{ p }}-security-new", match: {enabled: true}}
+      - {kind: repo_automated_security_fixes, repo: "{{ p }}-security-new", match: {enabled: true}}

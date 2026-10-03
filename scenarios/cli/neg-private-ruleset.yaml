@@ -1,0 +1,75 @@
+# C-NEG-PRIVATE-RULESET (SPEC 19, P2): ruleset on a PRIVATE repository (discovery on plans without it).
+id: cli.neg.private-ruleset
+title: Repository ruleset on a private repository (discovery without the capability)
+description: |
+  A private run repository with a branch ruleset. With Cap.PRIVATE_REPO_RULESETS (Team, Enterprise) the ruleset
+  must be created, read back and converge. Without it (Free) this is a DISCOVERY scenario (GH-06): GitHub documents
+  rulesets on private repositories of Free orgs as stored but not enforced, while otterdog turns a 403/404 on the
+  ruleset listing into an empty list (#731, repo_client.py), so the likely outcomes are 'apply ok' or 'apply ok, then
+  a phantom add on converge'. The apply is recorded ('expect: any', observe) without asserting state or
+  convergence; write the observed GitHub behaviour into docs/capability-matrix.md before promoting it.
+  required_status_checks is null on purpose (an empty newStatusChecks() is suspected never to converge, KB-021).
+  The repository is created PUBLIC in a first step and made private by the next one: otterdog before 1.7.0.dev14
+  cannot create a private repository on an organization without Code Security (the code scanning default setup
+  PATCH of new repositories fails, #791; regression.791-731-private-repo covers that path).
+priority: P2
+min_plan: free
+tags: [rulesets, repo, discovery, private]
+expect_failure_without: [private_repo_rulesets]
+observe: true
+steps:
+  - name: public
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-priv-rules') {
+            description: "otterdog e2e: ruleset on a private repository",
+            has_wiki: false,
+          }
+    plan:
+      expect: changes
+      contains:
+        - '+ add repository[name="{{ p }}-priv-rules"]'
+      counts: {add: 1, delete: 0}
+    state:
+      - kind: repo
+        name: "{{ p }}-priv-rules"
+        match: {private: false}
+
+  - name: create
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-priv-rules') {
+            description: "otterdog e2e: ruleset on a private repository",
+            private: true,
+            allow_forking: false,
+            has_wiki: false,
+            rulesets: [
+              orgs.newRepoRuleset('{{ p }}-priv-main') {
+                include_refs+: ["~DEFAULT_BRANCH"],
+                required_pull_request+: {
+                  required_approving_review_count: 1,
+                },
+                required_status_checks: null,
+              },
+            ],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ repository[name="{{ p }}-priv-rules"]'
+        - '+ add repo_ruleset[name="{{ p }}-priv-main", repository={{ p }}-priv-rules]'
+      not_contains:
+        - '+ add repository[name="{{ p }}-priv-rules"]'
+    state:
+      - kind: repo_ruleset
+        repo: "{{ p }}-priv-rules"
+        name: "{{ p }}-priv-main"
+        match:
+          enforcement: active
+          rules: {$unordered: [{type: creation}, {type: deletion}, {type: non_fast_forward}, {type: pull_request}]}
+    on_missing_capability:
+      apply: {expect: any}
+      state: []
+      converge: false

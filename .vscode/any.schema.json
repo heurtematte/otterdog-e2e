@@ -1,0 +1,5 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "no schema",
+  "description": "Accepts any document: keeps unrelated SchemaStore schemas (e.g. CrowdSec 'scenario') away from otterdog-e2e files the loaders validate themselves (known_bugs.py, differential.load_pr_manifest)."
+}

@@ -1,0 +1,118 @@
+# C-RULESET-PUBLIC (SPEC 19, P1): repository ruleset lifecycle on a public run repository.
+id: cli.ruleset.public
+title: Repository ruleset on a public repository
+description: |
+  A public run repository with a branch ruleset on the default branch: required pull request (1 approval), required
+  status checks (strict) and linear history; the template defaults add the creation, deletion and non_fast_forward
+  rules. The status check is written WITHOUT the 'any:' prefix: rulesets read checks back without it (see
+  cli.kb.ruleset-any-status-check). The oracle reads the full ruleset (REST, includes_parents=false) and matches
+  every rule. The update step changes the review count and the checks; the last step removes the ruleset from the
+  still existing repository (nested removal, apply -d).
+priority: P1
+min_plan: free
+tags: [rulesets, repo]
+steps:
+  - name: create
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-rules') {
+            description: "otterdog e2e: repository ruleset",
+            rulesets: [
+              orgs.newRepoRuleset('{{ p }}-main') {
+                include_refs+: ["~DEFAULT_BRANCH"],
+                requires_linear_history: true,
+                required_pull_request+: {
+                  required_approving_review_count: 1,
+                },
+                required_status_checks+: {
+                  strict: true,
+                  status_checks+: ["e2e-ci"],
+                },
+              },
+            ],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '+ add repository[name="{{ p }}-rules"]'
+        - '+ add repo_ruleset[name="{{ p }}-main", repository={{ p }}-rules]'
+      counts: {add: 2, change: 0, delete: 0}
+    state:
+      - kind: repo_ruleset
+        repo: "{{ p }}-rules"
+        name: "{{ p }}-main"
+        match:
+          name: "{{ p }}-main"
+          target: branch
+          enforcement: active
+          conditions: {ref_name: {include: ["~DEFAULT_BRANCH"], exclude: []}}
+          rules:
+            $unordered:
+              - {type: creation}
+              - {type: deletion}
+              - {type: non_fast_forward}
+              - {type: required_linear_history}
+              - {type: pull_request, parameters: {required_approving_review_count: 1}}
+              - type: required_status_checks
+                parameters:
+                  strict_required_status_checks_policy: true
+                  required_status_checks: [{context: e2e-ci}]
+
+  - name: update
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-rules') {
+            description: "otterdog e2e: repository ruleset",
+            rulesets: [
+              orgs.newRepoRuleset('{{ p }}-main') {
+                include_refs+: ["~DEFAULT_BRANCH"],
+                requires_linear_history: true,
+                required_pull_request+: {
+                  required_approving_review_count: 2,
+                },
+                required_status_checks+: {
+                  strict: false,
+                  status_checks+: ["e2e-ci", "e2e-lint"],
+                },
+              },
+            ],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ repo_ruleset[name="{{ p }}-main", repository={{ p }}-rules]'
+      counts: {add: 0, delete: 0}
+    state:
+      - kind: repo_ruleset
+        repo: "{{ p }}-rules"
+        name: "{{ p }}-main"
+        match:
+          rules:
+            $unordered:
+              - {type: creation}
+              - {type: deletion}
+              - {type: non_fast_forward}
+              - {type: required_linear_history}
+              - {type: pull_request, parameters: {required_approving_review_count: 2}}
+              - type: required_status_checks
+                parameters:
+                  strict_required_status_checks_policy: false
+                  required_status_checks: {$unordered: [{context: e2e-ci}, {context: e2e-lint}]}
+
+  - name: remove-ruleset
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-rules') {
+            description: "otterdog e2e: repository ruleset",
+          }
+    plan:
+      expect: changes
+      contains:
+        - '- remove repo_ruleset[name="{{ p }}-main", repository={{ p }}-rules]'
+      counts: {add: 0, delete: 1}
+    apply: {delete: true}
+    state:
+      - {kind: repo_ruleset, repo: "{{ p }}-rules", name: "{{ p }}-main", absent: true}

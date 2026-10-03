@@ -1,0 +1,10 @@
+Validating organization configurations:
+
+Project e2e-test-org[github_id=e2e-test-org] (1/1)
+╷                                                                                                                              
+│ Warning:   repo_secret[name="E2E_T3C7Z8A5_PLAIN"] has a value 'e2e-dummy-abcd1234' that does not use a credential provider.  
+╵                                                                                                                              
+╷                                                                                                                                                            
+│ Warning:   private repository[name="e2e-t3c7z8a5-wiki"] has 'has_wiki' enabled, which requires at least GitHub Team billing, currently using 'free' plan.  
+╵                                                                                                                                                            
+  Validation succeeded': 0 info(s), 2 warning(s), 0 error(s)

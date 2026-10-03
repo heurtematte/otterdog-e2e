@@ -1,0 +1,51 @@
+# Regression #562 (v1.2.0): a ruleset with an empty status_checks list must not send a status-check rule.
+id: regression.562-ruleset-empty-status-checks
+title: "#562: ruleset with empty status checks is created without a required_status_checks rule"
+description: |
+  Issue https://github.com/eclipse-csi/otterdog/issues/562 ("Correctly handle rulesets with empty status_checks"):
+  an empty status_checks list means "no status checks" and no required_status_checks rule is sent
+  (otterdog/models/ruleset.py StatusCheckSettings.get_mapping_to_provider: empty list -> {}), because GitHub rejects
+  a required_status_checks rule without checks.
+  Known-bad: v1.1.1 - the apply sent an empty required_status_checks rule and failed.
+  The apply must succeed and the live ruleset must carry the configured rules but no required_status_checks rule.
+  Convergence is NOT asserted here: the empty newStatusChecks() is suspected never to converge (KB-021, scenario
+  cli.kb.ruleset-default-status-checks), and this regression must not be masked by that known bug.
+priority: P1
+min_plan: free
+tags: [rulesets, repo, regression, pr-562]
+steps:
+  - name: create
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-r562') {
+            description: "otterdog e2e: #562 empty status checks",
+            rulesets: [
+              orgs.newRepoRuleset('{{ p }}-r562') {
+                include_refs+: ["~DEFAULT_BRANCH"],
+                required_pull_request+: {
+                  required_approving_review_count: 1,
+                },
+                required_status_checks+: {
+                  strict: true,
+                  status_checks: [],
+                },
+              },
+            ],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '+ add repo_ruleset[name="{{ p }}-r562", repository={{ p }}-r562]'
+    state:
+      - kind: repo_ruleset
+        repo: "{{ p }}-r562"
+        name: "{{ p }}-r562"
+        match:
+          rules:
+            $unordered:
+              - {type: creation}
+              - {type: deletion}
+              - {type: non_fast_forward}
+              - {type: pull_request, parameters: {required_approving_review_count: 1}}
+    converge: false

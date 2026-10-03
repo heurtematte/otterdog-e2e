@@ -1,0 +1,65 @@
+# C-ENV (SPEC 19, P1): deployment environment with a selected-branches policy on a public run repository.
+id: cli.environment
+title: Deployment environment with branch policies
+description: |
+  A public run repository with a deployment environment restricted to selected branches (custom branch policies
+  'main' and 'release/*') and a wait timer (wait timers and reviewers are available on public repositories of every
+  plan). The oracle checks the environment (deployment_branch_policy flags) and its deployment branch policies
+  (GH-07: the patterns live under .../deployment-branch-policies, not in the environment object). The model accepts
+  deployment_branch_policy 'all' | 'protected' | 'selected' (the template comment saying 'protected_branches' /
+  'branch_policies' is outdated). The update step drops one branch policy and changes the wait timer.
+  Example of jsonnet injected from files (docs/writing-scenarios.md): both steps render the shared fragment
+  scenarios/fragments/environment-repo.jsonnet with their own vars, through the helpers of the library
+  scenarios/lib/e2e.libsonnet (publicRepo, selectedBranchesEnvironment).
+priority: P1
+min_plan: free
+tags: [environments, repo]
+libraries:
+  e2e: ../lib/e2e.libsonnet
+steps:
+  - name: create
+    fragments:
+      repositories:
+        - file: ../fragments/environment-repo.jsonnet
+          vars: {wait_timer: 5, branch_policies: [main, "release/*"]}
+    plan:
+      expect: changes
+      contains:
+        - '+ add repository[name="{{ p }}-env"]'
+        - '+ add environment[name="e2e-staging", repository={{ p }}-env]'
+      counts: {add: 2, change: 0, delete: 0}
+    state:
+      - kind: environment
+        repo: "{{ p }}-env"
+        name: e2e-staging
+        match:
+          name: e2e-staging
+          deployment_branch_policy: {protected_branches: false, custom_branch_policies: true}
+      - kind: env_branch_policies
+        repo: "{{ p }}-env"
+        env: e2e-staging
+        match: {$unordered: [{name: main}, {name: "release/*"}]}
+
+  - name: update
+    fragments:
+      repositories:
+        - file: ../fragments/environment-repo.jsonnet
+          vars: {wait_timer: 10, branch_policies: [main]}
+    plan:
+      expect: changes
+      contains:
+        - '~ environment[name="e2e-staging", repository={{ p }}-env]'
+      counts: {add: 0, delete: 0}
+    state:
+      - kind: environment
+        repo: "{{ p }}-env"
+        name: e2e-staging
+        match:
+          protection_rules:
+            $unordered:
+              - {type: wait_timer, wait_timer: 10}
+              - {type: branch_policy}
+      - kind: env_branch_policies
+        repo: "{{ p }}-env"
+        env: e2e-staging
+        match: {$unordered: [{name: main}]}

@@ -1,0 +1,47 @@
+# Known bug KB-016: a custom property whose name contains '_' cannot hold a multi_select value.
+id: cli.kb.custom-property-underscore
+title: multi_select custom property named with '_' (known bug KB-016)
+description: |
+  otterdog's repository schema types custom_properties as an object whose keys matching '^.*_' must be strings
+  (otterdog/resources/schemas/types.json:32-41, used by repository.json:58), so a multi_select value (a list) of a
+  property named with an underscore fails validation ("... is not valid under any of the given schemas"), although
+  GitHub allows '_' in property names. This scenario defines a multi_select property E2E_<RUN>_TAGS and a run
+  repository holding two values; it asserts a clean validation, apply and convergence and is expected to fail
+  (xfail) at validation while the bug exists. The harness itself names properties with '-' (naming.prop, OC-05).
+priority: P2
+min_plan: free
+requires: [custom_properties]
+known_bug: KB-016
+tags: [custom-properties, repo, known-bug]
+steps:
+  - name: create
+    fragments:
+      custom_properties:
+        - |
+          orgs.newCustomProperty('{{ P }}_TAGS') {
+            value_type: "multi_select",
+            allowed_values: ["alpha", "beta"],
+          }
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-prop-underscore') {
+            description: "otterdog e2e: custom property with an underscore",
+            custom_properties: {
+              "{{ P }}_TAGS": ["alpha", "beta"],
+            },
+          }
+    validate:
+      ok: true
+      errors: 0
+      not_contains:
+        - "is not valid under any of the given schemas"
+    plan:
+      expect: changes
+      contains:
+        - '+ add custom_property[name="{{ P }}_TAGS"]'
+        - '+ add repository[name="{{ p }}-prop-underscore"]'
+    state:
+      - kind: repo_custom_properties
+        repo: "{{ p }}-prop-underscore"
+        match:
+          "{{ P }}_TAGS": {$unordered: [alpha, beta]}

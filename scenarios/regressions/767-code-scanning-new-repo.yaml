@@ -1,0 +1,36 @@
+# Regression #767 (8e3a359, after v1.6.1): code scanning languages on a repository that does not exist yet.
+id: regression.767-code-scanning-new-repo
+title: "#767: code_scanning_default_languages on a not-yet-existing repository is a validation error"
+description: |
+  PR https://github.com/eclipse-csi/otterdog/pull/767: when a repository enables the code scanning default setup with
+  languages but does not exist yet, validation lists the org repositories (live: GitHubProvider.get_repos) and
+  reports an ERROR "has 'code_scanning_default_languages' configured while the repository does not yet exist."
+  (otterdog/models/github_organization.py:230-260, repository.py:318-323), instead of letting the apply fail on the
+  language check of a missing repository.
+  Known-bad: v1.6.1 (476bf5e and earlier) - validation accepted it and the language validation/apply failed later.
+  Validation only: nothing is applied.
+  Not released yet: 8e3a359 is otterdog 1.7.0.dev2 (v1.6.1 + 2 commits), so
+  fixed_in skips the scenario on older SUTs such as release:latest (ScenarioEngine.skip_reason).
+priority: P1
+min_plan: free
+fixed_in: "1.7.0.dev2"
+tags: [repo, regression, code-scanning, pr-767]
+steps:
+  - name: validate
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-r767') {
+            description: "otterdog e2e: #767 code scanning on a new repository",
+            code_scanning_default_setup_enabled: true,
+            code_scanning_default_languages: ["python"],
+          }
+    validate:
+      ok: false
+      errors: 1
+      contains:
+        - "has 'code_scanning_default_languages' configured while the repository does not yet exist."
+    plan:
+      expect: validation_error
+    apply: null
+    converge: false

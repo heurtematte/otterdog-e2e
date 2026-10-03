@@ -1,0 +1,99 @@
+# Branch protection settings without actors (coverage: branch-protection.pull-request-reviews,
+# branch-protection.history-and-signatures, branch-protection.force-push-deletion-admin,
+# branch-protection.status-checks).
+id: cli.bpr.settings
+tier: cli
+title: Branch protection review, history, force push and status check settings
+description: |
+  A public run repository with a branch protection rule on main, read back through GraphQL (Oracle
+  branch_protection_rule, camelCase fields). The strict step enables the settings cli.bpr.public leaves at their
+  template defaults: require_last_push_approval, requires_commit_signatures, allows_force_pushes and allows_deletions,
+  and a required status check written as a plain context, which otterdog binds to the github-actions app
+  (models/branch_protection_rule.py:333-363) and reads back as a plain context again (app slug github-actions,
+  :270-290). The relaxed step stops requiring pull requests the way Eclipse configurations do (requires_pull_request
+  false with required_approving_review_count null: the dependent review settings then leave the diff,
+  include_field_for_diff_computation), turns the history, signature, force push and deletion settings back off,
+  enforces the rule for administrators and drops the status checks (requires_status_checks false): seven changed
+  attributes, the dependent settings left out. Both steps converge.
+priority: P0
+min_plan: free
+tags: [bpr, repo]
+steps:
+  - name: strict
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-bpr-settings') {
+            description: "otterdog e2e: branch protection settings",
+            branch_protection_rules: [
+              orgs.newBranchProtectionRule('main') {
+                required_approving_review_count: 1,
+                dismisses_stale_reviews: true,
+                require_last_push_approval: true,
+                requires_commit_signatures: true,
+                requires_linear_history: true,
+                allows_force_pushes: true,
+                allows_deletions: true,
+                requires_status_checks: true,
+                requires_strict_status_checks: true,
+                required_status_checks+: ["e2e-plain"],
+              },
+            ],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '+ add repository[name="{{ p }}-bpr-settings"]'
+        - '+ add branch_protection_rule[pattern="main", repository={{ p }}-bpr-settings]'
+      counts: {add: 2, change: 0, delete: 0}
+    state:
+      - kind: bpr
+        repo: "{{ p }}-bpr-settings"
+        pattern: main
+        match:
+          requiresApprovingReviews: true
+          requiredApprovingReviewCount: 1
+          dismissesStaleReviews: true
+          requireLastPushApproval: true
+          requiresCodeOwnerReviews: false
+          requiresCommitSignatures: true
+          requiresLinearHistory: true
+          allowsForcePushes: true
+          allowsDeletions: true
+          isAdminEnforced: false
+          requiresStatusChecks: true
+          requiresStrictStatusChecks: true
+          requiredStatusChecks: [{context: e2e-plain, app: {slug: github-actions}}]
+
+  - name: relaxed
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-bpr-settings') {
+            description: "otterdog e2e: branch protection settings",
+            branch_protection_rules: [
+              orgs.newBranchProtectionRule('main') {
+                requires_pull_request: false,
+                required_approving_review_count: null,
+                is_admin_enforced: true,
+                requires_status_checks: false,
+              },
+            ],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ branch_protection_rule[pattern="main", repository={{ p }}-bpr-settings]'
+      counts: {add: 0, change: 7, delete: 0}
+    state:
+      - kind: bpr
+        repo: "{{ p }}-bpr-settings"
+        pattern: main
+        match:
+          requiresApprovingReviews: false
+          isAdminEnforced: true
+          requiresCommitSignatures: false
+          requiresLinearHistory: false
+          allowsForcePushes: false
+          allowsDeletions: false
+          requiresStatusChecks: false

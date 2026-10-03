@@ -1,0 +1,104 @@
+# Offline tier (battery, validation): organization and repository webhooks.
+id: O-VAL-WEBHOOKS
+tier: offline
+title: Webhook content type, SSL flag and secret notices are validated
+description: >-
+  Webhook.validate (organization and repository hooks) accepts content_type json | form and insecure_ssl '0' | '1',
+  warns about a secret that does not use a credential provider (asserted without the value, which otterdog echoes:
+  KB-026, dummy values only here) and, with -v, informs that a hook whose secret is the dummy '********' is skipped.
+  A credential reference ('pass:...') validates silently. Every message is asserted with its organization or
+  repository header; the last step expects the plain value not to be printed and runs as an expected failure.
+priority: P1
+tags: [offline, webhooks]
+observe: true
+variables: {plan: free}
+steps:
+  - name: invalid-webhooks
+    fragments:
+      webhooks:
+        - "orgs.newOrgWebhook('{{ hook_base }}org-invalid') { content_type: 'xml', insecure_ssl: '2', secret: 'e2e-dummy-{{ run }}' }"
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-hooks') {
+            webhooks: [orgs.newRepoWebhook('{{ hook_base }}repo-invalid') { content_type: 'xml' }],
+          }
+    validate:
+      ok: false
+      errors: 3
+      warnings_min: 1
+      contains:
+        - >-
+          Error: org_webhook[url="{{ hook_base }}org-invalid"] has 'content_type' of value 'xml', while only values
+          ('json' | 'form') are allowed.
+        - >-
+          Error: org_webhook[url="{{ hook_base }}org-invalid"] has 'insecure_ssl' of value '2', while only values
+          ('0' | '1') are allowed.
+        - >-
+          Error: repo_webhook[url="{{ hook_base }}repo-invalid", repository={{ p }}-hooks] has 'content_type' of
+          value 'xml', while only values ('json' | 'form') are allowed.
+        - "Warning: org_webhook[url=\"{{ hook_base }}org-invalid\"] has a secret"
+        - "that does not use a credential provider."
+  - name: secret-notices
+    base_fragments: {}
+    fragments:
+      webhooks:
+        - "orgs.newOrgWebhook('{{ hook_base }}org-dummy') { events+: ['push'], secret: '********' }"
+        - "orgs.newOrgWebhook('{{ hook_base }}org-reference') { events+: ['push'], secret: 'pass:e2e/hook' }"
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-hooks') {
+            webhooks: [orgs.newRepoWebhook('{{ hook_base }}repo-plain') { events+: ['push'], secret: 'e2e-dummy-{{ run }}' }],
+          }
+    validate:
+      verbose: true
+      ok: true
+      errors: 0
+      infos: 1
+      warnings_min: 1
+      exit_code: 0
+      contains:
+        - >-
+          Info: org_webhook[url="{{ hook_base }}org-dummy"] has a secret set, but only a dummy secret '********' is
+          provided in the configuration, will be skipped.
+        - "Warning: repo_webhook[url=\"{{ hook_base }}repo-plain\", repository={{ p }}-hooks] has a secret"
+        - "that does not use a credential provider."
+      not_contains: ["org_webhook[url=\"{{ hook_base }}org-reference\"] has a secret"]
+    plan:
+      expect: changes
+      counts: {add: 4, change: 0, delete: 0}
+      contains:
+        - "there have been 1 validation infos, enable verbose output to display them."
+        - '+ add org_webhook[url="{{ hook_base }}org-reference"]'
+        - '+ add repo_webhook[url="{{ hook_base }}repo-plain", repository={{ p }}-hooks]'
+  - name: valid-webhooks
+    fragments:
+      webhooks:
+        - "orgs.newOrgWebhook('{{ hook_base }}org-json') { content_type: 'json', insecure_ssl: '1', events+: ['push'] }"
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-hooks') {
+            webhooks: [orgs.newRepoWebhook('{{ hook_base }}repo-form') { content_type: 'form', insecure_ssl: '0' }],
+          }
+    validate:
+      ok: true
+      errors: 0
+      exit_code: 0
+      contains: ["Validation succeeded"]
+      not_contains: ["Error:", "Warning:"]
+  - name: plain-secret-not-echoed
+    known_bug: KB-026
+    base_fragments: {}
+    fragments:
+      webhooks:
+        - "orgs.newOrgWebhook('{{ hook_base }}org-plain') { events+: ['push'], secret: 'e2e-dummy-{{ run }}' }"
+    validate:
+      ok: true
+      errors: 0
+      warnings_min: 1
+      contains: ["Warning: org_webhook[url=\"{{ hook_base }}org-plain\"] has a secret", "that does not use a credential provider."]
+      not_contains: ["e2e-dummy-{{ run }}"]
+    plan:
+      expect: changes
+      counts: {add: 1, change: 0, delete: 0}
+      contains: ['+ add org_webhook[url="{{ hook_base }}org-plain"] {']
+      not_contains: ["e2e-dummy-{{ run }}"]

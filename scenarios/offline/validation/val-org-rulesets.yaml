@@ -1,0 +1,167 @@
+# Offline tier (battery, validation): organization rulesets (enterprise plan).
+id: O-VAL-ORG-RULESETS
+tier: offline
+title: Organization ruleset repository patterns and nested rules are validated
+description: >-
+  On an enterprise plan, OrganizationRuleset.validate warns when an include or exclude repository pattern matches no
+  repository of the configuration and when protect_repo_names has no names, and inherits the ruleset rules (target,
+  enforcement, ref patterns) with the organization ruleset header. Two known defects run as expected failures of
+  their own steps: every pattern after the first one warns spuriously (KB-023), and the nested rule validators crash
+  with an AttributeError for an organization ruleset (KB-008: an out-of-range review count, a deployment rule).
+priority: P2
+tags: [offline, rulesets]
+observe: true
+variables: {plan: enterprise}
+steps:
+  - name: include-without-match
+    fragments:
+      rulesets:
+        - "orgs.newOrgRuleset('{{ p }}-ors') { include_refs+: ['~DEFAULT_BRANCH'], include_repo_names: ['{{ p }}-nomatch-*'] }"
+      repositories: ["orgs.newRepo('{{ p }}-a')"]
+    validate:
+      ok: true
+      errors: 0
+      warnings_min: 1
+      exit_code: 0
+      contains:
+        - >-
+          Warning: org_ruleset[name="{{ p }}-ors"] has an 'include_repo_names' pattern '{{ p }}-nomatch-*' that does
+          not match any existing repository
+  - name: exclude-without-match
+    fragments:
+      rulesets:
+        - |-
+          orgs.newOrgRuleset('{{ p }}-ors') {
+            include_refs+: ['~DEFAULT_BRANCH'],
+            include_repo_names: ['~ALL'],
+            exclude_repo_names: ['{{ p }}-nomatch-*'],
+          }
+      repositories: ["orgs.newRepo('{{ p }}-a')"]
+    validate:
+      ok: true
+      errors: 0
+      warnings_min: 1
+      exit_code: 0
+      contains:
+        - >-
+          Warning: org_ruleset[name="{{ p }}-ors"] has an 'exclude_repo_names' pattern '{{ p }}-nomatch-*' that does
+          not match any existing repository
+  - name: protect-without-names
+    fragments:
+      rulesets:
+        - "orgs.newOrgRuleset('{{ p }}-ors') { include_refs+: ['~DEFAULT_BRANCH'], protect_repo_names: true }"
+    validate:
+      ok: true
+      errors: 0
+      warnings_min: 1
+      exit_code: 0
+      contains:
+        - >-
+          Warning: org_ruleset[name="{{ p }}-ors"] has 'protect_repo_names' set to 'True' but 'include_repo_names'
+          and 'exclude_repo_names' are empty.
+  - name: target-and-enforcement
+    fragments:
+      rulesets:
+        - "orgs.newOrgRuleset('{{ p }}-ors') { target: 'tags', enforcement: 'on', include_repo_names: ['~ALL'] }"
+    validate:
+      ok: false
+      errors: 2
+      contains:
+        - >-
+          org_ruleset[name="{{ p }}-ors"] has 'target' of value 'tags', while only values ('branch' | 'tag' |
+          'push') are allowed.
+        - >-
+          org_ruleset[name="{{ p }}-ors"] has 'enforcement' of value 'on', while only values ('active' | 'disabled'
+          | 'evaluate') are allowed.
+  - name: ref-patterns
+    fragments:
+      rulesets:
+        - |-
+          orgs.newOrgRuleset('{{ p }}-ors') {
+            include_refs: ['main'],
+            exclude_refs: ['refs/tags/v1'],
+            include_repo_names: ['~ALL'],
+          }
+    validate:
+      ok: false
+      errors: 2
+      contains:
+        - >-
+          org_ruleset[name="{{ p }}-ors"] has an invalid 'include_refs' pattern 'main', while only values
+          ('refs/heads/*', '~DEFAULT_BRANCH', '~ALL') are allowed
+        - >-
+          org_ruleset[name="{{ p }}-ors"] has an invalid 'exclude_refs' pattern 'refs/tags/v1', while only values
+          ('refs/heads/*', '~DEFAULT_BRANCH', '~ALL') are allowed
+  - name: valid-patterns
+    base_fragments: {}
+    fragments:
+      rulesets:
+        - |-
+          orgs.newOrgRuleset('{{ p }}-ors') {
+            include_refs+: ['~DEFAULT_BRANCH', 'refs/heads/release/*'],
+            include_repo_names: ['{{ p }}-*'],
+            protect_repo_names: true,
+          }
+      repositories: ["orgs.newRepo('{{ p }}-a')"]
+    validate:
+      ok: true
+      errors: 0
+      exit_code: 0
+      contains: ["Validation succeeded"]
+      not_contains: ["Warning:", "Error:"]
+    plan:
+      expect: changes
+      counts: {add: 2, change: 0, delete: 0}
+      contains:
+        - '+ add org_ruleset[name="{{ p }}-ors"]'
+        - '+ add repository[name="{{ p }}-a"]'
+  - name: second-pattern
+    known_bug: KB-023
+    fragments:
+      rulesets:
+        - |-
+          orgs.newOrgRuleset('{{ p }}-ors') {
+            include_refs+: ['~DEFAULT_BRANCH'],
+            include_repo_names: ['{{ p }}-a', '{{ p }}-b'],
+          }
+      repositories: ["orgs.newRepo('{{ p }}-a')", "orgs.newRepo('{{ p }}-b')"]
+    validate:
+      ok: true
+      errors: 0
+      contains: ["Validation succeeded"]
+      not_contains: ["that does not match any existing repository"]
+  - name: review-count-range
+    known_bug: KB-008
+    fragments:
+      rulesets:
+        - |-
+          orgs.newOrgRuleset('{{ p }}-ors') {
+            include_refs+: ['~DEFAULT_BRANCH'],
+            include_repo_names: ['~ALL'],
+            required_pull_request+: { required_approving_review_count: 11 },
+          }
+    validate:
+      ok: false
+      errors: 1
+      exit_code: 1
+      contains:
+        - >-
+          has 'required_pull_request.required_approving_review_count' of value '11' while only integers in the
+          range [0, 10] are allowed.
+      not_contains: ["object has no attribute"]
+  - name: deployment-rule
+    known_bug: KB-008
+    fragments:
+      rulesets:
+        - |-
+          orgs.newOrgRuleset('{{ p }}-ors') {
+            include_refs+: ['~DEFAULT_BRANCH'],
+            include_repo_names: ['~ALL'],
+            requires_deployments: true,
+            required_deployment_environments: ['{{ p }}-prod'],
+          }
+    validate:
+      ok: true
+      errors: 0
+      exit_code: 0
+      not_contains: ["object has no attribute"]

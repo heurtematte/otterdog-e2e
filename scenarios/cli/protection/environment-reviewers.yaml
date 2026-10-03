@@ -1,0 +1,98 @@
+# Required reviewers of an environment on a public repository (coverage: environments.reviewers).
+id: cli.environment.reviewers
+tier: cli
+title: Environment required reviewers (team and user) on a public repository
+description: |
+  reviewers ('@<login>' users, '@<org>/<team>' teams) and prevent_self_review of a deployment environment
+  (models/environment.py:60-61, :179-188, :238-246): otterdog resolves each reviewer to its id
+  (GitHubProvider.get_actor_ids_with_type) and PUTs a required_reviewers protection rule; the read-back maps the
+  reviewers to the same notation. Required reviewers are available on public repositories of every plan (private
+  repositories: Enterprise only, scenario enterprise.env-reviewers-private). A run team (read access through
+  team_permissions) and the admin identity review deployments of a public run repository, with prevent_self_review and
+  a one-minute wait timer (so that the oracle knows the exact protection rules: a wait timer rule and a required
+  reviewers rule); the update step keeps the team only and allows self reviews (two changed attributes). Both steps
+  converge; the cleanup removes the repository and the team.
+priority: P1
+min_plan: free
+tags: [environments, teams, repo]
+steps:
+  - name: create
+    fragments:
+      teams:
+        - &team |
+          orgs.newTeam('{{ p }}-env-rev') {
+            description: "otterdog e2e: environment reviewers",
+            privacy: "visible",
+            members: [],
+          }
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-env-rev') {
+            description: "otterdog e2e: environment reviewers",
+            team_permissions: {
+              "{{ p }}-env-rev": "pull",
+            },
+            environments: [
+              orgs.newEnvironment('e2e-prod') {
+                wait_timer: 1,
+                reviewers: ["@{{ org }}/{{ p }}-env-rev", "@{{ logins.admin }}"],
+                prevent_self_review: true,
+              },
+            ],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '+ add team[name="{{ p }}-env-rev"]'
+        - '+ add environment[name="e2e-prod", repository={{ p }}-env-rev]'
+      counts: {add: 3, change: 0, delete: 0}
+    state:
+      - kind: environment
+        repo: "{{ p }}-env-rev"
+        name: e2e-prod
+        match:
+          protection_rules:
+            $unordered:
+              - {type: wait_timer, wait_timer: 1}
+              - type: required_reviewers
+                prevent_self_review: true
+                reviewers:
+                  $unordered:
+                    - {type: Team, reviewer: {slug: "{{ p }}-env-rev"}}
+                    - {type: User, reviewer: {login: "{{ logins.admin }}"}}
+
+  - name: team-only
+    fragments:
+      teams:
+        - *team
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-env-rev') {
+            description: "otterdog e2e: environment reviewers",
+            team_permissions: {
+              "{{ p }}-env-rev": "pull",
+            },
+            environments: [
+              orgs.newEnvironment('e2e-prod') {
+                wait_timer: 1,
+                reviewers: ["@{{ org }}/{{ p }}-env-rev"],
+                prevent_self_review: false,
+              },
+            ],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ environment[name="e2e-prod", repository={{ p }}-env-rev]'
+      counts: {add: 0, change: 2, delete: 0}
+    state:
+      - kind: environment
+        repo: "{{ p }}-env-rev"
+        name: e2e-prod
+        match:
+          protection_rules:
+            $unordered:
+              - {type: wait_timer, wait_timer: 1}
+              - type: required_reviewers
+                prevent_self_review: false
+                reviewers: [{type: Team, reviewer: {slug: "{{ p }}-env-rev"}}]

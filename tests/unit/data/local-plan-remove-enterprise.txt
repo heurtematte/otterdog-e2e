@@ -1,0 +1,56 @@
+Printing local diff:
+
+Actions are indicated with the following symbols:
+  + create
+  ~ modify
+  ! forced update
+  - delete
+
+Project e2e-test-org[github_id=e2e-test-org] (1/1)
+
+  - remove org_role[name="e2e-t3c7z8a5-role"] {
+    - base_role   = "read"
+    - description = ""
+    - name        = "e2e-t3c7z8a5-role"
+    - permissions = [
+      - "read_audit_logs"
+    - ],
+  - }
+
+  - remove org_ruleset[name="e2e-t3c7z8a5-org-rs"] {
+    - allows_creations                    = false
+    - allows_deletions                    = false
+    - allows_force_pushes                 = false
+    - allows_updates                      = true
+    - bypass_actors                       = []
+    - enforcement                         = "active"
+    - exclude_refs                        = []
+    - exclude_repo_names                  = []
+    - include_refs                        = [
+      - "~DEFAULT_BRANCH"
+    - ],
+    - include_repo_names                  = [
+      - "~ALL"
+    - ],
+    - name                                = "e2e-t3c7z8a5-org-rs"
+    - protect_repo_names                  = false
+    - required_merge_queue                = null
+    - required_pull_request               = {
+      - dismisses_stale_reviews             = false
+      - required_approving_review_count     = 2
+      - requires_code_owner_review          = false
+      - requires_last_push_approval         = false
+      - requires_review_thread_resolution   = false
+    - }
+    - required_status_checks              = {
+      - do_not_enforce_on_create            = false
+      - status_checks                       = []
+      - strict                              = false
+    - }
+    - requires_commit_signatures          = false
+    - requires_deployments                = false
+    - requires_linear_history             = false
+    - target                              = "branch"
+  - }
+  
+  Plan: 0 to add, 0 to change, 2 to delete.

@@ -1,0 +1,105 @@
+# Merge queue rule of a ruleset (coverage: rulesets.merge-queue).
+id: cli.ruleset.merge-queue
+tier: cli
+title: Ruleset requiring a merge queue
+description: |
+  required_merge_queue (orgs.newMergeQueue, models/ruleset.py:230-325) becomes the merge_queue rule; otterdog renames
+  build_concurrency -> max_entries_to_build, min_group_size -> min_entries_to_merge, max_group_size ->
+  max_entries_to_merge, wait_time_for_minimum_group_size -> min_entries_to_merge_wait_minutes, status_check_timeout ->
+  check_response_timeout_minutes and maps requires_all_group_entries_to_pass_required_checks to grouping_strategy
+  ALLGREEN | HEADGREEN. The object is merged over the template's newMergeQueue(), so all seven parameters GitHub
+  requires are set (a partial object is never reported: KB-031). Merge queues are available on public repositories
+  of organizations on every plan. The create step queues squash merges with non-default sizes and timeouts, the
+  update step switches to merge commits with HEADGREEN grouping (one changed attribute: the embedded object); both
+  converge. The pull request and status check rules are left out (KB-021).
+priority: P2
+min_plan: free
+tags: [rulesets, repo]
+steps:
+  - name: create
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-rs-mq') {
+            description: "otterdog e2e: merge queue",
+            rulesets: [
+              orgs.newRepoRuleset('{{ p }}-rs-mq') {
+                include_refs+: ["~DEFAULT_BRANCH"],
+                required_pull_request: null,
+                required_status_checks: null,
+                required_merge_queue: orgs.newMergeQueue() {
+                  merge_method: "SQUASH",
+                  build_concurrency: 2,
+                  min_group_size: 1,
+                  max_group_size: 3,
+                  wait_time_for_minimum_group_size: 10,
+                  status_check_timeout: 30,
+                },
+              },
+            ],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '+ add repo_ruleset[name="{{ p }}-rs-mq", repository={{ p }}-rs-mq]'
+      counts: {add: 2, change: 0, delete: 0}
+    state:
+      - kind: repo_ruleset
+        repo: "{{ p }}-rs-mq"
+        name: "{{ p }}-rs-mq"
+        match:
+          rules:
+            $unordered:
+              - {type: creation}
+              - {type: deletion}
+              - {type: non_fast_forward}
+              - type: merge_queue
+                parameters:
+                  merge_method: SQUASH
+                  max_entries_to_build: 2
+                  min_entries_to_merge: 1
+                  max_entries_to_merge: 3
+                  min_entries_to_merge_wait_minutes: 10
+                  check_response_timeout_minutes: 30
+                  grouping_strategy: ALLGREEN
+
+  - name: update
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-rs-mq') {
+            description: "otterdog e2e: merge queue",
+            rulesets: [
+              orgs.newRepoRuleset('{{ p }}-rs-mq') {
+                include_refs+: ["~DEFAULT_BRANCH"],
+                required_pull_request: null,
+                required_status_checks: null,
+                required_merge_queue: orgs.newMergeQueue() {
+                  merge_method: "MERGE",
+                  build_concurrency: 2,
+                  min_group_size: 1,
+                  max_group_size: 3,
+                  wait_time_for_minimum_group_size: 10,
+                  status_check_timeout: 30,
+                  requires_all_group_entries_to_pass_required_checks: false,
+                },
+              },
+            ],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ repo_ruleset[name="{{ p }}-rs-mq", repository={{ p }}-rs-mq]'
+      counts: {add: 0, change: 1, delete: 0}
+    state:
+      - kind: repo_ruleset
+        repo: "{{ p }}-rs-mq"
+        name: "{{ p }}-rs-mq"
+        match:
+          rules:
+            $unordered:
+              - {type: creation}
+              - {type: deletion}
+              - {type: non_fast_forward}
+              - type: merge_queue
+                parameters: {merge_method: MERGE, max_entries_to_build: 2, grouping_strategy: HEADGREEN}

@@ -1,0 +1,81 @@
+# teams.privacy (P1) and teams.notifications (P2): a team's privacy and notification setting, both ways.
+id: cli.team.settings
+title: Team privacy (visible, secret) and notifications
+tier: cli
+description: |
+  otterdog's team privacy 'visible' is GitHub's 'closed' and 'secret' is 'secret' (otterdog/models/team.py:118,
+  :131-132); notifications true | false is GitHub's notification_setting notifications_enabled | _disabled
+  (team.py:105-111, :134-138). A run team is created visible with notifications, then made secret and quiet, then
+  visible with notifications again: the plan shows each change on the team ('~ team[...]'), the oracle reads
+  privacy and notification_setting after every apply (GET /orgs/{org}/teams/{slug}), and every step converges. The
+  members stay empty (the creator GitHub adds is removed, see cli.team). Teams need the org member list for
+  validation, so the offline lint skips these steps; the guarded -d cleanup removes the team (run prefix).
+priority: P1
+tags: [teams]
+steps:
+  - name: create
+    fragments:
+      teams:
+        - |
+          orgs.newTeam('{{ p }}-ts') {
+            description: "otterdog e2e: team settings",
+            privacy: "visible",
+            notifications: true,
+            members: [],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '+ add team[name="{{ p }}-ts"]'
+      counts: {add: 1, delete: 0}
+    state:
+      - kind: team
+        slug: "{{ p }}-ts"
+        match: {name: "{{ p }}-ts", privacy: closed, notification_setting: notifications_enabled}
+      - kind: team_members
+        slug: "{{ p }}-ts"
+        equals: []
+
+  - name: secret-quiet
+    fragments:
+      teams:
+        - |
+          orgs.newTeam('{{ p }}-ts') {
+            description: "otterdog e2e: team settings",
+            privacy: "secret",
+            notifications: false,
+            members: [],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ team[name="{{ p }}-ts"]'
+        - '"visible" -> "secret"'
+        - "true -> false"
+      counts: {add: 0, delete: 0}
+    state:
+      - kind: team
+        slug: "{{ p }}-ts"
+        match: {privacy: secret, notification_setting: notifications_disabled}
+
+  - name: visible-again
+    fragments:
+      teams:
+        - |
+          orgs.newTeam('{{ p }}-ts') {
+            description: "otterdog e2e: team settings",
+            privacy: "visible",
+            notifications: true,
+            members: [],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ team[name="{{ p }}-ts"]'
+        - '"secret" -> "visible"'
+        - "false -> true"
+      counts: {add: 0, delete: 0}
+    state:
+      - kind: team
+        slug: "{{ p }}-ts"
+        match: {privacy: closed, notification_setting: notifications_enabled}

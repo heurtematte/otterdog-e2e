@@ -1,0 +1,68 @@
+# Nightly full lane (SPEC 2, 17): for every enabled target, release:latest, then branch:main with a differential
+# against release:latest. Both calls of e2e.yml join the concurrency group e2e-<target>, so they never overlap with
+# each other, with dispatched runs or with the janitor. The optional web-UI lane (e2e-webui.yml) runs last.
+#
+# Enabled targets: repository variable E2E_TARGETS, a JSON list such as ["free", "enterprise"] (default ["free"]).
+# Scheduled runs are skipped until E2E_TARGETS is set, so a fresh fork or clone stays quiet; workflow_dispatch always runs.
+# Web-UI lane: E2E_WEB_UI_ENABLED == 'true' and E2E_WEB_UI_TARGETS (default ["free"]), docs/web-ui-testing.md.
+name: nightly
+
+on:
+  schedule:
+    - cron: "23 2 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+cache-mode: none
+
+jobs:
+  release:
+    name: release:latest
+    if: ${{ vars.E2E_TARGETS != '' || github.event_name == 'workflow_dispatch' }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ${{ fromJSON(vars.E2E_TARGETS || '["free"]') }}
+    uses: ./.github/workflows/e2e.yml
+    with:
+      target: ${{ matrix.target }}
+      sut: release:latest
+      lane: nightly-full
+
+  main:
+    name: branch:main vs release:latest
+    needs: release
+    if: ${{ !cancelled() && (vars.E2E_TARGETS != '' || github.event_name == 'workflow_dispatch') }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ${{ fromJSON(vars.E2E_TARGETS || '["free"]') }}
+    uses: ./.github/workflows/e2e.yml
+    with:
+      target: ${{ matrix.target }}
+      sut: branch:main
+      base_sut: release:latest
+      lane: nightly-full
+
+  # Optional web-UI lane (docs/web-ui-testing.md): only when the repository variable E2E_WEB_UI_ENABLED is 'true',
+  # for the targets of E2E_WEB_UI_TARGETS (JSON list, default ["free"]), each with an e2e-<target>-webui environment
+  # holding the admin bot's web credentials; trusted SUT only, after the other sessions of the night.
+  webui:
+    name: web-UI tier (release:latest)
+    needs: [release, main]
+    if: ${{ !cancelled() && vars.E2E_WEB_UI_ENABLED == 'true' }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ${{ fromJSON(vars.E2E_WEB_UI_TARGETS || '["free"]') }}
+    uses: ./.github/workflows/e2e-webui.yml
+    with:
+      target: ${{ matrix.target }}
+      sut: release:latest

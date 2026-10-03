@@ -1,0 +1,65 @@
+# validation.teams (P1): team validation rules, validate only (team validation lists the org members: live only).
+id: cli.validate.teams
+title: Team validation rules (privacy values, skip_members with members)
+tier: cli
+description: |
+  Team validation (otterdog/models/team.py:62-99) runs with the org member list as soon as a configuration has teams
+  (otterdog/models/github_organization.py:177-181), so it cannot run offline. Validate-only steps (plan null):
+  GitHub's own privacy name 'closed' is refused (otterdog accepts 'secret' | 'visible'); the message is asserted up
+  to its value list, which prints ('secret' | 'closed') instead of the accepted values (KB-037:
+  cli.kb.team-privacy-message asserts the correct list); skip_members with members is refused; a valid team
+  validates. The non-member rule needs the outsider identity: cli.validate.team-non-member. Nothing is applied.
+priority: P1
+tags: [teams]
+steps:
+  - name: privacy-closed
+    fragments:
+      teams:
+        - |
+          orgs.newTeam('{{ p }}-t1') {
+            description: "otterdog e2e: team validation",
+            privacy: "closed",
+            members: [],
+          }
+    validate:
+      ok: false
+      errors: 1
+      exit_code: 1
+      contains:
+        - "Error: team[name=\"{{ p }}-t1\"] has 'privacy' of value 'closed', while only values ("
+    plan: null
+
+  - name: skip-members-with-members
+    fragments:
+      teams:
+        - |
+          orgs.newTeam('{{ p }}-t2') {
+            description: "otterdog e2e: team validation",
+            privacy: "visible",
+            skip_members: true,
+            members: ["{{ logins.admin }}"],
+          }
+    validate:
+      ok: false
+      errors: 1
+      exit_code: 1
+      contains:
+        - "Error: team[name=\"{{ p }}-t2\"] has 'skip_members' enabled, but 'members' is set to ['{{ logins.admin }}']."
+    plan: null
+
+  - name: valid
+    fragments:
+      teams:
+        - |
+          orgs.newTeam('{{ p }}-t3') {
+            description: "otterdog e2e: team validation",
+            privacy: "secret",
+            skip_members: true,
+            members: [],
+          }
+    validate:
+      ok: true
+      errors: 0
+      not_contains:
+        - 'team[name="{{ p }}-t3"] has'
+    plan: null

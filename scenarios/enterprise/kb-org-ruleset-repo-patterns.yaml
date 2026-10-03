@@ -1,0 +1,41 @@
+# Known bug KB-023: org ruleset repository-name patterns after the first one warn spuriously.
+id: enterprise.kb.org-ruleset-repo-patterns
+title: Org ruleset with several include_repo_names patterns (known bug KB-023)
+description: |
+  OrganizationRuleset.validate builds the repository names ONCE as a generator expression
+  (otterdog/models/organization_ruleset.py:46-47: all_repo_names = (x.name for x in repositories)) and passes it
+  to fnmatch.filter for every pattern; the first filter exhausts it, so every later include/exclude pattern matches
+  nothing and gets the warning "... that does not match any existing repository". Two declared repositories and two
+  include patterns (one per repository) must validate without that warning; the scenario is expected to fail
+  (xfail) while the bug exists. Validation only (plan: null): nothing is planned or applied.
+priority: P2
+min_plan: enterprise
+requires: [otterdog_org_rulesets]
+known_bug: KB-023
+tags: [rulesets, repo, enterprise, known-bug]
+steps:
+  - name: validate
+    fragments:
+      rulesets:
+        - |
+          orgs.newOrgRuleset('{{ p }}-org-patterns') {
+            include_repo_names: ["{{ p }}-pat-a", "{{ p }}-pat-b"],
+            include_refs+: ["~DEFAULT_BRANCH"],
+            required_pull_request: null,
+            required_status_checks: null,
+          }
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-pat-a') {
+            description: "otterdog e2e: org ruleset pattern a",
+          }
+        - |
+          orgs.newRepo('{{ p }}-pat-b') {
+            description: "otterdog e2e: org ruleset pattern b",
+          }
+    validate:
+      ok: true
+      errors: 0
+      not_contains:
+        - "does not match any existing repository"
+    plan: null

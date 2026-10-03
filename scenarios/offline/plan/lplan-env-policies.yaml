@@ -1,0 +1,57 @@
+# Offline tier (battery, plan semantics): environment branch policies.
+id: O-LPLAN-ENV-POLICIES
+tier: offline
+title: Environment branch policies are only diffed with the 'selected' deployment branch policy
+description: >-
+  Environment.include_field_for_diff_computation drops branch_policies unless deployment_branch_policy is
+  'selected': a change of the policies of an 'all' or 'protected' environment plans nothing (validation warns that
+  they are ignored), the same change on a 'selected' environment is planned, and switching an environment to
+  'selected' plans the policy and its branch patterns together.
+priority: P1
+tags: [offline, environments]
+observe: true
+variables: {plan: free}
+steps:
+  - name: all-policies-ignored
+    base_fragments:
+      repositories: ["orgs.newRepo('{{ p }}-env') { environments: [orgs.newEnvironment('{{ p }}-e') { branch_policies: ['a'] }] }"]
+    fragments:
+      repositories: ["orgs.newRepo('{{ p }}-env') { environments: [orgs.newEnvironment('{{ p }}-e') { branch_policies: ['b'] }] }"]
+    validate:
+      ok: true
+      errors: 0
+      warnings_min: 1
+      contains:
+        - >-
+          Warning: environment[name="{{ p }}-e", repository={{ p }}-env] has 'deployment_branch_policy' set to 'all',
+          but 'branch_policies' is set to '['b']', setting will be ignored.
+    plan:
+      expect: noop
+      counts: {add: 0, change: 0, delete: 0}
+  - name: protected-policies-ignored
+    base_fragments:
+      repositories: ["orgs.newRepo('{{ p }}-env') { environments: [orgs.newEnvironment('{{ p }}-e') { deployment_branch_policy: 'protected', branch_policies: ['a'] }] }"]
+    fragments:
+      repositories: ["orgs.newRepo('{{ p }}-env') { environments: [orgs.newEnvironment('{{ p }}-e') { deployment_branch_policy: 'protected', branch_policies: ['b'] }] }"]
+    plan:
+      expect: noop
+      counts: {add: 0, change: 0, delete: 0}
+  - name: selected-policies-managed
+    base_fragments:
+      repositories: ["orgs.newRepo('{{ p }}-env') { environments: [orgs.newEnvironment('{{ p }}-e') { deployment_branch_policy: 'selected', branch_policies: ['a'] }] }"]
+    fragments:
+      repositories: ["orgs.newRepo('{{ p }}-env') { environments: [orgs.newEnvironment('{{ p }}-e') { deployment_branch_policy: 'selected', branch_policies: ['b'] }] }"]
+    validate: {ok: true, errors: 0}
+    plan:
+      expect: changes
+      counts: {add: 0, change: 1, delete: 0}
+      contains: ['~ environment[name="{{ p }}-e", repository={{ p }}-env] {', '~ "a" -> "b"']
+  - name: switch-to-selected
+    base_fragments:
+      repositories: ["orgs.newRepo('{{ p }}-env') { environments: [orgs.newEnvironment('{{ p }}-e')] }"]
+    fragments:
+      repositories: ["orgs.newRepo('{{ p }}-env') { environments: [orgs.newEnvironment('{{ p }}-e') { deployment_branch_policy: 'selected', branch_policies: ['main'] }] }"]
+    plan:
+      expect: changes
+      counts: {add: 0, change: 2, delete: 0}
+      contains: ['"all" -> "selected"', '+ "main"']

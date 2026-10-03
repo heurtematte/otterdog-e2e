@@ -1,0 +1,40 @@
+# Known bug KB-022 (suspected): an org variable selecting a repository created by the same apply fails.
+id: cli.kb.org-variable-same-apply
+title: Org variable selecting a repository created in the same apply (known bug KB-022)
+description: |
+  otterdog generates and applies live patches in a fixed order: roles, teams, settings, org webhooks, org secrets,
+  org variables, org rulesets, then repositories (models/github_organization.py:529-545; operations/apply.py only
+  moves read-only patches last). An org variable with visibility 'selected' resolves the ids of its repositories
+  while it is added (models/organization_variable.py get_mapping_to_provider -> GitHubProvider.get_repo_ids, a GET
+  per repository), so a repository created by the same apply does not exist yet and the variable patch fails
+  ("failed to apply patch"); a second apply succeeds. One configuration change (one PR on the webapp) cannot add both.
+  This scenario adds both at once, asserts a clean apply and the selection, and is expected to fail (xfail) while
+  the bug exists. cli.org.variable avoids it with two steps.
+priority: P2
+min_plan: free
+known_bug: KB-022
+tags: [variables, repo, known-bug]
+steps:
+  - name: create
+    fragments:
+      variables:
+        - |
+          orgs.newOrgVariable('{{ P }}_SAME_APPLY') {
+            value: "same apply",
+            visibility: "selected",
+            selected_repositories: ["{{ p }}-same-apply"],
+          }
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-same-apply') {
+            description: "otterdog e2e: org variable and repository in one apply",
+          }
+    plan:
+      expect: changes
+      contains:
+        - '+ add org_variable[name="{{ P }}_SAME_APPLY"]'
+        - '+ add repository[name="{{ p }}-same-apply"]'
+    state:
+      - kind: org_variable_repos
+        name: "{{ P }}_SAME_APPLY"
+        equals: ["{{ p }}-same-apply"]

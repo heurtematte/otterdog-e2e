@@ -1,0 +1,164 @@
+# Janitor (SPEC 9.5, 17, SEC-17): sweeps leftovers of finished or crashed runs on every enabled target. Only runs
+# registered in the ledger, older than --older-than and not holding an unexpired lease are swept. It joins the
+# concurrency group e2e-<target> and holds the org lease while deleting.
+#
+# Enabled targets: repository variable E2E_TARGETS, a JSON list such as ["free", "enterprise"] (default ["free"]).
+# Scheduled runs are skipped until E2E_TARGETS is set, so a fresh fork or clone stays quiet; workflow_dispatch always runs.
+name: janitor
+
+on:
+  schedule:
+    - cron: "41 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      older_than:
+        description: "Minimum age of the swept runs (90s, 10m, 6h, 2d)"
+        type: string
+        default: 6h
+      apply:
+        description: "Delete (otherwise only list)"
+        type: boolean
+        default: true
+
+permissions: {}
+
+cache-mode: none
+
+jobs:
+  janitor:
+    name: janitor ${{ matrix.target }}
+    if: ${{ vars.E2E_TARGETS != '' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ${{ fromJSON(vars.E2E_TARGETS || '["free"]') }}
+    environment: e2e-${{ matrix.target }}
+    concurrency:
+      group: e2e-${{ matrix.target }}
+      cancel-in-progress: false
+      queue: max
+    env:
+      E2E_LEASE_WAIT: "900"
+    steps:
+      - name: Check out the harness
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Prepare the harness directories
+        run: |
+          set -euo pipefail
+          {
+            echo "E2E_CACHE_DIR=$RUNNER_TEMP/otterdog-e2e-cache"
+            echo "E2E_ARTIFACTS=$RUNNER_TEMP/otterdog-e2e-artifacts"
+          } >> "$GITHUB_ENV"
+      - name: Install the harness
+        env:
+          POETRY_VERSION: "2.5.1"
+          POETRY_VIRTUALENVS_IN_PROJECT: "true"
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --no-input "poetry==${POETRY_VERSION}"
+          poetry install --no-interaction --only main
+      - name: Load the target configuration (environment variables, no secrets)
+        env:
+          E2E_ORG: ${{ vars.E2E_ORG }}
+          E2E_ORG_ID: ${{ vars.E2E_ORG_ID }}
+          E2E_ALLOWED_ORG_IDS: ${{ vars.E2E_ALLOWED_ORG_IDS }}
+          E2E_ADMIN_LOGIN: ${{ vars.E2E_ADMIN_LOGIN }}
+          E2E_CONFIGS_REPO: ${{ vars.E2E_CONFIGS_REPO }}
+          E2E_ORG_CONFIG_REPO: ${{ vars.E2E_ORG_CONFIG_REPO }}
+          E2E_DEFAULTS_REPO: ${{ vars.E2E_DEFAULTS_REPO }}
+          E2E_ADMIN_TEAM: ${{ vars.E2E_ADMIN_TEAM }}
+          E2E_APPROVAL_TEAM: ${{ vars.E2E_APPROVAL_TEAM }}
+          E2E_CONTRIBUTORS_TEAM: ${{ vars.E2E_CONTRIBUTORS_TEAM }}
+          E2E_VALIDATION_CONTEXT: ${{ vars.E2E_VALIDATION_CONTEXT }}
+          E2E_SYNC_CONTEXT: ${{ vars.E2E_SYNC_CONTEXT }}
+        run: |
+          set -euo pipefail
+          while IFS= read -r name; do
+            value="${!name}"
+            if [[ -z "$value" ]]; then continue; fi
+            if [[ "$value" == *$'\n'* || "$value" == *$'\r'* ]]; then
+              echo "::error::variable $name contains a line break"
+              exit 1
+            fi
+            printf '%s=%s\n' "$name" "$value" >> "$GITHUB_ENV"
+          done < <(compgen -e | grep -E '^E2E_')
+      - name: Run the janitor
+        id: janitor
+        timeout-minutes: 20
+        env:
+          TARGET: ${{ matrix.target }}
+          OLDER_THAN: ${{ inputs.older_than }}
+          APPLY: ${{ github.event_name == 'schedule' || inputs.apply }}
+          E2E_ADMIN_TOKEN: ${{ secrets.E2E_ADMIN_TOKEN }}
+        run: |
+          set -euo pipefail
+          older_than="${OLDER_THAN:-6h}"
+          [[ "$older_than" =~ ^[0-9]+(\.[0-9]+)?[smhd]?$ ]] || { echo "::error::invalid older_than"; exit 1; }
+          args=(janitor --target "$TARGET" --older-than "$older_than")
+          if [[ "$APPLY" == true ]]; then args+=(--apply); fi
+          .venv/bin/otterdog-e2e "${args[@]}"
+      - name: Locate the run artifacts
+        if: always()
+        env:
+          LABEL: janitor-${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          ids=()
+          for file in "${E2E_ARTIFACTS:-/nonexistent}"/*/run.json; do
+            id="${file%/run.json}"
+            id="${id##*/}"
+            if [[ "$id" =~ ^[0-9a-z]{6}[0-9a-f]{2}$ ]]; then ids+=("$id"); fi
+          done
+          label="$(printf '%s' "$LABEL" | tr -c 'A-Za-z0-9._-' '-' | cut -c1-60)"
+          {
+            echo "E2E_RUN_IDS=${ids[*]}"
+            echo "E2E_ARTIFACT_NAME=e2e-${label}-${ids[0]:-norun-${GITHUB_RUN_ATTEMPT}-${RANDOM}}"
+          } >> "$GITHUB_ENV"
+      - name: Scrub the artifacts (fails on leaked secrets)
+        id: scrub
+        if: always()
+        timeout-minutes: 5
+        # the secrets of this job, so the scan finds leaked values that have no token shape (webhook secret,
+        # password, TOTP seed) and the encoded variants of every secret: a separate step inherits no secret, and the
+        # session's own scrub never ran when the session step was killed (ISO-02)
+        env:
+          E2E_ADMIN_TOKEN: ${{ secrets.E2E_ADMIN_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ ! -d "${E2E_ARTIFACTS:-/nonexistent}" ]]; then
+            echo "no artifacts to scrub"
+            exit 0
+          fi
+          .venv/bin/otterdog-e2e scrub-artifacts "$E2E_ARTIFACTS"
+      - name: Upload the artifacts
+        if: always() && steps.scrub.outcome == 'success'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ env.E2E_ARTIFACT_NAME }}
+          path: ${{ runner.temp }}/otterdog-e2e-artifacts
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Job summary
+        if: always()
+        env:
+          TARGET: ${{ matrix.target }}
+          JANITOR_OUTCOME: ${{ steps.janitor.outcome }}
+        run: |
+          set -euo pipefail
+          {
+            echo "### otterdog-e2e janitor: \`$TARGET\`"
+            echo
+            echo "- outcome: $JANITOR_OUTCOME"
+            echo "- artifact: \`${E2E_ARTIFACT_NAME:-none}\` (kept 7 days)"
+          } >> "$GITHUB_STEP_SUMMARY"

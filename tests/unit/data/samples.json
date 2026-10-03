@@ -1,0 +1,807 @@
+{
+ "apply-executed": {
+  "argv": [
+   "otterdog",
+   "local-apply",
+   "-f",
+   "-n",
+   "-d",
+   "e2e-test-org"
+  ],
+  "base": "configs/local-apply-offline.jsonnet-BASE",
+  "case": "local-apply-offline",
+  "config": "configs/local-apply-offline.jsonnet",
+  "description": "Executed plan with -d: real local-apply prefix + otterdog's own printer tail",
+  "exit_code": 0,
+  "synthetic": true
+ },
+ "apply-executed-ignored": {
+  "argv": [
+   "otterdog",
+   "local-apply",
+   "-f",
+   "-n",
+   "e2e-test-org"
+  ],
+  "base": "configs/local-apply-offline.jsonnet-BASE",
+  "case": "local-apply-offline",
+  "config": "configs/local-apply-offline.jsonnet",
+  "description": "Executed plan without -d: real local-apply prefix + otterdog's own printer tail",
+  "exit_code": 0,
+  "synthetic": true
+ },
+ "apply-failed-patch": {
+  "argv": [
+   "otterdog",
+   "local-apply",
+   "-f",
+   "-n",
+   "-d",
+   "e2e-test-org"
+  ],
+  "base": "configs/local-apply-offline.jsonnet-BASE",
+  "case": "local-apply-offline",
+  "config": "configs/local-apply-offline.jsonnet",
+  "description": "one failed patch: real local-apply prefix + otterdog's own printer tail",
+  "exit_code": 1,
+  "synthetic": true
+ },
+ "apply-network": {
+  "argv": [
+   "otterdog",
+   "apply",
+   "-c",
+   "otterdog.json",
+   "--local",
+   "-f",
+   "-n",
+   "e2e-test-org"
+  ],
+  "base": null,
+  "case": "plan-offline",
+  "config": "configs/plan-offline.jsonnet",
+  "description": "apply -f -n offline: network error (exit 2)",
+  "exit_code": 2,
+  "synthetic": false
+ },
+ "apply-validation-error": {
+  "argv": [
+   "otterdog",
+   "apply",
+   "-c",
+   "otterdog.json",
+   "--local",
+   "-f",
+   "-n",
+   "e2e-test-org"
+  ],
+  "base": null,
+  "case": "plan-validation-error",
+  "config": "configs/plan-validation-error.jsonnet",
+  "description": "apply -f -n with a validation error: exit 0 (known bug)",
+  "exit_code": 0,
+  "synthetic": false
+ },
+ "canonical-diff": {
+  "argv": [
+   "otterdog",
+   "canonical-diff",
+   "-c",
+   "otterdog.json",
+   "--local",
+   "e2e-test-org"
+  ],
+  "base": null,
+  "case": "show",
+  "config": "configs/show.jsonnet",
+  "description": "canonical-diff --local (labels inverted)",
+  "exit_code": 0,
+  "synthetic": false
+ },
+ "check-status": {
+  "argv": [
+   "otterdog",
+   "check-status",
+   "-c",
+   "otterdog.json",
+   "-n",
+   "-j",
+   "check-status.json",
+   "e2e-test-org"
+  ],
+  "base": null,
+  "case": null,
+  "config": null,
+  "description": "check_status.py handle_finish/post_execute output (live only)",
+  "exit_code": 0,
+  "json": "check-status.json",
+  "synthetic": true
+ },
+ "check-status-network": {
+  "argv": [
+   "otterdog",
+   "check-status",
+   "-c",
+   "otterdog.json",
+   "--local",
+   "-n",
+   "-j",
+   "status.json",
+   "e2e-test-org"
+  ],
+  "base": null,
+  "case": "check-status-offline",
+  "config": "configs/check-status-offline.jsonnet",
+  "description": "check-status -n -j offline: network error, no JSON",
+  "exit_code": 2,
+  "synthetic": false
+ },
+ "check-status-out-of-sync": {
+  "argv": [
+   "otterdog",
+   "check-status",
+   "-c",
+   "otterdog.json",
+   "-n",
+   "-j",
+   "check-status-out-of-sync.json",
+   "e2e-test-org"
+  ],
+  "base": null,
+  "case": null,
+  "config": null,
+  "description": "check_status.py handle_finish/post_execute output (live only)",
+  "exit_code": 0,
+  "json": "check-status-out-of-sync.json",
+  "synthetic": true
+ },
+ "list-projects": {
+  "argv": [
+   "otterdog",
+   "list-projects",
+   "-c",
+   "otterdog.json"
+  ],
+  "base": null,
+  "case": "list-projects",
+  "config": "configs/list-projects.jsonnet",
+  "description": "list-projects (rich table, no org positional)",
+  "exit_code": 0,
+  "synthetic": false
+ },
+ "local-apply-network": {
+  "argv": [
+   "otterdog",
+   "local-apply",
+   "-c",
+   "otterdog.json",
+   "--local",
+   "-f",
+   "-n",
+   "-d",
+   "e2e-test-org"
+  ],
+  "base": "configs/local-apply-offline.jsonnet-BASE",
+  "case": "local-apply-offline",
+  "config": "configs/local-apply-offline.jsonnet",
+  "description": "local-apply -f -n -d offline: plan blocks, progress bar, network error",
+  "exit_code": 2,
+  "synthetic": false
+ },
+ "local-apply-no-changes": {
+  "argv": [
+   "otterdog",
+   "local-apply",
+   "-c",
+   "otterdog.json",
+   "--local",
+   "-f",
+   "-n",
+   "e2e-test-org"
+  ],
+  "base": "configs/local-apply-nochange.jsonnet-BASE",
+  "case": "local-apply-nochange",
+  "config": "configs/local-apply-nochange.jsonnet",
+  "description": "No changes required + would be deleted without -d",
+  "exit_code": 0,
+  "synthetic": false
+ },
+ "local-plan-add": {
+  "argv": [
+   "otterdog",
+   "local-plan",
+   "-c",
+   "otterdog.json",
+   "--local",
+   "e2e-test-org"
+  ],
+  "base": "configs/local-plan-add.jsonnet-BASE",
+  "case": "local-plan-add",
+  "config": "configs/local-plan-add.jsonnet",
+  "description": "adds: repo with secret/variable/webhook/BPR/environment, org secret/variable/webhook, custom property",
+  "exit_code": 0,
+  "synthetic": false
+ },
+ "local-plan-add-cache-hidden": {
+  "argv": [
+   "otterdog",
+   "local-plan",
+   "-c",
+   "otterdog.json",
+   "--local",
+   "e2e-test-org"
+  ],
+  "base": "configs/local-plan-add-cache-hidden.jsonnet-BASE",
+  "case": "local-plan-add-cache-hidden",
+  "config": "configs/local-plan-add-cache-hidden.jsonnet",
+  "description": "repo add with hidden max_cache_size_gb",
+  "exit_code": 0,
+  "synthetic": false
+ },
+ "local-plan-cache-limit-hidden": {
+  "argv": [
+   "otterdog",
+   "local-plan",
+   "-c",
+   "otterdog.json",
+   "--local",
+   "e2e-test-org"
+  ],
+  "base": "configs/local-plan-cache-limit.jsonnet-BASE",
+  "case": "local-plan-cache-limit",
+  "config": "configs/local-plan-cache-limit.jsonnet",
+  "description": "hide_cache_limit vs visible max_cache_size_gb: no diff (UNSET)",
+  "exit_code": 0,
+  "synthetic": false
+ },
+ "local-plan-change": {
+  "argv": [
+   "otterdog",
+   "local-plan",
+   "-c",
+   "otterdog.json",
+   "--local",
+   "e2e-test-org"
+  ],
+  "base": "configs/local-plan-change.jsonnet-BASE",
+  "case": "local-plan-change",
+  "config": "configs/local-plan-change.jsonnet",
+  "description": "changes incl. nested objects and an org setting (coerced repo keys)",
+  "exit_code": 0,
+  "synthetic": false
+ },
+ "local-plan-description-removed": {
+  "argv": [
+   "otterdog",
+   "local-plan",
+   "-c",
+   "otterdog.json",
+   "--local",
+   "e2e-test-org"
+  ],
+  "base": "configs/local-plan-profile-wipe.jsonnet-BASE",
+  "case": "local-plan-profile-wipe",
+  "config": "configs/local-plan-profile-wipe.jsonnet",
+  "description": "org description removed (what the baseline guard refuses)",
+  "exit_code": 0,
+  "synthetic": false
+ },
+ "local-plan-env-nested-add": {
+  "argv": [
+   "otterdog",
+   "local-plan",
+   "-c",
+   "otterdog.json",
+   "--local",
+   "e2e-test-org"
+  ],
+  "base": "configs/local-plan-env-nested.jsonnet-BASE",
+  "case": "local-plan-env-nested",
+  "config": "configs/local-plan-env-nested.jsonnet",
+  "description": "env secret/variable (parent environment=) and repo ruleset adds",
+  "exit_code": 0,
+  "synthetic": false
+ },
+ "local-plan-env-nested-remove": {
+  "argv": [
+   "otterdog",
+   "local-plan",
+   "-c",
+   "otterdog.json",
+   "--local",
+   "e2e-test-org"
+  ],
+  "base": "configs/local-plan-env-nested-remove.jsonnet-BASE",
+  "case": "local-plan-env-nested-remove",
+  "config": "configs/local-plan-env-nested-remove.jsonnet",
+  "description": "the same objects removed",
+  "exit_code": 0,
+  "synthetic": false
+ },
+ "local-plan-forced": {
+  "argv": [
+   "otterdog",
+   "local-plan",
+   "-c",
+   "otterdog.json",
+   "--local",
+   "--update-secrets",
+   "--update-webhooks",
+   "e2e-test-org"
+  ],
+  "base": "configs/local-plan-forced.jsonnet-BASE",
+  "case": "local-plan-forced",
+  "config": "configs/local-plan-forced.jsonnet",
+  "description": "--update-secrets --update-webhooks: forced (!) updates",
+  "exit_code": 0,
+  "synthetic": false
+ },
+ "local-plan-missing-base": {
+  "argv": [
+   "otterdog",
+   "local-plan",
+   "-c",
+   "otterdog.json",
+   "--local",
+   "e2e-test-org"
+  ],
+  "base": null,
+  "case": "local-plan-missing-base",
+  "config": "configs/local-plan-missing-base.jsonnet",
+  "description": "-BASE missing: failed to load current configuration",
+  "exit_code": 1,
+  "synthetic": false
+ },
+ "local-plan-noop": {
+  "argv": [
+   "otterdog",
+   "local-plan",
+   "-c",
+   "otterdog.json",
+   "--local",
+   "e2e-test-org"
+  ],
+  "base": "configs/local-plan-noop.jsonnet-BASE",
+  "case": "local-plan-noop",
+  "config": "configs/local-plan-noop.jsonnet",
+  "description": "identical configs",
+  "exit_code": 0,
+  "synthetic": false
+ },
+ "local-plan-readonly": {
+  "argv": [
+   "otterdog",
+   "local-plan",
+   "-c",
+   "otterdog.json",
+   "--local",
+   "e2e-test-org"
+  ],
+  "base": "configs/local-plan-readonly.jsonnet-BASE",
+  "case": "local-plan-readonly",
+  "config": "configs/local-plan-readonly.jsonnet",
+  "description": "plan free -> team: Note read-only, 0 to change",
+  "exit_code": 0,
+  "synthetic": false
+ },
+ "local-plan-remove": {
+  "argv": [
+   "otterdog",
+   "local-plan",
+   "-c",
+   "otterdog.json",
+   "--local",
+   "e2e-test-org"
+  ],
+  "base": "configs/local-plan-remove.jsonnet-BASE",
+  "case": "local-plan-remove",
+  "config": "configs/local-plan-remove.jsonnet",
+  "description": "removals: org-level objects, nested objects of a kept repo, a whole repo",
+  "exit_code": 0,
+  "synthetic": false
+ },
+ "local-plan-remove-enterprise": {
+  "argv": [
+   "otterdog",
+   "local-plan",
+   "-c",
+   "otterdog.json",
+   "--local",
+   "e2e-test-org"
+  ],
+  "base": "configs/local-plan-enterprise-remove.jsonnet-BASE",
+  "case": "local-plan-enterprise-remove",
+  "config": "configs/local-plan-enterprise-remove.jsonnet",
+  "description": "org role and org ruleset removals (plan enterprise)",
+  "exit_code": 0,
+  "synthetic": false
+ },
+ "local-plan-remove-filtered": {
+  "argv": [
+   "otterdog",
+   "local-plan",
+   "-c",
+   "otterdog.json",
+   "--local",
+   "-r",
+   "e2e-t3c7z8a5-gone",
+   "e2e-test-org"
+  ],
+  "base": "configs/local-plan-remove.jsonnet-BASE",
+  "case": "local-plan-remove",
+  "config": "configs/local-plan-remove.jsonnet",
+  "description": "same with -r <repo>: org-level removals are NOT filtered (OC-02)",
+  "exit_code": 0,
+  "synthetic": false
+ },
+ "local-plan-remove-repo": {
+  "argv": [
+   "otterdog",
+   "local-plan",
+   "-c",
+   "otterdog.json",
+   "--local",
+   "e2e-test-org"
+  ],
+  "base": "configs/local-plan-remove-nested-repo.jsonnet-BASE",
+  "case": "local-plan-remove-nested-repo",
+  "config": "configs/local-plan-remove-nested-repo.jsonnet",
+  "description": "removing a repo with nested objects: ONE header, counted once",
+  "exit_code": 0,
+  "synthetic": false
+ },
+ "local-plan-remove-teams": {
+  "argv": [
+   "otterdog",
+   "local-plan",
+   "-c",
+   "otterdog.json",
+   "--local",
+   "e2e-test-org"
+  ],
+  "base": "configs/local-plan-remove-teams.jsonnet-BASE",
+  "case": "local-plan-remove-teams",
+  "config": "configs/local-plan-remove-teams.jsonnet",
+  "description": "team removals (run team and a baseline-like team)",
+  "exit_code": 0,
+  "synthetic": false
+ },
+ "local-plan-unknown-property": {
+  "argv": [
+   "otterdog",
+   "local-plan",
+   "-c",
+   "otterdog.json",
+   "--local",
+   "e2e-test-org"
+  ],
+  "base": "configs/validate-unknown-property.jsonnet-BASE",
+  "case": "validate-unknown-property",
+  "config": "configs/validate-unknown-property.jsonnet",
+  "description": "unknown settings key in a local-plan",
+  "exit_code": 0,
+  "synthetic": false
+ },
+ "local-plan-validation-error": {
+  "argv": [
+   "otterdog",
+   "local-plan",
+   "-c",
+   "otterdog.json",
+   "--local",
+   "e2e-test-org"
+  ],
+  "base": "configs/local-plan-validation-error.jsonnet-BASE",
+  "case": "local-plan-validation-error",
+  "config": "configs/local-plan-validation-error.jsonnet",
+  "description": "validation error: 'Planning aborted', no Plan: line",
+  "exit_code": 1,
+  "synthetic": false
+ },
+ "local-plan-webhook-secret-removed": {
+  "argv": [
+   "otterdog",
+   "local-plan",
+   "-c",
+   "otterdog.json",
+   "--local",
+   "e2e-test-org"
+  ],
+  "base": "configs/local-plan-webhook-secret-removed.jsonnet-BASE",
+  "case": "local-plan-webhook-secret-removed",
+  "config": "configs/local-plan-webhook-secret-removed.jsonnet",
+  "description": "plain 'Warning: removing secret for webhook' line",
+  "exit_code": 0,
+  "synthetic": false
+ },
+ "plan-network": {
+  "argv": [
+   "otterdog",
+   "plan",
+   "-c",
+   "otterdog.json",
+   "--local",
+   "-n",
+   "e2e-test-org"
+  ],
+  "base": null,
+  "case": "plan-offline",
+  "config": "configs/plan-offline.jsonnet",
+  "description": "plan -n offline: network error (exit 2)",
+  "exit_code": 2,
+  "synthetic": false
+ },
+ "plan-validation-error": {
+  "argv": [
+   "otterdog",
+   "plan",
+   "-c",
+   "otterdog.json",
+   "--local",
+   "-n",
+   "e2e-test-org"
+  ],
+  "base": null,
+  "case": "plan-validation-error",
+  "config": "configs/plan-validation-error.jsonnet",
+  "description": "plan -n with a validation error (exit 1)",
+  "exit_code": 1,
+  "synthetic": false
+ },
+ "push-config-network": {
+  "argv": [
+   "otterdog",
+   "push-config",
+   "-c",
+   "otterdog.json",
+   "--local",
+   "-f",
+   "-m",
+   "e2e push",
+   "e2e-test-org"
+  ],
+  "base": null,
+  "case": "push-config-offline",
+  "config": "configs/push-config-offline.jsonnet",
+  "description": "push-config -f offline: network error",
+  "exit_code": 2,
+  "synthetic": false
+ },
+ "show": {
+  "argv": [
+   "otterdog",
+   "show",
+   "-c",
+   "otterdog.json",
+   "--local",
+   "e2e-test-org"
+  ],
+  "base": null,
+  "case": "show",
+  "config": "configs/show.jsonnet",
+  "description": "show --local",
+  "exit_code": 0,
+  "synthetic": false
+ },
+ "show-default": {
+  "argv": [
+   "otterdog",
+   "show-default",
+   "-c",
+   "otterdog.json",
+   "--local",
+   "e2e-test-org"
+  ],
+  "base": null,
+  "case": "show",
+  "config": "configs/show.jsonnet",
+  "description": "show-default --local",
+  "exit_code": 0,
+  "synthetic": false
+ },
+ "validate-790": {
+  "argv": [
+   "otterdog",
+   "validate",
+   "-c",
+   "otterdog.json",
+   "--local",
+   "e2e-test-org"
+  ],
+  "base": null,
+  "case": "validate-790",
+  "config": "configs/validate-790.jsonnet",
+  "description": "repo ruleset required_status_checks without strict (#790)",
+  "exit_code": 1,
+  "synthetic": false
+ },
+ "validate-errors": {
+  "argv": [
+   "otterdog",
+   "validate",
+   "-c",
+   "otterdog.json",
+   "--local",
+   "e2e-test-org"
+  ],
+  "base": null,
+  "case": "validate-errors",
+  "config": "configs/validate-errors.jsonnet",
+  "description": "3 errors: private org secret on free, org ruleset on free, ruleset status checks without strict",
+  "exit_code": 3,
+  "synthetic": false
+ },
+ "validate-infos-hidden": {
+  "argv": [
+   "otterdog",
+   "validate",
+   "-c",
+   "otterdog.json",
+   "--local",
+   "e2e-test-org"
+  ],
+  "base": null,
+  "case": "validate-infos",
+  "config": "configs/validate-infos.jsonnet",
+  "description": "dummy secrets: infos hidden without -v",
+  "exit_code": 0,
+  "synthetic": false
+ },
+ "validate-infos-verbose": {
+  "argv": [
+   "otterdog",
+   "validate",
+   "-c",
+   "otterdog.json",
+   "--local",
+   "-v",
+   "e2e-test-org"
+  ],
+  "base": null,
+  "case": "validate-infos",
+  "config": "configs/validate-infos.jsonnet",
+  "description": "same config with -v: Info boxes",
+  "exit_code": 0,
+  "synthetic": false
+ },
+ "validate-missing-config": {
+  "argv": [
+   "otterdog",
+   "validate",
+   "-c",
+   "otterdog.json",
+   "--local",
+   "e2e-test-org"
+  ],
+  "base": null,
+  "case": "validate-missing-config",
+  "config": null,
+  "description": "org config file missing",
+  "exit_code": 1,
+  "synthetic": false
+ },
+ "validate-network": {
+  "argv": [
+   "otterdog",
+   "validate",
+   "-c",
+   "otterdog.json",
+   "--local",
+   "e2e-test-org"
+  ],
+  "base": null,
+  "case": "validate-teams-offline",
+  "config": "configs/validate-teams-offline.jsonnet",
+  "description": "teams make validate call GitHub: network error offline (exit 2)",
+  "exit_code": 2,
+  "synthetic": false
+ },
+ "validate-ok": {
+  "argv": [
+   "otterdog",
+   "validate",
+   "-c",
+   "otterdog.json",
+   "--local",
+   "e2e-test-org"
+  ],
+  "base": null,
+  "case": "validate-ok",
+  "config": "configs/validate-ok.jsonnet",
+  "description": "valid config, no notices",
+  "exit_code": 0,
+  "synthetic": false
+ },
+ "validate-plan-gate": {
+  "argv": [
+   "otterdog",
+   "validate",
+   "-c",
+   "otterdog.json",
+   "--local",
+   "e2e-test-org"
+  ],
+  "base": null,
+  "case": "validate-plan-gate",
+  "config": "configs/validate-plan-gate.jsonnet",
+  "description": "org ruleset with plan free",
+  "exit_code": 1,
+  "synthetic": false
+ },
+ "validate-schema": {
+  "argv": [
+   "otterdog",
+   "validate",
+   "-c",
+   "otterdog.json",
+   "--local",
+   "e2e-test-org"
+  ],
+  "base": null,
+  "case": "validate-schema",
+  "config": "configs/validate-schema.jsonnet",
+  "description": "JSON-schema type error (uncaught, exit 2)",
+  "exit_code": 2,
+  "synthetic": false
+ },
+ "validate-syntax": {
+  "argv": [
+   "otterdog",
+   "validate",
+   "-c",
+   "otterdog.json",
+   "--local",
+   "e2e-test-org"
+  ],
+  "base": null,
+  "case": "validate-syntax",
+  "config": "configs/validate-syntax.jsonnet",
+  "description": "jsonnet syntax error (load error, exit 1)",
+  "exit_code": 1,
+  "synthetic": false
+ },
+ "validate-unknown-property": {
+  "argv": [
+   "otterdog",
+   "validate",
+   "-c",
+   "otterdog.json",
+   "--local",
+   "e2e-test-org"
+  ],
+  "base": "configs/validate-unknown-property.jsonnet-BASE",
+  "case": "validate-unknown-property",
+  "config": "configs/validate-unknown-property.jsonnet",
+  "description": "unknown settings key: logger WARNING with file.py:LINE",
+  "exit_code": 0,
+  "synthetic": false
+ },
+ "validate-warnings": {
+  "argv": [
+   "otterdog",
+   "validate",
+   "-c",
+   "otterdog.json",
+   "--local",
+   "e2e-test-org"
+  ],
+  "base": null,
+  "case": "validate-warnings",
+  "config": "configs/validate-warnings.jsonnet",
+  "description": "warnings only (plain secret value, private repo wiki on free)",
+  "exit_code": 0,
+  "synthetic": false
+ },
+ "version": {
+  "argv": [
+   "otterdog",
+   "--version"
+  ],
+  "base": null,
+  "case": "version",
+  "config": null,
+  "description": "--version",
+  "exit_code": 0,
+  "synthetic": false
+ }
+}

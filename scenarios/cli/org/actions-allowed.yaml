@@ -1,0 +1,101 @@
+# org-workflows.allowed-actions (P1) and org-workflows.fork-pr-approval (P2), org_level: which actions may run.
+id: cli.org.actions-allowed
+title: Organization allowed actions and fork pull request approval policy
+tier: cli
+description: |
+  settings.workflows.allowed_actions all | selected with allow_github_owned_actions, allow_verified_creator_actions
+  and allow_action_patterns (GitHub's selected-actions endpoint: github_owned_allowed, verified_allowed,
+  patterns_allowed; otterdog/models/workflow_settings.py:43-46, :167-208, org_client.py:621-639), plus the
+  organization's fork_pr_approval_policy (PUT .../actions/permissions/fork-pr-contributor-approval, org_client.py:
+  661-681). The 'selected' step keeps GitHub-owned actions allowed (workflows of the org keep running), refuses
+  verified creators, allows 'actions/*' and requires approval for all external contributors: the oracle reads the
+  policy, the selected actions and the approval policy, and the plan converges; a run repository keeping the
+  template's allowed_actions 'all' is less restrictive than the organization, so its value is ignored (validate -v
+  Info). The 'all' step is the template value (the baseline): the selected-actions keys are no longer diffed
+  (otterdog/models/workflow_settings.py:152-157), GitHub answers 409 for the selected actions (absent), and the
+  approval policy goes to GitHub's default first_time_contributors: the example template does not set an
+  organization fork_pr_approval_policy, so the harness baseline pins GitHub's default
+  (otterdog_e2e.otterdog.render.BASELINE_WORKFLOW_DEFAULTS) and the org_level cleanup restores it even when a step
+  fails before 'all' (BAT-14). 'local_only' is never applied (it would block GitHub-owned actions in the whole org); an invalid
+  approval policy is refused by validation (its message prints a Python set, KB-038: only the stable prefix is
+  asserted). org_level: unfiltered plans, full baseline reset as cleanup.
+priority: P1
+org_level: true
+tags: [workflows, org-settings, repo]
+steps:
+  - name: selected
+    fragments:
+      settings:
+        - |
+          workflows+: {
+            allowed_actions: 'selected',
+            allow_github_owned_actions: true,
+            allow_verified_creator_actions: false,
+            allow_action_patterns: ['actions/*'],
+            fork_pr_approval_policy: 'all_external_contributors',
+          }
+      repositories: &repo
+        - "orgs.newRepo('{{ p }}-allowed') { description: 'otterdog e2e: allowed actions' }"
+    validate:
+      verbose: true
+      ok: true
+      contains:
+        - >-
+          Info: repository[name="{{ p }}-allowed"] has set 'allowed_actions' to 'all', while on organization level it
+          is more restricted to 'selected', setting will be ignored.
+    plan:
+      expect: changes
+      contains:
+        - "~ settings {"
+        - '"all" -> "selected"'
+        - '+ "actions/*"'
+        - "allow_verified_creator_actions"
+        - '+ add repository[name="{{ p }}-allowed"]'
+      # the approval policy is unmanaged by the baseline: its previous value (and so its plan line) is not asserted,
+      # the oracle checks the applied value
+    state:
+      - kind: org_actions
+        match: {allowed_actions: selected}
+      - kind: org_selected_actions
+        match: {github_owned_allowed: true, verified_allowed: false, patterns_allowed: ["actions/*"]}
+      - kind: org_fork_pr_approval
+        match: {approval_policy: all_external_contributors}
+
+  - name: invalid-approval-policy
+    fragments:
+      settings:
+        - "workflows+: { fork_pr_approval_policy: 'everybody' }"
+      repositories: *repo
+    validate:
+      ok: false
+      errors: 1
+      contains:
+        - "settings has 'workflows.fork_pr_approval_policy' of value 'everybody', while only values {"
+    plan: null
+
+  - name: all
+    fragments:
+      settings:
+        - "workflows+: { fork_pr_approval_policy: 'first_time_contributors' }"
+      repositories: *repo
+    validate:
+      verbose: true
+      ok: true
+      not_contains:
+        - "has set 'allowed_actions' to 'all', while on organization level it is more restricted"
+    plan:
+      expect: changes
+      contains:
+        - "~ settings {"
+        - '"selected" -> "all"'
+        - '"all_external_contributors" -> "first_time_contributors"'
+      not_contains:
+        - "allow_action_patterns"
+        - "allow_verified_creator_actions"
+    state:
+      - kind: org_actions
+        match: {allowed_actions: all}
+      - kind: org_selected_actions
+        absent: true
+      - kind: org_fork_pr_approval
+        match: {approval_policy: first_time_contributors}

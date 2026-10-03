@@ -1,0 +1,46 @@
+# org-workflows.cache-size (P2, org_level): the organization's GitHub Actions cache storage limit.
+id: cli.org.cache-size
+title: Organization Actions cache storage limit
+tier: cli
+description: |
+  settings.workflows.max_cache_size_gb is read and written by otterdog on GET/PUT /orgs/{org}/actions/cache/
+  storage-limit (otterdog/providers/github/rest/org_client.py:562-593); GitHub documents the endpoint under
+  /organizations/{org}/... only (KB-006). The scenario runs where otterdog can manage the limit at all (capability
+  actions_cache_limit: both the repository endpoint and otterdog's /orgs path answer, otherwise the renderer hides
+  the key and nothing could be asserted): the limit goes from the template's 10 GB (the baseline) to 5 GB, which the
+  oracle reads on GitHub's documented path and on otterdog's path, and the plan converges; the last step is the
+  template value again. A smaller limit costs nothing (cost-related changes are increases beyond the cost policy's
+  free limit, otterdog/models/workflow_settings.py:81-92). The key is written with ':::' (the renderer hides it
+  where the capability is missing). org_level: unfiltered plans, full baseline reset as cleanup.
+priority: P2
+org_level: true
+requires: [actions_cache_limit]
+tags: [workflows, org-settings]
+steps:
+  - name: limit
+    fragments:
+      settings:
+        - "workflows+: { max_cache_size_gb::: 5 }"
+    plan:
+      expect: changes
+      contains:
+        - "~ settings {"
+        - "max_cache_size_gb"
+        - "-> 5"
+    state:
+      - kind: org_cache_storage_limit
+        match: {max_cache_size_gb: 5}
+      - kind: org_cache_storage_limit_orgs_path
+        match: {max_cache_size_gb: 5}
+
+  - name: template
+    plan:
+      expect: changes
+      contains:
+        - "~ settings {"
+        - "5 -> 10"
+    state:
+      - kind: org_cache_storage_limit
+        match: {max_cache_size_gb: 10}
+      - kind: org_cache_storage_limit_orgs_path
+        match: {max_cache_size_gb: 10}

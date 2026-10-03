@@ -1,0 +1,31 @@
+{
+    "workbench.colorCustomizations": {
+        "activityBar.background": "#613659",
+        "activityBar.foreground": "#C197D2",
+        "activityBar.inactiveForeground": "#b4b4b4",
+        "activityBar.activeBorder": "#9ec9a6",
+        "activityBar.activeBackground": "#D3B1C2",
+        "activityBar.border": "#D3B1C2",
+        "titleBar.activeBackground": "#613659",
+        "titleBar.activeForeground": "#C197D2",
+        "titleBar.inactiveBackground": "#4e494d",
+        "titleBar.inactiveForeground": "#b4b4b4",
+        "titleBar.border": "#D3B1C2",
+        "statusBar.background": "#613659",
+        "statusBar.foreground": "#C197D2",
+        "statusBar.border": "#D3B1C2"
+    },
+    "yaml.schemas": {
+        "./.vscode/scenario.schema.json": [
+            "scenarios/offline/**/*.yaml",
+            "scenarios/cli/**/*.yaml",
+            "scenarios/regressions/**/*.yaml",
+            "scenarios/enterprise/**/*.yaml"
+        ],
+        "./.vscode/any.schema.json": [
+            "scenarios/known_bugs.yaml",
+            "scenarios/coverage.yaml",
+            "scenarios/otterdog-prs/*.yaml"
+        ]
+    }
+}

@@ -1,0 +1,91 @@
+# org-workflows.enabled-repositories (P1, org_level): GitHub Actions enabled for all or for selected repositories.
+id: cli.org.actions-enabled-repositories
+title: Organization Actions availability for all or selected repositories
+tier: cli
+description: |
+  settings.workflows.enabled_repositories all | selected with selected_repositories (repository names, sent as ids:
+  otterdog/models/organization_workflow_settings.py:87-97, PUT /orgs/{org}/actions/permissions and
+  .../permissions/repositories, otterdog/providers/github/rest/org_client.py:595-619). The 'selected' step enables
+  Actions for every repository of the configuration except the run repository '<p>-act-off' (an overlay computes the
+  list from the rendered repositories, so the baseline repositories keep Actions whatever the target names them):
+  the oracle reads the policy and the selected repositories, the plan converges, and the repository left out has
+  its workflows settings ignored (validate -v Info, otterdog/models/repo_workflow_settings.py:87-97). 'none' is
+  never applied (it would stop every workflow of the org). The last step is the template's 'all' (the baseline):
+  the selected list is no longer diffed and GitHub reports no selection. org_level: unfiltered plans, full baseline
+  reset as cleanup. The repositories are created in a first step: the selection resolves repository ids when it is
+  applied, before the repositories of the same apply exist (plan-semantics.patch-order, as for KB-022).
+priority: P1
+org_level: true
+tags: [workflows, org-settings, repo]
+steps:
+  - name: repos
+    fragments:
+      repositories: &repos
+        - "orgs.newRepo('{{ p }}-act') { description: 'otterdog e2e: actions enabled' }"
+        - "orgs.newRepo('{{ p }}-act-off') { description: 'otterdog e2e: actions not selected' }"
+    plan:
+      expect: changes
+      contains:
+        - '+ add repository[name="{{ p }}-act"]'
+        - '+ add repository[name="{{ p }}-act-off"]'
+      not_contains:
+        - "~ settings {"
+    state:
+      - kind: org_actions
+        match: {enabled_repositories: all}
+
+  - name: selected
+    fragments:
+      repositories: *repos
+    overlay: |
+      {
+        settings+: {
+          workflows+: {
+            enabled_repositories: 'selected',
+            selected_repositories: std.set([repo.name for repo in $._repositories if repo.name != '{{ p }}-act-off']),
+          },
+        },
+      }
+    validate:
+      verbose: true
+      ok: true
+      contains:
+        - >-
+          Info: repository[name="{{ p }}-act-off"] has enabled workflows, while on organization level it is only
+          enabled for selected repositories, setting will be ignored.
+      not_contains:
+        - 'repository[name="{{ p }}-act"] has enabled workflows'
+    plan:
+      expect: changes
+      contains:
+        - "~ settings {"
+        - '"all" -> "selected"'
+        - '+ "{{ p }}-act"'
+      not_contains:
+        - '+ "{{ p }}-act-off"'
+    state:
+      - kind: org_actions
+        match: {enabled_repositories: selected}
+      - kind: org_actions_selected_repositories
+        contains: ["{{ p }}-act"]
+
+  - name: all
+    fragments:
+      repositories: *repos
+    validate:
+      verbose: true
+      ok: true
+      not_contains:
+        - "has enabled workflows, while on organization level"
+    plan:
+      expect: changes
+      contains:
+        - "~ settings {"
+        - '"selected" -> "all"'
+      not_contains:
+        - "selected_repositories"
+    state:
+      # the policy match alone: the selection listing answers 409 (an empty list) for every policy but 'selected', so
+      # an 'equals: []' could never fail (BAT-11); converge diffs a stale selection
+      - kind: org_actions
+        match: {enabled_repositories: all}
