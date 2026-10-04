@@ -14,6 +14,9 @@ cli.kb.list-advisories-markup (known bug KB-050): the CSV rows go through rich m
     words of a summary ('[e2e]') disappear from the CSV (and a '[/]' crashes the command).
 cli.token-scopes: ``check-token-permissions -l`` prints the classic token's granted scopes; the config_reader
     identity (a fine-grained token: no X-OAuth-Scopes header) is reported with every missing scope and exit 1.
+cli.kb.check-token-permissions-fine-grained (known bug KB-078): with a fine-grained admin token (the supported setup
+    when classic PATs are forbidden) the command must not report classic scopes as missing; it reports all five and
+    exits 1. Skipped with a classic admin token.
 
 Commands that need the local configuration read the baseline (written into the workspace, never applied); nothing
 here changes the org except the advisory tests, which only create run objects.
@@ -378,7 +381,10 @@ def test_check_token_permissions_lists_the_granted_scopes(
     token (a superset of the five otterdog needs), no 'Missing scopes', exit 0."""
     granted = e2e.http("admin").oauth_scopes()
     if granted is None:
-        pytest.skip("the admin token is not a classic token (no X-OAuth-Scopes): otterdog needs a classic PAT")
+        pytest.skip(
+            "the admin token is not a classic PAT (no X-OAuth-Scopes): no scope to list "
+            "(cli.kb.check-token-permissions-fine-grained covers fine-grained admin tokens, KB-078)"
+        )
     result = make_cli(fresh_workspace).run("check-token-permissions", "-l")
     text = cli_lines(result)
     assert result.exit_code == 0, f"exit {result.exit_code}:\n{text[-2000:]}"
@@ -410,3 +416,24 @@ def test_check_token_permissions_reports_missing_scopes(
     assert line, f"no 'Missing scopes:' line:\n{text[-2000:]}"
     assert scope_set(line.group("scopes")) == missing, (line.group("scopes"), sorted(missing))
     assert result.exit_code == 1, f"exit {result.exit_code} although scopes are missing"
+
+
+@pytest.mark.scenario("cli.kb.check-token-permissions-fine-grained", priority="P2")
+@pytest.mark.known_bug("KB-078")
+@pytest.mark.tags("known-bug")
+def test_check_token_permissions_accepts_a_fine_grained_admin(
+    e2e: E2EContext,
+    fresh_workspace: ConfigWorkspace,
+    make_cli: Callable[[ConfigWorkspace], OtterdogCli],
+    cli_lines: Callable[[CliResult], str],
+) -> None:
+    """``check-token-permissions`` with a fine-grained admin token (verified by the harness: resource owner = the test
+    org, owner reads answer 200) must not report missing scopes and must exit 0 (KB-078: EXPECTED_SCOPES are classic
+    scopes read from X-OAuth-Scopes, which GitHub does not send for fine-grained tokens, so all five are 'missing')."""
+    kind = e2e.http("admin").token_info().kind
+    if kind != "fine-grained":
+        pytest.skip(f"the admin token is a {kind} token: KB-078 only concerns fine-grained admin tokens")
+    result = make_cli(fresh_workspace).run("check-token-permissions")
+    text = cli_lines(result)
+    assert MISSING_RE.search(text) is None, f"classic scopes reported missing for a fine-grained token:\n{text[-2000:]}"
+    assert result.exit_code == 0, f"exit {result.exit_code}:\n{text[-2000:]}"

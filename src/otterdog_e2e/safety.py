@@ -5,6 +5,17 @@ component able to mutate GitHub (Mutator, TemplatePublisher, Janitor, OrgLease, 
 GitHubHttp with write_scope) requires one, so no mutation path can be built without the checks having passed.
 
 verify_target raises SafetyError for every failed check (GitHub errors included, chained as ``__cause__``).
+
+Identity isolation depends on the kind of token (docs/security.md, "Fine-grained personal access tokens"):
+
+- classic PAT (GET /rate_limit answers X-OAuth-Scopes): its scopes must be allowed for the role and the ACCOUNT may
+  only belong to test organizations (GET /user/orgs, GET /user/memberships/orgs?state=pending);
+- fine-grained PAT (``github_pat_``, no X-OAuth-Scopes): bound to ONE resource owner, so isolation is proven on the
+  TOKEN: owner roles must read org-owner-only data of the test org (FINE_GRAINED_OWNER_PROBES), author/approver their
+  own active membership of the test org through an organization permission (FINE_GRAINED_MEMBER_PROBE). GitHub
+  answers GET /user/orgs with an empty list for fine-grained tokens, so the account check proves nothing for them.
+  The outsider cannot use one (it must write to repos of an org it does not belong to), the read-only roles keep their
+  former rules.
 """
 
 from __future__ import annotations
@@ -56,11 +67,68 @@ ALLOWED_SCOPES: Mapping[str, frozenset[str]] = {
     ),
     "other": frozenset({"public_repo", "repo", "read:org", "read:user", "user:email", "workflow"}),
 }
-FINE_GRAINED_ROLES = frozenset({"config_reader", "readonly"})  # roles allowed to use fine-grained tokens
 # roles checked against ALLOWED_SCOPES["admin"]: the oracle falls back to the admin token and, when separate, needs
 # owner reads (admin:org, admin:org_hook) for org-level ground truth (GH-10)
 OWNER_ROLES = frozenset({"admin", "oracle"})
+MEMBER_ROLES = frozenset({"author", "approver"})  # active members of the test org (no owner rights)
+READ_ONLY_ROLES = frozenset({"config_reader", "readonly"})  # read public data only: any non-classic token accepted
 OUTSIDER_ROLE = "outsider"  # must NOT belong to (or be invited by) the test org
+# roles allowed to use fine-grained PATs: every role but the outsider (see CLASSIC_ONLY_ROLES of settings)
+FINE_GRAINED_ROLES = OWNER_ROLES | MEMBER_ROLES | READ_ONLY_ROLES
+
+# token kinds (TokenInfo.kind); the declared identities.<role>.token_type uses the first two
+CLASSIC, FINE_GRAINED, OTHER_TOKEN = "classic", "fine-grained", "other"
+FINE_GRAINED_PREFIX = "github_pat_"  # classic PATs start with ghp_, App/OAuth tokens with ghs_/ghu_/gho_
+TOKEN_EXPIRATION_HEADER = "github-authentication-token-expiration"  # noqa: S105 - a header name, sent for expiring tokens
+_EXPIRATION_FORMATS = ("%Y-%m-%d %H:%M:%S %Z", "%Y-%m-%d %H:%M:%S %z", "%Y-%m-%dT%H:%M:%S%z")
+
+
+@dataclass(frozen=True)
+class TokenInfo:
+    """What GET /rate_limit reveals about a token: kind, classic scopes and expiration."""
+
+    kind: str  # CLASSIC, FINE_GRAINED or OTHER_TOKEN (App installation / user-to-server tokens, unknown prefixes)
+    scopes: frozenset[str] | None = None  # classic scopes (None for other kinds)
+    expires_at: datetime | None = None  # None: no expiration header (classic tokens may never expire)
+    expiration_header: str | None = None  # raw header value (kept when it cannot be parsed)
+
+
+def token_kind(scopes_header: str | None, token: str | None) -> str:
+    """CLASSIC when X-OAuth-Scopes is present, FINE_GRAINED for a ``github_pat_`` token without it, else OTHER_TOKEN."""
+    if scopes_header is not None:
+        return CLASSIC
+    return FINE_GRAINED if (token or "").startswith(FINE_GRAINED_PREFIX) else OTHER_TOKEN
+
+
+def parse_token_expiration(value: str | None) -> datetime | None:
+    """Aware datetime of a github-authentication-token-expiration value (``2026-11-03 12:00:00 UTC``), else None."""
+    text = (value or "").strip()
+    for fmt in _EXPIRATION_FORMATS:
+        try:
+            parsed = datetime.strptime(text, fmt)  # noqa: DTZ007 - naive values are UTC (below)
+        except ValueError:
+            continue
+        return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
+    return None
+
+
+@dataclass(frozen=True)
+class PermissionProbe:
+    """A read that needs a fine-grained permission (path template with {org}; the permission as shown on GitHub)."""
+
+    path: str
+    permission: str
+
+
+# org-owner-only reads: a fine-grained token answers 200 only when its resource owner is the org AND its user is an
+# owner; classic tokens need admin:org / admin:org_hook (openapi: actions/get-github-actions-permissions-organization,
+# orgs/list-webhooks; ghdocs fine-grained permission tables "Administration" and "Webhooks", organization permissions)
+FINE_GRAINED_OWNER_PROBES = (
+    PermissionProbe("/orgs/{org}/actions/permissions", "Organization > Administration: Read-only"),
+    PermissionProbe("/orgs/{org}/hooks", "Organization > Webhooks: Read-only"),
+)
+# the token user's own membership, through an ORGANIZATION permission (only granted on the token's resource owner)
+FINE_GRAINED_MEMBER_PROBE = PermissionProbe("/user/memberships/orgs/{org}", "Organization > Members: Read-only")
 
 _SENTINEL = object()
 
@@ -160,7 +228,8 @@ def _check_plan(org_json: Mapping[str, Any], target: Target) -> str:
     if not isinstance(plan, str) or not plan:
         raise SafetyError(
             f"the plan of {target.org!r} is not visible: the admin token must belong to an organization owner and "
-            "carry the admin:org scope"
+            "carry the admin:org scope (classic PAT), or the Organization > Plan and Administration read permissions "
+            "with the test org as resource owner (fine-grained PAT)"
         )
     if plan.lower() != target.expected_plan:
         raise SafetyError(f"organization {target.org!r} is on plan {plan!r}, target expects {target.expected_plan!r}")
@@ -201,20 +270,36 @@ def _rules(role: str) -> tuple[frozenset[str], bool, bool]:
 def _check_all_identities(admin_http: GitHubHttp, target: Target, identities: Mapping[str, Identity]) -> None:
     """Isolation of the admin client and of every identity (each distinct token/rule pair checked once)."""
     allowed, test_org_id = target.allowed_org_ids, target.org_id
-    check_identity_isolation(admin_http, role="admin", allowed_org_ids=allowed, test_org_id=test_org_id)
+    admin = identities.get("admin")
+    admin_type = admin.token_type if admin is not None else "auto"
+    check_identity_isolation(
+        admin_http,
+        role="admin",
+        allowed_org_ids=allowed,
+        test_org_id=test_org_id,
+        org=target.org,
+        token_type=admin_type,
+    )
     admin_token = getattr(admin_http, "token", None)
-    if admin_token is None and "admin" in identities:
-        admin_token = identities["admin"].token  # clients without a token attribute (fakes) stand for the admin
-    checked = {(admin_token, _rules("admin"))}
+    if admin_token is None and admin is not None:
+        admin_token = admin.token  # clients without a token attribute (fakes) stand for the admin
+    checked = {(admin_token, _rules("admin"), "admin" in OWNER_ROLES, admin_type)}
     clients: dict[str | None, GitHubHttp] = {admin_token: admin_http}  # one client per distinct token
     for name, identity in identities.items():
-        key = (identity.token, _rules(name))
+        key = (identity.token, _rules(name), name in OWNER_ROLES, identity.token_type)
         if key in checked:
             continue
         checked.add(key)
         if identity.token not in clients:
             clients[identity.token] = identity_http(identity, like=admin_http)
-        check_identity_isolation(clients[identity.token], role=name, allowed_org_ids=allowed, test_org_id=test_org_id)
+        check_identity_isolation(
+            clients[identity.token],
+            role=name,
+            allowed_org_ids=allowed,
+            test_org_id=test_org_id,
+            org=target.org,
+            token_type=identity.token_type,
+        )
 
 
 def verify_target(
@@ -252,26 +337,37 @@ def verify_target(
     return verified
 
 
-def _token_scopes(http: GitHubHttp, role: str) -> set[str] | None:
-    """Classic scopes of the client's token (None for fine-grained tokens); SafetyError when unreadable."""
+def read_token_info(http: GitHubHttp, role: str) -> TokenInfo:
+    """Kind, scopes and expiration of the client's token (GET /rate_limit); SafetyError when unreadable."""
     try:
-        scopes = http.oauth_scopes()
+        info = http.token_info()
     except SafetyError:
         raise
     except Exception as exc:
         raise SafetyError(f"{role}: cannot read the token scopes: {_describe(exc)}") from exc
-    return None if scopes is None else {scope.strip() for scope in scopes if scope.strip()}
+    if not isinstance(info, TokenInfo):
+        raise SafetyError(f"{role}: unexpected token information ({type(info).__name__})")
+    return info
+
+
+def _check_token_type(role: str, info: TokenInfo, declared: str) -> None:
+    """The declared identities.<role>.token_type (auto, classic, fine-grained) must match the detected kind."""
+    if declared in ("auto", "", None) or declared == info.kind:
+        return
+    found = {CLASSIC: "a classic PAT", FINE_GRAINED: "a fine-grained PAT"}.get(
+        info.kind, "neither a classic nor a fine-grained PAT"
+    )
+    raise SafetyError(
+        f"{role}: the target declares token_type {declared!r} but the token is {found} (X-OAuth-Scopes "
+        f"{'present' if info.kind == CLASSIC else 'absent'} on GET /rate_limit): fix identities.{role}.token_type or "
+        "the token"
+    )
 
 
 def _check_scopes(role: str, scopes: set[str] | None) -> None:
-    """Classic scopes must be allowed for the role; fine-grained tokens only for FINE_GRAINED_ROLES."""
-    allowed, fine_grained_ok, _ = _rules(role)
+    """Classic scopes must be allowed for the role (non-classic tokens are checked by _check_fine_grained)."""
+    allowed, _, _ = _rules(role)
     if scopes is None:
-        if not fine_grained_ok:
-            raise SafetyError(
-                f"{role}: fine-grained or App tokens are only accepted for {', '.join(sorted(FINE_GRAINED_ROLES))}; "
-                "use a classic PAT so its scopes can be verified"
-            )
         return
     extra = scopes - allowed
     if extra:
@@ -433,26 +529,135 @@ def verify_app(app: Any, target: Target) -> AppIsolation:
     return AppIsolation(slug=slug, owner=owner_login, installations=tuple(accounts))
 
 
-def check_identity_isolation(
-    http: GitHubHttp, *, role: str, allowed_org_ids: Collection[int], test_org_id: int
-) -> None:
-    """Raise SafetyError unless the identity only belongs to test orgs and its token scopes are allowed for ``role``.
+def _probe_hint(exc: BaseException) -> str:
+    """The permissions GitHub asked for (X-Accepted-GitHub-Permissions), if any."""
+    headers = {str(key).lower(): value for key, value in (getattr(exc, "headers", None) or {}).items()}
+    accepted = headers.get("x-accepted-github-permissions")
+    return f"; GitHub accepts: {accepted}" if accepted else ""
 
-    Paginates GET /user/orgs and GET /user/memberships/orgs?state=pending; any org id outside allowed_org_ids fails
-    (role "outsider": test_org_id must not be present). Classic scopes (X-OAuth-Scopes) must be a subset of
-    ALLOWED_SCOPES["admin"] (OWNER_ROLES) or ALLOWED_SCOPES["other"]; fine-grained tokens only for FINE_GRAINED_ROLES
-    (their membership listings may answer 403/404, which is tolerated).
-    """
-    scopes = _token_scopes(http, role)
-    _check_scopes(role, scopes)
-    fine_grained = scopes is None
-    active = _list_orgs(http, "/user/orgs", None, role, tolerate=fine_grained)
-    pending = _list_orgs(http, "/user/memberships/orgs", {"state": "pending"}, role, tolerate=fine_grained)
-    _check_memberships(role, active, pending, {int(oid) for oid in allowed_org_ids}, test_org_id)
-    _logger.info(
-        "identity %s isolated: %s; %d organization(s), %d pending invitation(s)",
-        role,
-        "fine-grained token" if fine_grained else f"scopes {', '.join(sorted(scopes or ())) or '(none)'}",
-        len(active),
-        len(pending),
+
+def run_probe(http: GitHubHttp, probe: PermissionProbe, org: str) -> tuple[Any, BaseException | None]:
+    """GET the probe path: (body, None) on 200, (None, error) otherwise (SafetyErrors of the client propagate)."""
+    try:
+        return http.get(probe.path.format(org=org)), None
+    except SafetyError:
+        raise
+    except Exception as exc:  # noqa: BLE001 - the caller turns it into a failed proof
+        return None, exc
+
+
+def _refuse_probe(role: str, probe: PermissionProbe, org: str, exc: BaseException, why: str) -> SafetyError:
+    """SafetyError of a failed fine-grained proof (with the permission GitHub asks for)."""
+    status = getattr(exc, "status", None)
+    return SafetyError(
+        f"{role}: fine-grained token cannot read GET {probe.path.format(org=org)} ({status or _describe(exc)}"
+        f"{_probe_hint(exc)}): {why}. Create the token with resource owner {org!r}, Repository access 'All "
+        f"repositories' and {probe.permission} (docs/setup-free-org.md#fine-grained-personal-access-tokens), and have "
+        "an org owner approve it if the org requires approval"
     )
+
+
+def _check_owner_token(http: GitHubHttp, role: str, org: str) -> None:
+    """Owner roles: org-owner-only reads of the test org must answer 200 (the token's resource owner is the org)."""
+    for probe in FINE_GRAINED_OWNER_PROBES:
+        _, error = run_probe(http, probe, org)
+        if error is not None:
+            raise _refuse_probe(
+                role,
+                probe,
+                org,
+                error,
+                "only a token whose resource owner is the test org and whose account is an "
+                "owner can, so its isolation is not proven",
+            ) from error
+
+
+def _check_member_token(http: GitHubHttp, role: str, org: str, test_org_id: int) -> None:
+    """author/approver: the token reads its user's ACTIVE membership of the test org through an org permission."""
+    probe = FINE_GRAINED_MEMBER_PROBE
+    body, error = run_probe(http, probe, org)
+    if error is not None:
+        raise _refuse_probe(
+            role,
+            probe,
+            org,
+            error,
+            "organization permissions only apply to the token's resource owner, so the "
+            "token is not proven to target the test org",
+        ) from error
+    membership = body if isinstance(body, Mapping) else {}
+    organization = membership.get("organization")
+    org_id = organization.get("id") if isinstance(organization, Mapping) else None
+    if org_id != test_org_id or membership.get("state") != "active":
+        raise SafetyError(
+            f"{role}: GET {probe.path.format(org=org)} answered organization id {org_id!r}, state "
+            f"{membership.get('state')!r}: expected an active membership of the test org (id {test_org_id})"
+        )
+
+
+def _check_fine_grained(http: GitHubHttp, role: str, info: TokenInfo, org: str | None, test_org_id: int) -> None:
+    """Rules of non-classic tokens: read-only roles accept them, the outsider never, the others need the token proof."""
+    if role in READ_ONLY_ROLES:
+        return
+    if role == OUTSIDER_ROLE:
+        raise SafetyError(
+            f"{role}: needs a classic PAT: it comments on the test org's public repositories without being a member, "
+            "and a fine-grained token can only write to the resources of its resource owner (docs/security.md)"
+        )
+    if info.kind != FINE_GRAINED:
+        raise SafetyError(
+            f"{role}: token without X-OAuth-Scopes that is not a fine-grained PAT ({FINE_GRAINED_PREFIX}...): App or "
+            "OAuth tokens are only accepted for " + ", ".join(sorted(READ_ONLY_ROLES))
+        )
+    if role not in FINE_GRAINED_ROLES:
+        raise SafetyError(f"{role}: fine-grained tokens are not accepted for this role; use a classic PAT")
+    if not org:
+        raise SafetyError(f"{role}: the test org login is needed to verify a fine-grained token (fail closed)")
+    if role in OWNER_ROLES:
+        _check_owner_token(http, role, org)
+    else:
+        _check_member_token(http, role, org, test_org_id)
+
+
+def check_identity_isolation(
+    http: GitHubHttp,
+    *,
+    role: str,
+    allowed_org_ids: Collection[int],
+    test_org_id: int,
+    org: str | None = None,
+    token_type: str = "auto",  # noqa: S107 - a token kind, not a secret
+) -> None:
+    """Raise SafetyError unless the token of ``role`` is isolated to test orgs (rules depend on the token kind).
+
+    The declared ``token_type`` (auto, classic, fine-grained) must match the kind GET /rate_limit reveals.
+    Classic PAT: its scopes (X-OAuth-Scopes) must be a subset of ALLOWED_SCOPES["admin"] (OWNER_ROLES) or
+    ALLOWED_SCOPES["other"], and GET /user/orgs + GET /user/memberships/orgs?state=pending may only list
+    allowed_org_ids (role "outsider": test_org_id must not be present).
+    Fine-grained PAT (no X-OAuth-Scopes; GitHub lists no orgs for it): owner roles must read FINE_GRAINED_OWNER_PROBES
+    of ``org`` (the test org login), author/approver their active membership of it (FINE_GRAINED_MEMBER_PROBE); the
+    outsider is refused; config_reader/readonly accept any non-classic token (their membership listings may answer
+    403/404, which is tolerated, and visible memberships are still checked).
+    """
+    info = read_token_info(http, role)
+    _check_token_type(role, info, token_type)
+    if info.kind == CLASSIC:
+        scopes = set(info.scopes or ())
+        _check_scopes(role, scopes)
+        active = _list_orgs(http, "/user/orgs", None, role, tolerate=False)
+        pending = _list_orgs(http, "/user/memberships/orgs", {"state": "pending"}, role, tolerate=False)
+        _check_memberships(role, active, pending, {int(oid) for oid in allowed_org_ids}, test_org_id)
+        _logger.info(
+            "identity %s isolated: classic PAT, scopes %s; %d organization(s), %d pending invitation(s)",
+            role,
+            ", ".join(sorted(scopes)) or "(none)",
+            len(active),
+            len(pending),
+        )
+        return
+    _check_fine_grained(http, role, info, org, test_org_id)
+    if role in READ_ONLY_ROLES:
+        active = _list_orgs(http, "/user/orgs", None, role, tolerate=True)
+        pending = _list_orgs(http, "/user/memberships/orgs", {"state": "pending"}, role, tolerate=True)
+        _check_memberships(role, active, pending, {int(oid) for oid in allowed_org_ids}, test_org_id)
+    _logger.info("identity %s isolated: %s token bound to %s", role, info.kind, org or "its resource owner")

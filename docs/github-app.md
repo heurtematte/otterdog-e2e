@@ -31,6 +31,11 @@ Events: `issue_comment`, `pull_request`, `pull_request_review`, `push`, `workflo
 
 The App is private (`public: false`) and named `otterdog-e2e-<org>` (truncated to 34 characters).
 
+The App does not depend on the kind of the machine-account tokens: with fine-grained personal access tokens
+([setup-free-org.md](setup-free-org.md#fine-grained-personal-access-tokens)) the table above stays the same. The
+fine-grained admin token needs a slightly different set (repository security advisories for `list-advisories`, no
+commit status or issue writes), because it serves the otterdog CLI and the harness, not the webapp.
+
 **Isolation (enforced).** The private key reaches the webapp under test, untrusted pull request images included, and
 with it every installation of the App. Before the key is handed to a webapp stack (at every start), and for the
 installation preflight, `safety.verify_app` therefore requires: `GET /app` names the test organization as owner

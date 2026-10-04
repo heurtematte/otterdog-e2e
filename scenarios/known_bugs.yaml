@@ -12,7 +12,8 @@
 # Python known-bug test has a scenario id of its own (cli.kb.<name>, O-KB-<NAME>, W-<NAME>), and a bug declared by a
 # step of a YAML scenario never lists that scenario (only that step is an expected failure).
 # KB-028..KB-040 are the findings F-01..F-13 of scenarios/coverage.yaml, KB-041 the web-UI tier's finding, KB-042..
-# KB-077 the findings of the test battery; features of the coverage matrix reference them in their `known_bugs`.
+# KB-077 the findings of the test battery, KB-078..KB-080 the findings of the fine-grained token support (otterdog with
+# a fine-grained admin token); features of the coverage matrix reference them in their `known_bugs`.
 
 - id: KB-001
   title: apply exits 0 (and the webapp reports success) when validation fails
@@ -933,6 +934,46 @@
     - otterdog/operations/local_plan.py:68-80
     - otterdog/models/repository.py:793-796
     - "e2e: scenarios/offline/plan/lplan-repo-filter.yaml (step removal-outside-the-filter declares the bug)"
+  upstream: null
+  fixed_in: null
+  scenarios: []
+
+- id: KB-078
+  title: check-token-permissions only knows classic scopes, so a fine-grained token is always reported with all five scopes missing (exit 1)
+  status: confirmed
+  evidence:
+    - otterdog/operations/check_token_permissions.py:26
+    - otterdog/operations/check_token_permissions.py:56-65
+    - otterdog/operations/check_token_permissions.py:71-78
+    - otterdog/providers/github/rest/meta_client.py:21-28
+    - otterdog/providers/github/rest/requester.py:199
+  upstream: null
+  fixed_in: null
+  scenarios: [cli.kb.check-token-permissions-fine-grained]
+
+- id: KB-079
+  title: any 403 carrying X-Accepted-OAuth-Scopes raises InsufficientPermissionsException for a fine-grained token (no X-OAuth-Scopes), bypassing the 403 fallbacks of the providers
+  status: suspected
+  evidence:
+    - otterdog/providers/github/rest/requester.py:186
+    - otterdog/providers/github/rest/requester.py:238-245
+    - otterdog/providers/github/exception.py:65
+    - otterdog/providers/github/rest/repo_client.py:377-386
+    - otterdog/providers/github/rest/org_client.py:736-744
+  upstream: null
+  fixed_in: null
+  scenarios: []
+
+- id: KB-080
+  title: reads refused for lack of a permission are taken as absent configuration (rulesets, secrets, variables, Dependabot alerts, Pages), so a fine-grained token missing one permission yields a plausible but wrong live configuration
+  status: suspected
+  evidence:
+    - otterdog/providers/github/rest/org_client.py:736-744
+    - otterdog/providers/github/rest/repo_client.py:377-386
+    - otterdog/providers/github/rest/repo_client.py:1043-1051
+    - otterdog/providers/github/rest/repo_client.py:1109-1117
+    - otterdog/providers/github/rest/repo_client.py:613-620
+    - otterdog/providers/github/rest/repo_client.py:487-490
   upstream: null
   fixed_in: null
   scenarios: []

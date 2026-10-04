@@ -78,7 +78,7 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
             raise TargetError(world.target_error)
         return world.target
 
-    def isolation(http: Any, *, role: str, allowed_org_ids: Any, test_org_id: int) -> None:
+    def isolation(http: Any, *, role: str, allowed_org_ids: Any, test_org_id: int, **kwargs: Any) -> None:
         """SafetyError for configured roles."""
         if role in world.isolation_errors:
             raise SafetyError(world.isolation_errors[role])
@@ -172,6 +172,83 @@ def test_identity_problems(world: World) -> None:
     assert rows["isolation:approver"]["status"] == "FAIL"
     assert rows["scopes:config_reader"]["status"] == "FAIL" and "classic" in rows["scopes:config_reader"]["detail"]
     assert rows["scopes:admin"]["status"] == "FAIL" and "admin:org" in rows["scopes:admin"]["detail"]
+
+
+def fine_grained_admin(world: World, *, missing: tuple[str, ...] = (), **kw: Any) -> FakeGitHubHttp:
+    """A fine-grained admin client: every read probe answers 200 except ``missing`` paths (403 with GitHub's hint)."""
+    client = world.http("admin", scopes=None)
+    client.token_kind = "fine-grained"
+    for key, value in kw.items():
+        setattr(client, key, value)
+    for path, _permission in cli.FINE_GRAINED_OWNER_READS:
+        concrete = path.format(org=FAKE_ORG, repo="otterdog-e2e-configs")
+        if concrete in missing:
+            hint = {"X-Accepted-GitHub-Permissions": "secrets=read"}
+            client.add("GET", concrete, status=403, json={"message": "Resource not accessible"}, headers=hint)
+        else:
+            client.add("GET", concrete, json=[], repeat=True)
+    return client
+
+
+def test_token_rows_report_kind_and_expiration(world: World) -> None:
+    """token:<name> rows: classic without expiration OK, fine-grained expiring soon WARN, later OK."""
+    world.https["author"].expires_at = datetime.now(UTC) + timedelta(days=3)
+    world.https["approver"].expires_at = datetime.now(UTC) + timedelta(days=90)
+    _code, rows = doctor_json()
+    assert rows["token:admin"]["status"] == "OK" and rows["token:admin"]["detail"] == "classic PAT, no expiration"
+    assert rows["token:config_reader"]["detail"] == "fine-grained PAT, no expiration"
+    assert rows["token:author"]["status"] == "WARN" and "in 2 day(s)" in rows["token:author"]["detail"]
+    assert rows["token:approver"]["status"] == "OK" and "expires" in rows["token:approver"]["detail"]
+
+
+def test_fine_grained_admin_is_probed_instead_of_scoped(world: World) -> None:
+    """A fine-grained admin passes when every read probe answers 200 (no scopes:admin row)."""
+    fine_grained_admin(world)
+    code, rows = doctor_json()
+    assert code == 0, [row for row in rows.values() if isinstance(row, dict) and row["status"] == "FAIL"]
+    assert "scopes:admin" not in rows and rows["permissions:admin"]["status"] == "OK"
+    assert rows["token:admin"]["detail"].startswith("fine-grained PAT")
+    assert rows["isolation:admin"]["detail"] == f"fine-grained token bound to {FAKE_ORG}"
+
+
+def test_fine_grained_admin_names_the_missing_permissions(world: World) -> None:
+    """A failing probe names the permission and what GitHub accepts (X-Accepted-GitHub-Permissions)."""
+    secrets = f"/orgs/{FAKE_ORG}/actions/secrets"
+    fine_grained_admin(world, missing=(secrets,))
+    code, rows = doctor_json()
+    row = rows["permissions:admin"]
+    assert code == 1 and row["status"] == "FAIL"
+    assert f"Organization > Secrets (GET {secrets}: 403, GitHub accepts secrets=read)" in row["detail"]
+    assert "Organization > Webhooks" not in row["detail"]
+
+
+def test_fine_grained_admin_write_probe_on_paid_plans(world: World) -> None:
+    """Team/enterprise targets also probe GET /orgs/{org}/rulesets, which GitHub lists under Administration write."""
+    import dataclasses
+
+    world.target = dataclasses.replace(world.target, expected_plan="team")
+    client = fine_grained_admin(world)
+    client.add("GET", f"/orgs/{FAKE_ORG}/rulesets", status=403, json={"message": "Resource not accessible"})
+    _code, rows = doctor_json()
+    assert rows["permissions:admin"]["status"] == "FAIL"
+    assert "Organization > Administration: Read and write" in rows["permissions:admin"]["detail"]
+    client.routes.pop(("GET", f"/orgs/{FAKE_ORG}/rulesets"))
+    client.add("GET", f"/orgs/{FAKE_ORG}/rulesets", json=[], repeat=True)
+    _code, rows = doctor_json()
+    assert rows["permissions:admin"]["status"] == "OK"
+    assert rows["permissions:admin"]["detail"].startswith(f"{len(cli.FINE_GRAINED_OWNER_READS) + 1} read probes")
+
+
+def test_declared_token_type_mismatch_fails(world: World) -> None:
+    """identities.<role>.token_type must match the detected kind."""
+    import dataclasses
+
+    fine_grained_admin(world)
+    world.identities["admin"] = dataclasses.replace(world.identities["admin"], token_type="classic")
+    code, rows = doctor_json()
+    assert code == 1 and rows["token:admin"]["status"] == "FAIL"
+    assert "fine-grained PAT, but the target declares token_type 'classic'" in rows["token:admin"]["detail"]
+    assert "isolation:admin" not in rows and "org" not in rows
 
 
 def test_admin_isolation_failure_stops_org_checks(world: World) -> None:

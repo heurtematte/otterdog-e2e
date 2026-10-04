@@ -61,6 +61,9 @@ Every classic token needs `read:org`, given directly or through `admin:org`: the
 `GET /user/orgs`, which answers 403 without it. Any scope outside the role's allowlist fails the session (see
 [security.md](security.md#dedicated-machine-accounts-t1-t2)).
 
+Organizations or enterprises that forbid classic PATs can use fine-grained personal access tokens for every role
+except the `outsider`: see [Fine-grained personal access tokens](#fine-grained-personal-access-tokens) below.
+
 ## 4. Environment file
 
 ```bash
@@ -270,3 +273,143 @@ To run the live lanes from GitHub Actions (`e2e.yml`, `nightly.yml`, `janitor.ym
     Never add the password or the seed to `e2e-free` or `e2e-free-untrusted`.
 
 The full list of variables and the protections are in [security.md](security.md#ci-environments).
+
+## Fine-grained personal access tokens
+
+Classic PATs cannot always be used: an organization owner can restrict them, and an enterprise policy can restrict
+them for every organization of the enterprise ("Restrict access via personal access tokens (classic)",
+organizations cannot override it). Every role except the `outsider` then works with a fine-grained personal access
+token. The harness detects the kind of each token and applies the rules of
+[security.md](security.md#fine-grained-personal-access-tokens-t1-t2); declare the kind to make a mix-up fail early:
+
+```bash
+E2E_ADMIN_TOKEN=github_pat_xxxxxxxxxxxxxxxxxxxxxx
+E2E_ADMIN_TOKEN_TYPE=fine-grained      # auto (default) | classic | fine-grained, likewise E2E_<ROLE>_TOKEN_TYPE
+```
+
+A target file can also say it directly: `admin: {login: ..., token_env: E2E_ADMIN_TOKEN, token_type: fine-grained}`
+(see the comments of `targets/free.yaml`). Doctor shows the kind and the expiry of every token (`token:<role>` rows,
+`WARN` under 14 days) and, for a fine-grained admin or oracle, probes the read side of the permissions below
+(`permissions:<role>`), naming each missing one with the permission GitHub asks for.
+
+### Organization prerequisites
+
+In the test organization, as an owner: **Settings, Personal access tokens, Settings, Fine-grained tokens**:
+
+- "Allow access via fine-grained personal access tokens" (a restricted organization does not even appear as a
+  resource owner when the token is created);
+- "Require administrator approval" (the default) is fine: the tokens of organization owners (`admin`, a separate
+  `oracle`) are approved automatically, those of members (`author`, `approver`) wait under **Personal access tokens,
+  Pending requests** until an owner approves them. A pending token "will only be able to read public resources", so
+  the harness refuses it (its proof read answers 403 or 404) until it is approved;
+- maximum lifetime ("Set maximum lifetimes for personal access tokens"): the organization default for fine-grained
+  tokens is 366 days, an enterprise maximum caps it, and a token over the limit is blocked from the organization
+  without being revoked. Classic tokens have no expiration requirement. Rotate before doctor's `WARN`.
+
+In an enterprise, the same settings live under **Enterprise, Policies, Personal access tokens** (Fine-grained tokens /
+Tokens (classic) tabs); "Allow organizations to configure access requirements" leaves the choice to the organization.
+
+SAML single sign-on: fine-grained tokens "are authorized during token creation, before access to the organization is
+granted" (no separate "Configure SSO" step as for classic tokens); the account may need an active SAML session while it
+creates the token, and the organization's approval policy then applies.
+
+The membership comes first: a fine-grained token can only be created for an organization the account already belongs
+to. The `author` and `approver` therefore accept the invitation of `bootstrap` and make their membership public in
+the web UI (`https://github.com/orgs/<org>/people`) before their tokens exist, see
+[Limitations](#limitations-of-fine-grained-tokens).
+
+### Token settings (every role)
+
+| Setting | Value | Why |
+|---|---|---|
+| Resource owner | the test organization (`E2E_ORG`) | a fine-grained token reaches the resources of one owner only; the harness proves it is the test org |
+| Expiration | 90 days or less is a sensible default (366 days at most by default) | doctor warns 14 days before |
+| Repository access | **All repositories** | the run repositories (`e2e-<run>-*`) and the per-session config repository `e2e-<run>-config` are created during the run, so "Only select repositories" cannot list them in advance |
+
+Whether "All repositories" covers repositories created after the token is not stated by GitHub's docs: to confirm on
+the first live run (a run repository that the admin token cannot read shows up as 404s right after its creation).
+
+### Permissions per role
+
+Only what the role needs; GitHub always adds Metadata (read). The sources are the endpoints otterdog
+(`otterdog/providers/github/rest/*.py`, `graphql.py`, `main` 9bdeb75) and the harness (Mutator, Oracle, janitor,
+lease, bootstrap) call, mapped with GitHub's tables "Permissions required for fine-grained personal access tokens".
+
+**`admin`** (otterdog, the harness writes, and the oracle when no separate oracle is configured):
+
+| Organization permission | Access | Needed for |
+|---|---|---|
+| Administration | Read and write | organization settings (`PATCH /orgs/{org}`), Actions permissions, code security configurations, App installations, organization rulesets (GitHub lists even `GET /orgs/{org}/rulesets` under write) |
+| Custom organization roles | Read | `GET /orgs/{org}/organization-roles` (security managers, custom roles); probably Read and write on Enterprise Cloud to manage custom roles (to confirm on the first live run) |
+| Custom properties | Admin | property definitions (`PUT`/`DELETE /orgs/{org}/properties/schema/{name}`) |
+| Members | Read and write | teams, team members, team repository permissions, security manager teams, organization memberships (`bootstrap`) |
+| Plan | Read | the `plan` of `GET /orgs/{org}` (read by otterdog and checked by the harness); GitHub documents it for Apps only: to confirm on the first live run |
+| Secrets | Read and write | organization Actions secrets |
+| Variables | Read and write | organization Actions variables |
+| Webhooks | Read and write | organization webhooks (and the harness proof read `GET /orgs/{org}/hooks`) |
+
+| Repository permission | Access | Needed for |
+|---|---|---|
+| Actions | Read and write | environments and deployment branch policies (read), Actions cache limit, workflow dispatch / cancel / re-run (harness, `dispatch-workflow`) |
+| Administration | Read and write | create, update, delete repositories (and from templates or forks), rulesets, branch protection rules (REST and GraphQL), topics, Actions settings, Dependabot alerts, private vulnerability reporting, code scanning default setup, environments, collaborators, team access |
+| Commit statuses | Read | the oracle's view of webapp statuses |
+| Contents | Read and write | branches, files, refs, commits, merges, the org lease and run ledger refs |
+| Custom properties | Read and write | repository property values |
+| Environments | Read and write | environment secrets and variables |
+| Metadata | Read | mandatory |
+| Pages | Read | GitHub Pages configuration (writes go through Administration) |
+| Pull requests | Read and write | `open-pr`, `fetch-config --pull-request`, the harness pull requests, comments, reviews and draft toggles |
+| Repository security advisories | Read and write | `list-advisories` (GitHub lists `GET /orgs/{org}/security-advisories` under write) and the advisory scenarios |
+| Secrets | Read and write | repository Actions secrets |
+| Variables | Read and write | repository Actions variables |
+| Webhooks | Read and write | repository webhooks |
+| Workflows | Read and write | files under `.github/workflows` (template repositories, `push-config`, `delete-file`, scenario workflows) |
+
+Not needed: organization Blocking users, Projects, Self-hosted runners, Dependabot or Codespaces secrets; repository
+Issues, Deployments, Dependabot alerts, Code scanning alerts, Secret scanning alerts (otterdog toggles these features
+through Administration and `PATCH /repos/{owner}/{repo}`).
+
+**`oracle`** (optional; omit it to let the admin token serve as oracle): an organization owner, every permission of
+the admin table at **Read**, except two reads that GitHub lists under write: organization Administration **Read and
+write** (organization rulesets, Team and Enterprise plans) and repository Repository security advisories **Read and
+write** (the organization advisory listing). With read-only access there, GitHub refuses those reads and the oracle
+records them as unavailable, so the checks that need them cannot pass.
+
+**`author`** and **`approver`** (organization members):
+
+| Permission | Access | Needed for |
+|---|---|---|
+| Organization > Members | Read | the isolation proof `GET /user/memberships/orgs/{org}` (see [security.md](security.md#fine-grained-personal-access-tokens-t1-t2)) |
+| Repository > Contents | Read and write | branches and commits of their pull requests |
+| Repository > Metadata | Read | mandatory |
+| Repository > Pull requests | Read and write | open, comment, review (`approver`), reopen, draft toggles |
+
+**`outsider`**: a fine-grained token is not possible (below); keep a classic PAT with `public_repo` and `read:org`,
+or leave the role unset (its negative tests are skipped).
+
+**`config_reader`**: unchanged, a fine-grained token whose resource owner is the config_reader account itself,
+repository access "Public repositories", no permission (step [3. Tokens](#3-tokens)).
+
+### Limitations of fine-grained tokens
+
+What does not work, or works differently, with fine-grained tokens:
+
+| Limitation | Effect | Status |
+|---|---|---|
+| The `outsider` cannot use one: GitHub's fine-grained tokens cannot "contribute to public repos where the user is not a member" ("only personal access tokens (classic) have write access for public repositories that are not owned by you or an organization that you are not a member of") | `token_type: fine-grained` is refused for the outsider; without a classic PAT, leave it unset and its tests are skipped | documented by GitHub |
+| `otterdog check-token-permissions` only knows classic scopes | it reports all five scopes missing and exits 1 for a fine-grained token ([KB-078](known-issues.md#kb-078--check-token-permissions-reports-every-classic-scope-missing-for-a-fine-grained-token)); the smoke test reports an expected failure | otterdog defect, reproduced offline |
+| otterdog's requester raises on a 403 naming classic scopes when the token has none | an expected 403 (rulesets of a private repository on Free) may abort a command instead of being tolerated ([KB-079](known-issues.md#kb-079--a-403-with-x-accepted-oauth-scopes-aborts-a-fine-grained-session)) | otterdog defect, suspected: to confirm on the first live run |
+| otterdog takes several refused reads as absent configuration | a missing permission yields a wrong live configuration instead of an error ([KB-080](known-issues.md#kb-080--reads-refused-for-lack-of-a-permission-are-taken-as-absent-configuration)); doctor's read probes catch the usual cases | otterdog defect, suspected |
+| no API reads a token's own fine-grained permissions | the harness cannot enforce least privilege as it does with classic scope allowlists; doctor probes the **read** side only, missing **write** access shows up as failures of the first live run | GitHub limitation |
+| members cannot accept the `bootstrap` invitation nor publicize their membership with a fine-grained token (the organization is not a resource owner choice before the membership is active) | do both in the web UI, then create the token; `bootstrap` reports the step it cannot do | GitHub limitation |
+| one resource owner per token | machine accounts shared by several test organizations (`E2E_ALLOWED_ORG_IDS`) need one token per organization and target | GitHub limitation |
+| organization approval | members' tokens only read public resources until an owner approves them (the harness refuses them meanwhile) | GitHub behaviour |
+| the `plan` field of `GET /orgs/{org}` | GitHub documents the Plan permission for Apps only; without the plan the session stops ("the plan of ... is not visible") | to confirm on the first live run |
+| "All repositories" and repositories created later | not stated by GitHub's docs | to confirm on the first live run |
+| forks and template repositories owned by another account (otterdog `forked_repository` / `template_repository` naming a repository outside the test org) | the token can read public repositories of other owners, whether GitHub lets it create a fork or a repository from them in the test org is not documented | to confirm on the first live run |
+| the expiry date | doctor reads the `github-authentication-token-expiration` response header, which GitHub's REST docs do not describe; without it doctor reports "no expiration" | to confirm on the first live run |
+
+Unchanged with fine-grained tokens: GraphQL ("You can authenticate to the GraphQL API using a personal access token")
+with the same permissions, the GitHub App of the webapp tiers ([github-app.md](github-app.md)), the web-UI tier
+(it logs in with the admin account's password and TOTP seed, not with a token). GitHub caps every user at 50
+fine-grained tokens and removes tokens unused for a year.

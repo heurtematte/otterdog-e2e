@@ -2,6 +2,10 @@
 
 No baseline reset is needed: these commands only read (the token's scopes, otterdog.json). They run first in any
 lane selection because they carry the 'smoke' tag (selection.ALWAYS_TAGS).
+
+check-token-permissions only knows classic scopes: with a fine-grained admin token it reports all five as missing
+(KB-078), which this smoke test reports as an expected failure (cli.kb.check-token-permissions-fine-grained asserts
+the correct behaviour).
 """
 
 from __future__ import annotations
@@ -13,6 +17,7 @@ import pytest
 from otterdog_e2e.sut.version import public_version
 
 if TYPE_CHECKING:
+    from otterdog_e2e.context import E2EContext
     from otterdog_e2e.otterdog.runner import OtterdogCli
     from otterdog_e2e.settings import Target
     from otterdog_e2e.sut.cli_install import InstalledCli
@@ -30,9 +35,16 @@ def test_version(otterdog: OtterdogCli, sut: InstalledCli) -> None:
     assert expected in printed, f"otterdog --version printed {printed!r}, expected version {expected}"
 
 
-def test_check_token_permissions(otterdog: OtterdogCli) -> None:
-    """The admin token has every scope otterdog requires (admin:org, admin:org_hook, delete_repo, repo, workflow)."""
-    result = otterdog.check_token_permissions().assert_ok("check-token-permissions")
+def test_check_token_permissions(otterdog: OtterdogCli, e2e: E2EContext) -> None:
+    """The admin token has every scope otterdog requires (admin:org, admin:org_hook, delete_repo, repo, workflow).
+
+    A fine-grained admin token has no classic scopes: otterdog reporting them missing is KB-078 (expected failure).
+    """
+    kind = e2e.http("admin").token_info().kind
+    result = otterdog.check_token_permissions()
+    if kind != "classic" and (result.exit_code != 0 or MISSING_SCOPES_TEXT in result.output):
+        pytest.xfail(f"KB-078: check-token-permissions only knows classic scopes ({kind} admin token)")
+    result.assert_ok("check-token-permissions")
     assert MISSING_SCOPES_TEXT not in result.output, result.output[-2000:]
 
 

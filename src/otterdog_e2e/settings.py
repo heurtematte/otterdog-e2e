@@ -86,6 +86,12 @@ _BOOLEAN_TEXT = {
     "0": False,
 }
 TOP_LEVEL_WEB_UI_KEYS = ("probe_app_slug",)
+# identities.<role>.token_type: the declared kind of the token (auto = whatever GET /rate_limit reveals); doctor and
+# verify_target fail when the declared kind is not the detected one (docs/setup-free-org.md, fine-grained tokens)
+TOKEN_TYPES = ("auto", "classic", "fine-grained")
+# roles that cannot use a fine-grained PAT: the outsider comments on the test org's public repos without being a
+# member, and a fine-grained token can only write to the resources of its resource owner (docs/security.md)
+CLASSIC_ONLY_ROLES = frozenset({"outsider"})
 
 _ENV_REF_RE = re.compile(r"\$\{(?:(?P<name>[A-Za-z_][A-Za-z0-9_]*)(?::-(?P<default>[^}]*))?\}|(?P<bad>))")
 _ENV_LINE_RE = re.compile(r"^\s*(?:export\s+)?(?P<key>[A-Za-z_][A-Za-z0-9_]*)\s*=(?P<value>.*)$")
@@ -353,7 +359,7 @@ class IdentitySpec:
     """Declared identity of a target: public login and the NAME of the env var holding its token.
 
     The admin identity may also name the variables of its web-UI login (``username_env``, ``password_env``,
-    ``totp_seed_env``; None = the DEFAULT_WEB_ENV names).
+    ``totp_seed_env``; None = the DEFAULT_WEB_ENV names). ``token_type`` is the declared kind of its token (TOKEN_TYPES).
     """
 
     name: str
@@ -362,6 +368,7 @@ class IdentitySpec:
     username_env: str | None = None
     password_env: str | None = None
     totp_seed_env: str | None = None
+    token_type: str = "auto"  # noqa: S105 - a token kind (TOKEN_TYPES), not a secret
 
     def web_env(self, key: str) -> str:
         """Variable holding one web credential (``username_env``, ``password_env`` or ``totp_seed_env``)."""
@@ -372,11 +379,12 @@ class IdentitySpec:
 
 @dataclass(frozen=True)
 class Identity:
-    """Resolved identity with its token (never shown in repr)."""
+    """Resolved identity with its token (never shown in repr) and the declared token kind (TOKEN_TYPES)."""
 
     name: str
     login: str | None
     token: str = field(repr=False)
+    token_type: str = "auto"  # noqa: S105 - a token kind (TOKEN_TYPES), not a secret
 
 
 @dataclass(frozen=True)
@@ -497,7 +505,7 @@ _GITHUB_KEYS = ("org", "org_id", "allowed_org_ids", "expected_plan", "marker", "
 _CAPABILITY_KEYS = ("add", "remove")
 _CONFIG_KEYS = ("configs_repo", "org_config_repo", "defaults_repo", "template")
 _TEMPLATE_KEYS = ("mode", "url")
-_IDENTITY_KEYS = ("login", "token_env", *WEB_CREDENTIAL_KEYS)
+_IDENTITY_KEYS = ("login", "token_env", "token_type", *WEB_CREDENTIAL_KEYS)
 _APP_KEYS = ("id_env", "private_key_env", "private_key_file_env", "webhook_secret_env", "slug")
 _TEAM_KEYS = ("admin", "approval", "contributors")
 _WEBAPP_KEYS = (
@@ -747,6 +755,20 @@ def _web_env_names(entry: _Section, name: str) -> dict[str, str | None]:
     return names
 
 
+def _token_type(entry: _Section, name: str) -> str:
+    """identities.<name>.token_type (default auto); a fine-grained outsider is refused (CLASSIC_ONLY_ROLES)."""
+    value = entry.required_text("token_type", "auto")
+    if value not in TOKEN_TYPES:
+        raise TargetError(f"{entry.path('token_type')}: {value!r} must be one of {', '.join(TOKEN_TYPES)}")
+    if value == "fine-grained" and name in CLASSIC_ONLY_ROLES:
+        raise TargetError(
+            f"{entry.path('token_type')}: the {name} identity needs a classic PAT: it comments on the test org's "
+            "public repositories without being a member, and a fine-grained token can only write to the resources of "
+            "its resource owner (docs/security.md)"
+        )
+    return value
+
+
 def _identity_specs(top: _Section) -> dict[str, IdentitySpec]:
     """Parse the identities section; admin needs a login and a token env var (and may name its web credentials)."""
     section = top.section("identities", IDENTITY_ROLES)
@@ -761,7 +783,8 @@ def _identity_specs(top: _Section) -> dict[str, IdentitySpec]:
         token_env = entry.text("token_env")
         if token_env is not None:
             _secret_env_name(token_env, entry.path("token_env"))
-        specs[name] = IdentitySpec(name, login, token_env, **_web_env_names(entry, name))
+        token_type = _token_type(entry, name)
+        specs[name] = IdentitySpec(name, login, token_env, **_web_env_names(entry, name), token_type=token_type)
     admin = specs.get("admin")
     if admin is None or admin.login is None or admin.token_env is None:
         raise TargetError("identities.admin needs a login and a token_env")
@@ -997,12 +1020,12 @@ def resolve_identities(target: Target, environ: Mapping[str, str]) -> dict[str, 
     for name, spec in target.identities.items():
         token = _env_value(environ, spec.token_env)
         if token is not None:
-            found[name] = Identity(name, spec.login, token)
+            found[name] = Identity(name, spec.login, token, spec.token_type)
     admin = found.get("admin")
     if admin is None:
         env_name = target.identities["admin"].token_env if "admin" in target.identities else "the admin token_env"
         raise TargetError(f"{target.name}: {env_name} (admin token) is not set")
-    found.setdefault("oracle", Identity("oracle", admin.login, admin.token))
+    found.setdefault("oracle", Identity("oracle", admin.login, admin.token, admin.token_type))
     _check_distinct_tokens(found)
     REDACTOR.add(*(identity.token for identity in found.values()))
     return {name: found[name] for name in IDENTITY_ROLES if name in found}

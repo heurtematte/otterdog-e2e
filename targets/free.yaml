@@ -24,16 +24,22 @@ config:
     mode: ${E2E_TEMPLATE_MODE:-auto}    # auto (upstream for release/tag/branch, publish otherwise) | upstream | publish | url
     url: ${E2E_TEMPLATE_URL:-}
 identities:                             # login = public, non-secret (F8); *_env = NAME of the env var holding the secret
-  admin:         {login: "${E2E_ADMIN_LOGIN}", token_env: E2E_ADMIN_TOKEN}
+  # token_type: auto (default: whatever the token is), classic or fine-grained; doctor and every live session FAIL when
+  # the token is of another kind. Fine-grained PATs (resource owner = the test org, Repository access = All
+  # repositories, permissions per role): docs/setup-free-org.md#fine-grained-personal-access-tokens. The outsider
+  # needs a classic PAT (a fine-grained token cannot write to an org its account does not belong to), so
+  # E2E_OUTSIDER_TOKEN_TYPE=fine-grained is refused. Explicit form, e.g. an enterprise that forbids classic PATs:
+  # admin: {login: "${E2E_ADMIN_LOGIN}", token_env: E2E_ADMIN_TOKEN, token_type: fine-grained}
+  admin:         {login: "${E2E_ADMIN_LOGIN}", token_env: E2E_ADMIN_TOKEN, token_type: "${E2E_ADMIN_TOKEN_TYPE:-auto}"}
   # web-UI tier (docs/web-ui-testing.md): the admin bot's web login is read from E2E_ADMIN_USERNAME (optional,
   # default: the admin login), E2E_ADMIN_PASSWORD and E2E_ADMIN_TOTP_SEED; other variable names can be declared:
   # admin: {login: "${E2E_ADMIN_LOGIN}", token_env: E2E_ADMIN_TOKEN, username_env: E2E_ADMIN_USERNAME,
   #         password_env: E2E_ADMIN_PASSWORD, totp_seed_env: E2E_ADMIN_TOTP_SEED}
-  oracle:        {login: "${E2E_ORACLE_LOGIN:-}", token_env: E2E_ORACLE_TOKEN}            # optional, defaults to admin
-  author:        {login: "${E2E_AUTHOR_LOGIN:-}", token_env: E2E_AUTHOR_TOKEN}            # optional: member, contributors team only
-  approver:      {login: "${E2E_APPROVER_LOGIN:-}", token_env: E2E_APPROVER_TOKEN}        # optional: approval team member
-  outsider:      {login: "${E2E_OUTSIDER_LOGIN:-}", token_env: E2E_OUTSIDER_TOKEN}        # optional: not an org member
-  config_reader: {login: "${E2E_CONFIG_READER_LOGIN:-}", token_env: E2E_CONFIG_READ_TOKEN} # optional: fine-grained public read-only (webapp OTTERDOG_CONFIG_TOKEN)
+  oracle:        {login: "${E2E_ORACLE_LOGIN:-}", token_env: E2E_ORACLE_TOKEN, token_type: "${E2E_ORACLE_TOKEN_TYPE:-auto}"}  # optional, defaults to admin
+  author:        {login: "${E2E_AUTHOR_LOGIN:-}", token_env: E2E_AUTHOR_TOKEN, token_type: "${E2E_AUTHOR_TOKEN_TYPE:-auto}"}  # optional: member, contributors team only
+  approver:      {login: "${E2E_APPROVER_LOGIN:-}", token_env: E2E_APPROVER_TOKEN, token_type: "${E2E_APPROVER_TOKEN_TYPE:-auto}"}  # optional: approval team member
+  outsider:      {login: "${E2E_OUTSIDER_LOGIN:-}", token_env: E2E_OUTSIDER_TOKEN, token_type: "${E2E_OUTSIDER_TOKEN_TYPE:-auto}"}  # optional: not an org member
+  config_reader: {login: "${E2E_CONFIG_READER_LOGIN:-}", token_env: E2E_CONFIG_READ_TOKEN, token_type: "${E2E_CONFIG_READ_TOKEN_TYPE:-auto}"}  # optional: fine-grained public read-only (webapp OTTERDOG_CONFIG_TOKEN)
 app:
   id_env: E2E_APP_ID
   private_key_env: E2E_APP_PRIVATE_KEY

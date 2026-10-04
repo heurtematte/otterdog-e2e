@@ -426,8 +426,9 @@ features:
     ui_only: false
     priority: P1
     status: covered
-    covered_by: [tests/cli/test_smoke.py::test_check_token_permissions, tests/cli/test_commands_read.py::test_check_token_permissions_lists_the_granted_scopes, tests/cli/test_commands_read.py::test_check_token_permissions_reports_missing_scopes]
-    notes: "-l: 'Granted scopes:' == the token's X-OAuth-Scopes; config_reader (fine-grained): 'Missing scopes:' == the five required minus granted (order-insensitive: printed from a frozenset), exit 1."
+    covered_by: [tests/cli/test_smoke.py::test_check_token_permissions, tests/cli/test_commands_read.py::test_check_token_permissions_lists_the_granted_scopes, tests/cli/test_commands_read.py::test_check_token_permissions_reports_missing_scopes, tests/cli/test_commands_read.py::test_check_token_permissions_accepts_a_fine_grained_admin]
+    known_bugs: [KB-078]
+    notes: "-l: 'Granted scopes:' == the token's X-OAuth-Scopes; config_reader (fine-grained): 'Missing scopes:' == the five required minus granted (order-insensitive: printed from a frozenset), exit 1. A fine-grained ADMIN token is reported the same way (KB-078: the command only knows classic scopes); its test is skipped with a classic admin token."
 
   - id: cli.list-members
     area: cli

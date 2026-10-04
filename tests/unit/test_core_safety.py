@@ -334,11 +334,150 @@ def test_isolation_refuses_excess_scopes(role: str, scopes: set[str], message: s
         isolate(member_http(scopes=scopes, orgs=[]), role)
 
 
+# --- fine-grained tokens: isolation proven on the token ---------------------------------------------------------------
+OWNER_PROBES = (f"/orgs/{FAKE_ORG}/actions/permissions", f"/orgs/{FAKE_ORG}/hooks")
+MEMBERSHIP = f"/user/memberships/orgs/{FAKE_ORG}"
+ACCEPTED = {"X-Accepted-GitHub-Permissions": "administration=read"}
+
+
+def fine_grained_http(role: str, *, owner: bool = True, membership: Mapping[str, Any] | None = None) -> FakeGitHubHttp:
+    """A fine-grained token bound to the test org: owner probes (owner roles) or its own membership answer 200."""
+    http = FakeGitHubHttp(identity=role, scopes=None)
+    if owner:
+        http.add("GET", OWNER_PROBES[0], json={"enabled_repositories": "all"}, repeat=True)
+        http.add("GET", OWNER_PROBES[1], json=[], repeat=True)
+    state = {"state": "active", "role": "member", "organization": dict(TEST_ORG)}
+    http.add("GET", MEMBERSHIP, json=dict(membership or state), repeat=True)
+    return http
+
+
+def isolate_fg(http: Any, role: str, *, org: str | None = FAKE_ORG, token_type: str = "auto") -> None:  # noqa: S107
+    """check_identity_isolation with the test org login (needed by fine-grained proofs)."""
+    check_identity_isolation(
+        http, role=role, allowed_org_ids=(FAKE_ORG_ID,), test_org_id=FAKE_ORG_ID, org=org, token_type=token_type
+    )
+
+
+@pytest.mark.parametrize("role", ["admin", "oracle"])
+def test_fine_grained_owner_proven_by_owner_only_reads(role: str) -> None:
+    """Owner roles: both org-owner-only reads answer 200; the account's org listings are not used."""
+    http = fine_grained_http(role)
+    isolate_fg(http, role, token_type="fine-grained")
+    assert [call.path for call in http.calls] == list(OWNER_PROBES)
+
+
+@pytest.mark.parametrize(("status", "probe"), [(403, 0), (404, 0), (403, 1), (401, 1)])
+def test_fine_grained_owner_refused_when_a_probe_fails(status: int, probe: int) -> None:
+    """A token bound to another owner (or without the permission) cannot read them: fail closed, with GitHub's hint."""
+    http = FakeGitHubHttp(identity="admin", scopes=None)
+    for index, path in enumerate(OWNER_PROBES):
+        answer = status if index == probe else 200
+        http.add("GET", path, status=answer, json={"message": "Resource not accessible"}, headers=ACCEPTED)
+    with pytest.raises(SafetyError, match=f"admin: fine-grained token cannot read GET {OWNER_PROBES[probe]}") as info:
+        isolate_fg(http, "admin")
+    assert f"({status}; GitHub accepts: administration=read)" in str(info.value)
+    assert "resource owner 'e2e-test-org'" in str(info.value) and isinstance(info.value.__cause__, GitHubError)
+
+
+@pytest.mark.parametrize("role", ["admin", "oracle", "author", "approver"])
+def test_fine_grained_needs_the_org_login(role: str) -> None:
+    """Without the test org login nothing can be proven: fail closed."""
+    with pytest.raises(SafetyError, match=f"{role}: the test org login is needed"):
+        isolate_fg(fine_grained_http(role), role, org=None)
+
+
+@pytest.mark.parametrize("role", ["author", "approver"])
+def test_fine_grained_members_proven_by_their_membership(role: str) -> None:
+    """author/approver: their active membership of the test org, read through an organization permission."""
+    http = fine_grained_http(role, owner=False)
+    isolate_fg(http, role)
+    assert [call.path for call in http.calls] == [MEMBERSHIP]
+
+
+@pytest.mark.parametrize(
+    ("membership", "message"),
+    [
+        ({"state": "pending", "organization": dict(TEST_ORG)}, "state 'pending'"),
+        ({"state": "active", "organization": dict(SECOND_TEST_ORG)}, "organization id 777"),
+        ({"state": "active"}, "organization id None"),
+    ],
+)
+def test_fine_grained_members_refused_without_an_active_membership(membership: dict[str, Any], message: str) -> None:
+    """Pending or foreign memberships are no proof."""
+    with pytest.raises(SafetyError, match=message):
+        isolate_fg(fine_grained_http("author", owner=False, membership=membership), "author")
+
+
+def test_fine_grained_member_refused_when_the_membership_is_not_readable() -> None:
+    """A token bound to the user account (no organization permission) cannot read it."""
+    http = FakeGitHubHttp(identity="approver", scopes=None)
+    http.add("GET", MEMBERSHIP, status=403, json={"message": "Resource not accessible by personal access token"})
+    with pytest.raises(SafetyError, match=f"approver: fine-grained token cannot read GET {MEMBERSHIP} .403"):
+        isolate_fg(http, "approver")
+
+
+def test_fine_grained_outsider_is_refused() -> None:
+    """The outsider writes to repos of an org it does not belong to: impossible with a fine-grained token."""
+    with pytest.raises(SafetyError, match="outsider: needs a classic PAT"):
+        isolate_fg(fine_grained_http("outsider"), "outsider")
+
+
 @pytest.mark.parametrize("role", ["admin", "oracle", "author", "approver", "outsider"])
-def test_isolation_refuses_fine_grained_tokens_for_classic_roles(role: str) -> None:
-    """Fine-grained/App tokens (no X-OAuth-Scopes) only for config_reader/readonly."""
-    with pytest.raises(SafetyError, match="fine-grained or App tokens are only accepted for config_reader, readonly"):
-        isolate(member_http(scopes=None, orgs=[]), role)
+def test_other_token_kinds_are_refused_for_writing_roles(role: str) -> None:
+    """Tokens without X-OAuth-Scopes that are not github_pat_ (App/OAuth user tokens) are not bound to one owner."""
+    http = FakeGitHubHttp(identity=role, scopes=None, token_kind=safety.OTHER_TOKEN)
+    with pytest.raises(SafetyError, match=f"{role}: (needs a classic PAT|.*not a fine-grained PAT)"):
+        isolate_fg(http, role)
+
+
+def test_other_token_kinds_stay_accepted_for_read_only_roles() -> None:
+    """config_reader/readonly keep their former rules (any non-classic token, visible memberships checked)."""
+    for role in ("config_reader", "readonly"):
+        http = member_http(scopes=None, orgs=[], identity=role)
+        http.token_kind = safety.OTHER_TOKEN
+        isolate_fg(http, role)
+
+
+@pytest.mark.parametrize(
+    ("declared", "http", "found"),
+    [
+        ("classic", fine_grained_http("admin"), "a fine-grained PAT"),
+        ("fine-grained", member_http(scopes=ADMIN_SCOPES), "a classic PAT"),
+        ("fine-grained", FakeGitHubHttp(scopes=None, token_kind=safety.OTHER_TOKEN), "neither"),
+    ],
+)
+def test_declared_token_type_must_match(declared: str, http: FakeGitHubHttp, found: str) -> None:
+    """identities.<role>.token_type is checked against the detected kind before anything else."""
+    with pytest.raises(
+        SafetyError, match=f"admin: the target declares token_type '{declared}' but the token is {found}"
+    ):
+        isolate_fg(http, "admin", token_type=declared)
+    assert http.calls == []
+
+
+def test_declared_token_type_matching_passes() -> None:
+    """Declared kinds equal to the detected ones (and auto) pass."""
+    isolate_fg(member_http(scopes=ADMIN_SCOPES), "admin", token_type="classic")
+    isolate_fg(fine_grained_http("admin"), "admin", token_type="fine-grained")
+    isolate_fg(fine_grained_http("admin"), "admin", token_type="auto")
+
+
+def test_verify_target_with_fine_grained_identities(monkeypatch: pytest.MonkeyPatch) -> None:
+    """verify_target hands the org login and the declared token types to every check."""
+    admin = admin_http(scopes=None)
+    for path in OWNER_PROBES:
+        admin.add("GET", path, json={}, repeat=True)
+    author = fine_grained_http("author", owner=False)
+    monkeypatch.setattr(safety, "identity_http", lambda identity, *, like: author)
+    identities = {
+        "admin": Identity("admin", "e2e-admin-bot", "github_pat_admin_1", "fine-grained"),
+        "author": Identity("author", "e2e-author-bot", "github_pat_author_1", "fine-grained"),
+    }
+    verify_target(admin, make_target(), identities)
+    assert admin.calls_to("GET", "/user/orgs") == [] and len(author.calls_to("GET", MEMBERSHIP)) == 1
+    identities["author"] = dataclasses.replace(identities["author"], token_type="classic")
+    with pytest.raises(SafetyError, match="author: the target declares token_type 'classic'"):
+        verify_target(admin, make_target(), identities)
 
 
 def test_isolation_accepts_fine_grained_readers_and_tolerates_hidden_listings() -> None:
@@ -430,11 +569,11 @@ def test_isolation_wraps_scope_read_errors() -> None:
     """A failing GET /rate_limit (e.g. bad credentials) is a SafetyError."""
     http = member_http(scopes=MEMBER_SCOPES)
 
-    def broken() -> set[str] | None:
+    def broken() -> safety.TokenInfo:
         """Bad credentials."""
         raise GitHubError(401, "GET", f"{API}/rate_limit", '{"message": "Bad credentials"}')
 
-    http.oauth_scopes = broken  # type: ignore[method-assign]
+    http.token_info = broken  # type: ignore[method-assign]
     with pytest.raises(SafetyError, match="cannot read the token scopes"):
         isolate(http, "author")
 
@@ -591,3 +730,56 @@ def test_verify_app_wraps_github_errors() -> None:
 
     with pytest.raises(SafetyError, match="cannot verify the GitHub App"):
         safety.verify_app(Broken(), make_target())
+
+
+# --- token kinds and expiration (GET /rate_limit) -------------------------------------------------------------------
+@pytest.mark.parametrize(
+    ("token", "headers", "kind", "scopes"),
+    [
+        ("ghp_classic_1", {"X-OAuth-Scopes": "repo, admin:org"}, "classic", frozenset({"repo", "admin:org"})),
+        ("ghp_classic_2", {"X-OAuth-Scopes": ""}, "classic", frozenset()),
+        ("github_pat_fine_1", {}, "fine-grained", None),
+        ("ghs_installation_1", {}, "other", None),
+    ],
+)
+def test_token_info_with_real_http(token: str, headers: dict[str, str], kind: str, scopes: Any) -> None:
+    """X-OAuth-Scopes present = classic; absent = fine-grained for github_pat_ tokens, other kinds otherwise."""
+    with responses.RequestsMock() as rsps:
+        rsps.get(f"{API}/rate_limit", json={"resources": {}}, headers=headers, match=_auth(token))
+        info = GitHubHttp(token, sleep=lambda _s: None).token_info()
+    assert (info.kind, info.scopes, info.expires_at) == (kind, scopes, None)
+
+
+def test_token_info_reads_the_expiration_header() -> None:
+    """github-authentication-token-expiration is parsed (kept raw when the format is unknown)."""
+    with responses.RequestsMock() as rsps:
+        expiring = {"github-authentication-token-expiration": "2026-11-03 12:30:00 UTC"}
+        rsps.get(f"{API}/rate_limit", json={}, headers=expiring)
+        rsps.get(f"{API}/rate_limit", json={}, headers={"github-authentication-token-expiration": "soon"})
+        http = GitHubHttp("github_pat_fine_2", sleep=lambda _s: None)
+        first, second = http.token_info(), http.token_info()
+    assert first.expires_at == datetime(2026, 11, 3, 12, 30, tzinfo=UTC)
+    assert (second.expires_at, second.expiration_header) == (None, "soon")
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("2026-11-03 12:30:00 UTC", datetime(2026, 11, 3, 12, 30, tzinfo=UTC)),
+        ("2026-11-03 14:30:00 +0200", datetime(2026, 11, 3, 12, 30, tzinfo=UTC)),
+        ("2026-11-03T12:30:00+00:00", datetime(2026, 11, 3, 12, 30, tzinfo=UTC)),
+        ("", None),
+        (None, None),
+        ("next week", None),
+    ],
+)
+def test_parse_token_expiration(value: str | None, expected: datetime | None) -> None:
+    """The header formats seen in the wild (to confirm on the first live run) and garbage."""
+    assert safety.parse_token_expiration(value) == expected
+
+
+def test_token_kind() -> None:
+    """Classification of GET /rate_limit answers."""
+    assert safety.token_kind("repo", "github_pat_x") == "classic"
+    assert safety.token_kind(None, "github_pat_x") == "fine-grained"
+    assert safety.token_kind(None, "ghu_x") == safety.token_kind(None, None) == "other"

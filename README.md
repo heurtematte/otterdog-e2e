@@ -133,7 +133,7 @@ All commands are subcommands of `.venv/bin/otterdog-e2e` (`--help` on each one; 
 
 | Command | Purpose |
 |---|---|
-| `doctor --target T [--json]` | read-only checks: env, identities and their isolation, PAT scopes, org id/plan/marker, memberships, teams, repositories, GitHub App, web-UI credentials and login gate (never logs in), docker, unshare (exit 1 on FAIL) |
+| `doctor --target T [--json]` | read-only checks: env, identities and their isolation, token kind and expiry, PAT scopes (classic) or permission probes (fine-grained), org id/plan/marker, memberships, teams, repositories, GitHub App, web-UI credentials and login gate (never logs in), docker, unshare (exit 1 on FAIL) |
 | `bootstrap --target T [--apply]` | idempotent org preparation: marker (typed confirmation), identities, configs/defaults repositories, lease, template, baseline reset, App checks and delivery probe (dry run without `--apply`) |
 | `sut resolve\|install\|image\|classify SPEC` | resolve a SUT to a commit, install its CLI (trusted only), build its webapp image, classify its trust |
 | `run [--target T] [--sut S] [--base-sut B] [--suite ...] [--tags ...] [--scenario ...] [-k EXPR] [pytest args]` | run tiers through pytest (also `--pr-manifest` (its `base` is the default `--base-sut`), `--reset-sut`, `--run-id`, `--artifacts`, `--webapp-image`, `--keep`, `--no-reset`, `--strict-diff`, `--allow-web-ui`) |
@@ -221,7 +221,7 @@ The documentation is published at https://heurtematte.github.io/otterdog-e2e/ (M
 |---|---|
 | [architecture.md](docs/architecture.md) | components, tiers, data flow, safety model, differential testing |
 | [security.md](docs/security.md) | threat model, controls, CI environments, incident runbook |
-| [setup-free-org.md](docs/setup-free-org.md) | machine accounts, organization, tokens, bootstrap, GitHub App, first run |
+| [setup-free-org.md](docs/setup-free-org.md) | machine accounts, organization, tokens (classic or fine-grained), bootstrap, GitHub App, first run |
 | [setup-enterprise-org.md](docs/setup-enterprise-org.md) | GitHub Enterprise Cloud specifics (trial, SAML SSO, policies) |
 | [github-app.md](docs/github-app.md) | the e2e GitHub App: permissions, manifest flow, webhook sink, relay |
 | [writing-scenarios.md](docs/writing-scenarios.md) | the YAML scenario model, checks, rules, examples |

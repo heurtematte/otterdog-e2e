@@ -89,6 +89,29 @@ PR_LIVE_SUITES = ("cli", "webhooks", "webapp", "enterprise")
 WEB_UI_SUITE = "web_ui"  # tests/web_ui: a default suite only with --allow-web-ui (docs/web-ui-testing.md)
 # otterdog's own check-token-permissions requirement for the admin PAT
 REQUIRED_ADMIN_SCOPES = frozenset({"admin:org", "admin:org_hook", "delete_repo", "repo", "workflow"})
+TOKEN_EXPIRY_WARNING = timedelta(days=14)  # doctor WARNs when a token expires sooner
+# read probes of a fine-grained admin/oracle token: (path, permission); {org} = the test org, {repo} = the configs repo.
+# Each answers 200 only with the permission (docs/setup-free-org.md#fine-grained-personal-access-tokens); write
+# access cannot be probed without mutating, the first live run verifies it
+FINE_GRAINED_OWNER_READS: tuple[tuple[str, str], ...] = (
+    ("/orgs/{org}/actions/permissions", "Organization > Administration"),
+    ("/orgs/{org}/hooks", "Organization > Webhooks"),
+    ("/orgs/{org}/teams", "Organization > Members"),
+    ("/orgs/{org}/actions/secrets", "Organization > Secrets"),
+    ("/orgs/{org}/actions/variables", "Organization > Variables"),
+    ("/orgs/{org}/properties/schema", "Organization > Custom properties"),
+    ("/orgs/{org}/organization-roles", "Organization > Custom organization roles"),
+    ("/repos/{org}/{repo}/actions/permissions", "Repository > Administration"),
+    ("/repos/{org}/{repo}/hooks", "Repository > Webhooks"),
+    ("/repos/{org}/{repo}/actions/secrets", "Repository > Secrets"),
+    ("/repos/{org}/{repo}/actions/variables", "Repository > Variables"),
+    ("/repos/{org}/{repo}/environments", "Repository > Actions"),
+)
+# reads GitHub lists under WRITE access (fine-grained permission tables): a GET that proves write access; org rulesets
+# need a paid plan, so only probed on team/enterprise targets
+FINE_GRAINED_OWNER_WRITE_READS: tuple[tuple[str, str], ...] = (
+    ("/orgs/{org}/rulesets", "Organization > Administration: Read and write"),
+)
 FULL_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 RUN_ID_ARG_RE = re.compile(r"^[0-9a-z]{6}[0-9a-f]{2}$")
 DELIVERY_PROBE_TIMEOUT = 300.0  # like every delivery wait of the harness: GitHub lists deliveries minutes late (F6)
@@ -323,7 +346,7 @@ class Doctor:
 
     def _identity(self, target: Target, name: str) -> bool:
         """Checks of one identity."""
-        from otterdog_e2e.safety import SafetyError, check_identity_isolation
+        from otterdog_e2e.safety import SafetyError, check_identity_isolation, read_token_info
 
         http = self.ctx.http(name)
         login = str((http.get("/user") or {}).get("login") or "")
@@ -338,26 +361,74 @@ class Doctor:
             return False
         hint = "" if declared else f"declare identities.{name}.login in the target (F8)"
         self.add(f"identity:{name}", OK if declared else WARN, f"GET /user = {login}", hint)
-        try:
-            check_identity_isolation(http, role=name, allowed_org_ids=target.allowed_org_ids, test_org_id=target.org_id)
-        except SafetyError as exc:
-            self.add(
-                f"isolation:{name}", FAIL, str(exc), "use a dedicated machine account that belongs only to test orgs"
-            )
+        info = read_token_info(http, name)
+        token_type = self.ctx.identities[name].token_type
+        if not self._token(name, info, token_type):
             return False
-        self.add(f"isolation:{name}", OK, "member of test orgs only, token scopes allowed")
-        if name == "admin":
-            self._admin_scopes(http)
+        try:
+            check_identity_isolation(
+                http,
+                role=name,
+                allowed_org_ids=target.allowed_org_ids,
+                test_org_id=target.org_id,
+                org=target.org,
+                token_type=token_type,
+            )
+        except SafetyError as exc:
+            remediation = (
+                "use a dedicated machine account that belongs only to test orgs"
+                if info.kind == "classic"
+                else "create the fine-grained token with the test org as resource owner (docs/security.md)"
+            )
+            self.add(f"isolation:{name}", FAIL, str(exc), remediation)
+            return False
+        detail = (
+            "member of test orgs only, token scopes allowed"
+            if info.kind == "classic"
+            else f"{info.kind} token bound to {target.org}"
+            if name not in ("config_reader", "readonly")
+            else f"{info.kind} token (read-only role)"
+        )
+        self.add(f"isolation:{name}", OK, detail)
+        if name in ("admin", "oracle"):
+            self._owner_token(target, name, http, info)
         if name == "config_reader":
             self._config_reader(http)
         return True
 
-    def _admin_scopes(self, http: GitHubHttp) -> None:
-        """The admin PAT is classic and has otterdog's required scopes."""
-        scopes = http.oauth_scopes()
-        if scopes is None:
-            self.add("scopes:admin", FAIL, "not a classic PAT", "create a classic PAT for the admin machine account")
+    def _token(self, name: str, info: Any, declared: str) -> bool:
+        """token:<name>: kind, declared token_type and expiration (WARN under TOKEN_EXPIRY_WARNING)."""
+        kind = {"classic": "classic PAT", "fine-grained": "fine-grained PAT"}.get(info.kind, "App/OAuth token")
+        if declared not in ("auto", info.kind):
+            self.add(
+                f"token:{name}",
+                FAIL,
+                f"{kind}, but the target declares token_type {declared!r}",
+                f"fix identities.{name}.token_type or use a {declared} token",
+            )
+            return False
+        if info.expires_at is None:
+            note = "expiration unknown: " + info.expiration_header if info.expiration_header else "no expiration"
+            self.add(f"token:{name}", OK, f"{kind}, {note}")
+            return True
+        left = info.expires_at - datetime.now(UTC)
+        detail = f"{kind}, expires {info.expires_at:%Y-%m-%d %H:%M} UTC"
+        if left < TOKEN_EXPIRY_WARNING:
+            self.add(f"token:{name}", WARN, f"{detail} (in {max(left.days, 0)} day(s))", "regenerate the token soon")
+        else:
+            self.add(f"token:{name}", OK, detail)
+        return True
+
+    def _owner_token(self, target: Target, name: str, http: GitHubHttp, info: Any) -> None:
+        """scopes:<name> of a classic admin PAT, permissions:<name> of a fine-grained admin/oracle token."""
+        if info.kind == "classic":
+            if name == "admin":
+                self._admin_scopes(set(info.scopes or ()))
             return
+        self._owner_permissions(target, name, http)
+
+    def _admin_scopes(self, scopes: set[str]) -> None:
+        """The classic admin PAT has otterdog's required scopes."""
         missing = sorted(REQUIRED_ADMIN_SCOPES - scopes)
         if missing:
             self.add(
@@ -368,6 +439,40 @@ class Doctor:
             )
         else:
             self.add("scopes:admin", OK, ", ".join(sorted(scopes)))
+
+    def _owner_permissions(self, target: Target, name: str, http: GitHubHttp) -> None:
+        """Read probes of the permissions otterdog (admin) / the oracle need; missing ones named with what GitHub asks."""
+        from otterdog_e2e.safety import PermissionProbe, run_probe
+
+        missing = []
+        probes = FINE_GRAINED_OWNER_READS
+        if target.expected_plan != "free":
+            probes += FINE_GRAINED_OWNER_WRITE_READS
+        for path, permission in probes:
+            probe = PermissionProbe(path.replace("{repo}", target.configs_repo), permission)
+            _, error = run_probe(http, probe, target.org)
+            if error is None:
+                continue
+            headers = {str(key).lower(): value for key, value in (getattr(error, "headers", None) or {}).items()}
+            accepted = headers.get("x-accepted-github-permissions")
+            status = getattr(error, "status", "error")
+            missing.append(
+                f"{permission} (GET {probe.path.format(org=target.org)}: {status}"
+                + (f", GitHub accepts {accepted})" if accepted else ")")
+            )
+        if missing:
+            self.add(
+                f"permissions:{name}",
+                FAIL,
+                "missing read access: " + "; ".join(missing),
+                "edit the fine-grained token (docs/setup-free-org.md#fine-grained-personal-access-tokens)",
+            )
+        else:
+            self.add(
+                f"permissions:{name}",
+                OK,
+                f"{len(probes)} read probes passed (write access is verified by the first live run)",
+            )
 
     def _config_reader(self, http: GitHubHttp) -> None:
         """config_reader is a fine-grained token distinct from the admin token (SEC-11)."""

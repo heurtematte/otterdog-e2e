@@ -168,6 +168,8 @@ jobs:
           E2E_ADMIN_LOGIN: ${{ vars.E2E_ADMIN_LOGIN }}
           E2E_ADMIN_USERNAME: ${{ vars.E2E_ADMIN_USERNAME }}
           E2E_ORACLE_LOGIN: ${{ vars.E2E_ORACLE_LOGIN }}
+          E2E_ADMIN_TOKEN_TYPE: ${{ vars.E2E_ADMIN_TOKEN_TYPE }}
+          E2E_ORACLE_TOKEN_TYPE: ${{ vars.E2E_ORACLE_TOKEN_TYPE }}
           E2E_CONFIGS_REPO: ${{ vars.E2E_CONFIGS_REPO }}
           E2E_ORG_CONFIG_REPO: ${{ vars.E2E_ORG_CONFIG_REPO }}
           E2E_DEFAULTS_REPO: ${{ vars.E2E_DEFAULTS_REPO }}

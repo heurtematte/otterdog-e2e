@@ -39,7 +39,14 @@ $EDITOR ~/.config/otterdog-e2e/enterprise.env      # E2E_ORG, E2E_ORG_ID, identi
 ```
 
 - When the same machine accounts serve the Free and the Enterprise organizations, list the other organization's id
-  in `E2E_ALLOWED_ORG_IDS` of **both** env files; otherwise the isolation check fails.
+  in `E2E_ALLOWED_ORG_IDS` of **both** env files; otherwise the isolation check fails. Fine-grained tokens are bound
+  to one organization: such accounts need one token per organization.
+- Enterprises often forbid classic PATs: use fine-grained tokens
+  ([setup-free-org.md](setup-free-org.md#fine-grained-personal-access-tokens)), set `E2E_<ROLE>_TOKEN_TYPE=fine-grained`
+  and leave the `outsider` unset if it cannot have a classic PAT (its negative tests are skipped). On an Enterprise
+  Cloud organization the admin token most likely also needs organization Custom organization roles **Read and write**
+  (custom roles are managed there; the Enterprise Cloud role endpoints are missing from GitHub's fine-grained
+  permission tables: to confirm on the first live run).
 - Capability overrides (`github.capabilities` in the target file) adjust what the plan matrix grants. For a trial:
 
     ```yaml
@@ -61,8 +68,10 @@ With SAML SSO enforced on the organization (or its enterprise):
   authorization link itself is never printed);
 - the machine accounts need an identity in your IdP and an active SAML session to accept invitations and to
   authorize tokens;
-- fine-grained tokens (config_reader) are subject to the organization's fine-grained token policy: allow them, or
-  approve the token request;
+- fine-grained tokens (config_reader, and every role in an enterprise that forbids classic PATs) need no SSO
+  authorization step: GitHub authorizes them when they are created (an active SAML session of the account may be
+  required then). They are subject to the organization's fine-grained token policy instead: allow them, and approve
+  the token requests of members ([organization prerequisites](setup-free-org.md#organization-prerequisites));
 - set `github.saml_sso: true` in `targets/enterprise.yaml`: otterdog's web client cannot log in through SSO ("Your
   organization requires single sign-on login which is currently not supported by the web client"), so the web-UI tier
   ([web-ui-testing.md](web-ui-testing.md)) is skipped with that reason; the token tiers are unaffected. Without SSO,
@@ -81,6 +90,11 @@ Enterprise policies can lock organization settings (repository creation, forking
 permissions, two-factor requirement, ...). A locked setting that the baseline or a scenario tries to change makes
 `apply` fail or leaves a permanent drift (converge never reaches a no-op). Keep the enterprise policies permissive
 for the test organization, or set `baseline.settings` in the target to the values the policies enforce.
+
+The enterprise's personal access token policies (**Policies, Personal access tokens**) decide which token kinds
+reach the organization: with "Restrict access via personal access tokens (classic)" every classic PAT gets 403
+answers, so switch the roles to fine-grained tokens (see above); the maximum lifetime set there caps the
+organization's.
 
 Enterprise-level objects visible in the organization count as unmanaged organization-level objects: an enterprise
 ruleset or an enterprise custom property applying to the test organization appears as a removal in every guarded

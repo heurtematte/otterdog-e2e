@@ -49,15 +49,64 @@ other check cannot reach a real organization.
 | `author`, `approver`, `outsider` | `public_repo`, `repo`, `read:org`, `read:user`, `user:email`, `workflow` | use `public_repo` + `read:org` |
 | `config_reader`, `readonly` | fine-grained tokens only | public repositories, read-only |
 
-- fine-grained tokens are accepted only for `config_reader`/`readonly` (GitHub answers `200 []` to `/user/orgs` for
-  them, so their memberships cannot be listed);
+- fine-grained tokens are accepted for every role except the `outsider`, under the rules of
+  [Fine-grained personal access tokens](#fine-grained-personal-access-tokens-t1-t2) below (GitHub answers
+  `200 []` to `GET /user/orgs` for them, so the account check above proves nothing and the proof moves to the token);
+- the kind of every token is detected (`X-OAuth-Scopes` present on `GET /rate_limit`: classic; absent and
+  `github_pat_` prefix: fine-grained) and must match `identities.<role>.token_type` when the target declares it
+  (`classic` or `fine-grained`; `auto` by default, from `E2E_<ROLE>_TOKEN_TYPE` in the shipped targets);
 - two roles never share a token (except `oracle` falling back to `admin`, and `config_reader` with `readonly`);
 - logins are declared in the target (public data) and compared with `GET /user`; they are never derived from tokens.
+
+### Fine-grained personal access tokens (T1, T2)
+
+Some enterprises forbid classic PATs. Every role except the `outsider` can then use a fine-grained PAT; the setup
+(resource owner, repository access, permissions per role, org approval) is in
+[setup-free-org.md](setup-free-org.md#fine-grained-personal-access-tokens).
+
+A fine-grained PAT is bound to **one resource owner** (a user or an organization) and can only reach the resources of
+that owner, plus read access to public repositories ("Each token is limited to access resources owned by a single
+user or organization"; "Tokens always include read-only access to all public repositories", GitHub docs, *Managing
+your personal access tokens*). Its account's other memberships are therefore irrelevant: what must be proven is that
+the token's resource owner is the test organization. `check_identity_isolation` does it per role, failing closed on
+any other answer (403, 404, an error), and the `SafetyError` names the permission GitHub asks for
+(`X-Accepted-GitHub-Permissions`):
+
+| Role | Proof (every request must answer 200) | Why it proves the resource owner |
+|---|---|---|
+| `admin`, `oracle` | `GET /orgs/{org}/actions/permissions` and `GET /orgs/{org}/hooks` | organization-owner data, reachable only through the organization permissions Administration (read) and Webhooks (read); organization permissions exist only on a token whose resource owner is that organization, and only an owner's token can read them |
+| `author`, `approver` | `GET /user/memberships/orgs/{org}`: `state` `active`, `organization.id` = the pinned id | the token user's membership, read through the organization permission Members (read), which again only applies to the token's resource owner |
+| `outsider` | refused | see below |
+| `config_reader`, `readonly` | unchanged (any non-classic token, visible memberships checked) | they only read public data |
+
+Without the organization login a fine-grained owner or member token is refused (fail closed). Classic tokens keep the
+account-membership and scope checks above.
+
+The `outsider` must stay a non-member and comment on the test organization's public repositories. GitHub documents
+that fine-grained tokens cannot "contribute to public repos where the user is not a member" and that "only personal
+access tokens (classic) have write access for public repositories that are not owned by you or an organization that
+you are not a member of": the `outsider` therefore requires a classic PAT, `token_type: fine-grained` is refused when
+the target is loaded, and a fine-grained token found at run time fails the isolation check. In an enterprise that
+forbids classic PATs everywhere, leave the `outsider` unset: its negative tests are skipped.
+
+What the harness cannot check for fine-grained tokens, and what remains to confirm on the first live run:
+
+- **least privilege**: GitHub exposes no API that lets a token read its own fine-grained permissions (the
+  organization listing `GET /orgs/{org}/personal-access-tokens` is GitHub App only), so the scope allowlists above
+  have no fine-grained equivalent. Grant exactly the permissions of the setup tables; doctor probes the **read** side
+  of the admin/oracle permissions, the write side shows up in the first live run;
+- **"All repositories"**: whether the token covers repositories created after it is not readable either; the
+  harness creates run repositories and the per-session config repository during the run (to confirm on the first live
+  run: GitHub's docs extract does not state it);
+- the exact answer of a token bound to another owner (403 "Resource not accessible by personal access token" or 404)
+  is not documented; both fail the proof;
+- the `github-authentication-token-expiration` response header that doctor reads for the expiry date is not in
+  GitHub's REST docs; when it is absent doctor reports "no expiration".
 
 ### Organization pin (T1, T2)
 
 `verify_target` requires, with the admin token: the exact-case login of the target, the pinned numeric `org_id`,
-the expected plan (`free`, `team` or `enterprise`; reading it needs an owner token with `admin:org`), and the safety
+the expected plan (`free`, `team` or `enterprise`; reading it needs an owner token with `admin:org`, or a fine-grained owner token with the organization permission Plan, which GitHub documents for Apps only: to confirm on the first live run), and the safety
 marker (default `[otterdog-e2e]`) in the organization description. Logins matching a denylist of real organizations
 are always refused (`eclipse`, `eclipse-*`, `eclipsefdn*`, `eclipse-csi`, `adoptium`, `jakartaee*`, `openhwgroup*`,
 `osgi`, `jetty*`, `microprofile*`, `locationtech*`, `deeplearning4j`, `eclipsenebula`, `orcwg`, `rust-sig`,
@@ -271,7 +320,7 @@ Variables (environment variables, identical in both environments of a target): `
 `E2E_OUTSIDER_LOGIN`, `E2E_CONFIG_READER_LOGIN`, `E2E_APP_ID`, `E2E_APP_SLUG`, and optionally `E2E_CONFIGS_REPO`,
 `E2E_ORG_CONFIG_REPO`, `E2E_DEFAULTS_REPO`, `E2E_TEMPLATE_MODE`, `E2E_TEMPLATE_URL`, `E2E_ADMIN_TEAM`,
 `E2E_APPROVAL_TEAM`, `E2E_CONTRIBUTORS_TEAM`, `E2E_VALIDATION_CONTEXT`, `E2E_SYNC_CONTEXT`, `E2E_WEBAPP_WORKERS`,
-`E2E_WEBAPP_PORT`, `E2E_MIN_RATE_REMAINING`. Repository variable: `E2E_TARGETS`, the JSON list of targets the nightly
+`E2E_WEBAPP_PORT`, `E2E_MIN_RATE_REMAINING`, and the declared token kinds `E2E_ADMIN_TOKEN_TYPE`, `E2E_ORACLE_TOKEN_TYPE`, `E2E_AUTHOR_TOKEN_TYPE`, `E2E_APPROVER_TOKEN_TYPE`, `E2E_OUTSIDER_TOKEN_TYPE`, `E2E_CONFIG_READ_TOKEN_TYPE` (`auto`, `classic` or `fine-grained`). Repository variable: `E2E_TARGETS`, the JSON list of targets the nightly
 and janitor workflows run on (default `["free"]`); while it is unset, their scheduled runs are skipped.
 
 What the workflows enforce (and `tests/unit/test_workflows_static.py` checks):

@@ -37,7 +37,7 @@ import requests
 from requests.structures import CaseInsensitiveDict
 
 from otterdog_e2e.redact import REDACTOR
-from otterdog_e2e.safety import SafetyError
+from otterdog_e2e.safety import TOKEN_EXPIRATION_HEADER, SafetyError, TokenInfo, parse_token_expiration, token_kind
 
 if TYPE_CHECKING:
     from otterdog_e2e.safety import VerifiedOrg
@@ -664,6 +664,19 @@ class GitHubHttp:
         if header is None:
             return None
         return {scope.strip() for scope in header.split(",") if scope.strip()}
+
+    def token_info(self) -> TokenInfo:
+        """Kind (classic / fine-grained / other), classic scopes and expiration of the token (GET /rate_limit).
+
+        Classic tokens answer X-OAuth-Scopes; a ``github_pat_`` token without it is fine-grained. The expiration is the
+        github-authentication-token-expiration header (absent for tokens that never expire).
+        """
+        response = self.request("GET", "/rate_limit")
+        header = response.headers.get("X-OAuth-Scopes")
+        kind = token_kind(header, self.token)
+        scopes = None if header is None else frozenset(scope.strip() for scope in header.split(",") if scope.strip())
+        expiration = response.headers.get(TOKEN_EXPIRATION_HEADER)
+        return TokenInfo(kind, scopes, parse_token_expiration(expiration), expiration)
 
     def rate_snapshot(self) -> dict[str, Any]:
         """Last x-ratelimit-* headers seen, per resource."""

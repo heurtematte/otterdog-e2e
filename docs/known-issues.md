@@ -24,7 +24,8 @@ How the registry is used:
   Helm chart `otterdog-1.5.4` (eclipse-csi/helm-charts). `openapi:` refers to GitHub's REST OpenAPI description.
 - KB-028 to KB-040 are the findings F-01 to F-13 of the coverage matrix (`scenarios/coverage.yaml`,
   [coverage-matrix.md](coverage-matrix.md)), KB-041 the finding of the web-UI tier
-  ([web-ui-testing.md](web-ui-testing.md)), KB-042 to KB-077 the findings of the test battery. The matrix features
+  ([web-ui-testing.md](web-ui-testing.md)), KB-042 to KB-077 the findings of the test battery, KB-078 to KB-080 those of the fine-grained token support
+  ([setup-free-org.md](setup-free-org.md#fine-grained-personal-access-tokens)). The matrix features
   they affect list them in `known_bugs`. A bug that only one step of a YAML scenario exercises is declared by that
   step (`known_bug` of the step) and is not listed in `scenarios`: its section names the step, its evidence the file.
 
@@ -148,6 +149,9 @@ shortened to the relevant lines.
 | KB-075 | blueprint status updated_at never refreshed | suspected | webapp | - |
 | KB-076 | global blueprints de-duplicated by type | suspected | webapp | - |
 | KB-077 | local-plan/local-apply ignore -r for repositories only in the other configuration | confirmed | CLI | step of `O-LPLAN-FILTER` |
+| KB-078 | check-token-permissions reports every classic scope missing for a fine-grained token | confirmed | CLI | `cli.kb.check-token-permissions-fine-grained` |
+| KB-079 | 403 with X-Accepted-OAuth-Scopes aborts a fine-grained session (InsufficientPermissionsException) | suspected | provider | - |
+| KB-080 | reads refused for lack of a permission taken as absent configuration | suspected | provider | - |
 
 ## Issues
 
@@ -2428,3 +2432,96 @@ $ echo n | otterdog local-apply -c otterdog.json --local -n -s -BASE -r a -d e2e
 ```
 
 Same on v1.6.1 and main 9bdeb75.
+
+### KB-078 — check-token-permissions reports every classic scope missing for a fine-grained token
+
+Status: **confirmed** · Upstream: none · Scenarios: `cli.kb.check-token-permissions-fine-grained`
+(tests/cli/test_commands_read.py; the smoke test of `cli.smoke` reports it as an expected failure too)
+
+Evidence: `otterdog/operations/check_token_permissions.py:26`, `otterdog/operations/check_token_permissions.py:56-65`,
+`otterdog/operations/check_token_permissions.py:71-78`, `otterdog/providers/github/rest/meta_client.py:21-28`,
+`otterdog/providers/github/rest/requester.py:199`.
+
+`check-token-permissions` reads the `X-OAuth-Scopes` header of `GET /rate_limit` (`MetaClient.get_scopes`; the
+requester returns `""` when the header is absent) and compares it with `EXPECTED_SCOPES` (`admin:org`,
+`admin:org_hook`, `delete_repo`, `repo`, `workflow`), which are classic scopes. A fine-grained personal access token
+has no classic scopes, so the command prints `Missing scopes:` with all five and exits 1, whatever permissions the
+token holds. Organizations that forbid classic PATs cannot use the command at all. A fix would recognise the token
+kind and, for a fine-grained token, probe the permissions (for example from `X-Accepted-GitHub-Permissions`) instead.
+
+#### Reproduction
+
+`MetaClient.get_scopes` replaced by the answer for a fine-grained token (the empty header value), no network
+(`unshare -rn`, otterdog 1.7.0.dev19, same code as `main` 9bdeb75):
+
+```python
+from otterdog.providers.github.rest import meta_client
+
+
+async def get_scopes(self):
+    return ""  # requester.py:199: response.headers.get("X-OAuth-Scopes", "") without the header
+
+
+meta_client.MetaClient.get_scopes = get_scopes
+```
+
+```console
+$ otterdog check-token-permissions -c otterdog.json e2e-test-org   # E2E_OTTERDOG_API_TOKEN=github_pat_...
+Checking token permissions:
+Project e2e-test-org[github_id=e2e-test-org] (1/1)
+  Missing scopes: delete_repo, admin:org_hook, repo, admin:org, workflow
+$ echo $?
+1
+```
+
+### KB-079 — a 403 with X-Accepted-OAuth-Scopes aborts a fine-grained session
+
+Status: **suspected** · Upstream: none · Scenarios: none
+
+Evidence: `otterdog/providers/github/rest/requester.py:186`, `otterdog/providers/github/rest/requester.py:238-245`,
+`otterdog/providers/github/exception.py:65`, `otterdog/providers/github/rest/repo_client.py:377-386`,
+`otterdog/providers/github/rest/org_client.py:736-744`.
+
+Every response goes through `Requester._check_permissions`: on a 403 it subtracts the scopes of `X-OAuth-Scopes` from
+those of `X-Accepted-OAuth-Scopes` and raises `InsufficientPermissionsException` when something is left. A
+fine-grained token has no `X-OAuth-Scopes`, so any 403 whose answer names accepted scopes raises, with a misleading
+"missing scopes" message. `InsufficientPermissionsException` is not a `GitHubException`, so the fallbacks that
+tolerate expected 403s (rulesets of a private repository on GitHub Free, organization rulesets without a paid plan:
+`except GitHubException` with `ex.status in (403, 404)`) never see it and the command aborts where a classic token
+goes on.
+
+Suspected because it depends on GitHub sending `X-Accepted-OAuth-Scopes` with the 403 answered to a fine-grained
+token, which GitHub's docs do not state (they document `X-Accepted-GitHub-Permissions` for fine-grained tokens): to
+confirm on the first live run with a fine-grained admin token on GitHub Free (plan of a private run repository with
+rulesets). The otterdog side is reproduced offline (otterdog 1.7.0.dev19, `unshare -rn`):
+
+```python
+from otterdog.providers.github.rest.requester import Requester
+
+headers = {"X-Accepted-OAuth-Scopes": "repo", "X-Accepted-GitHub-Permissions": "administration=read"}
+Requester._check_permissions("/repos/e2e-test-org/private-repo/rulesets", 403, "{}", headers)
+# InsufficientPermissionsException (not a GitHubException): missing scopes=['repo']
+Requester._check_permissions(
+    "/repos/e2e-test-org/private-repo/rulesets", 403, "{}", {**headers, "X-OAuth-Scopes": "repo, workflow, admin:org"}
+)
+# None: a classic token falls through to the 403 fallback
+```
+
+### KB-080 — reads refused for lack of a permission are taken as absent configuration
+
+Status: **suspected** · Upstream: none · Scenarios: none
+
+Evidence: `otterdog/providers/github/rest/org_client.py:736-744`,
+`otterdog/providers/github/rest/repo_client.py:377-386`, `otterdog/providers/github/rest/repo_client.py:1043-1051`,
+`otterdog/providers/github/rest/repo_client.py:1109-1117`, `otterdog/providers/github/rest/repo_client.py:613-620`,
+`otterdog/providers/github/rest/repo_client.py:487-490`.
+
+Several reads turn a refusal into "nothing configured": organization and repository rulesets (403/404 -> `[]`, meant
+for plans without rulesets), repository secrets and variables (any status but 200 -> `[]`), Dependabot alerts
+(anything but 204 -> disabled), GitHub Pages (anything but 200 -> no Pages). With a classic token holding otterdog's
+scopes these reads succeed. A fine-grained token is checked permission by permission: one missing permission (or one
+granted read-only where GitHub wants write, as for `GET /orgs/{org}/rulesets`, which GitHub's fine-grained permission
+tables list under organization Administration **write**) produces a plausible but wrong live configuration; plan then
+proposes to add what exists, and apply fails or duplicates. Suspected: established from the source and GitHub's
+permission tables, a live org with a deliberately incomplete fine-grained token reproduces it. The harness doctor
+probes the read permissions of a fine-grained admin token to catch this before a session.

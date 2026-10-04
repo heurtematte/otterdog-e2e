@@ -244,6 +244,19 @@ INVALID_CASES: list[tuple[str, Callable[[dict[str, Any]], None] | None, dict[str
         {},
         "must end with one of",
     ),
+    ("unknown token type", None, {"E2E_AUTHOR_TOKEN_TYPE": "oauth"}, "must be one of auto, classic, fine-grained"),
+    (
+        "fine-grained outsider",
+        None,
+        {"E2E_OUTSIDER_TOKEN_TYPE": "fine-grained"},
+        "outsider identity needs a classic PAT",
+    ),
+    (
+        "fine-grained outsider literal",
+        setter("identities.outsider", {"login": "o", "token_env": "E2E_OUTSIDER_TOKEN", "token_type": "fine-grained"}),
+        {},
+        "identities.outsider.token_type",
+    ),
     ("baseline description", setter("baseline.settings", {"description": "x"}), {}, "come from the live organization"),
     ("baseline not mapping", setter("baseline.settings", ["x"]), {}, "expected a mapping of org settings"),
     ("run-like fixture", setter("fixtures.repos", ["e2e-t3c7z8a5-fixture"]), {}, "looks like a run-prefixed name"),
@@ -306,6 +319,29 @@ def test_enterprise_target_documents_trial_overrides() -> None:
 
 
 # --- identities -----------------------------------------------------------------------------------------------------
+def test_identity_token_types(harness: HarnessSettings, redactor: Redactor) -> None:
+    """identities.<role>.token_type defaults to auto, follows E2E_<ROLE>_TOKEN_TYPE and reaches the Identity."""
+    target = free_target(harness)
+    assert {spec.token_type for spec in target.identities.values()} == {"auto"}
+    target = free_target(
+        harness, E2E_ADMIN_TOKEN_TYPE="fine-grained", E2E_AUTHOR_TOKEN_TYPE="classic", E2E_OUTSIDER_TOKEN_TYPE="classic"
+    )
+    types = {name: spec.token_type for name, spec in target.identities.items()}
+    assert types == {
+        "admin": "fine-grained",
+        "oracle": "auto",
+        "author": "classic",
+        "approver": "auto",
+        "outsider": "classic",
+        "config_reader": "auto",
+    }
+    identities = resolve_identities(target, {"E2E_ADMIN_TOKEN": "github_pat_a1", "E2E_AUTHOR_TOKEN": "ghp_a2"})
+    assert identities["admin"].token_type == "fine-grained"
+    assert identities["oracle"] == Identity("oracle", ADMIN, "github_pat_a1", "fine-grained")  # falls back to admin
+    assert identities["author"].token_type == "classic"
+    assert "github_pat_a1" not in repr(identities["admin"])
+
+
 def test_resolve_identities_oracle_falls_back_to_admin(harness: HarnessSettings, redactor: Redactor) -> None:
     """Only the admin token: oracle = admin, optional identities omitted, tokens registered."""
     target = free_target(harness)

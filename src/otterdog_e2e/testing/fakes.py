@@ -36,7 +36,7 @@ from otterdog_e2e.github.lease import LeaseBusy
 from otterdog_e2e.github.oracle import Oracle
 from otterdog_e2e.otterdog.runner import CliResult, DiffOptions
 from otterdog_e2e.otterdog.workspace import ConfigWorkspace
-from otterdog_e2e.safety import SafetyError, VerifiedOrg, _mint_verified_org
+from otterdog_e2e.safety import CLASSIC, FINE_GRAINED, SafetyError, TokenInfo, VerifiedOrg, _mint_verified_org
 from otterdog_e2e.settings import AppSpec, HarnessSettings, Identity, IdentitySpec, Target, WebappSpec
 
 FAKE_ORG = "e2e-test-org"
@@ -169,10 +169,17 @@ class FakeGitHubHttp:
         read_only: bool = False,
         write_scope: VerifiedOrg | None = None,
         strict: bool = True,
+        token_kind: str | None = None,
+        expires_at: datetime | None = None,
     ) -> None:
-        """Create an empty route table; ``scopes`` is what oauth_scopes() returns (None = fine-grained)."""
+        """Create an empty route table; ``scopes`` is what oauth_scopes() returns (None = fine-grained).
+
+        token_info() reports ``token_kind`` (default: classic with scopes, fine-grained without) and ``expires_at``.
+        """
         self.identity = identity
         self.scopes = scopes
+        self.token_kind = token_kind
+        self.expires_at = expires_at
         self.read_only = read_only
         self.write_scope = write_scope
         self.strict = strict
@@ -322,6 +329,13 @@ class FakeGitHubHttp:
     def oauth_scopes(self) -> set[str] | None:
         """The configured scopes."""
         return None if self.scopes is None else set(self.scopes)
+
+    def token_info(self) -> TokenInfo:
+        """The configured kind, scopes and expiration."""
+        kind = self.token_kind or (CLASSIC if self.scopes is not None else FINE_GRAINED)
+        scopes = None if self.scopes is None or kind != CLASSIC else frozenset(self.scopes)
+        header = None if self.expires_at is None else self.expires_at.strftime("%Y-%m-%d %H:%M:%S UTC")
+        return TokenInfo(kind, scopes, self.expires_at, header)
 
     def rate_snapshot(self) -> dict[str, Any]:
         """A static core budget."""
@@ -2208,7 +2222,8 @@ def make_identities(*names: str) -> dict[str, Identity]:
     """Identities with fake tokens (default: admin; oracle falls back to admin like settings.resolve_identities)."""
     identities = {name: Identity(name, FAKE_LOGINS.get(name), fake_token(name)) for name in names or ("admin",)}
     if "admin" in identities and "oracle" not in identities:
-        identities["oracle"] = Identity("oracle", identities["admin"].login, identities["admin"].token)
+        admin = identities["admin"]
+        identities["oracle"] = Identity("oracle", admin.login, admin.token, admin.token_type)
     return identities
 
 
