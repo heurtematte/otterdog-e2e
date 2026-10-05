@@ -1,21 +1,21 @@
-# otterdog-e2e target: a DEDICATED GitHub Free test organization (SPEC 6.2).
+# otterdog-e2e target: a DEDICATED GitHub Team test organization (SPEC 6.2).
 #
 # Values come from the environment: ${VAR} or ${VAR:-default} (expanded after YAML parsing, never re-expanded).
 # Secrets are never written here: *_env keys hold the NAME of the environment variable that carries the secret.
 # This file is a PROFILE: it holds no org-specific value. An instance (one test org) uses it with --target <instance>
-# and E2E_PROFILE=free in its env file; --target free is the instance named after the profile. Env files of the
+# and E2E_PROFILE=team in its env file; --target team is the instance named after the profile. Env files of the
 # instance, loaded without overriding the environment: ~/.config/otterdog-e2e/<instance>.env,
 # <root>/.env.e2e.<instance>, <root>/.env.e2e. Every identity MUST be a dedicated machine account that only belongs
 # to test organizations (github.allowed_org_ids); classic PATs need the read:org scope so their memberships can be
 # verified.
 # Note: inside {flow, mappings} a ${...} value must be quoted ("${VAR}"), otherwise YAML reads '{' as syntax.
-name: free
-description: Dedicated GitHub Free test organization
+name: team
+description: Dedicated GitHub Team test organization
 github:
   org: ${E2E_ORG}                       # exact-case login
   org_id: ${E2E_ORG_ID}                 # REQUIRED numeric id (GET /orgs/{org} .id) - pins the org (SEC-02)
   allowed_org_ids: ${E2E_ALLOWED_ORG_IDS:-}   # comma list of ids the machine accounts may belong to (default: org_id)
-  expected_plan: free                   # free | team | enterprise
+  expected_plan: team                   # free | team | enterprise
   marker: "[otterdog-e2e]"              # must be contained in the org description
   saml_sso: ${E2E_SAML_SSO:-false}      # true when SAML SSO is enforced: otterdog's web client cannot log in (web-UI tier off)
   # capability overrides: comma lists of capabilities.Cap values, e.g. E2E_CAPABILITIES_REMOVE=larger_runners

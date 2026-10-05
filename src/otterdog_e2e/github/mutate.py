@@ -55,6 +55,7 @@ DISPATCH_INTERVAL = 5.0
 # repository fields that are never changed on protected (non-e2e) repositories
 GUARDED_REPO_FIELDS = frozenset({"name", "archived", "private", "visibility", "default_branch"})
 TEAM_ROLES = frozenset({"member", "maintainer"})
+ORG_MEMBERSHIP_ROLES = frozenset({"member", "admin"})  # roles of PUT /orgs/{org}/memberships ("admin" = owner)
 DEFAULT_FOR_NEW_REPOS = frozenset({"all", "none", "private_and_internal", "public"})
 ADVISORY_SEVERITIES = frozenset({"critical", "high", "medium", "low"})
 DRY_RUN_GHSA = "GHSA-0000-0000-0000"
@@ -566,16 +567,25 @@ class Mutator:
         last = getattr(self.http, "last_date", None)
         return last if isinstance(last, datetime) and not self.dry_run else datetime.now(UTC)
 
-    def ensure_membership(self, login: str) -> dict[str, Any]:
-        """PUT /orgs/{org}/memberships/{login} {role: member} (bootstrap only); returns the membership.
+    def ensure_membership(self, login: str, *, role: str = "member") -> dict[str, Any]:
+        """PUT /orgs/{org}/memberships/{login} {role} (bootstrap only; ``admin`` = owner); returns the membership.
 
-        An existing membership (active or pending) is returned unchanged, so an owner is never demoted.
+        Without a membership ``login`` is invited with ``role``. An existing one is never demoted: it is returned
+        unchanged, except that ``role="admin"`` promotes an ACTIVE member to owner (a pending invitation is left as it
+        is: the account accepts it first).
         """
+        if role not in ORG_MEMBERSHIP_ROLES:
+            raise ValueError(f"membership role must be one of {sorted(ORG_MEMBERSHIP_ROLES)}, got {role!r}")
         path = f"{self._orgp}/memberships/{_q(login)}"
         current = self.http.get(path, allow_404=True)
         if current is not None:
-            return dict(current)
-        return dict(self._write("PUT", path, json={"role": "member"}) or {"state": "pending", "dry_run": True})
+            promote = role == "admin" and current.get("state") == "active" and current.get("role") != "admin"
+            if not promote:
+                return dict(current)
+            return dict(self._write("PUT", path, json={"role": role}) or {**current, "role": role, "dry_run": True})
+        return dict(
+            self._write("PUT", path, json={"role": role}) or {"state": "pending", "role": role, "dry_run": True}
+        )
 
     def set_org_description(self, description: str) -> None:
         """PATCH /orgs/{org} {description} (bootstrap only, after interactive confirmation)."""

@@ -1725,10 +1725,10 @@ class RecordingMutator:
         self._record("ping_org_hook", hook_id)
         return datetime.now(UTC)
 
-    def ensure_membership(self, login: str) -> dict[str, Any]:
-        """Record; returns an active membership."""
-        self._record("ensure_membership", login)
-        return {"state": "active", "role": "member", "user": {"login": login}}
+    def ensure_membership(self, login: str, *, role: str = "member") -> dict[str, Any]:
+        """Record (``role`` as a keyword); returns an active membership with that role."""
+        self._record("ensure_membership", login, role=role)
+        return {"state": "active", "role": role, "user": {"login": login}}
 
     def set_org_description(self, description: str) -> None:
         """Record; updates the oracle's org description."""
@@ -1968,7 +1968,8 @@ class FakeAppAuth:
 
     The installation grants the manifest's permissions and events (appmanifest defaults) unless given. The App is
     owned by ``org`` (``owner`` overrides GET /app's owner) and installed on it only, plus ``extra_installations``
-    (GET /app/installations items, for safety.verify_app tests).
+    (GET /app/installations items, for safety.verify_app tests); ``installed = False`` makes it not installed on
+    ``org`` (installation_for_org answers None) until set back to True.
     """
 
     def __init__(
@@ -2001,6 +2002,7 @@ class FakeAppAuth:
         self.extra_installations = [dict(item) for item in extra_installations]
         self.installations_count = installations_count
         self.installation_id = installation_id
+        self.installed = True
         self._rate_remaining = rate_remaining
         self._rate_reset = rate_reset
         self.permissions = dict(DEFAULT_PERMISSIONS if permissions is None else permissions)
@@ -2050,18 +2052,22 @@ class FakeAppAuth:
     def get_app(self, *, refresh: bool = False) -> dict[str, Any]:
         """GET /app equivalent (owner, installations_count)."""
         self.calls.append(("get_app", (refresh,)))
-        count = self.installations_count if self.installations_count is not None else 1 + len(self.extra_installations)
+        own = 1 if self.installed else 0
+        count = (
+            self.installations_count if self.installations_count is not None else own + len(self.extra_installations)
+        )
         return {"id": int(self.app_id), "slug": self._slug, "owner": dict(self.owner), "installations_count": count}
 
     def installations(self) -> list[dict[str, Any]]:
-        """GET /app/installations equivalent: the installation on ``org`` and the extra ones."""
+        """GET /app/installations equivalent: the installation on ``org`` (when installed) and the extra ones."""
         self.calls.append(("installations", ()))
-        return [self._installation(), *(dict(item) for item in self.extra_installations)]
+        own = [self._installation()] if self.installed else []
+        return [*own, *(dict(item) for item in self.extra_installations)]
 
     def installation_for_org(self, org: str) -> dict[str, Any] | None:
-        """The installation on ``org`` (None for other orgs)."""
+        """The installation on ``org`` (None for other orgs and while not ``installed``)."""
         self.calls.append(("installation_for_org", (org,)))
-        return self._installation() if org == self.org else None
+        return self._installation() if org == self.org and self.installed else None
 
     def _installation(self) -> dict[str, Any]:
         """The installation on ``org`` (GET /orgs/{org}/installation and GET /app/installations item)."""
@@ -2208,6 +2214,7 @@ def make_target(name: str = "fake", **overrides: Any) -> Target:
         "extra_protected_repos": (),
         "baseline_settings": {},
         "source_path": Path("targets") / f"{name}.yaml",
+        "profile": "free",  # the instance ``name`` uses the free profile
     }
     values.update(overrides)
     return Target(**values)

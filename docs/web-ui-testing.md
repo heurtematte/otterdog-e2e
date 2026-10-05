@@ -144,7 +144,8 @@ The login gate (`webui.gate.LoginGate`, `<E2E_CACHE_DIR>/webui/<login>.{lock,jso
 
 ### The bot account
 
-Use the admin machine account of the target (an owner of the test organization, member of test organizations only):
+Use the admin machine account of the instance (an owner of the test organization, member of test organizations
+only):
 
 1. sign in once in a browser as the bot and enable two-factor authentication with an **authenticator app**: on the
    "Scan the QR code" page choose "setup key" and store the base32 key (or the `otpauth://` URI) in your password
@@ -153,7 +154,8 @@ Use the admin machine account of the target (an owner of the test organization, 
    TOTP code on `https://github.com/sessions/two-factor/app`;
 3. sign out, then check the login once with `otterdog web-login` on your machine (below): it shows every interstitial
    GitHub may present ("Verify 2FA now", "Confirm your account recovery settings");
-4. `doctor --target <t>` checks the variables, the seed, the bot's 2FA (`GET /user`), SSO, the browser and the gate.
+4. `doctor --target <instance>` checks the variables, the seed, the bot's 2FA (`GET /user`), SSO, the browser and
+   the gate.
 
 ### Environment
 
@@ -167,16 +169,18 @@ Use the admin machine account of the target (an owner of the test organization, 
 | `E2E_WEB_LOGIN` | process environment only: `1` lets the `web-login` test open a visible browser |
 | `E2E_WEB_READER` | process environment only: `import` makes the trusted reader use `import` + `show --local` instead of `show-live` (keys the import leaves at the template default are dropped) |
 
-Put the secrets in `~/.config/otterdog-e2e/<target>.env` (chmod 600) like the tokens. Other variable names can be
-declared in the target: `identities.admin.username_env`, `password_env` (must end with `_PASSWORD`) and
-`totp_seed_env` (must end with `_TOTP_SEED`). `github.saml_sso: true` disables the tier for a target;
-`web_ui.probe_app_slug` names the probe App.
+Put the secrets in `~/.config/otterdog-e2e/<instance>.env` (chmod 600) like the tokens: `setup` asks for the
+password and the setup key in hidden prompts and writes both (`setup --target <instance> --rotate web` replaces them;
+[onboarding.md](onboarding.md#the-web-login-step)). Other variable names can be declared in a custom profile:
+`identities.admin.username_env`, `password_env` (must end with `_PASSWORD`) and `totp_seed_env` (must end with
+`_TOTP_SEED`). `E2E_SAML_SSO=true` (`github.saml_sso` of the profile) disables the tier for an instance;
+`E2E_WEB_PROBE_APP_SLUG` (`web_ui.probe_app_slug`) names the probe App.
 
 ### The probe App (optional)
 
 `webui.cmd.install-app` installs and uninstalls an App: create a second, harmless GitHub App owned by the test
 organization (no permissions, webhook inactive, "Only on this account"), keep it NOT installed, and set
-`web_ui.probe_app_slug` in the target. Never use the e2e App (the target loader refuses it): uninstalling it would
+`E2E_WEB_PROBE_APP_SLUG` for the instance. Never use the e2e App (the target loader refuses it): uninstalling it would
 break the webapp and webhooks tiers. Since otterdog #693/#699 both commands resolve token-only credentials and fail
 with "username not available" (KB-002, a non-strict xfail: an XPASS reveals the fix).
 
@@ -191,18 +195,33 @@ code runs). `doctor` reports the installed builds.
 ### CI
 
 `.github/workflows/e2e-webui.yml` (dispatch, or the nightly `webui` job when the repository variable
-`E2E_WEB_UI_ENABLED` is `true`, for the targets of `E2E_WEB_UI_TARGETS`, default `["free"]`):
+`E2E_WEB_UI_ENABLED` is `true`, for the instances of `E2E_WEB_UI_TARGETS`, default `["free"]`):
 
-* a `classify` job without secrets refuses untrusted SUTs and `pr:`/`path:`/`dirty:` specs;
-* the `webui` job runs in the environment **`e2e-<target>-webui`**, the only one holding `E2E_ADMIN_PASSWORD` and
-  `E2E_ADMIN_TOTP_SEED` (plus `E2E_ADMIN_TOKEN`, optionally `E2E_ORACLE_TOKEN`, and the variables of `e2e-<target>`,
-  optionally `E2E_ADMIN_USERNAME` and `E2E_WEB_LOGIN_SPACING`). Protect it like `e2e-<target>` (deployment branches:
-  `main` only; required reviewers are possible for dispatched runs, they would block the nightly job);
-* it joins the concurrency group `e2e-<target>` (never in parallel with another session of the org) and runs
-  `otterdog-e2e run --target <t> --sut <s> --suite cli --scenario 'webui.*' tests/web_ui` with `E2E_ALLOW_WEB_UI=true`,
-  then the janitor, the scrub and the upload, like `e2e.yml`.
+* its `target` input is one instance or a comma separated list of at most 8, each in the allowlist `E2E_INSTANCES`
+  (else `E2E_TARGETS`, else `["free", "team", "enterprise"]`): the instances of `E2E_WEB_UI_TARGETS` must be in it too;
+* a `classify` job without secrets validates the instances and refuses untrusted SUTs and `pr:`/`path:`/`dirty:`
+  specs;
+* the `webui` job runs once per instance (a matrix with `max-parallel: 1`: one instance at a time, since every
+  session logs a bot in from the shared runner IP ranges; a failing instance does not cancel the others; the nightly
+  `webui` job, which calls this workflow once per instance of `E2E_WEB_UI_TARGETS`, runs one instance at a time
+  too), in the
+  environment **`e2e-<instance>-webui`**, the only one holding `E2E_ADMIN_PASSWORD` and `E2E_ADMIN_TOTP_SEED` (plus
+  `E2E_ADMIN_TOKEN`, optionally `E2E_ORACLE_TOKEN`, and the variables of `e2e-<instance>`, optionally
+  `E2E_ADMIN_USERNAME` and `E2E_WEB_LOGIN_SPACING`). Protect it like `e2e-<instance>` (deployment branches: `main`
+  only; required reviewers are possible for dispatched runs, they would block the nightly job). `ci-sync` creates it,
+  with these values, when the instance's env file holds the web login
+  ([onboarding.md](onboarding.md#ci-ci-sync));
+* each job checks first that its environment configures the instance (a missing environment is created by GitHub
+  on the fly, empty: the job then fails before any SUT code runs);
+* it joins the concurrency group `e2e-<instance>` (never in parallel with another session of the org) and runs
+  `otterdog-e2e run --target <instance> --sut <s> --suite cli --scenario 'webui.*' tests/web_ui` with
+  `E2E_ALLOW_WEB_UI=true`, then the janitor, the scrub and the upload, like `e2e.yml`.
 
-Never add the web credentials to `e2e-<target>` or `e2e-<target>-untrusted` (`tests/unit/test_webui_workflow.py`
+```bash
+gh workflow run e2e-webui.yml -f target=free,acme-a -f sut=release:latest   # one instance after the other
+```
+
+Never add the web credentials to `e2e-<instance>` or `e2e-<instance>-untrusted` (`tests/unit/test_webui_workflow.py`
 checks that no other workflow references them). `W-PR-WEBUI` needs no web credentials and runs in the normal webapp
 tier of `e2e.yml`.
 
@@ -243,9 +262,9 @@ nightly at most; `run.json` (`web_ui`) records the logins and the time spent wai
 | Risk | Mitigation |
 |---|---|
 | Account lockout after failed logins | the gate blocks after the first blocking failure; `doctor` shows it; check the account before deleting `<E2E_CACHE_DIR>/webui/<login>.json` |
-| TOTP code reuse | one web login at a time on a machine, a TOTP window apart; one bot per target, never the same bot from CI and a workstation at the same time (the org lease serializes sessions of one org only) |
+| TOTP code reuse | one web login at a time on a machine, a TOTP window apart; one bot per instance, never the same bot from CI and a workstation at the same time (the org lease serializes sessions of one org only) |
 | Login challenges (device verification, passkey prompts, a new 2FA method, "unusual activity" checks of datacenter IPs) | classified as `challenge` (blocking); log in once interactively (`web-login`), keep TOTP the only 2FA method; CI runners may be challenged more often |
-| SAML SSO | `github.saml_sso: true` skips the tier |
+| SAML SSO | `E2E_SAML_SSO=true` (`github.saml_sso: true`) skips the tier |
 | GitHub changes the settings pages | that is what the tier detects: otterdog's selectors fail (`failed to retrieve setting ... via web ui`), the round trip reports the keys |
 | Settings left toggled | first-record-wins snapshot, trusted fallback restore, session-end restore, persisted pending restore |
 | Credentials reaching PR code | trusted SUTs only, host CLIs only, a separate CI environment, refusals in `WebOtterdogCli`, redaction |

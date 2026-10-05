@@ -1,9 +1,17 @@
-# One end-to-end session against a dedicated test organization (SPEC 17, SEC-14/15/16/17).
+# One end-to-end session per test organization (SPEC 17, SEC-14/15/16/17).
 #
-# classify (no secrets): validates the inputs and runs `otterdog-e2e sut classify` (trust + normalized specs; for an
-#   untrusted SUT the PR title, author, head repo, sha and risky changed files go to the step summary for the reviewer).
-# e2e: runs in the environment `e2e-<target>` (trusted SUTs: no reviewers, main only) or `e2e-<target>-untrusted`
-#   (required reviewers, prevent self-review, main only). Secrets are mapped on the harness steps only; the final
+# target: one instance or a comma separated list of instances (at most 8). An instance is a test organization whose
+#   configuration lives in the environments `e2e-<instance>` and `e2e-<instance>-untrusted`; their environment
+#   variable E2E_PROFILE names its profile targets/<profile>.yaml (default: the instance name, so `free`, `team` and
+#   `enterprise` keep working without it). Dispatchable instances: the repository variable E2E_INSTANCES (JSON list),
+#   else E2E_TARGETS, else ["free", "team", "enterprise"].
+# classify (no secrets): validates the inputs (instance names, the allowlist) and runs `otterdog-e2e sut classify`
+#   (trust + normalized specs; for an untrusted SUT the PR title, author, head repo, sha and risky changed files go to
+#   the step summary for the reviewer); outputs the instances as a JSON list.
+# e2e: one job per instance (matrix, fail-fast off) in the environment `e2e-<instance>` (trusted SUTs: no reviewers,
+#   main only) or `e2e-<instance>-untrusted` (required reviewers, prevent self-review, main only). GitHub creates a
+#   missing environment on the fly, unprotected: the instance check fails the job before any SUT code runs when the
+#   environment does not hold the instance's configuration. Secrets are mapped on the harness steps only; the final
 #   janitor step sweeps exactly this run; artifacts are uploaded only after `otterdog-e2e scrub-artifacts` succeeded.
 #
 # Values never reach `run:` scripts as `${{ }}` expressions: they are passed through `env:` and always quoted.
@@ -14,9 +22,8 @@ on:
   workflow_dispatch:
     inputs:
       target:
-        description: "Target (targets/<name>.yaml)"
-        type: choice
-        options: [free, team, enterprise]
+        description: "Instance or comma separated instances (environments e2e-<instance>, allowlist E2E_INSTANCES)"
+        type: string
         default: free
         required: true
       sut:
@@ -99,10 +106,19 @@ jobs:
       trust: ${{ steps.classify.outputs.trust }}
       sut: ${{ steps.classify.outputs.sut }}
       base_sut: ${{ steps.classify.outputs.base_sut }}
+      # JSON list of the validated instances (deduplicated, in the order given): the matrix of the e2e job
+      targets: ${{ steps.inputs.outputs.targets }}
     steps:
       - name: Validate the inputs
+        id: inputs
         env:
           TARGET: ${{ inputs.target }}
+          # the instances that may be dispatched (JSON list): a repository setting, list only configured instances
+          INSTANCES: ${{ vars.E2E_INSTANCES || vars.E2E_TARGETS || '["free","team","enterprise"]' }}
+          # no environment here: these are repository or organization variables, which must stay unset (below)
+          REPO_E2E_ORG: ${{ vars.E2E_ORG }}
+          REPO_E2E_ORG_ID: ${{ vars.E2E_ORG_ID }}
+          REPO_E2E_PROFILE: ${{ vars.E2E_PROFILE }}
           SUT: ${{ inputs.sut }}
           BASE_SUT: ${{ inputs.base_sut }}
           SUITES: ${{ inputs.suites }}
@@ -113,7 +129,30 @@ jobs:
         run: |
           set -euo pipefail
           fail() { echo "::error::$1"; exit 1; }
-          case "$TARGET" in free | team | enterprise) ;; *) fail "target must be free, team or enterprise" ;; esac
+          # an instance's organization and profile are environment variables of its environments only: a job of a
+          # missing (auto-created, unprotected) environment must not inherit them from the repository or the org
+          for name in E2E_ORG E2E_ORG_ID E2E_PROFILE; do
+            repo_name="REPO_$name"
+            [[ -z "${!repo_name}" ]] \
+              || fail "$name is a repository or organization variable: set it in the e2e-<instance> environments only"
+          done
+          jq -e 'type == "array" and all(.[]; type == "string")' <<< "$INSTANCES" > /dev/null \
+            || fail "the repository variable E2E_INSTANCES (or E2E_TARGETS) must be a JSON list of instance names"
+          # target: one instance or a comma separated list (spaces ignored), every instance in the allowlist
+          list="${TARGET//[[:space:]]/}"
+          [[ "$list" =~ ^[a-z0-9,-]{1,400}$ && "$list" != ,* && "$list" != *, && "$list" != *,,* ]] \
+            || fail "target must be an instance name or a comma separated list of instance names"
+          IFS=',' read -r -a names <<< "$list"
+          targets=()
+          for name in "${names[@]}"; do
+            [[ "$name" =~ ^[a-z0-9][a-z0-9-]{0,38}$ ]] || fail "invalid instance name: $name"
+            # reserved: the suffixes of the environments of an instance
+            case "$name" in *-untrusted | *-webui) fail "an instance name cannot end with -untrusted or -webui" ;; lists) fail "lists is a reserved name (the directory of the instance lists)" ;; esac
+            jq -e --arg name "$name" 'any(.[]; . == $name)' <<< "$INSTANCES" > /dev/null \
+              || fail "instance $name is not allowed (repository variable E2E_INSTANCES, else E2E_TARGETS)"
+            case " ${targets[*]} " in *" $name "*) ;; *) targets+=("$name") ;; esac
+          done
+          (( ${#targets[@]} >= 1 && ${#targets[@]} <= 8 )) || fail "target must list 1 to 8 instances"
           case "$LANE" in pr-fast | nightly-full) ;; *) fail "lane must be pr-fast or nightly-full" ;; esac
           spec_re='^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,119}$'
           [[ "$SUT" =~ $spec_re ]] || fail "sut is not a SUT spec"
@@ -135,6 +174,8 @@ jobs:
           [[ "$SCENARIO" =~ $scenario_re ]] || fail "scenario must be comma separated id globs"
           k_re='^[]A-Za-z0-9_ .:()[-]{0,200}$'
           [[ "$PYTEST_K" =~ $k_re ]] || fail "k must be a plain pytest -k expression"
+          json="$(jq -cn '$ARGS.positional' --args "${targets[@]}")"
+          echo "targets=$json" >> "$GITHUB_OUTPUT"
       - name: Check out the harness
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -163,6 +204,7 @@ jobs:
         env:
           SUT: ${{ inputs.sut }}
           BASE_SUT: ${{ inputs.base_sut }}
+          TARGETS: ${{ steps.inputs.outputs.targets }}
         run: |
           set -euo pipefail
           # the CLI also writes trust/sut/base_sut lines to GITHUB_OUTPUT: this step writes its own (combined) ones
@@ -188,24 +230,31 @@ jobs:
             echo "sut=$sut"
             echo "base_sut=$base"
           } >> "$GITHUB_OUTPUT"
+          instances="$(jq -r 'map("`" + . + "`") | join(", ")' <<< "$TARGETS")"
           {
             echo "### SUT classification"
             echo
             echo "- SUT: \`$sut\` (${trust})"
             echo "- base SUT: \`${base:-none}\`"
+            echo "- instances: ${instances} (one job each)"
           } >> "$GITHUB_STEP_SUMMARY"
 
   e2e:
-    name: e2e ${{ inputs.target }} (${{ needs.classify.outputs.sut }}, ${{ needs.classify.outputs.trust }})
+    name: e2e ${{ matrix.target }} (${{ needs.classify.outputs.sut }}, ${{ needs.classify.outputs.trust }})
     needs: classify
     runs-on: ubuntu-24.04
     timeout-minutes: 150
     permissions:
       contents: read
-    environment: ${{ needs.classify.outputs.trust == 'trusted' && format('e2e-{0}', inputs.target) || format('e2e-{0}-untrusted', inputs.target) }}
+    strategy:
+      # one job per instance (one test org each, in parallel); a failing instance never cancels the others
+      fail-fast: false
+      matrix:
+        target: ${{ fromJSON(needs.classify.outputs.targets) }}
+    environment: ${{ needs.classify.outputs.trust == 'trusted' && format('e2e-{0}', matrix.target) || format('e2e-{0}-untrusted', matrix.target) }}
     concurrency:
       # one session per test org at a time (the org lease also covers local runs); queued runs wait, never cancel
-      group: e2e-${{ inputs.target }}
+      group: e2e-${{ matrix.target }}
       cancel-in-progress: false
       queue: max
     env:
@@ -246,7 +295,10 @@ jobs:
           python -m pip install --disable-pip-version-check --no-input "poetry==${POETRY_VERSION}"
           poetry install --no-interaction --only main
       - name: Load the target configuration (environment variables, no secrets)
+        id: load
         env:
+          # the instance's profile: targets/<profile>.yaml (empty: the instance name)
+          E2E_PROFILE: ${{ vars.E2E_PROFILE }}
           E2E_ORG: ${{ vars.E2E_ORG }}
           E2E_ORG_ID: ${{ vars.E2E_ORG_ID }}
           E2E_ALLOWED_ORG_IDS: ${{ vars.E2E_ALLOWED_ORG_IDS }}
@@ -277,6 +329,11 @@ jobs:
           E2E_WEBAPP_WORKERS: ${{ vars.E2E_WEBAPP_WORKERS }}
           E2E_WEBAPP_PORT: ${{ vars.E2E_WEBAPP_PORT }}
           E2E_MIN_RATE_REMAINING: ${{ vars.E2E_MIN_RATE_REMAINING }}
+          # per-instance values of the profile (targets/<profile>.yaml)
+          E2E_SAML_SSO: ${{ vars.E2E_SAML_SSO }}
+          E2E_CAPABILITIES_ADD: ${{ vars.E2E_CAPABILITIES_ADD }}
+          E2E_CAPABILITIES_REMOVE: ${{ vars.E2E_CAPABILITIES_REMOVE }}
+          E2E_WEB_PROBE_APP_SLUG: ${{ vars.E2E_WEB_PROBE_APP_SLUG }}
         run: |
           set -euo pipefail
           # environment-level variables -> GITHUB_ENV, so the harness and the janitor steps see the same target
@@ -289,11 +346,33 @@ jobs:
             fi
             printf '%s=%s\n' "$name" "$value" >> "$GITHUB_ENV"
           done < <(compgen -e | grep -E '^E2E_')
+      - name: Check the instance (its environment exists and configures it, no secrets)
+        id: instance
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$1"; exit 1; }
+          # GitHub creates a missing environment on the fly, without protection rules, variables or secrets: stop
+          # here, before any SUT code runs, when the environment of this job does not configure the instance
+          [[ "$TARGET" =~ ^[a-z0-9][a-z0-9-]{0,38}$ ]] || fail "invalid instance name"
+          profile="${E2E_PROFILE:-$TARGET}"
+          [[ "$profile" =~ ^[a-z0-9][a-z0-9._-]{0,63}$ ]] || fail "E2E_PROFILE must be the name of a targets/ file"
+          if [[ -f "targets/$TARGET.yaml" || -f "targets/$TARGET.yml" ]] && [[ "$profile" != "$TARGET" ]]; then
+            fail "instance $TARGET is a profile name: its E2E_PROFILE must be empty or $TARGET"
+          fi
+          [[ -f "targets/$profile.yaml" || -f "targets/$profile.yml" ]] \
+            || fail "no profile targets/$profile.yaml for instance $TARGET (environment variable E2E_PROFILE)"
+          [[ -n "${E2E_ORG:-}" ]] \
+            || fail "E2E_ORG is not set: the environment of instance $TARGET is missing or incomplete"
+          [[ "${E2E_ORG_ID:-}" =~ ^[0-9]+$ ]] \
+            || fail "E2E_ORG_ID is not a numeric id: the environment of instance $TARGET is missing or incomplete"
+          echo "instance $TARGET: profile $profile, organization $E2E_ORG ($E2E_ORG_ID)"
       - name: Run the e2e session
         id: run
         timeout-minutes: 120
         env:
-          TARGET: ${{ inputs.target }}
+          TARGET: ${{ matrix.target }}
           SUT: ${{ needs.classify.outputs.sut }}
           BASE_SUT: ${{ needs.classify.outputs.base_sut }}
           SUITES: ${{ inputs.suites }}
@@ -329,7 +408,7 @@ jobs:
       - name: Locate the run artifacts
         if: always()
         env:
-          LABEL: ${{ inputs.target }}-${{ needs.classify.outputs.sut }}
+          LABEL: ${{ matrix.target }}-${{ needs.classify.outputs.sut }}
         run: |
           set -euo pipefail
           shopt -s nullglob
@@ -349,7 +428,7 @@ jobs:
         if: always()
         timeout-minutes: 15
         env:
-          TARGET: ${{ inputs.target }}
+          TARGET: ${{ matrix.target }}
           E2E_ADMIN_TOKEN: ${{ secrets.E2E_ADMIN_TOKEN }}
         run: |
           set -euo pipefail
@@ -403,7 +482,7 @@ jobs:
       - name: Job summary
         if: always()
         env:
-          TARGET: ${{ inputs.target }}
+          TARGET: ${{ matrix.target }}
           SUT: ${{ needs.classify.outputs.sut }}
           BASE_SUT: ${{ needs.classify.outputs.base_sut }}
           TRUST: ${{ needs.classify.outputs.trust }}
@@ -417,7 +496,7 @@ jobs:
             echo
             echo "| item | value |"
             echo "|---|---|"
-            echo "| target | \`$TARGET\` |"
+            echo "| instance | \`$TARGET\` (profile \`${E2E_PROFILE:-$TARGET}\`) |"
             echo "| SUT | \`$SUT\` ($TRUST) |"
             echo "| base SUT | \`${BASE_SUT:-none}\` |"
             echo "| lane | \`${E2E_LANE:-}\` |"

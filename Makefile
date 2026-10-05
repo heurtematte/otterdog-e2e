@@ -2,13 +2,17 @@
 # Every harness target runs .venv/bin/otterdog-e2e (create the venv with `make init`).
 #
 #   make offline                          offline tier of release:latest (no GitHub)
-#   make cli TARGET=free                  live CLI tier on targets/free.yaml
+#   make cli TARGET=free                  live CLI tier on the instance free (profile targets/free.yaml)
+#   make cli TARGET=free,acme PARALLEL=2  several instances (one child process each; @all, @<list> too)
 #   make web-ui TARGET=free               web-UI tier (bot login; docs/web-ui-testing.md)
 #   make one SCENARIO='cli.repo.*' TARGET=free SUT=branch:main
 #   make lint-scenarios                   every live scenario step validated offline (before submitting a scenario)
 #   make inject ARGS='--fragment repositories=scenarios/fragments/repo-basic.jsonnet --print'
 #   make pr PR=792 SHA=<40-hex> TARGET=free
-#   make bootstrap TARGET=free APPLY=1
+#   make setup TARGET=acme                 interactive onboarding of a new test org (docs/onboarding.md)
+#   make bootstrap TARGET=acme APPLY=1 WAIT=1
+#   make ci-sync TARGET=acme APPLY=1       GitHub environments, variables and secrets of the instance (gh)
+#   make targets                          the instances (~/.config/otterdog-e2e/<instance>.env) and profiles
 #   make docs                             strict build of the documentation site (poetry install --with docs)
 
 SHELL := /bin/bash
@@ -25,13 +29,21 @@ POETRY ?= poetry
 # Python files outside the package: the MkDocs hooks of the documentation site
 HOOKS := docs_hooks.py
 
+# one target instance, or several for the run-based targets, pr, doctor and janitor: a comma list, @all, @<list>
 TARGET ?= $(E2E_TARGET)
+# run-based targets with several TARGETs: run up to PARALLEL of them at once (distinct orgs)
+PARALLEL ?=
 SUT ?= $(or $(E2E_SUT),release:latest)
 BASE_SUT ?= $(E2E_BASE_SUT)
 SCENARIO ?=
 SUITE ?=
 ARGS ?=
 APPLY ?=
+WAIT ?=
+FROM ?=
+PROFILE ?=
+NIGHTLY ?=
+REVIEWER ?=
 OLDER_THAN ?= 6h
 RUN_ID ?=
 FORCE_TAKEOVER ?=
@@ -43,10 +55,11 @@ KEEP ?= 3
 ARTIFACTS ?= $(or $(E2E_ARTIFACTS),artifacts)
 # newest run directory below the artifacts root (evaluated only by the targets that use it)
 RUN ?= $(shell ls -1td "$(ARTIFACTS)"/*/ 2>/dev/null | head -n 1)
+PARALLEL_ARG = $(if $(PARALLEL),--parallel "$(PARALLEL)")
 
 .PHONY: help init unit lint format typecheck check offline lint-scenarios cli webhooks webapp web-ui enterprise \
-	differential e2e one inject pr doctor bootstrap janitor relay report scrub cache-prune sut docs docs-serve clean \
-	require-target require-base require-scenario require-pr require-docs
+	differential e2e one inject pr doctor bootstrap setup ci-sync janitor relay report targets scrub cache-prune sut docs \
+	docs-serve clean require-target require-base require-scenario require-pr require-docs
 
 help: ## Show this help
 	@echo "Targets:"
@@ -54,6 +67,8 @@ help: ## Show this help
 	@echo
 	@echo "Variables: TARGET=$(TARGET) SUT=$(SUT) BASE_SUT=$(BASE_SUT) SCENARIO=<glob> SUITE=<tiers> ARGS=<pytest args>"
 	@echo "           APPLY=1 OLDER_THAN=$(OLDER_THAN) RUN_ID=<id> PR=<n> SHA=<40-hex> RUN=<artifacts dir> KEEP=$(KEEP)"
+	@echo "           TARGET=a,b|@all|@<list> runs several instances (run-based targets, pr, doctor, janitor);"
+	@echo "           PARALLEL=<n> runs up to n of them at once"
 
 init: ## Create .venv with the harness and its dev tools (poetry install --with dev)
 	$(POETRY) install --with dev
@@ -81,40 +96,46 @@ lint-scenarios: ## Offline lint of every live scenario step with SUT (validate -
 	$(E2E) run --suite offline --sut "$(SUT)" -k lint $(ARGS)
 
 cli: require-target ## Live CLI tier of SUT on TARGET
-	$(E2E) run --target "$(TARGET)" --sut "$(SUT)" --suite cli $(ARGS)
+	$(E2E) run --target "$(TARGET)" --sut "$(SUT)" --suite cli $(PARALLEL_ARG) $(ARGS)
 
 webhooks: require-target ## Live webhooks tier of SUT on TARGET
-	$(E2E) run --target "$(TARGET)" --sut "$(SUT)" --suite webhooks $(ARGS)
+	$(E2E) run --target "$(TARGET)" --sut "$(SUT)" --suite webhooks $(PARALLEL_ARG) $(ARGS)
 
 webapp: require-target ## Webapp tier of SUT on TARGET (GitHub App + docker, or E2E_TRANSPORT=external)
-	$(E2E) run --target "$(TARGET)" --sut "$(SUT)" --suite webapp $(ARGS)
+	$(E2E) run --target "$(TARGET)" --sut "$(SUT)" --suite webapp $(PARALLEL_ARG) $(ARGS)
 
 web-ui: require-target ## Web-UI tier of SUT on TARGET: otterdog logs in as the admin bot (web credentials, trusted SUT)
-	$(E2E) run --target "$(TARGET)" --sut "$(SUT)" --suite web_ui --allow-web-ui $(ARGS)
+	$(E2E) run --target "$(TARGET)" --sut "$(SUT)" --suite web_ui --allow-web-ui $(PARALLEL_ARG) $(ARGS)
 
 enterprise: require-target ## Enterprise-only tier of SUT on TARGET (plan enterprise)
-	$(E2E) run --target "$(TARGET)" --sut "$(SUT)" --suite enterprise $(ARGS)
+	$(E2E) run --target "$(TARGET)" --sut "$(SUT)" --suite enterprise $(PARALLEL_ARG) $(ARGS)
 
 differential: require-base ## Offline (+ live with TARGET) differential of SUT against BASE_SUT
-	$(E2E) run $(if $(TARGET),--target "$(TARGET)") --sut "$(SUT)" --base-sut "$(BASE_SUT)" --suite offline,differential $(ARGS)
+	$(E2E) run $(if $(TARGET),--target "$(TARGET)") --sut "$(SUT)" --base-sut "$(BASE_SUT)" --suite offline,differential $(PARALLEL_ARG) $(ARGS)
 
 e2e: ## Every tier of SUT (live tiers are skipped without TARGET; differential with BASE_SUT)
-	$(E2E) run $(if $(TARGET),--target "$(TARGET)") --sut "$(SUT)" $(if $(BASE_SUT),--base-sut "$(BASE_SUT)") $(if $(SUITE),--suite "$(SUITE)") $(ARGS)
+	$(E2E) run $(if $(TARGET),--target "$(TARGET)") --sut "$(SUT)" $(if $(BASE_SUT),--base-sut "$(BASE_SUT)") $(if $(SUITE),--suite "$(SUITE)") $(PARALLEL_ARG) $(ARGS)
 
 one: require-scenario ## Only the scenarios matching SCENARIO=<glob[,glob]> (live ones need TARGET)
-	$(E2E) run $(if $(TARGET),--target "$(TARGET)") --sut "$(SUT)" $(if $(BASE_SUT),--base-sut "$(BASE_SUT)") --scenario "$(SCENARIO)" $(if $(SUITE),--suite "$(SUITE)") $(ARGS)
+	$(E2E) run $(if $(TARGET),--target "$(TARGET)") --sut "$(SUT)" $(if $(BASE_SUT),--base-sut "$(BASE_SUT)") --scenario "$(SCENARIO)" $(if $(SUITE),--suite "$(SUITE)") $(PARALLEL_ARG) $(ARGS)
 
 inject: ## Try jsonnet files with SUT without a scenario: ARGS='--fragment KIND=FILE ...' (offline unless TARGET)
 	$(E2E) inject $(if $(TARGET),--target "$(TARGET)") --sut "$(SUT)" $(ARGS)
 
 pr: require-pr ## Test otterdog PR=<n> pinned at SHA=<40-hex> (differential vs its base; live tiers with TARGET)
-	$(E2E) pr "$(PR)" --sha "$(SHA)" $(if $(TARGET),--target "$(TARGET)") $(if $(SUITE),--suite "$(SUITE)")
+	$(E2E) pr "$(PR)" --sha "$(SHA)" $(if $(TARGET),--target "$(TARGET)") $(if $(SUITE),--suite "$(SUITE)") $(PARALLEL_ARG)
 
 doctor: require-target ## Read-only checks of TARGET (environment, identities, org, repos, teams, App, tools)
 	$(E2E) doctor --target "$(TARGET)"
 
-bootstrap: require-target ## Prepare TARGET (dry run; APPLY=1 writes the marker, repos, baseline, App checks)
-	$(E2E) bootstrap --target "$(TARGET)" $(if $(APPLY),--apply)
+bootstrap: require-target ## Prepare TARGET (dry run; APPLY=1 writes the marker, repos, baseline, App checks; WAIT=1 waits for invitations and the App installation)
+	$(E2E) bootstrap --target "$(TARGET)" $(if $(APPLY),--apply) $(if $(WAIT),--wait)
+
+setup: require-target ## Interactive onboarding of the instance TARGET: org, tokens, web login, App, then bootstrap (FROM=<instance>, PROFILE=<profile>)
+	$(E2E) setup --target "$(TARGET)" $(if $(FROM),--from "$(FROM)") $(if $(PROFILE),--profile "$(PROFILE)")
+
+ci-sync: require-target ## GitHub environments, variables and secrets of the instance TARGET (dry run; APPLY=1 writes them with gh; NIGHTLY=1, REVIEWER=<login>)
+	$(E2E) ci-sync --target "$(TARGET)" $(if $(REVIEWER),--reviewer "$(REVIEWER)") $(if $(NIGHTLY),--nightly) $(if $(APPLY),--apply)
 
 janitor: require-target ## Leftovers of runs older than OLDER_THAN (or RUN_ID) on TARGET; APPLY=1 deletes them
 	$(E2E) janitor --target "$(TARGET)" --older-than "$(OLDER_THAN)" $(if $(RUN_ID),--run-id "$(RUN_ID)") $(if $(FORCE_TAKEOVER),--force-takeover) $(if $(APPLY),--apply)
@@ -124,6 +145,9 @@ relay: require-target ## Forward the App deliveries of TARGET to FORWARD_TO (hol
 
 report: ## Print the summary of RUN=<artifacts dir> (default: the newest run)
 	$(E2E) report "$(RUN)"
+
+targets: ## List the target instances (~/.config/otterdog-e2e/<instance>.env) and the profiles of targets/
+	$(E2E) targets
 
 scrub: ## Scrub RUN=<artifacts dir> (exit 1 when a file leaked a secret)
 	$(E2E) scrub-artifacts "$(RUN)"
@@ -146,7 +170,7 @@ clean: ## Remove Python caches (never the artifacts nor the harness cache)
 	rm -rf .pytest_cache .mypy_cache .ruff_cache
 
 require-target:
-	@test -n "$(TARGET)" || { echo "set TARGET=<name> (targets/<name>.yaml) or export E2E_TARGET" >&2; exit 2; }
+	@test -n "$(TARGET)" || { echo "set TARGET=<instance> (an instance or a profile of targets/; a,b, @all or @<list> for several) or export E2E_TARGET" >&2; exit 2; }
 
 require-base:
 	@test -n "$(BASE_SUT)" || { echo "set BASE_SUT=<spec> (auto = merge base of SUT)" >&2; exit 2; }

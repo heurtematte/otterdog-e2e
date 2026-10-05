@@ -19,8 +19,8 @@ organizations as code. It covers the three faces of otterdog:
 A web-UI tier also covers what otterdog can only do through the GitHub web UI (its Playwright login as a bot owner):
 the web-only organization settings and the UI-driven commands.
 
-The harness runs against **real, dedicated GitHub test organizations**: a GitHub Free organization first, then a
-GitHub Enterprise Cloud organization on github.com. It can test a released otterdog version, upstream `main`, a
+The harness runs against **real, dedicated GitHub test organizations**: GitHub Free, Team and Enterprise Cloud
+organizations on github.com, one or several in one command. It can test a released otterdog version, upstream `main`, a
 proposed upstream pull request pinned to a commit, or a local checkout (uncommitted changes included). For a pull
 request it compares base and head (differential observations) and reports expected and unexpected deltas.
 
@@ -57,17 +57,27 @@ make offline     # offline tier of the latest otterdog release (docker for the w
 The first run fetches the otterdog repository, installs each SUT and builds its webapp image; later runs reuse the
 cache. Everything lands in `E2E_CACHE_DIR` and `E2E_ARTIFACTS`.
 
-With a dedicated GitHub Free test organization ([docs/setup-free-org.md](docs/setup-free-org.md) walks through it):
+With a dedicated test organization: create its machine accounts and the organization by hand, then let `setup`
+onboard it ([docs/onboarding.md](docs/onboarding.md) is the fast path, [docs/setup-free-org.md](docs/setup-free-org.md)
+the same steps by hand):
 
 ```bash
-install -d -m 700 ~/.config/otterdog-e2e
-install -m 600 .env.example ~/.config/otterdog-e2e/free.env
-$EDITOR ~/.config/otterdog-e2e/free.env                # org, org id, machine accounts, tokens
+.venv/bin/otterdog-e2e setup --target free             # interactive: org, tokens (prefilled URLs), App, bootstrap
 .venv/bin/otterdog-e2e doctor --target free            # read-only checks
-.venv/bin/otterdog-e2e bootstrap --target free --apply # marker, repositories, teams, baseline
+.venv/bin/otterdog-e2e ci-sync --target free --apply   # CI environments, variables and secrets (your gh login)
 make cli TARGET=free                                   # live CLI tier
 make one TARGET=free SCENARIO='cli.repo.*'             # selected scenarios only
 make web-ui TARGET=free                                # web-UI tier: the admin bot logs in (docs/web-ui-testing.md)
+```
+
+Every test organization is an **instance** (`free` above, or any name such as `acme-a` bound to a profile
+`targets/<profile>.yaml` by `E2E_PROFILE`); several of them run in one command, one child process each:
+
+```bash
+.venv/bin/otterdog-e2e setup --target acme-a --from free   # a second organization, same settings
+.venv/bin/otterdog-e2e targets                             # the instances, their profile and org
+make cli TARGET=free,acme-a                                # one after the other (PARALLEL=2: at once)
+.venv/bin/otterdog-e2e run --target @all --suite cli       # every instance with an env file
 ```
 
 ## Tiers
@@ -133,16 +143,19 @@ All commands are subcommands of `.venv/bin/otterdog-e2e` (`--help` on each one; 
 
 | Command | Purpose |
 |---|---|
-| `doctor --target T [--json]` | read-only checks: env, identities and their isolation, token kind and expiry, PAT scopes (classic) or permission probes (fine-grained), org id/plan/marker, memberships, teams, repositories, GitHub App, web-UI credentials and login gate (never logs in), docker, unshare (exit 1 on FAIL) |
-| `bootstrap --target T [--apply]` | idempotent org preparation: marker (typed confirmation), identities, configs/defaults repositories, lease, template, baseline reset, App checks and delivery probe (dry run without `--apply`) |
+| `setup --target T [--profile P] [--from I] [--token-type classic\|fine-grained] [--rotate ROLE] [--wait-timeout 30m] [--open]` | interactive onboarding of one instance: org, tokens of every role (prefilled creation URLs, checked before they are written), web-UI login, GitHub App (verified before its installation link), then bootstrap and doctor; writes `~/.config/otterdog-e2e/<instance>.env` ([onboarding.md](docs/onboarding.md)) |
+| `ci-sync --target T [--reviewer LOGIN] [--nightly] [--prune-branch-policies] [--apply]` | the CI environments, variables and secrets of an instance, with your own `gh` login (dry run without `--apply`; deployment branch `main` only, the protections read back before any secret) |
+| `targets [--json]` | list the instances (env files) and profiles, with their organization |
+| `doctor --target T [--json]` | read-only checks: env, identities and their isolation, token kind and expiry, PAT scopes (classic) or permission probes (fine-grained), org id/plan/marker, memberships, teams, repositories, GitHub App, web-UI credentials and login gate (never logs in), docker, unshare (exit 1 on FAIL); several targets: one table each |
+| `bootstrap --target T [--apply [--wait [--wait-timeout 30m]]]` | idempotent org preparation: marker (typed confirmation), identities (a separate oracle invited as an owner when its own token proves its login), configs/defaults repositories, lease, template, baseline reset, App checks and delivery probe (dry run without `--apply`; `--wait`, only with `--apply`, waits for the invitations and the App installation) |
 | `sut resolve\|install\|image\|classify SPEC` | resolve a SUT to a commit, install its CLI (trusted only), build its webapp image, classify its trust |
-| `run [--target T] [--sut S] [--base-sut B] [--suite ...] [--tags ...] [--scenario ...] [-k EXPR] [pytest args]` | run tiers through pytest (also `--pr-manifest` (its `base` is the default `--base-sut`), `--reset-sut`, `--run-id`, `--artifacts`, `--webapp-image`, `--keep`, `--no-reset`, `--strict-diff`, `--allow-web-ui`) |
-| `pr N --sha SHA [--target T] [--suite auto\|...] [--strict-diff] [--allow-web-ui]` | test upstream PR N at SHA: regression tiers, differential against its base, PR manifest scenarios |
+| `run [--target T] [--sut S] [--base-sut B] [--suite ...] [--tags ...] [--scenario ...] [-k EXPR] [pytest args]` | run tiers through pytest (also `--pr-manifest` (its `base` is the default `--base-sut`), `--reset-sut`, `--run-id`, `--artifacts`, `--webapp-image`, `--keep`, `--no-reset`, `--strict-diff`, `--allow-web-ui`); several targets (`a,b`, `@all`, `@<list>`): one child process each, `--parallel N`, `--fail-fast`, a batch summary |
+| `pr N --sha SHA [--target T] [--suite auto\|...] [--strict-diff] [--allow-web-ui]` | test upstream PR N at SHA: regression tiers, differential against its base, PR manifest scenarios (several targets like `run`) |
 | `relay --target T --forward-to URL [--since 10m] [--allow-remote]` | forward the App's webhook deliveries to a local webapp (holds the org lease) |
-| `janitor --target T [--older-than 6h] [--run-id ID [--force-takeover]] [--apply]` | list (and delete) leftovers of finished or crashed runs (a lease of `--run-id` renewed within 20 minutes is not taken over unless `--force-takeover`) |
+| `janitor --target T [--older-than 6h] [--run-id ID [--force-takeover]] [--apply]` | list (and delete) leftovers of finished or crashed runs (a lease of `--run-id` renewed within 20 minutes is not taken over unless `--force-takeover`); several targets one after the other |
 | `report DIR` | print the summary of a run artifacts directory |
 | `scrub-artifacts DIR` | delete non-text files and files leaking a secret (the secret values of its environment included; exit 1 on leaks) |
-| `cache prune [--keep 3]` | drop old builds, sources, runs and images from the harness cache |
+| `cache prune [--keep 3]` | drop old builds, sources, runs and images from the harness cache (never an entry whose lock a running session or build holds) |
 | `app-manifest --target T --webhook-url URL [--port 8765] [--exchange CODE]` | create the e2e GitHub App from a manifest |
 | `inject [--target T] [--sut S] --fragment KIND=FILE [--library NAME=FILE] [--overlay FILE] [--config/--base FILE] [--apply] [--print]` | try jsonnet files against a SUT without writing a scenario (offline by default; `--target`: live validate + plan, `--apply` with guards and cleanup) |
 
@@ -164,17 +177,23 @@ The same options exist as pytest options when you call pytest directly: `--e2e-t
 `make help` lists every target. The main ones: `init`, `unit`, `lint`, `format`, `typecheck`, `check`, `offline`,
 `lint-scenarios` (the offline lint of every live scenario step), `inject ARGS='--fragment KIND=FILE ...'`,
 `cli`, `webhooks`, `webapp`, `web-ui`, `enterprise`, `differential`, `e2e`, `one SCENARIO=<glob>`, `pr PR=<n> SHA=<sha>`,
-`doctor`, `bootstrap [APPLY=1]`, `janitor [APPLY=1]`, `relay`, `report [RUN=<dir>]`, `scrub`, `cache-prune`, `sut`.
-They read `TARGET` (default `$E2E_TARGET`), `SUT` (default `release:latest`), `BASE_SUT`, `SUITE` and `ARGS` (extra
-pytest arguments), and never pass `OTTERDOG_CONFIG_ROOT` on.
+`setup [FROM=<instance>] [PROFILE=<profile>]`, `ci-sync [REVIEWER=<login>] [NIGHTLY=1] [APPLY=1]`, `targets`, `doctor`,
+`bootstrap [APPLY=1] [WAIT=1]`, `janitor [APPLY=1]`, `relay`, `report [RUN=<dir>]`, `scrub`, `cache-prune`, `sut`.
+They read `TARGET` (default
+`$E2E_TARGET`; a comma list, `@all` or `@<list>` for the run-based targets, `pr`, `doctor` and `janitor`), `PARALLEL`,
+`SUT` (default `release:latest`), `BASE_SUT`, `SUITE` and `ARGS` (extra pytest arguments), and never pass
+`OTTERDOG_CONFIG_ROOT` on.
 
 ## Configuration
 
-- `targets/<name>.yaml`: one file per test organization (`free.yaml`, `enterprise.yaml`). Values come from
-  environment variables; secrets are never written there (`*_env` keys name the variable holding them).
-- Environment files, first one wins and the process environment wins over all of them:
-  `~/.config/otterdog-e2e/<target>.env`, `.env.e2e.<target>`, `.env.e2e`. [.env.example](.env.example) lists every
-  variable with its meaning and the required token scopes.
+- `targets/<profile>.yaml`: the profiles (`free.yaml`, `team.yaml`, `enterprise.yaml`), holding no org-specific
+  value. Values come from environment variables; secrets are never written there (`*_env` keys name the variable
+  holding them).
+- Instances: one test organization each, `--target <instance>`. Its environment files, first one wins and the process
+  environment wins over all of them: `~/.config/otterdog-e2e/<instance>.env` (written by `setup`, with
+  `E2E_PROFILE=<profile>`), `.env.e2e.<instance>`, `.env.e2e`. The instances `free`, `team` and `enterprise` use the
+  profile of the same name. [.env.example](.env.example) lists every variable with its meaning and the required token
+  scopes; [docs/onboarding.md](docs/onboarding.md#instances-and-profiles) the naming rules.
 - `E2E_CACHE_DIR` (default `~/.cache/otterdog-e2e`): upstream mirror, SUT sources and builds, tool venvs, private
   per-run scratch directories. `E2E_ARTIFACTS` (default `./artifacts`): redacted run artifacts.
 
@@ -202,15 +221,16 @@ scratch directory below `E2E_CACHE_DIR`, which is deleted at session end (unless
 | Workflow | Trigger | What |
 |---|---|---|
 | `ci.yml` | push to main, pull requests | ruff, mypy (non-blocking), unit tier, offline tier of `release:latest` and `branch:main` (no secrets) |
-| `e2e.yml` | dispatch, reusable | one live session on a target: `classify` (no secrets) then `e2e` in the `e2e-<target>` or `e2e-<target>-untrusted` environment |
+| `e2e.yml` | dispatch, reusable | one live session per instance (`target`: one instance or a comma list, allowlist `E2E_INSTANCES`): `classify` (no secrets) then one `e2e` job per instance in the `e2e-<instance>` or `e2e-<instance>-untrusted` environment |
 | `e2e-otterdog-pr.yml` | dispatch only | validates `pr` and the 40-hex `sha`, then calls `e2e.yml` with `pr:<n>@<sha>` and base `auto` |
-| `e2e-webui.yml` | dispatch, reusable | the web-UI tier of a trusted SUT on a target, in the `e2e-<target>-webui` environment (the only one holding the bot's password and TOTP seed) |
-| `nightly.yml` | schedule | per enabled target: `release:latest`, then `branch:main` with a differential against `release:latest`; the web-UI lane when `E2E_WEB_UI_ENABLED` is `true` |
-| `janitor.yml` | every 6 hours | sweeps leftovers of old runs on every enabled target |
+| `e2e-webui.yml` | dispatch, reusable | the web-UI tier of a trusted SUT on one or several instances (one at a time), in the `e2e-<instance>-webui` environment (the only one holding the bot's password and TOTP seed) |
+| `nightly.yml` | schedule | per enabled instance (`E2E_TARGETS`): `release:latest`, then `branch:main` with a differential against `release:latest`; the web-UI lane when `E2E_WEB_UI_ENABLED` is `true` (one instance at a time) |
+| `janitor.yml` | every 6 hours | a `check` job (no environment, no secrets) refuses `E2E_ORG`, `E2E_ORG_ID` and `E2E_PROFILE` as repository or organization variables, then sweeps leftovers of old runs on every enabled instance |
 | `docs.yml` | push to main and pull requests changing the documentation, dispatch | strict MkDocs build of the documentation site; on main, deploys it to GitHub Pages (no secrets) |
 
 The required repository setup (environments, variables, secrets) is described in
-[docs/security.md](docs/security.md#ci-environments) and [docs/setup-free-org.md](docs/setup-free-org.md#ci).
+[docs/security.md](docs/security.md#ci-environments) and [docs/setup-free-org.md](docs/setup-free-org.md#ci);
+`otterdog-e2e ci-sync` creates it per instance ([docs/onboarding.md](docs/onboarding.md#ci-ci-sync)).
 
 ## Documentation
 
@@ -221,8 +241,9 @@ The documentation is published at https://heurtematte.github.io/otterdog-e2e/ (M
 |---|---|
 | [architecture.md](docs/architecture.md) | components, tiers, data flow, safety model, differential testing |
 | [security.md](docs/security.md) | threat model, controls, CI environments, incident runbook |
-| [setup-free-org.md](docs/setup-free-org.md) | machine accounts, organization, tokens (classic or fine-grained), bootstrap, GitHub App, first run |
-| [setup-enterprise-org.md](docs/setup-enterprise-org.md) | GitHub Enterprise Cloud specifics (trial, SAML SSO, policies) |
+| [onboarding.md](docs/onboarding.md) | the fast path: `setup`, `ci-sync`, instances and profiles, runs on several organizations, what GitHub does not let a program do |
+| [setup-free-org.md](docs/setup-free-org.md) | machine accounts, organization, tokens (classic or fine-grained), bootstrap, GitHub App, first run, by hand |
+| [setup-enterprise-org.md](docs/setup-enterprise-org.md) | GitHub Enterprise Cloud specifics (trial, SAML SSO, policies), the Team profile |
 | [github-app.md](docs/github-app.md) | the e2e GitHub App: permissions, manifest flow, webhook sink, relay |
 | [writing-scenarios.md](docs/writing-scenarios.md) | the YAML scenario model, checks, rules, examples |
 | [battery-guide.md](docs/battery-guide.md) | authoring guide of the test battery: which harness API, YAML key, fixture or check kind closes which kind of coverage gap, conventions, the lint and the login budget |

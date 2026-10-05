@@ -299,12 +299,13 @@ def test_load_target_rejects_invalid_targets(
     assert str(harness.targets_dir / f"{name}.yaml") in str(info.value)
 
 
-@pytest.mark.parametrize(("name", "plan"), [("free", "free"), ("enterprise", "enterprise")])
+@pytest.mark.parametrize(("name", "plan"), [("free", "free"), ("team", "team"), ("enterprise", "enterprise")])
 def test_repository_target_files(name: str, plan: str) -> None:
-    """targets/free.yaml and targets/enterprise.yaml are valid SPEC 6.2 targets."""
+    """targets/free.yaml, team.yaml and enterprise.yaml are valid SPEC 6.2 targets (profiles of their own name)."""
     harness = HarnessSettings(PROJECT, PROJECT / ".cache-unused", PROJECT / "artifacts", "o/r", REPO_TARGETS, PROJECT)
     target = load_target(name, harness, ENV)
-    assert (target.name, target.expected_plan, target.marker) == (name, plan, "[otterdog-e2e]")
+    assert (target.name, target.profile, target.expected_plan, target.marker) == (name, name, plan, "[otterdog-e2e]")
+    assert (target.saml_sso, target.web_probe_app_slug) == (False, None)
     assert target.capability_overrides == {"add": (), "remove": ()}
     assert set(target.identities) == {"admin", "oracle", "author", "approver", "outsider", "config_reader"}
     assert target.app is not None and target.app.private_key_file_env == "E2E_APP_PRIVATE_KEY_FILE"
@@ -375,6 +376,32 @@ def test_resolve_identities_requires_admin_token(harness: HarnessSettings, redac
     """A live session cannot run without the admin token."""
     with pytest.raises(TargetError, match="E2E_ADMIN_TOKEN"):
         resolve_identities(free_target(harness), {"E2E_AUTHOR_TOKEN": "wpa-author-tok-3", "E2E_ADMIN_TOKEN": " "})
+
+
+@pytest.mark.parametrize(
+    ("env", "roles"),
+    [
+        ({"E2E_ORACLE_LOGIN": "e2e-author-bot", "E2E_AUTHOR_LOGIN": "E2E-Author-Bot"}, "author, oracle"),
+        ({"E2E_AUTHOR_LOGIN": "same-bot", "E2E_APPROVER_LOGIN": "same-bot"}, "approver, author"),
+        ({"E2E_OUTSIDER_LOGIN": ADMIN.upper()}, "admin, outsider"),
+        ({"E2E_CONFIG_READER_LOGIN": ADMIN}, "admin, config_reader"),
+    ],
+)
+def test_load_target_refuses_one_login_for_two_roles(harness: HarnessSettings, env: dict[str, str], roles: str) -> None:
+    """One machine account per role, compared case-insensitively: a declared login of another role (the author's as
+    oracle: bootstrap would make it an org owner) is a TargetError naming the roles."""
+    with pytest.raises(TargetError, match=re.escape(f"identities {roles} declare the same login")):
+        free_target(harness, **env)
+
+
+def test_admin_and_oracle_or_both_read_only_roles_may_share_a_login(harness: HarnessSettings) -> None:
+    """The oracle may be the admin account (its fallback) and readonly the config_reader account."""
+    target = free_target(harness, E2E_ORACLE_LOGIN=ADMIN.upper())
+    assert target.identities["oracle"].login == ADMIN.upper()
+    readonly = setter("identities.readonly", {"login": "e2e-reader", "token_env": "E2E_READONLY_TOKEN"})
+    name = variant(harness, readonly)
+    loaded = load_target(name, harness, {**ENV, "E2E_CONFIG_READER_LOGIN": "E2E-reader"})
+    assert loaded.identities["readonly"].login == "e2e-reader"
 
 
 def test_resolve_identities_refuses_shared_tokens(harness: HarnessSettings, redactor: Redactor) -> None:

@@ -7,24 +7,33 @@ scratch home so the operator's dotfiles (~/.gitconfig, ~/.netrc, ~/.config/gh, ~
 Children run in their own session (process group): on timeout or interruption the whole group gets SIGTERM, then
 SIGKILL after TERMINATE_GRACE seconds, so no grandchild (git, pip, a docker CLI) keeps running behind the harness.
 Remote docker daemons over ``ssh://`` are not supported (SSH_AUTH_SOCK is removed for every child).
+
+run_harness() is the exception to the sanitized environment: it starts the harness itself (``python -P -m
+otterdog_e2e``, one child per target of a batch) with the parent's pristine environment, streams its redacted output
+line by line and forwards SIGINT/SIGTERM to it (forward_signals; a signal forwarded before the child was registered
+is sent to it right after, each signal exactly once).
 """
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 import re
 import shlex
 import signal
 import subprocess
+import threading
 import time
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from pathlib import Path
 from subprocess import CalledProcessError, CompletedProcess, TimeoutExpired
 
 from otterdog_e2e.redact import REDACTOR
 
 __all__ = [
+    "FORWARDED_SIGNALS",
+    "HARNESS_STOP_GRACE",
     "REMOVED_ENV_KEYS",
     "REMOVED_ENV_PATTERNS",
     "SET_ENV",
@@ -33,7 +42,9 @@ __all__ = [
     "CompletedProcess",
     "TimeoutExpired",
     "default_home",
+    "forward_signals",
     "run",
+    "run_harness",
     "sanitized_env",
     "set_default_home",
     "unshare_available",
@@ -270,3 +281,160 @@ def unshare_available() -> bool:
         return run(["unshare", "-rn", "true"], timeout=10, keep_home=True).returncode == 0
     except (OSError, TimeoutExpired):
         return False
+
+
+# --- harness children (batch runs: one child process per target) ----------------------------------------------------
+HARNESS_STOP_GRACE = 600.0  # seconds a harness child may clean up (lease release, sweep) after SIGTERM before SIGKILL
+FORWARDED_SIGNALS = (signal.SIGINT, signal.SIGTERM)
+
+
+class _HarnessChild:
+    """A running harness child and how many of the forwarded signals it got (``lock``: one sender at a time)."""
+
+    def __init__(self) -> None:
+        """No signal delivered yet."""
+        self.delivered = 0
+        self.lock = threading.Lock()
+
+
+_harness_children: dict[subprocess.Popen[str], _HarnessChild] = {}
+_harness_lock = threading.RLock()  # re-entrant: the forwarding handler may interrupt the main thread holding it
+_forwarded = threading.Event()  # set once a signal was forwarded (shared by nested forward_signals blocks)
+_forwarded_signals: list[int] = []  # every signal forwarded since the outermost forward_signals block began
+_forward_depth = 0
+
+
+def _deliver(process: subprocess.Popen[str], child: _HarnessChild) -> None:
+    """Send ``process`` every forwarded signal it did not get yet, each exactly once: whoever holds ``child.lock``
+    sends (a handler interrupting a sender in the main thread, or racing one in a worker, leaves it to that sender,
+    which checks again after sending)."""
+    while child.delivered < len(_forwarded_signals):
+        if not child.lock.acquire(blocking=False):  # atomic: a signal handler cannot interleave inside it
+            return
+        try:
+            pending = _forwarded_signals[child.delivered :]
+            child.delivered += len(pending)
+        finally:
+            child.lock.release()
+        for signum in pending:
+            _signal_group(process, signum)
+
+
+def _forward_signal(signum: int, frame: object) -> None:
+    """Signal handler of forward_signals(): send the signal to the process group of every running harness child (a
+    child registered later gets it when it registers, _register_child)."""
+    with _harness_lock:
+        _forwarded_signals.append(signum)
+        _forwarded.set()
+        children = list(_harness_children.items())
+    _logger.warning("forwarding signal %d to %d harness child process(es)", signum, len(children))
+    for process, child in children:
+        _deliver(process, child)
+
+
+def _register_child(process: subprocess.Popen[str]) -> None:
+    """Register a just-started harness child, then send it the signals forwarded before (a signal that arrived
+    between Popen and the registration found no child to forward to)."""
+    child = _HarnessChild()
+    with _harness_lock:
+        _harness_children[process] = child
+    _deliver(process, child)
+
+
+@contextlib.contextmanager
+def forward_signals() -> Iterator[threading.Event]:
+    """While the block runs, SIGINT and SIGTERM of this process are forwarded to the harness children of run_harness()
+    instead of interrupting this process (each child cleans up and exits with its own code); the yielded Event is set
+    once a signal was forwarded (callers start no further child). Handlers can only be installed by the main thread:
+    elsewhere the block relies on an enclosing block of the main thread."""
+    global _forward_depth
+    if threading.current_thread() is not threading.main_thread():
+        yield _forwarded
+        return
+    if _forward_depth == 0:
+        with _harness_lock:
+            _forwarded.clear()
+            _forwarded_signals.clear()
+    previous = {sig: signal.signal(sig, _forward_signal) for sig in FORWARDED_SIGNALS}
+    _forward_depth += 1
+    try:
+        yield _forwarded
+    finally:
+        _forward_depth -= 1
+        for sig, handler in previous.items():
+            signal.signal(sig, signal.SIG_DFL if handler is None else handler)
+
+
+def _open_log(path: Path) -> int:
+    """File descriptor of a child's log file: appended, mode 0600, never through a symlink."""
+    flags = os.O_WRONLY | os.O_CREAT | os.O_APPEND | getattr(os, "O_NOFOLLOW", 0)
+    return os.open(path, flags, 0o600)
+
+
+def _stop_harness(process: subprocess.Popen[str]) -> None:
+    """Ask a harness child's process group to stop (SIGTERM: every otterdog-e2e command turns it into a
+    KeyboardInterrupt and cleans up, cli.TerminationGuard), keep draining its output while it cleans up, then SIGKILL
+    after HARNESS_STOP_GRACE seconds."""
+    _signal_group(process, signal.SIGTERM)
+    try:
+        process.communicate(timeout=HARNESS_STOP_GRACE)
+    except (TimeoutExpired, ValueError, OSError):
+        _signal_group(process, getattr(signal, "SIGKILL", signal.SIGTERM))
+        with contextlib.suppress(TimeoutExpired, ValueError, OSError):
+            process.communicate(timeout=TERMINATE_GRACE)
+
+
+def run_harness(
+    argv: Sequence[str],
+    *,
+    env: Mapping[str, str],
+    on_line: Callable[[str], None],
+    log_path: Path | None = None,
+) -> int:
+    """Run a harness child (``python -m otterdog_e2e ...``) to completion and return its exit code (a negative
+    signal number when a signal killed it).
+
+    Unlike run(), the child gets ``env`` unchanged: the parent's pristine environment (E2E_* settings and the
+    credentials of CI included; never sanitized_env(), which strips them), so the child loads the env files of its
+    own target itself. It runs in its own session with stdin /dev/null; stdout and stderr are merged and read line
+    by line: each line is redacted, appended to ``log_path`` (0600) and handed to ``on_line`` (the caller prefixes
+    ``[<target>] ``). SIGINT/SIGTERM of this process are forwarded to the child while it runs (forward_signals); if
+    this process fails while reading (an exception in ``on_line``), the child is stopped first.
+    """
+    args = [str(arg) for arg in argv]  # Path arguments are common
+    if not args:
+        raise ValueError("run_harness() needs a command")
+    _logger.debug("harness child: %s", REDACTOR(shlex.join(args)))
+    log_fd = _open_log(log_path) if log_path is not None else None
+    try:
+        with (
+            forward_signals(),
+            subprocess.Popen(
+                args,
+                env=dict(env),
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                encoding="utf-8",
+                errors="replace",
+                start_new_session=True,
+            ) as process,
+        ):
+            _register_child(process)
+            try:
+                assert process.stdout is not None
+                for raw in process.stdout:
+                    line = REDACTOR(raw.rstrip("\r\n"))
+                    if log_fd is not None:
+                        os.write(log_fd, (line + "\n").encode("utf-8"))
+                    on_line(line)
+                return process.wait()
+            except BaseException:
+                _stop_harness(process)
+                raise
+            finally:
+                with _harness_lock:
+                    _harness_children.pop(process, None)
+    finally:
+        if log_fd is not None:
+            os.close(log_fd)

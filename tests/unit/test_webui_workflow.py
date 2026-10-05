@@ -1,6 +1,8 @@
 """Static checks of the web-UI CI lane (.github/workflows/e2e-webui.yml and the nightly ``webui`` job): the rules of
-tests/unit/test_workflows_static.py, plus its own: trusted SUTs only, the e2e-<target>-webui environment, the web
-secrets on the harness step only, the shared concurrency group, scrub before upload."""
+tests/unit/test_workflows_static.py, plus its own: trusted SUTs only, one job per instance and one at a time, the
+e2e-<instance>-webui environment, the instance check, the web secrets on the harness step only, the shared concurrency
+group, scrub before upload. The validation of the ``target`` list and the instance check are also run with bash in
+tests/unit/test_workflows_static.py (TARGET_VALIDATIONS, INSTANCE_JOBS)."""
 
 from __future__ import annotations
 
@@ -23,6 +25,14 @@ PINNED_ACTION_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+@[0-9a-f]{40}$"
 SECRET_REF_RE = re.compile(r"secrets\.([A-Za-z0-9_]+)")
 WEB_SECRETS = {"E2E_ADMIN_PASSWORD", "E2E_ADMIN_TOTP_SEED"}
 HARNESS = ".venv/bin/otterdog-e2e"
+INSTANCES_ALLOWLIST = '${{ vars.E2E_INSTANCES || vars.E2E_TARGETS || \'["free","team","enterprise"]\' }}'
+INSTANCE_VARS = (
+    "E2E_PROFILE",
+    "E2E_SAML_SSO",
+    "E2E_CAPABILITIES_ADD",
+    "E2E_CAPABILITIES_REMOVE",
+    "E2E_WEB_PROBE_APP_SLUG",
+)
 
 
 @cache
@@ -48,14 +58,26 @@ def secret_names(value: Any) -> set[str]:
     return set(SECRET_REF_RE.findall(yaml.safe_dump(value))) if value else set()
 
 
+def step_by_id(job: dict[str, Any], step_id: str) -> tuple[int, dict[str, Any]]:
+    """(index, step) of the step with ``id: step_id``."""
+    for index, step in enumerate(steps(job)):
+        if step.get("id") == step_id:
+            return index, step
+    raise AssertionError(f"no step with id {step_id!r}")
+
+
 def test_top_level_rules() -> None:
-    """permissions {}, cache-mode none, dispatch + call with target/sut only, contents: read per job."""
+    """permissions {}, cache-mode none, dispatch + call with target/sut only (target: one instance or a comma list),
+    contents: read per job."""
     data = workflow("e2e-webui")
     assert data["permissions"] == {} and data["cache-mode"] == "none"
     on = data.get("on", data.get(True))
     assert set(on) == {"workflow_dispatch", "workflow_call"}
     for trigger in on.values():
         assert set(trigger["inputs"]) == {"target", "sut"}
+        target = trigger["inputs"]["target"]
+        assert target["type"] == "string" and target["required"] is True and "options" not in target
+    assert on["workflow_dispatch"]["inputs"]["target"]["default"] == "free"
     for job in jobs("e2e-webui").values():
         assert job["permissions"] == {"contents": "read"} and isinstance(job["timeout-minutes"], int)
 
@@ -95,12 +117,40 @@ def test_classify_refuses_untrusted_suts_without_secrets() -> None:
     assert '[[ "$trust" != trusted ]]' in script
 
 
+def test_classify_validates_the_instances() -> None:
+    """The target list is validated without secrets (instance name, reserved suffixes, the allowlist, 1 to 8) and
+    output as the JSON list of the matrix; per-instance variables are refused at repository level."""
+    classify = jobs("e2e-webui")["classify"]
+    assert set(classify["outputs"]) == {"sut", "targets"}
+    assert classify["outputs"]["targets"] == "${{ steps.inputs.outputs.targets }}"
+    _, validate = step_by_id(classify, "inputs")
+    assert validate["env"]["TARGET"] == "${{ inputs.target }}"
+    assert validate["env"]["INSTANCES"] == INSTANCES_ALLOWLIST
+    for name in ("E2E_ORG", "E2E_ORG_ID", "E2E_PROFILE"):
+        assert validate["env"][f"REPO_{name}"] == f"${{{{ vars.{name} }}}}", name
+    script = validate["run"]
+    assert '[[ "$name" =~ ^[a-z0-9][a-z0-9-]{0,38}$ ]]' in script and "*-untrusted | *-webui) fail" in script
+    assert "'any(.[]; . == $name)' <<< \"$INSTANCES\"" in script
+    assert "(( ${#targets[@]} >= 1 && ${#targets[@]} <= 8 ))" in script
+    assert 'echo "targets=$json" >> "$GITHUB_OUTPUT"' in script
+
+
 def test_web_job_environment_concurrency_and_secrets() -> None:
-    """e2e-<target>-webui environment, the org's concurrency group, the web secrets on the harness step only."""
+    """One job per instance, one at a time, each in its e2e-<instance>-webui environment and the org's concurrency
+    group, the web secrets on the harness step only."""
     job = jobs("e2e-webui")["webui"]
     assert job["needs"] == "classify"
-    assert job["environment"] == "${{ format('e2e-{0}-webui', inputs.target) }}"
-    assert job["concurrency"] == {"group": "e2e-${{ inputs.target }}", "cancel-in-progress": False, "queue": "max"}
+    assert job["strategy"] == {
+        "fail-fast": False,
+        "max-parallel": 1,
+        "matrix": {"target": "${{ fromJSON(needs.classify.outputs.targets) }}"},
+    }
+    assert job["environment"] == "${{ format('e2e-{0}-webui', matrix.target) }}"
+    assert job["concurrency"] == {"group": "e2e-${{ matrix.target }}", "cancel-in-progress": False, "queue": "max"}
+    assert "inputs.target" not in repr(job), "the job of an instance only knows matrix.target"
+    for step in steps(job):
+        if "TARGET" in (step.get("env") or {}):
+            assert step["env"]["TARGET"] == "${{ matrix.target }}", step.get("name")
     assert job["env"]["E2E_ALLOW_WEB_UI"] == "true" and not secret_names(job.get("env"))
     holders = {step.get("id") or step.get("name"): secret_names(step.get("env")) for step in steps(job)}
     assert holders["run"] == {"E2E_ADMIN_TOKEN", "E2E_ORACLE_TOKEN", *WEB_SECRETS}
@@ -113,6 +163,23 @@ def test_web_job_environment_concurrency_and_secrets() -> None:
     deps = next(step for step in steps(job) if "install-deps" in str(step.get("run")))
     assert steps(job).index(deps) < next(i for i, s in enumerate(steps(job)) if "poetry install" in str(s.get("run")))
     assert not secret_names(deps)
+
+
+def test_instance_check_precedes_the_session() -> None:
+    """The load step maps E2E_PROFILE and the per-instance variables; the instance check (no secrets) follows it and
+    precedes every harness step: a missing e2e-<instance>-webui environment is created on the fly, unprotected and
+    empty, and must fail before any SUT code runs."""
+    job = jobs("e2e-webui")["webui"]
+    load_index, load = step_by_id(job, "load")
+    for name in INSTANCE_VARS:
+        assert load["env"][name] == f"${{{{ vars.{name} }}}}", name
+    index, check = step_by_id(job, "instance")
+    harness = [i for i, step in enumerate(steps(job)) if HARNESS in str(step.get("run") or "")]
+    assert load_index < index < min(harness)
+    assert index < step_by_id(job, "run")[0]
+    assert check["env"] == {"TARGET": "${{ matrix.target }}"} and not secret_names(check)
+    assert 'profile="${E2E_PROFILE:-$TARGET}"' in check["run"] and '"targets/$profile.yaml"' in check["run"]
+    assert '"${E2E_ORG:-}"' in check["run"] and '"${E2E_ORG_ID:-}" =~ ^[0-9]+$' in check["run"]
 
 
 def test_scrub_before_upload_and_the_session_command() -> None:
@@ -159,6 +226,8 @@ def test_nightly_web_job_is_optional_and_last() -> None:
     assert "vars.E2E_WEB_UI_ENABLED == 'true'" in job["if"] and "!cancelled()" in job["if"]
     assert job["with"] == {"target": "${{ matrix.target }}", "sut": "release:latest"}
     assert "E2E_WEB_UI_TARGETS" in job["strategy"]["matrix"]["target"]
+    # one instance at a time (like the lists of e2e-webui.yml): the web logins of the bot accounts never overlap
+    assert job["strategy"]["max-parallel"] == 1 and job["strategy"]["fail-fast"] is False
     assert job["permissions"] == {"contents": "read"} and not secret_names(job) and "environment" not in job
 
 

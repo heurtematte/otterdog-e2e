@@ -4,6 +4,9 @@ Trusted SUTs are tagged ``otterdog-e2e/otterdog:<label>``, untrusted ones ``otte
 command-line labels (revision, trust, version) override any LABEL of the SUT's Dockerfile. Only a trusted tag whose
 labels match exactly is reused; untrusted images are always rebuilt (the layer cache still applies). The build arg
 ``version`` is the hash-free image version so dirty edits keep the dependency layers cached (F12).
+
+Builds of one tag are serialized across processes (a file lock next to the SUT source, ``<label>.image.lock``): the
+sessions of a parallel batch testing the same SUT build its image once and the others reuse it.
 """
 
 from __future__ import annotations
@@ -17,6 +20,8 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+
+from filelock import FileLock
 
 from otterdog_e2e import procs
 from otterdog_e2e.redact import REDACTOR
@@ -35,6 +40,8 @@ DOCKERFILE = "docker/Dockerfile"
 BUILD_ARGS_ENV = "E2E_DOCKER_BUILD_ARGS"
 BUILD_TIMEOUT = 3600.0
 PULL_TIMEOUT = 1800.0
+BUILD_LOCK_TIMEOUT = BUILD_TIMEOUT + 600.0  # waiting for another session's build of the same tag
+BUILD_LOCK_SUFFIX = ".image.lock"
 # flags of E2E_DOCKER_BUILD_ARGS / extra_args that would override the tag, Dockerfile, labels or outputs
 _FORBIDDEN_FLAGS = ("-t", "--tag", "-f", "--file", "--iidfile", "-o", "--output", "--push", "-q", "--quiet")
 _PROTECTED_KEYS = {
@@ -108,12 +115,29 @@ def _labels(info: Mapping[str, Any]) -> dict[str, str]:
     return dict((info.get("Config") or {}).get("Labels") or {})
 
 
+def build_lock_path(sut: ResolvedSut) -> Path:
+    """File lock of the image build of ``sut``: ``<label>.image.lock`` next to its source (trusted sources live in
+    ``<cache>/src``, untrusted exports in ``<cache>/untrusted``: one lock per tag). ``cache prune`` never removes a
+    held one: a trusted lock goes with its pruned ``src/<label>`` entry, an untrusted one (its export is removed by
+    its session) once nobody holds it."""
+    return sut.source_dir.parent / f"{sut.label}{BUILD_LOCK_SUFFIX}"
+
+
 def build_webapp_image(sut: ResolvedSut, *, force: bool = False, extra_args: Sequence[str] = ()) -> BuiltImage:
     """docker build -f docker/Dockerfile --build-arg version=<image_version> with revision/trust labels.
 
     Tag otterdog-e2e/otterdog:<label> (trusted) or otterdog-e2e/untrusted:<label>; a trusted tag is reused only if
-    its revision label matches and otterdog-e2e.trusted=true; E2E_DOCKER_BUILD_ARGS are appended.
+    its revision label matches and otterdog-e2e.trusted=true; E2E_DOCKER_BUILD_ARGS are appended. The reuse check and
+    the build hold the tag's file lock (build_lock_path): a concurrent session waits, then reuses the image.
     """
+    lock_path = build_lock_path(sut)
+    lock_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    with FileLock(str(lock_path), timeout=BUILD_LOCK_TIMEOUT):
+        return _build_locked(sut, force=force, extra_args=extra_args)
+
+
+def _build_locked(sut: ResolvedSut, *, force: bool, extra_args: Sequence[str]) -> BuiltImage:
+    """build_webapp_image under the tag's lock: reuse a matching trusted image, else docker build."""
     tag, labels = image_tag(sut), image_labels(sut)
     if sut.trusted and not force:
         info = _inspect(tag)

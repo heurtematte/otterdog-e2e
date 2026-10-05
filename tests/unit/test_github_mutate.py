@@ -393,6 +393,43 @@ def test_ensure_membership_never_demotes(api: responses.RequestsMock, mutator: M
     assert body(api.calls[-1]) == {"role": "member"}
 
 
+def test_ensure_membership_as_owner(api: responses.RequestsMock, mutator: Mutator) -> None:
+    """role admin (bootstrap's separate oracle): invites an owner and promotes an ACTIVE member; a pending invitation
+    and an owner are returned unchanged; role member never demotes; other roles are refused before any request."""
+    memberships = {
+        "member": {"state": "active", "role": "member"},
+        "invited": {"state": "pending", "role": "member"},
+        "owner": {"state": "active", "role": "admin"},
+    }
+    api.add(responses.GET, f"{ORG}/memberships/fresh", status=404, json={"message": "Not Found"})
+    api.add(responses.PUT, f"{ORG}/memberships/fresh", json={"state": "pending", "role": "admin"})
+    api.add(responses.PUT, f"{ORG}/memberships/member", json={"state": "active", "role": "admin"})
+    for login, membership in memberships.items():
+        api.add(responses.GET, f"{ORG}/memberships/{login}", json=membership)
+    assert mutator.ensure_membership("fresh", role="admin") == {"state": "pending", "role": "admin"}
+    assert mutator.ensure_membership("member", role="admin") == {"state": "active", "role": "admin"}
+    assert mutator.ensure_membership("invited", role="admin") == memberships["invited"]
+    assert mutator.ensure_membership("owner", role="admin") == memberships["owner"]
+    assert mutator.ensure_membership("owner", role="member") == memberships["owner"]  # never demoted
+    puts = [(call.request.url.rsplit("/", 1)[1], body(call)) for call in api.calls if call.request.method == "PUT"]
+    assert puts == [("fresh", {"role": "admin"}), ("member", {"role": "admin"})]
+    calls = len(api.calls)
+    with pytest.raises(ValueError, match="membership role"):
+        mutator.ensure_membership("fresh", role="maintainer")
+    assert len(api.calls) == calls
+
+
+def test_ensure_membership_dry_run(api: responses.RequestsMock) -> None:
+    """dry_run reads the membership and writes nothing: the would-be result is returned."""
+    verified = make_verified_org()
+    mutator = Mutator(GitHubHttp(TOKEN, read_only=True), verified, dry_run=True)
+    api.add(responses.GET, f"{ORG}/memberships/fresh", status=404, json={"message": "Not Found"})
+    api.add(responses.GET, f"{ORG}/memberships/member", json={"state": "active", "role": "member"})
+    assert mutator.ensure_membership("fresh", role="admin") == {"state": "pending", "role": "admin", "dry_run": True}
+    assert mutator.ensure_membership("member", role="admin") == {"state": "active", "role": "admin", "dry_run": True}
+    assert [call.request.method for call in api.calls] == ["GET", "GET"]
+
+
 def test_identity_side_helpers(api: responses.RequestsMock) -> None:
     """Accepting an invitation and publicizing a membership use the identity's own write-scoped client."""
     verified = make_verified_org()

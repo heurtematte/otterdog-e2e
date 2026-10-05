@@ -319,7 +319,8 @@ def test_ensure_live_builds_everything_in_order(tmp_path: Path, live: LiveFakes)
     assert context.docker_ok is False and context.app_ok is False
     assert context.extras["app_reason"] == "no GitHub App configured"
     run = json.loads((context.artifacts_dir / "run.json").read_text())
-    assert run["target"] == {"name": "fake", "org": FAKE_ORG, "plan": "free"} and run["plan"] == "free"
+    assert run["target"] == {"name": "fake", "profile": "free", "org": FAKE_ORG, "plan": "free"}
+    assert run["plan"] == "free"
     assert "public_repos" in run["capabilities"]["caps"]
     context.ensure_live()
     assert live.calls.count("probe") == 1

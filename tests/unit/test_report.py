@@ -228,6 +228,38 @@ def test_summary_title_and_run_table(summary: str) -> None:
     assert "| Command | `otterdog-e2e run --target free --sut pr:792@" in summary
 
 
+def test_summary_names_the_profile_of_the_instance(live_run: Path) -> None:
+    """run.json target.profile (instances bound to profiles): ``instance (profile p, org o, plan P)``."""
+    run = json.loads((live_run / "run.json").read_text(encoding="utf-8"))
+    run["target"] = {"name": "acme", "profile": "team", "org": ORG, "plan": "team"}
+    run.pop("plan", None)
+    (live_run / "run.json").write_text(json.dumps(run), encoding="utf-8")
+    text = report.build_summary(live_run, redactor=Redactor())
+    assert f"| Target | `acme` (profile `team`, org `{ORG}`, plan Team) |" in text
+
+
+def test_run_overview_and_tally_text(live_run: Path, tmp_path: Path) -> None:
+    """The facts a batch summary shows of a run directory (all optional), and outcome counts in OUTCOMES order."""
+    overview = report.run_overview(live_run)
+    assert (overview["target"], overview["profile"], overview["org"], overview["plan"]) == ("free", None, ORG, "free")
+    assert overview["tests"] == 10 and sum(overview["tallies"].values()) == 10
+    assert overview["failures"] == 2 and overview["infra_failures"] == 1
+    assert str(overview["command"]).startswith("otterdog-e2e run --target free")
+    assert report.run_overview(tmp_path / "missing") == {
+        "target": None,
+        "profile": None,
+        "org": None,
+        "plan": None,
+        "tests": 0,
+        "tallies": {},
+        "failures": 0,
+        "infra_failures": 0,
+        "command": None,
+    }
+    assert report.tally_text({"skipped": 3, "passed": 12, "failed": 0}) == "12 passed, 3 skipped"
+    assert report.tally_text({}) == "no results"
+
+
 def test_summary_tier_table(summary: str) -> None:
     """Per-tier counts (passed, failed, errors, skipped, xfailed, xpassed) and durations."""
     assert "| offline | 1 | 0 | 0 | 0 | 0 | 0 | 12.5 s |" in summary

@@ -669,9 +669,15 @@ class RunData:
 
     @property
     def target(self) -> str | None:
-        """Target name."""
+        """Target name (the instance)."""
         target = self.run.get("target")
         value = target if isinstance(target, str) else lookup(self.run, "target.name", "target_name")
+        return str(value) if value else None
+
+    @property
+    def profile(self) -> str | None:
+        """Profile of the target instance (targets/<profile>.yaml), None for older run.json files."""
+        value = lookup(self.run, "target.profile")
         return str(value) if value else None
 
     def failures(self) -> list[TestRecord]:
@@ -755,6 +761,30 @@ def _tally(records: Iterable[TestRecord]) -> Counter[str]:
     return Counter(record.outcome for record in records)
 
 
+def tally_text(tallies: Mapping[str, int]) -> str:
+    """``12 passed, 3 skipped`` in OUTCOMES order (``no results`` when empty)."""
+    return ", ".join(f"{tallies[name]} {name}" for name in OUTCOMES if tallies.get(name)) or "no results"
+
+
+def run_overview(artifacts_dir: Path) -> dict[str, Any]:
+    """Facts of a run directory for a batch summary: target (instance), profile, org, plan, outcome tallies, number
+    of tests, product/infrastructure failures and the command (run.json ``command``); every value is optional."""
+    data = RunData.load(artifacts_dir)
+    tally = _tally(data.records)
+    failures = data.failures()
+    return {
+        "target": data.target,
+        "profile": data.profile,
+        "org": data.org,
+        "plan": data.plan,
+        "tests": len(data.records),
+        "tallies": {name: tally[name] for name in OUTCOMES if tally[name]},
+        "failures": len(failures),
+        "infra_failures": sum(record.is_infra for record in failures),
+        "command": command_line(data.run),
+    }
+
+
 def section_title(data: RunData) -> str:
     """Title and one-line verdict."""
     tally = _tally(data.records)
@@ -778,8 +808,9 @@ def _run_rows(data: RunData) -> list[tuple[str, str]]:
     """(label, value) rows of the run table."""
     run = data.run
     target = data.target
+    profile = f"profile {md_code(data.profile)}" if data.profile else ""
     org_bits = ", ".join(
-        bit for bit in (f"org {md_code(data.org)}" if data.org else "", f"plan {plan_label(data.plan)}") if bit
+        bit for bit in (profile, f"org {md_code(data.org)}" if data.org else "", f"plan {plan_label(data.plan)}") if bit
     )
     rows = [("Run id", md_code(data.run_id))]
     if target or data.org:

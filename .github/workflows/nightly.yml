@@ -1,8 +1,9 @@
-# Nightly full lane (SPEC 2, 17): for every enabled target, release:latest, then branch:main with a differential
-# against release:latest. Both calls of e2e.yml join the concurrency group e2e-<target>, so they never overlap with
+# Nightly full lane (SPEC 2, 17): for every enabled instance, release:latest, then branch:main with a differential
+# against release:latest. Both calls of e2e.yml join the concurrency group e2e-<instance>, so they never overlap with
 # each other, with dispatched runs or with the janitor. The optional web-UI lane (e2e-webui.yml) runs last.
 #
-# Enabled targets: repository variable E2E_TARGETS, a JSON list such as ["free", "enterprise"] (default ["free"]).
+# Enabled instances: repository variable E2E_TARGETS, a JSON list such as ["free", "enterprise"] (default ["free"]).
+# Each matrix entry calls e2e.yml with one instance, which must also be in the allowlist E2E_INSTANCES when that is set.
 # Scheduled runs are skipped until E2E_TARGETS is set, so a fresh fork or clone stays quiet; workflow_dispatch always runs.
 # Web-UI lane: E2E_WEB_UI_ENABLED == 'true' and E2E_WEB_UI_TARGETS (default ["free"]), docs/web-ui-testing.md.
 name: nightly
@@ -50,8 +51,8 @@ jobs:
       lane: nightly-full
 
   # Optional web-UI lane (docs/web-ui-testing.md): only when the repository variable E2E_WEB_UI_ENABLED is 'true',
-  # for the targets of E2E_WEB_UI_TARGETS (JSON list, default ["free"]), each with an e2e-<target>-webui environment
-  # holding the admin bot's web credentials; trusted SUT only, after the other sessions of the night.
+  # for the instances of E2E_WEB_UI_TARGETS (JSON list, default ["free"]), each with an e2e-<instance>-webui
+  # environment holding the admin bot's web credentials; trusted SUT only, after the other sessions of the night.
   webui:
     name: web-UI tier (release:latest)
     needs: [release, main]
@@ -60,6 +61,8 @@ jobs:
       contents: read
     strategy:
       fail-fast: false
+      # one instance at a time, like the lists of e2e-webui.yml: the web logins of the bot accounts never overlap
+      max-parallel: 1
       matrix:
         target: ${{ fromJSON(vars.E2E_WEB_UI_TARGETS || '["free"]') }}
     uses: ./.github/workflows/e2e-webui.yml

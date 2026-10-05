@@ -1,8 +1,12 @@
-# Janitor (SPEC 9.5, 17, SEC-17): sweeps leftovers of finished or crashed runs on every enabled target. Only runs
+# Janitor (SPEC 9.5, 17, SEC-17): sweeps leftovers of finished or crashed runs on every enabled instance. Only runs
 # registered in the ledger, older than --older-than and not holding an unexpired lease are swept. It joins the
-# concurrency group e2e-<target> and holds the org lease while deleting.
+# concurrency group e2e-<instance> and holds the org lease while deleting. It runs in the trusted environment
+# e2e-<instance> (E2E_PROFILE there names the profile targets/<profile>.yaml, default: the instance name); the instance
+# check fails the job when that environment does not configure the instance (GitHub creates a missing one, empty),
+# and the check job (no environment) first refuses E2E_ORG, E2E_ORG_ID and E2E_PROFILE as repository or organization
+# variables, which such a missing environment would inherit.
 #
-# Enabled targets: repository variable E2E_TARGETS, a JSON list such as ["free", "enterprise"] (default ["free"]).
+# Enabled instances: repository variable E2E_TARGETS, a JSON list such as ["free", "enterprise"] (default ["free"]).
 # Scheduled runs are skipped until E2E_TARGETS is set, so a fresh fork or clone stays quiet; workflow_dispatch always runs.
 name: janitor
 
@@ -25,8 +29,37 @@ permissions: {}
 cache-mode: none
 
 jobs:
+  # no environment, no secrets: what classify checks in e2e.yml and e2e-webui.yml, before any job of an instance
+  check:
+    name: check the repository variables (no secrets)
+    if: ${{ vars.E2E_TARGETS != '' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Refuse per-instance variables at repository or organization level
+        id: repository
+        env:
+          # no environment here: these are repository or organization variables, which must stay unset (below)
+          REPO_E2E_ORG: ${{ vars.E2E_ORG }}
+          REPO_E2E_ORG_ID: ${{ vars.E2E_ORG_ID }}
+          REPO_E2E_PROFILE: ${{ vars.E2E_PROFILE }}
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$1"; exit 1; }
+          # an instance's organization and profile are environment variables of its environments only: a job of a
+          # missing (auto-created, unprotected) environment must not inherit them from the repository or the org
+          for name in E2E_ORG E2E_ORG_ID E2E_PROFILE; do
+            repo_name="REPO_$name"
+            [[ -z "${!repo_name}" ]] \
+              || fail "$name is a repository or organization variable: set it in the e2e-<instance> environments only"
+          done
+          echo "no per-instance variable at repository or organization level"
+
   janitor:
     name: janitor ${{ matrix.target }}
+    needs: check
     if: ${{ vars.E2E_TARGETS != '' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -68,7 +101,10 @@ jobs:
           python -m pip install --disable-pip-version-check --no-input "poetry==${POETRY_VERSION}"
           poetry install --no-interaction --only main
       - name: Load the target configuration (environment variables, no secrets)
+        id: load
         env:
+          # the instance's profile: targets/<profile>.yaml (empty: the instance name)
+          E2E_PROFILE: ${{ vars.E2E_PROFILE }}
           E2E_ORG: ${{ vars.E2E_ORG }}
           E2E_ORG_ID: ${{ vars.E2E_ORG_ID }}
           E2E_ALLOWED_ORG_IDS: ${{ vars.E2E_ALLOWED_ORG_IDS }}
@@ -82,6 +118,11 @@ jobs:
           E2E_CONTRIBUTORS_TEAM: ${{ vars.E2E_CONTRIBUTORS_TEAM }}
           E2E_VALIDATION_CONTEXT: ${{ vars.E2E_VALIDATION_CONTEXT }}
           E2E_SYNC_CONTEXT: ${{ vars.E2E_SYNC_CONTEXT }}
+          # per-instance values of the profile (targets/<profile>.yaml)
+          E2E_SAML_SSO: ${{ vars.E2E_SAML_SSO }}
+          E2E_CAPABILITIES_ADD: ${{ vars.E2E_CAPABILITIES_ADD }}
+          E2E_CAPABILITIES_REMOVE: ${{ vars.E2E_CAPABILITIES_REMOVE }}
+          E2E_WEB_PROBE_APP_SLUG: ${{ vars.E2E_WEB_PROBE_APP_SLUG }}
         run: |
           set -euo pipefail
           while IFS= read -r name; do
@@ -93,6 +134,29 @@ jobs:
             fi
             printf '%s=%s\n' "$name" "$value" >> "$GITHUB_ENV"
           done < <(compgen -e | grep -E '^E2E_')
+      - name: Check the instance (its environment exists and configures it, no secrets)
+        id: instance
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$1"; exit 1; }
+          # E2E_TARGETS is not validated by a classify job: check the name here, then that the environment of this job
+          # configures the instance (GitHub creates a missing environment on the fly, without variables or secrets)
+          [[ "$TARGET" =~ ^[a-z0-9][a-z0-9-]{0,38}$ ]] || fail "invalid instance name in E2E_TARGETS"
+          case "$TARGET" in *-untrusted | *-webui) fail "an instance name cannot end with -untrusted or -webui" ;; lists) fail "lists is a reserved name (the directory of the instance lists)" ;; esac
+          profile="${E2E_PROFILE:-$TARGET}"
+          [[ "$profile" =~ ^[a-z0-9][a-z0-9._-]{0,63}$ ]] || fail "E2E_PROFILE must be the name of a targets/ file"
+          if [[ -f "targets/$TARGET.yaml" || -f "targets/$TARGET.yml" ]] && [[ "$profile" != "$TARGET" ]]; then
+            fail "instance $TARGET is a profile name: its E2E_PROFILE must be empty or $TARGET"
+          fi
+          [[ -f "targets/$profile.yaml" || -f "targets/$profile.yml" ]] \
+            || fail "no profile targets/$profile.yaml for instance $TARGET (environment variable E2E_PROFILE)"
+          [[ -n "${E2E_ORG:-}" ]] \
+            || fail "E2E_ORG is not set: the environment of instance $TARGET is missing or incomplete"
+          [[ "${E2E_ORG_ID:-}" =~ ^[0-9]+$ ]] \
+            || fail "E2E_ORG_ID is not a numeric id: the environment of instance $TARGET is missing or incomplete"
+          echo "instance $TARGET: profile $profile, organization $E2E_ORG ($E2E_ORG_ID)"
       - name: Run the janitor
         id: janitor
         timeout-minutes: 20

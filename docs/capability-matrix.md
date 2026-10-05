@@ -10,7 +10,8 @@ How the capabilities of a session are computed (`capabilities.probe_capabilities
    `admin:org`);
 2. read-only **probes** (they never fail a session; their HTTP statuses are recorded);
 3. **environment** capabilities (App, docker, configured identities);
-4. the target's **overrides** `github.capabilities: {add: [...], remove: [...]}`, applied last (remove wins);
+4. the target's **overrides** `github.capabilities: {add: [...], remove: [...]}`, applied last (remove wins); the
+   shipped profiles read them per instance from `E2E_CAPABILITIES_ADD` and `E2E_CAPABILITIES_REMOVE` (comma lists);
 5. the **derived** capability `web_ui`, which the session decides itself (overrides can remove it, never add it).
 
 ## Plan capabilities
@@ -67,9 +68,11 @@ method on file" for cache settings. The capability therefore means "otterdog can
 
 | Capability | Meaning |
 |---|---|
-| `ghas_private` | GitHub Code Security / Secret Protection cover private repositories (purchasable on Team and Enterprise Cloud, included in the Enterprise Cloud trial on github.com). Never probed: add it in the target when it applies. |
+| `ghas_private` | GitHub Code Security / Secret Protection cover private repositories (purchasable on Team and Enterprise Cloud, included in the Enterprise Cloud trial on github.com). Never probed: add it (`E2E_CAPABILITIES_ADD=ghas_private`) when it applies. |
 
-Typical overrides of an Enterprise Cloud trial: `capabilities: {add: [ghas_private], remove: [larger_runners]}`.
+Typical overrides of an Enterprise Cloud trial: `E2E_CAPABILITIES_ADD=ghas_private` and
+`E2E_CAPABILITIES_REMOVE=larger_runners` in the instance's env file (or CI environments), the literal form of a
+custom profile being `capabilities: {add: [ghas_private], remove: [larger_runners]}`.
 
 ## Environment capabilities
 
@@ -101,7 +104,7 @@ has less than `E2E_MIN_RATE_REMAINING` (default 800) core requests left.
 | Target | `expected_plan` | Notes |
 |---|---|---|
 | `free` (`targets/free.yaml`) | `free` | positive tests on public repositories, negative tests (`expect_failure_without`) on private ones; if the baseline keeps `members_can_create_private_pages` pending (GitHub `true`, template `false`, `true` is enterprise-only in otterdog), leave it unmanaged with `baseline: settings: {members_can_create_private_pages: null}` (verified offline: the pending change disappears) |
-| `team` (create `targets/team.yaml` from `free.yaml`) | `team` | private-repository protections; organization rulesets are still rejected by otterdog (#776) |
+| `team` (`targets/team.yaml`) | `team` | private-repository protections; organization rulesets are still rejected by otterdog (#776) |
 | `enterprise` (`targets/enterprise.yaml`) | `enterprise` | everything above; GitHub Enterprise Cloud on github.com only |
 
 GitHub Enterprise Server, ghe.com (data residency) and Enterprise Managed Users are not supported: otterdog

@@ -1,5 +1,6 @@
-"""``otterdog-e2e`` command line (SPEC 16): doctor, bootstrap, sut, run, pr, relay, janitor, report, scrub-artifacts,
-cache prune and app-manifest. Exit codes: pytest's for run/pr; budget overruns never fail.
+"""``otterdog-e2e`` command line (SPEC 16): doctor, bootstrap, sut, run, pr, relay, janitor, report, targets,
+scrub-artifacts, cache prune, app-manifest, inject, setup and ci-sync. Exit codes: pytest's for run/pr (the most severe
+child code with several targets); budget overruns never fail.
 
 Every command builds an E2EContext (the composition root shared with the pytest plugin); collaborators are imported
 lazily so that ``--help`` stays fast. Errors are reported as redacted one-line messages (exit 1). ``run`` and ``pr``
@@ -21,7 +22,9 @@ import re
 import secrets
 import shlex
 import shutil
+import signal
 import sys
+import threading
 import time
 import urllib.parse
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
@@ -119,6 +122,8 @@ DELIVERY_FRESHNESS = timedelta(hours=72)
 # files of a PR that run code at build time or change templates: flagged in the classify step summary
 RISKY_PATHS = ("pyproject.toml", "poetry.lock", "docker/*", "*Dockerfile*", "examples/template/*")
 PRUNABLE_CACHE_DIRS = ("run", "build", "src", "http-cache")
+# private exports of untrusted SUTs (removed by their session): cache prune only removes their unheld image locks
+UNTRUSTED_CACHE_DIR = "untrusted"
 CONFIG_HOME = Path("~/.config/otterdog-e2e")
 MANIFEST_TIMEOUT = 600.0
 OK, WARN, FAIL = "OK", "WARN", "FAIL"
@@ -168,11 +173,28 @@ def _handled(func: F) -> F:
     return wrapper  # type: ignore[return-value]
 
 
+TARGET_LIST_COMMANDS = ("run", "pr", "doctor", "janitor")  # the commands accepting several targets (batch.py)
+
+
+def _single_target(target: str | None) -> str | None:
+    """``target`` unless it is a list of targets (UsageError: only TARGET_LIST_COMMANDS run several targets)."""
+    from otterdog_e2e.batch import is_target_list
+
+    if target is not None and is_target_list(target):
+        raise click.UsageError(
+            f"--target {target!r}: a list of targets (a,b / @all / @<list>) is only accepted by"
+            f" {', '.join(TARGET_LIST_COMMANDS)}; give this command one target"
+        )
+    return target
+
+
 def _context(
     target: str | None = None, *, make_dirs: bool = True, artifacts: bool = True, **options: Any
 ) -> E2EContext:
-    """A fresh E2EContext for one command."""
-    return E2EContext.create(E2EOptions(target=target, **options), make_dirs=make_dirs, artifacts=artifacts)
+    """A fresh E2EContext for one command (one target: a list of targets is a usage error)."""
+    return E2EContext.create(
+        E2EOptions(target=_single_target(target), **options), make_dirs=make_dirs, artifacts=artifacts
+    )
 
 
 @contextlib.contextmanager
@@ -228,16 +250,88 @@ def _public_member(context: E2EContext, org: str, login: str) -> bool:
     return response.status_code == 204
 
 
+class TerminationGuard:
+    """SIGTERM raises KeyboardInterrupt in every command (main thread), so its cleanup runs: E2EContext.close releases
+    the org lease and scrubs, like after a Ctrl-C (a batch parent forwards SIGTERM to its janitor children too).
+
+    Only the first interruption is raised, a SIGINT included (its own behaviour is kept): GitHub cancels with SIGINT,
+    then SIGTERM 7.5 s later, and a second KeyboardInterrupt would abort the cleanup in progress. One handler at a
+    time: while pytest runs in-process (run, pr, inject) the plugin's InterruptGuard replaces this SIGTERM handler and
+    restores it (run_pytest marks an interrupted session here), and procs.forward_signals replaces both handlers while
+    batch children run.
+    """
+
+    def __init__(self) -> None:
+        """Nothing interrupted yet."""
+        self.interrupted = False
+        self._previous: dict[int, Any] = {}
+
+    def install(self) -> bool:
+        """Install the handlers (main thread only; a SIGINT that Python does not handle, e.g. ignored, is left as is)."""
+        if threading.current_thread() is not threading.main_thread():
+            return False
+        self._previous[signal.SIGTERM] = signal.signal(signal.SIGTERM, self.on_sigterm)
+        if callable(signal.getsignal(signal.SIGINT)):
+            self._previous[signal.SIGINT] = signal.signal(signal.SIGINT, self.on_sigint)
+        return True
+
+    def uninstall(self) -> None:
+        """Restore the previous handlers."""
+        if threading.current_thread() is not threading.main_thread():
+            return
+        for signum, handler in self._previous.items():
+            signal.signal(signum, signal.SIG_DFL if handler is None else handler)
+        self._previous.clear()
+
+    def on_sigterm(self, signum: int, frame: Any) -> None:
+        """First interruption: KeyboardInterrupt; a later SIGTERM is logged while the cleanup runs."""
+        if self.interrupted:
+            logger.warning("signal %d ignored: cleanup in progress", signum)
+            return
+        self.interrupted = True
+        raise KeyboardInterrupt(f"signal {signum}")
+
+    def on_sigint(self, signum: int, frame: Any) -> None:
+        """A SIGINT behaves as before (the previous handler: KeyboardInterrupt) and counts as the first interruption."""
+        self.interrupted = True
+        previous = self._previous.get(signal.SIGINT)
+        if callable(previous):
+            previous(signum, frame)
+        else:  # pragma: no cover - install() only wraps a callable handler
+            raise KeyboardInterrupt
+
+
+_GUARD_KEY = "otterdog_e2e.termination_guard"  # click Context.meta: the TerminationGuard of the running command
+
+
+def _termination_guard() -> TerminationGuard | None:
+    """The TerminationGuard of the running command (None outside a command or off the main thread)."""
+    context = click.get_current_context(silent=True)
+    guard = context.meta.get(_GUARD_KEY) if context is not None else None
+    return guard if isinstance(guard, TerminationGuard) else None
+
+
+def _verbosity() -> int:
+    """The -v count given to the main group (0 outside a command)."""
+    context = click.get_current_context(silent=True)
+    return int(context.find_root().params.get("verbose") or 0) if context is not None else 0
+
+
 @click.group()
 @click.version_option(package_name="otterdog-e2e", prog_name="otterdog-e2e")
 @click.option("-v", "--verbose", count=True, help="log more (-v info, -vv debug)")
-def main(verbose: int) -> None:
+@click.pass_context
+def main(context: click.Context, verbose: int) -> None:
     """End-to-end test harness for otterdog."""
     from otterdog_e2e import redact
 
     redact.install_logging_filter()
     if verbose:
         logging.basicConfig(level=logging.DEBUG if verbose > 1 else logging.INFO, format="%(levelname)s %(message)s")
+    guard = TerminationGuard()
+    if guard.install():
+        context.meta[_GUARD_KEY] = guard
+        context.call_on_close(guard.uninstall)
 
 
 # --- doctor ---------------------------------------------------------------------------------------------------------
@@ -301,18 +395,23 @@ class Doctor:
         return any(row.status == FAIL for row in self.rows)
 
     def check_target(self) -> Target | None:
-        """The target file loads (env files applied)."""
+        """The target loads (env files applied): ``instance (profile p, file)`` with its org."""
         try:
             target = self.ctx.load_target()
         except Exception as exc:  # noqa: BLE001 - reported as the first FAIL
             hint = (
-                f"check targets/<name>.yaml and its env vars (export them or write {CONFIG_HOME}/<target>.env,"
-                " .env.e2e.<target> or .env.e2e)"
+                f"check targets/<profile>.yaml and the env vars of the instance (export them or write"
+                f" {CONFIG_HOME}/<instance>.env with E2E_PROFILE=<profile>, .env.e2e.<instance> or .env.e2e;"
+                " otterdog-e2e targets lists the instances)"
             )
             self.add("target", FAIL, describe_error(exc), hint)
             return None
+        profile = target.profile or target.source_path.stem
         self.add(
-            "target", OK, f"{target.source_path.name}: org {target.org} (id {target.org_id}), {target.expected_plan}"
+            "target",
+            OK,
+            f"{target.name} (profile {profile}, {target.source_path.name}): org {target.org} (id {target.org_id}),"
+            f" {target.expected_plan}",
         )
         return target
 
@@ -822,26 +921,102 @@ def render_rows(rows: Sequence[CheckRow]) -> str:
     return "\n".join(lines)
 
 
+TARGET_HELP = "target: an instance (~/.config/otterdog-e2e/<instance>.env with E2E_PROFILE), a profile or a file"
+TARGETS_HELP = (
+    f"{TARGET_HELP}; several: repeat it or give a comma list, @all (every instance env file) or @<list>"
+    " (~/.config/otterdog-e2e/lists/<list>)"
+)
+
+
+def target_names(values: Sequence[str], *, required: bool = False) -> tuple[str, ...]:
+    """The targets of the --target values of run/pr/doctor/janitor (batch.parse_targets; UsageError for a bad list,
+    or for no target at all when ``required``)."""
+    from otterdog_e2e.batch import ALL_INSTANCES, BatchError, parse_targets
+
+    settings = _settings() if any(ALL_INSTANCES in value for value in values) else None  # @all keeps profile names
+    try:
+        names = parse_targets(values, os.environ, settings)
+    except BatchError as exc:
+        raise click.UsageError(str(exc)) from None
+    if required and not names:
+        raise click.UsageError("--target: no target given")
+    return names
+
+
+def _doctor_report(target: str, checks: Doctor, rows: Sequence[CheckRow]) -> dict[str, Any]:
+    """The --json document of one target's checks."""
+    return {"target": target, "ok": not checks.failed, "checks": [dataclasses.asdict(row) for row in rows]}
+
+
 @main.command()
-@click.option("--target", "target", required=True, help="target name or path")
-@click.option("--json", "as_json", is_flag=True, help="print the checks as JSON")
+@click.option("--target", "targets", multiple=True, required=True, help=TARGETS_HELP)
+@click.option("--json", "as_json", is_flag=True, help="print the checks as JSON (a list with several targets)")
 @_handled
-def doctor(target: str, as_json: bool) -> None:
-    """Check environment, identities, isolation, org, repos, teams, App and tools of a target (exit 1 on FAIL)."""
-    checks = Doctor(_context(target, make_dirs=False))
-    rows = checks.run()
+def doctor(targets: tuple[str, ...], as_json: bool) -> None:
+    """Check environment, identities, isolation, org, repos, teams, App and tools of a target (exit 1 on FAIL).
+
+    Several targets: one table per target, each checked with its own copy of the environment (the env files of one
+    target never reach the checks of another); exit 1 when any target has a FAIL.
+    """
+    names = target_names(targets, required=True)
+    if len(names) == 1:
+        checks = Doctor(_context(names[0], make_dirs=False))
+        rows = checks.run()
+        if as_json:
+            _echo_json(_doctor_report(names[0], checks, rows))
+        else:
+            _echo(render_rows(rows))
+        if checks.failed:
+            sys.exit(1)
+        return
+    reports = []
+    for name in names:
+        checks = Doctor(E2EContext.create(E2EOptions(target=name), environ=dict(os.environ), make_dirs=False))
+        reports.append((name, checks, checks.run()))
+    failed = [name for name, checks, _rows in reports if checks.failed]
     if as_json:
-        _echo_json({"target": target, "ok": not checks.failed, "checks": [dataclasses.asdict(row) for row in rows]})
+        _echo_json([_doctor_report(name, checks, rows) for name, checks, rows in reports])
     else:
-        _echo(render_rows(rows))
-    if checks.failed:
+        for name, _checks, rows in reports:
+            _echo(f"=== target {name} ===\n{render_rows(rows)}\n")
+        _echo(
+            f"doctor: {len(reports)} targets, {len(failed)} with failures"
+            + (f": {', '.join(failed)}" if failed else "")
+        )
+    if failed:
         sys.exit(1)
 
 
 # --- bootstrap ------------------------------------------------------------------------------------------------------
+if TYPE_CHECKING:
+    from otterdog_e2e.github.oracle import Oracle
+
+BOOTSTRAP_WAIT_TIMEOUT = 1800.0  # --wait: 30 min for the invitations to be accepted / the App to be installed
+BOOTSTRAP_WAIT_INTERVAL = 10.0
+BOOTSTRAP_MEMBERS = ("author", "approver")  # active and public members of the org (no owner rights)
+
+
+def org_invitation_url(org: str) -> str:
+    """Page where an invited account accepts the invitation of the org."""
+    return f"https://github.com/orgs/{org}/invitation"
+
+
+def org_people_url(org: str) -> str:
+    """People page of the org, where a member makes its own membership public."""
+    return f"https://github.com/orgs/{org}/people"
+
+
+def token_requests_url(org: str) -> str:
+    """Org settings page where an owner approves the fine-grained PAT requests of members (never automated: it would
+    need the App permission organization_personal_access_token_requests, and the App key reaches untrusted lanes)."""
+    return f"https://github.com/organizations/{org}/settings/personal-access-token-requests"
+
+
 class Bootstrap:
     """SPEC 16 bootstrap, ordered and idempotent: verify -> marker -> identities -> repos -> lease -> template ->
-    baseline reset -> push baseline -> App checks and delivery probe. Without ``apply`` it only reports."""
+    baseline reset -> push baseline -> App checks and delivery probe. Without ``apply`` it only reports. With ``wait``
+    (and apply) it waits for the invitations to be accepted and for the App installation instead of stopping or
+    reporting them as manual steps; a timeout or Ctrl-C stops it, and running it again resumes."""
 
     def __init__(
         self,
@@ -851,17 +1026,34 @@ class Bootstrap:
         confirm: Callable[[str], str],
         sleep: Callable[[float], None] = time.sleep,
         probe_timeout: float = DELIVERY_PROBE_TIMEOUT,
+        wait: bool = False,
+        wait_timeout: float = BOOTSTRAP_WAIT_TIMEOUT,
+        clock: Callable[[], float] = time.monotonic,
     ) -> None:
-        """Bind the steps to a context; ``confirm(prompt)`` returns what the operator typed."""
+        """Bind the steps to a context; ``confirm(prompt)`` returns what the operator typed; ``sleep`` and ``clock``
+        drive the waits."""
         self.ctx = context
         self.apply = apply
         self.confirm = confirm
         self.sleep = sleep
         self.probe_timeout = probe_timeout
+        self.wait = wait
+        self.wait_timeout = wait_timeout
+        self.clock = clock
+        self._reader: Oracle | None = None
 
     def step(self, text: str) -> None:
         """Report one step."""
         _echo(f"[bootstrap] {text}")
+
+    def reader(self) -> Oracle:
+        """Oracle on the ADMIN client for bootstrap's own reads: a separate oracle account may not be an owner (not
+        even a member) of the org yet, the admin is one (identities step)."""
+        if self._reader is None:
+            from otterdog_e2e.github.oracle import Oracle
+
+            self._reader = Oracle(self.ctx.http("admin"), self.ctx.require_target().org)
+        return self._reader
 
     def run(self) -> None:
         """All steps in order (stops after the read-only ones without apply)."""
@@ -882,11 +1074,65 @@ class Bootstrap:
         self.step("done")
 
     def verify(self) -> VerifiedOrg:
-        """verify_target without the marker (identities isolated)."""
-        self.ctx.load_target()
-        verified = self.ctx.verify(require_marker=False, check_identities=True)
+        """verify_target without the marker (identities isolated); a fine-grained token of author, approver or the
+        oracle that cannot prove its isolation yet gets the steps GitHub requires first."""
+        from otterdog_e2e.safety import SafetyError
+
+        target = self.ctx.load_target()
+        try:
+            verified = self.ctx.verify(require_marker=False, check_identities=True)
+        except SafetyError as exc:
+            hint = self._fine_grained_hint(target, str(exc))
+            if not hint:
+                raise
+            raise click.ClickException(f"{describe_error(exc)}\n{hint}") from exc
         self.step(f"verified {verified.login} (id {verified.org_id}, plan {verified.plan})")
         return verified
+
+    def _fine_grained_hint(self, target: Target, message: str) -> str:
+        """Why a fine-grained token of author/approver/oracle fails its isolation proof (verify_target names the role
+        first) and what to do: such a token only works once its account is an active member (owner for the oracle)
+        and, for members, once an org owner approved its request; "" for any other error."""
+        refused = ("fine-grained token cannot read", "expected an active membership")
+        for name in (*BOOTSTRAP_MEMBERS, "oracle"):
+            if not message.startswith(f"{name}: ") or not any(text in message for text in refused):
+                continue
+            if not self._fine_grained(name):
+                return ""
+            login = _declared_login(target, name) or name
+            spec = target.identities.get(name)
+            token_env = (spec.token_env if spec is not None else None) or "its token"
+            if name == "oracle":  # bootstrap never invites an oracle whose own token does not prove its login
+                return (
+                    f"a fine-grained token of oracle {login} only works once {login} is an active org owner; if it is "
+                    f"not a member yet, invite {login} as an Owner at {org_people_url(target.org)} (Invite member) or "
+                    f"with `otterdog-e2e setup --target {target.name}`, accept the invitation at "
+                    f"{org_invitation_url(target.org)} logged in as {login}, then run bootstrap again"
+                )
+            needs = (
+                f"an active member of {target.org} and an org owner approved its request (when the org requires "
+                f"it) at {token_requests_url(target.org)}"
+            )
+            return (
+                f"a fine-grained token of {name} {login} only works once {login} is {needs}; if it is not a member "
+                f"yet, unset {token_env}, run bootstrap --apply (it invites {login}), accept the invitation at "
+                f"{org_invitation_url(target.org)}, then set the token again"
+            )
+        return ""
+
+    def _fine_grained(self, name: str) -> bool:
+        """True when the identity's token is declared or shaped (github_pat_) as a fine-grained PAT."""
+        from otterdog_e2e.safety import FINE_GRAINED, FINE_GRAINED_PREFIX
+
+        identity = self.ctx.identities.get(name)
+        return identity is not None and (
+            identity.token_type == FINE_GRAINED or identity.token.startswith(FINE_GRAINED_PREFIX)
+        )
+
+    def _own_token(self, name: str) -> bool:
+        """True when the identity has a token of its own (the oracle falls back to the admin token)."""
+        identity, admin = self.ctx.identities.get(name), self.ctx.identities.get("admin")
+        return identity is not None and (admin is None or identity.token != admin.token)
 
     def marker(self, verified: VerifiedOrg) -> None:
         """Add the safety marker to the org description after typing the org login (refused in CI)."""
@@ -919,9 +1165,7 @@ class Bootstrap:
 
         protected = set(target.protected_repos(self.ctx.run_ctx))
         foreign = sorted(
-            r["name"]
-            for r in self.ctx.oracle().repos()
-            if r.get("name") not in protected and not is_e2e_name(r["name"])
+            r["name"] for r in self.reader().repos() if r.get("name") not in protected and not is_e2e_name(r["name"])
         )
         if foreign:
             raise click.ClickException(
@@ -931,56 +1175,243 @@ class Bootstrap:
     def _foreign_members(self, target: Target) -> list[str]:
         """Org members that are not declared identities."""
         declared = {spec.login.lower() for spec in target.identities.values() if spec.login}
-        return sorted(login for login in self.ctx.oracle().members() if login.lower() not in declared)
+        return sorted(login for login in self.reader().members() if login.lower() not in declared)
 
     def identities(self) -> None:
-        """author/approver: invite (admin), then accept and publicize with the identity's own token when it may (the
-        allowed scopes, public_repo + read:org, usually cannot: the step is then reported as manual and bootstrap goes
-        on, F4); outsider not a member."""
+        """The admin is an active owner; author/approver: invite (admin), then accept and publicize with the identity's
+        own token when it may (the allowed scopes, public_repo + read:org, usually cannot: the step is then reported as
+        manual with the URLs and bootstrap goes on, F4); a separate oracle account whose own token proves its login
+        (_oracle_login): invited as an OWNER, an active member promoted, never demoted (GH-10); outsider not a member.
+        With ``wait`` (and apply) the pending invitations are awaited."""
         target = self.ctx.require_target()
-        members = [(name, login) for name in ("author", "approver") if (login := _declared_login(target, name))]
-        states = {name: self._invite(target, name, login) for name, login in members}  # every invitation first
-        for name, login in members:
-            self._accept_and_publicize(target, name, login, states[name])
-        outsider = _declared_login(target, "outsider")
-        if outsider and self.ctx.oracle().membership(outsider) is not None:
-            raise click.ClickException(f"the outsider {outsider} is a member of the org: remove it first")
+        self._admin_owner(target)
+        members = {name: login for name in BOOTSTRAP_MEMBERS if (login := _declared_login(target, name))}
+        oracle = self._oracle_login(target)
+        invited = {name: self._invite(login) for name, login in members.items()}  # every invitation first
+        if oracle:
+            invited["oracle"] = self._invite(oracle, role="admin")
+        pending = {
+            name: login
+            for name, login in members.items()
+            if not self._accept_and_publicize(target, name, login, (invited[name] or {}).get("state"))
+        }
+        if oracle and not self._accept_oracle(target, oracle, invited["oracle"]):
+            pending["oracle"] = oracle
+        self._check_outsider(target)
+        if pending and self.wait and self.apply:
+            self.wait_for_memberships(target, pending)
+        elif pending and self.apply:
+            names = ", ".join(f"{name} {login}" for name, login in pending.items())
+            self.step(f"memberships left to the web UI: {names} (--wait waits for them)")
+        if oracle:
+            self._oracle_owner(target, oracle)
 
-    def _invite(self, target: Target, name: str, login: str) -> str | None:
-        """Invite one identity when it is not a member (with apply); returns its membership state (None: none)."""
-        state = (self.ctx.oracle().membership(login) or {}).get("state")
-        if state is None and self.apply:
-            self.ctx.mutator().ensure_membership(login)
-            return "pending"
-        return state
+    def _admin_owner(self, target: Target) -> None:
+        """The admin is an active org owner (GET /user/memberships/orgs/{org}): it invites, marks and resets."""
+        login = _declared_login(target, "admin") or "admin"
+        response = self.ctx.http("admin").request("GET", f"/user/memberships/orgs/{target.org}", allow=(403, 404))
+        if response.status_code == 403:
+            self.step(f"admin {login}: its membership is not readable (403); it must be an org owner")
+            return
+        body = response.json() if response.status_code == 200 and response.content else {}
+        state, role = (body.get("state"), body.get("role")) if isinstance(body, dict) else (None, None)
+        if state != "active" or role != "admin":
+            raise click.ClickException(
+                f"the admin {login} is not an active owner of {target.org} (state {state or 'none'}, role "
+                f"{role or 'none'}): make it an org owner ({org_people_url(target.org)}), then run bootstrap again"
+            )
+        self.step(f"admin {login}: active, owner")
 
-    def _accept_and_publicize(self, target: Target, name: str, login: str, state: str | None) -> None:
-        """One identity active and public in the org; a refusal of the identity's own token (403/404: read:org cannot
-        write memberships) becomes a manual step instead of stopping bootstrap."""
+    def _oracle_login(self, target: Target) -> str | None:
+        """Login of a separate oracle account that bootstrap may make an org OWNER: declared, distinct from the admin's,
+        with a token of its own whose GET /user login is the declared one; None otherwise (reported: a declared login
+        alone proves nothing, it could name any account, the author's included)."""
+        from otterdog_e2e.github.http import GitHubError
+
+        login, admin = _declared_login(target, "oracle"), _declared_login(target, "admin")
+        if not login or (admin is not None and login.lower() == admin.lower()):
+            return None
+        spec = target.identities.get("oracle")
+        token_env = (spec.token_env if spec is not None else None) or "its token"
+        skipped = "not invited nor promoted to org owner"
+        if not self._own_token("oracle"):
+            self.step(
+                f"oracle {login}: no token of its own ({token_env}), the admin serves as oracle: {skipped}; set"
+                f" {token_env} to the token of {login} to make it an owner"
+            )
+            return None
+        try:
+            actual = str((self.ctx.http("oracle").get("/user") or {}).get("login") or "")
+        except GitHubError as exc:
+            self.step(f"oracle {login}: GET /user with its token failed ({exc.status}): {skipped}")
+            return None
+        if actual.lower() != login.lower():
+            self.step(
+                f"oracle {login}: {token_env} is the token of {actual or 'an unknown account'!r}, not of {login}:"
+                f" {skipped}; use the token of the declared machine account"
+            )
+            return None
+        return login
+
+    def _invite(self, login: str, *, role: str = "member") -> dict[str, Any] | None:
+        """Invite one identity with ``role`` when it is not a member (with apply); returns its membership (None:
+        none). An existing membership is never changed here."""
+        membership = self.reader().membership(login)
+        if membership is None and self.apply:
+            self.ctx.mutator().ensure_membership(login, role=role)
+            return {"state": "pending", "role": role}
+        return membership
+
+    def _manual(self, target: Target, login: str, state: str | None, *, publicize: bool = True) -> str:
+        """The web-UI steps left to ``login``: accept the invitation (unless active), make the membership public."""
+        steps = [] if state == "active" else [f"accept the invitation at {org_invitation_url(target.org)}"]
+        if publicize:
+            steps.append(f"make the membership public at {org_people_url(target.org)}")
+        return f"{' and '.join(steps)} in the web UI, logged in as {login}"
+
+    def _accept_and_publicize(self, target: Target, name: str, login: str, state: str | None) -> bool:
+        """One identity active and public in the org (True when it is); a refusal of the identity's own token (403/404:
+        read:org cannot write memberships, a fine-grained token may await an owner's approval) becomes a manual step
+        with the URLs instead of stopping bootstrap."""
         from otterdog_e2e.github.http import GitHubError
 
         public = state == "active" and _public_member(self.ctx, target.org, login)
         if public:
             self.step(f"{name} {login}: active, public")
-            return
+            return True
         if not self.apply:
             self.step(f"{name} {login}: would invite, accept and publicize the membership (state {state or 'none'})")
-            return
-        manual = f"accept the invitation and make the membership public in the web UI, logged in as {login}"
-        if name not in self.ctx.identities:
-            self.step(f"{name} {login}: invited; {manual} (no token)")
-            return
+            return False
+        if not self._own_token(name):
+            done = "invited" if state == "pending" else f"state {state}"
+            self.step(f"{name} {login}: {done}; {self._manual(target, login, state)} (no token)")
+            return False
         own = self.ctx.http(name, write=True)
         try:
             if state == "pending":
                 own.patch(f"/user/memberships/orgs/{target.org}", json={"state": "active"})
+                state = "active"
             own.put(f"/orgs/{target.org}/public_members/{login}")
         except GitHubError as exc:
             if exc.status not in (403, 404):
                 raise
+            manual = self._manual(target, login, state)
             self.step(f"{name} {login}: the token may not change its membership ({exc.status}): {manual}")
-            return
+            if self._fine_grained(name):
+                self.step(
+                    f"{name} {login}: a fine-grained token of a member needs an org owner's approval when the org "
+                    f"requires it: approve its request at {token_requests_url(target.org)}"
+                )
+            return False
         self.step(f"{name} {login}: active, public")
+        return True
+
+    def _accept_oracle(self, target: Target, login: str, membership: Mapping[str, Any] | None) -> bool:
+        """The separate oracle account active in the org (True when it is): its own token accepts the invitation when
+        it may, else a manual step with the URL. The owner role is settled by _oracle_owner."""
+        from otterdog_e2e.github.http import GitHubError
+
+        state, role = (membership or {}).get("state"), (membership or {}).get("role")
+        if state == "active":
+            return True
+        if not self.apply:
+            action = "invite it as an org owner" if state is None else "accept its invitation"
+            self.step(f"oracle {login}: would {action} (state {state or 'none'}, role {role or 'none'})")
+            return False
+        manual = self._manual(target, login, state, publicize=False)
+        if not self._own_token("oracle"):
+            self.step(f"oracle {login}: invited (role {role}); {manual} (no token)")
+            return False
+        try:
+            self.ctx.http("oracle", write=True).patch(f"/user/memberships/orgs/{target.org}", json={"state": "active"})
+        except GitHubError as exc:
+            if exc.status not in (403, 404):
+                raise
+            self.step(f"oracle {login}: invited (role {role}); the token may not accept it ({exc.status}): {manual}")
+            return False
+        self.step(f"oracle {login}: invitation accepted")
+        return True
+
+    def _oracle_owner(self, target: Target, login: str) -> None:
+        """A separate oracle must be an org owner (GH-10): an active member is promoted with apply (never demoted).
+        With apply and the oracle's own token in use, bootstrap stops while it is not an active owner: the next
+        steps read the org through it."""
+        membership = self.reader().membership(login) or {}
+        state, role = membership.get("state"), membership.get("role")
+        if state == "active" and role == "admin":
+            self.step(f"oracle {login}: active, owner")
+        elif state == "active" and not self.apply:
+            self.step(f"oracle {login}: active member, not an owner: would promote it to org owner")
+        elif state == "active":
+            self.ctx.mutator().ensure_membership(login, role="admin")
+            self.step(f"oracle {login}: promoted to org owner")
+        elif self.apply and self._own_token("oracle"):
+            raise click.ClickException(
+                f"the oracle {login} is not an active owner of {target.org} yet (state {state or 'none'}): "
+                f"{self._manual(target, login, state, publicize=False)}, then run bootstrap again (--wait waits for "
+                "it); the next steps read the org through the oracle"
+            )
+
+    def _check_outsider(self, target: Target) -> None:
+        """The outsider is not a member of the org (nor invited)."""
+        outsider = _declared_login(target, "outsider")
+        if outsider and self.reader().membership(outsider) is not None:
+            raise click.ClickException(f"the outsider {outsider} is a member of the org: remove it first")
+
+    def wait_for_memberships(self, target: Target, pending: Mapping[str, str]) -> None:
+        """--wait: poll until every pending identity is active (author and approver also public) and the outsider is
+        still not a member; a change of state is printed once."""
+        seen: dict[str, str] = {}
+
+        def ready() -> bool:
+            """One poll of the pending identities (changes printed); True when every one is ready."""
+            done = True
+            for name, login in pending.items():
+                status, ok = self._membership_status(target, name, login)
+                if name in seen and seen[name] != status:
+                    self.step(f"{name} {login}: {status}")
+                seen[name] = status
+                done = done and ok
+            self._check_outsider(target)
+            return done
+
+        names = ", ".join(f"{name} {login}" for name, login in pending.items())
+        self._wait(f"the memberships of {names}", ready)
+        self.step(f"memberships ready: {names}")
+
+    def _membership_status(self, target: Target, name: str, login: str) -> tuple[str, bool]:
+        """(state shown, ready) of one identity: active and public for author/approver, active for the oracle."""
+        state = (self.reader().membership(login) or {}).get("state")
+        if state != "active":
+            return ("invitation pending" if state == "pending" else "not a member"), False
+        if name == "oracle":
+            return "active", True
+        public = _public_member(self.ctx, target.org, login)
+        return ("active, public" if public else "active, private"), public
+
+    def _wait(self, what: str, condition: Callable[[], Any]) -> Any:
+        """wait_until(condition) every BOOTSTRAP_WAIT_INTERVAL s for at most ``wait_timeout`` s; a timeout or Ctrl-C
+        stops bootstrap with how to resume (run it again: every step is idempotent)."""
+        from otterdog_e2e.waiting import WaitTimeoutError, wait_until
+
+        name = self.ctx.require_target().name
+        again = f"run `otterdog-e2e bootstrap --target {name} --apply --wait` again (every step is idempotent)"
+        self.step(
+            f"waiting up to {self.wait_timeout:g} s for {what} (every {BOOTSTRAP_WAIT_INTERVAL:g} s; Ctrl-C stops)"
+        )
+        try:
+            return wait_until(
+                condition,
+                timeout=self.wait_timeout,
+                interval=BOOTSTRAP_WAIT_INTERVAL,
+                what=what,
+                sleep=self.sleep,
+                clock=self.clock,
+            )
+        except WaitTimeoutError as exc:
+            raise click.ClickException(f"{what}: not done within {self.wait_timeout:g} s: {again}") from exc
+        except KeyboardInterrupt:
+            raise click.ClickException(f"interrupted while waiting for {what}: {again}") from None
 
     def repos(self) -> None:
         """The configs and defaults repositories exist (public, auto-initialized)."""
@@ -990,7 +1421,7 @@ class Bootstrap:
             target.defaults_repo: "published templates",
         }
         for name, purpose in purposes.items():
-            if self.ctx.oracle().repo(name) is not None:
+            if self.reader().repo(name) is not None:
                 self.step(f"repo {name} exists")
             elif not self.apply:
                 self.step(f"would create the public repo {name} ({purpose})")
@@ -1026,12 +1457,37 @@ class Bootstrap:
             return
         self.ctx.publish_otterdog_json(template)
         self.step("otterdog.json written to the configs repo")
+        self.step(f"App installation {self.installation()} ready")
+        self.delivery_probe()
+
+    def installation(self) -> int:
+        """Installation id of the App on the org (installation_id: verify_app and the GH-09 preflight). An App not
+        installed yet (verified first: no installation link for an App that could reach other orgs): its installation
+        URL is printed and, with ``wait``, GET /orgs/{org}/installation is polled until it is installed; without
+        ``wait`` bootstrap stops (run it again once installed)."""
+        from otterdog_e2e.appmanifest import installation_url
+
+        target = self.ctx.require_target()
+        isolation = self.ctx.verify_app()
+        app = self.ctx.app_auth()
+        if app.installation_for_org(target.org) is None:
+            declared = target.app.slug if target.app is not None else None
+            slug = declared or self.ctx.require_app_credentials().slug or isolation.slug  # isolation: GET /app
+            install = (
+                f"install the GitHub App {slug} on {target.org} for All repositories: "
+                f"{installation_url(slug, target.org_id)}"
+            )
+            if not self.wait:
+                raise click.ClickException(
+                    f"the GitHub App is not installed on the org: {install}, then run bootstrap again (--wait waits)"
+                )
+            self.step(f"App not installed: {install}")
+            self._wait(f"the installation of the GitHub App {slug}", lambda: app.installation_for_org(target.org))
+            self.step(f"App {slug} installed on {target.org}")
         try:
-            installation = self.ctx.installation_id()
+            return self.ctx.installation_id()
         except ContextError as exc:
             raise click.ClickException(str(exc)) from exc
-        self.step(f"App installation {installation} ready")
-        self.delivery_probe()
 
     def delivery_probe(self) -> None:
         """Push a throwaway branch e2e/<run>/bootstrap to the configs repo and wait for its push delivery."""
@@ -1081,11 +1537,34 @@ class Bootstrap:
 @main.command()
 @click.option("--target", "target", required=True, help="target name or path")
 @click.option("--apply", "apply_", is_flag=True, help="perform the changes (default: dry run)")
+@click.option(
+    "--wait",
+    is_flag=True,
+    help="with --apply: wait until the invited accounts are active and public members and the App is installed",
+)
+@click.option("--wait-timeout", default="30m", show_default=True, help="how long --wait waits (90s, 10m, 1h)")
 @_handled
-def bootstrap(target: str, apply_: bool) -> None:
-    """Prepare a test org idempotently: marker, identities, repos, lease, template, baseline, App checks."""
+def bootstrap(target: str, apply_: bool, wait: bool, wait_timeout: str) -> None:
+    """Prepare a test org idempotently: marker, identities, repos, lease, template, baseline, App checks.
+
+    The web-UI steps GitHub does not allow to automate (accepting an invitation, making a membership public,
+    installing the App, approving a member's fine-grained token) are printed with their URLs; --wait polls until the
+    memberships are active and public and the App is installed.
+    """
+    try:
+        timeout = parse_duration(wait_timeout).total_seconds()
+    except ValueError as exc:
+        raise click.UsageError(f"--wait-timeout: {exc}") from None
+    if wait and not apply_:
+        raise click.UsageError("--wait needs --apply (a dry run invites nobody and waits for nothing)")
     with _session(target) as context:
-        Bootstrap(context, apply=apply_, confirm=lambda prompt: str(click.prompt(prompt))).run()
+        Bootstrap(
+            context,
+            apply=apply_,
+            confirm=lambda prompt: str(click.prompt(prompt)),
+            wait=wait,
+            wait_timeout=timeout,
+        ).run()
 
 
 # --- sut ------------------------------------------------------------------------------------------------------------
@@ -1296,6 +1775,34 @@ class RunRequest:
         argv += [flag for flag, enabled in flags if enabled]
         return shlex.join([*argv, *self.extra])
 
+    def harness_args(self) -> list[str]:
+        """``run`` arguments starting this very run in a child process (``python -m otterdog_e2e run ...``: one per
+        target of a batch): ``--option=value`` forms (a value never reads as an option), the run id, artifacts root
+        and keep flag included, the pass-through arguments after ``--``."""
+        options = {
+            "--suite": ",".join(self.suites),
+            "--target": self.target,
+            "--sut": self.sut,
+            "--base-sut": self.base_sut,
+            "--reset-sut": self.reset_sut,
+            "--tags": self.tags,
+            "--scenario": self.scenario,
+            "--run-id": self.run_id,
+            "--artifacts": self.artifacts,
+            "--webapp-image": self.webapp_image,
+            "--pr-manifest": str(self.pr_manifest) if self.pr_manifest is not None else None,
+        }
+        args = ["run", *(f"{flag}={value}" for flag, value in options.items() if value)]
+        args += [f"-k{self.keyword}"] if self.keyword else []
+        flags = (
+            ("--keep", self.keep),
+            ("--no-reset", self.no_reset),
+            ("--strict-diff", self.strict_diff),
+            ("--allow-web-ui", self.allow_web_ui),
+        )
+        args += [flag for flag, enabled in flags if enabled]
+        return [*args, "--", *self.extra]
+
 
 def _suite_dir(project_root: Path, suite: str) -> Path:
     """tests/<suite> of the project (UsageError for unknown suites or missing directories)."""
@@ -1344,7 +1851,11 @@ def run_pytest(args: Sequence[str], *, command: str | None = None) -> int:
     if command:
         os.environ[INVOCATION_ENV] = command
     try:
-        return int(pytest.main(list(args)))
+        code = int(pytest.main(list(args)))
+        guard = _termination_guard()
+        if code == int(pytest.ExitCode.INTERRUPTED) and guard is not None:
+            guard.interrupted = True  # the plugin's guard handled the first signal: a later SIGTERM is ignored
+        return code
     finally:
         if previous is None:
             os.environ.pop(INVOCATION_ENV, None)
@@ -1377,8 +1888,80 @@ def _echo_run_report(settings: HarnessSettings, request: RunRequest, code: int) 
         )
 
 
+# --- several targets: one child process per target (batch.py) -------------------------------------------------------
+if TYPE_CHECKING:
+    from otterdog_e2e.batch import BatchEntry, InstanceInfo
+
+PARALLEL_HELP = (
+    "with several targets: run up to N targets at once (distinct orgs; relay webapps get free loopback ports)"
+)
+FAIL_FAST_HELP = "with several targets: start no further target after one failed"
+RUN_ID_LIST_ERROR = "--run-id names one run: it cannot be used with several targets (each target gets its own run id)"
+
+
+def run_targets(
+    names: Sequence[str],
+    child_args: Callable[[BatchEntry], Sequence[str]],
+    *,
+    settings: HarnessSettings,
+    artifacts_root: Path,
+    parallel: int = 1,
+    fail_fast: bool = False,
+    reproduce: Callable[[BatchEntry], str] | None = None,
+    summary: bool = True,
+    run_ids: bool = True,
+) -> int:
+    """Run one harness child per target (batch.plan_batch, batch.run_batch) and return the batch exit code.
+
+    The plan is checked before anything runs (UsageError for an invalid target, exported per-instance values, two
+    parallel targets of one org or of one external webapp, equal pinned webapp ports); each child gets the -v count
+    of this command before its arguments; child lines are echoed with a ``[<instance>] `` prefix; with ``summary``
+    the batch writes ``batch-<id>.md``/``.json`` and one log per target below ``artifacts_root``. ``run_ids`` False:
+    the children get no --run-id (janitor), so no run id is printed.
+    """
+    from otterdog_e2e import batch
+
+    try:
+        plan = batch.plan_batch(
+            names, settings, environ=os.environ, parallel=parallel, fail_fast=fail_fast, run_ids=run_ids
+        )
+    except batch.BatchError as exc:
+        raise click.UsageError(str(exc)) from None
+    verbose = ["-v"] * _verbosity()
+    _echo(f"batch {plan.batch_id}: {len(plan.entries)} targets, {plan.mode}", err=True)
+    for entry in plan.entries:
+        run = f", run {entry.run_id}" if plan.run_ids else ""
+        port = f", webapp port {entry.webapp_port}" if entry.webapp_port is not None else ""
+        _echo(f"[{entry.instance}] profile {entry.profile}, org {entry.org} (id {entry.org_id}){run}{port}", err=True)
+    results = batch.run_batch(
+        plan,
+        lambda entry: [*verbose, *child_args(entry)],
+        echo=_echo,
+        environ=os.environ,
+        log_dir=artifacts_root if summary else None,
+    )
+    code = batch.batch_exit_code(result.exit_code for result in results)
+    sys.stdout.flush()
+    _echo(f"batch {plan.batch_id}: exit code {code}", err=True)
+    for line in batch.result_lines(results, run_ids=plan.run_ids):
+        _echo(f"  {line}", err=True)
+    if summary:
+        markdown, _json = batch.write_batch_summary(
+            plan,
+            results,
+            artifacts_root,
+            environ=os.environ,
+            reproduce=reproduce,
+            command=shlex.join(["otterdog-e2e", *(REDACTOR(arg) for arg in sys.argv[1:])]),
+        )
+        _echo(f"batch summary: {markdown}", err=True)
+    return code
+
+
 @main.command(context_settings={"ignore_unknown_options": True})
-@click.option("--target", default=None, help="target name or path")
+@click.option("--target", "targets", multiple=True, help=TARGETS_HELP)
+@click.option("--parallel", default=1, show_default=True, type=click.IntRange(min=1), help=PARALLEL_HELP)
+@click.option("--fail-fast", is_flag=True, help=FAIL_FAST_HELP)
 @click.option("--sut", "sut_spec", default=None, help="SUT spec")
 @click.option("--base-sut", default=None, help="base SUT spec (differential)")
 @click.option("--reset-sut", default=None, help="trusted reset SUT spec")
@@ -1410,7 +1993,9 @@ def _echo_run_report(settings: HarnessSettings, request: RunRequest, code: int) 
 @click.argument("pytest_args", nargs=-1, type=click.UNPROCESSED)
 @_handled
 def run(
-    target: str | None,
+    targets: tuple[str, ...],
+    parallel: int,
+    fail_fast: bool,
     sut_spec: str | None,
     base_sut: str | None,
     reset_sut: str | None,
@@ -1428,25 +2013,33 @@ def run(
     pr_manifest: Path | None,
     pytest_args: tuple[str, ...],
 ) -> None:
-    """Run test suites through pytest (pass-through args checked by check_passthrough)."""
+    """Run test suites through pytest (pass-through args checked by check_passthrough).
+
+    Several targets (``--target a,b``, repeated, @all, @<list>): one child process per target with its own run id,
+    sequential unless --parallel; the exit code is 0 only when every target passed, else the most severe one.
+    """
     from otterdog_e2e.naming import new_run_context
 
     check_passthrough(pytest_args)
     _check_addopts(os.environ)
+    names = target_names(targets)
+    several = len(names) > 1
+    if several and run_id:
+        raise click.UsageError(RUN_ID_LIST_ERROR)
     settings = _settings()
     manifest = _run_manifest(pr_manifest)
     if not base_sut and manifest is not None and manifest.base:
         base_sut = manifest.base
     request = RunRequest(
         suites=suites or default_suites(base_sut=base_sut, allow_web_ui=allow_web_ui),
-        target=target,
+        target=names[0] if len(names) == 1 else None,
         sut=sut_spec,
         base_sut=base_sut,
         reset_sut=reset_sut,
         tags=tags,
         scenario=scenario,
         keyword=keyword,
-        run_id=run_id or new_run_context().run_id,
+        run_id=None if several else run_id or new_run_context().run_id,
         pr_manifest=pr_manifest.resolve() if pr_manifest is not None else None,
         webapp_image=webapp_image,
         artifacts=artifacts,
@@ -1462,6 +2055,22 @@ def run(
             f"PR manifest #{manifest.pr} ({pr_manifest}): base {request.base_sut or '-'}, "
             f"manifest scenarios {','.join(request.extra_scenarios) or '-'}",
             err=True,
+        )
+    if several:
+        root = Path(artifacts).expanduser().resolve() if artifacts else settings.artifacts_root
+        template = dataclasses.replace(request, artifacts=str(root))
+        sys.exit(
+            run_targets(
+                names,
+                lambda entry: dataclasses.replace(template, target=entry.target, run_id=entry.run_id).harness_args(),
+                settings=settings,
+                artifacts_root=root,
+                parallel=parallel,
+                fail_fast=fail_fast,
+                reproduce=lambda entry: dataclasses.replace(request, target=entry.target).command_line(
+                    settings.project_root
+                ),
+            )
         )
     code = run_pytest(request.pytest_args(settings.project_root), command=request.command_line(settings.project_root))
     _echo_run_report(settings, request, code)
@@ -1503,8 +2112,10 @@ def load_manifest(settings: HarnessSettings, number: int) -> tuple[Path | None, 
     return path, manifest
 
 
-def plan_pr(number: int, sha: str, *, target: str | None, suites: str, settings: HarnessSettings) -> RunRequest:
-    """Resolve the PR (pin checked), load its manifest, derive base and tags.
+def plan_pr(
+    number: int, sha: str, *, target: str | None, suites: str, settings: HarnessSettings, run_id: str | None = None
+) -> RunRequest:
+    """Resolve the PR (pin checked), load its manifest, derive base and tags (``run_id``: default a new one).
 
     tags = selection.select_tags(changed files) + manifest tags. The manifest's ``scenarios`` are EXTRA scenarios:
     pytest reads them from --e2e-pr-manifest and lets them pass the tags filter. They are never passed as
@@ -1524,7 +2135,7 @@ def plan_pr(number: int, sha: str, *, target: str | None, suites: str, settings:
         sut=spec,
         base_sut=(manifest.base if manifest is not None and manifest.base else AUTO_BASE),
         tags=",".join(sorted(tags)),
-        run_id=new_run_context().run_id,
+        run_id=run_id or new_run_context().run_id,
         pr_manifest=manifest_path,
         extra_scenarios=tuple(manifest.scenarios) if manifest is not None else (),
     )
@@ -1536,23 +2147,89 @@ PR_WEB_UI_NOTE = (
 )
 
 
+def pr_command(
+    number: int, sha: str, *, target: str | None, suites: str, strict_diff: bool, allow_web_ui: bool
+) -> list[str]:
+    """The ``otterdog-e2e pr`` command of one target (run.json ``command``: summary.md "How to reproduce")."""
+    command = ["otterdog-e2e", "pr", str(number), "--sha", sha, *(["--target", target] if target else [])]
+    command += [*(["--suite", suites] if suites != "auto" else []), *(["--strict-diff"] if strict_diff else [])]
+    return command + (["--allow-web-ui"] if allow_web_ui else [])
+
+
+def pr_child_args(
+    number: int, sha: str, *, entry: BatchEntry, suites: str, strict_diff: bool, allow_web_ui: bool
+) -> list[str]:
+    """``pr`` arguments of the child process of one batch target (``--option=value`` forms, its own run id)."""
+    args = ["pr", str(number), f"--sha={sha}", f"--target={entry.target}", f"--suite={suites}"]
+    args += [f"--run-id={entry.run_id}", *(["--strict-diff"] if strict_diff else [])]
+    return args + (["--allow-web-ui"] if allow_web_ui else [])
+
+
 @main.command()
 @click.argument("number", type=int)
 @click.option("--sha", required=True, help="40-hex head sha to test (pin)")
-@click.option("--target", default=None, help="target name or path")
+@click.option("--target", "targets", multiple=True, help=TARGETS_HELP)
 @click.option("--suite", "suites", default="auto", help="auto (from the PR's changed files) or a comma list")
 @click.option("--strict-diff", is_flag=True, help="fail on unexpected differential deltas")
 @click.option("--allow-web-ui", is_flag=True, help=ALLOW_WEB_UI_HELP)
+@click.option("--run-id", default=None, help="run id (default: a new one; one target only)")
+@click.option("--parallel", default=1, show_default=True, type=click.IntRange(min=1), help=PARALLEL_HELP)
+@click.option("--fail-fast", is_flag=True, help=FAIL_FAST_HELP)
 @_handled
-def pr(number: int, sha: str, target: str | None, suites: str, strict_diff: bool, allow_web_ui: bool) -> None:
-    """Test otterdog PR NUMBER at SHA: regression suites, differential vs its base, manifest scenarios."""
+def pr(
+    number: int,
+    sha: str,
+    targets: tuple[str, ...],
+    suites: str,
+    strict_diff: bool,
+    allow_web_ui: bool,
+    run_id: str | None,
+    parallel: int,
+    fail_fast: bool,
+) -> None:
+    """Test otterdog PR NUMBER at SHA: regression suites, differential vs its base, manifest scenarios.
+
+    Several targets: one child ``pr`` process per target with its own run id (sequential unless --parallel).
+    """
     sha = sha.strip().lower()
     if number <= 0 or not FULL_SHA_RE.match(sha):
         raise click.UsageError("pr needs a positive PR number and --sha with the 40-hex head commit")
+    if run_id is not None and not RUN_ID_ARG_RE.match(run_id):
+        raise click.UsageError(f"--run-id {run_id!r} is not a run id ({RUN_ID_ARG_RE.pattern})")
+    names = target_names(targets)
+    if len(names) > 1 and run_id is not None:
+        raise click.UsageError(RUN_ID_LIST_ERROR)
     _check_addopts(os.environ)
     settings = _settings()
+    if len(names) > 1:
+        _echo(f"PR #{number} @ {sha[:12]} on {len(names)} targets: {', '.join(names)}", err=True)
+        if allow_web_ui:
+            _echo(PR_WEB_UI_NOTE, err=True)
+        sys.exit(
+            run_targets(
+                names,
+                lambda entry: pr_child_args(
+                    number, sha, entry=entry, suites=suites, strict_diff=strict_diff, allow_web_ui=allow_web_ui
+                ),
+                settings=settings,
+                artifacts_root=settings.artifacts_root,
+                parallel=parallel,
+                fail_fast=fail_fast,
+                reproduce=lambda entry: shlex.join(
+                    pr_command(
+                        number,
+                        sha,
+                        target=entry.target,
+                        suites=suites,
+                        strict_diff=strict_diff,
+                        allow_web_ui=allow_web_ui,
+                    )
+                ),
+            )
+        )
+    target = names[0] if names else None
     request = dataclasses.replace(
-        plan_pr(number, sha, target=target, suites=suites, settings=settings),
+        plan_pr(number, sha, target=target, suites=suites, settings=settings, run_id=run_id),
         strict_diff=strict_diff,
         allow_web_ui=allow_web_ui,
     )
@@ -1563,9 +2240,7 @@ def pr(number: int, sha: str, target: str | None, suites: str, strict_diff: bool
     )
     if allow_web_ui:
         _echo(PR_WEB_UI_NOTE, err=True)
-    command = ["otterdog-e2e", "pr", str(number), "--sha", sha, *(["--target", target] if target else [])]
-    command += [*(["--suite", suites] if suites != "auto" else []), *(["--strict-diff"] if strict_diff else [])]
-    command += ["--allow-web-ui"] if allow_web_ui else []
+    command = pr_command(number, sha, target=target, suites=suites, strict_diff=strict_diff, allow_web_ui=allow_web_ui)
     code = run_pytest(request.pytest_args(settings.project_root), command=shlex.join(command))
     _echo_run_report(settings, request, code)
     sys.exit(code)
@@ -1671,7 +2346,7 @@ def render_items(items: Iterable[JanitorItem]) -> str:
 
 
 @main.command()
-@click.option("--target", "target", required=True, help="target name or path")
+@click.option("--target", "targets", multiple=True, required=True, help=TARGETS_HELP)
 @click.option("--older-than", default="6h", show_default=True, help="minimum age of swept runs")
 @click.option("--run-id", default=None, help="sweep exactly this run (no age threshold)")
 @click.option("--apply", "apply_", is_flag=True, help="delete (default: dry run)")
@@ -1681,18 +2356,39 @@ def render_items(items: Iterable[JanitorItem]) -> str:
     help="with --run-id: take over that run's lease even if it was renewed recently (the run is known to be dead)",
 )
 @_handled
-def janitor(target: str, older_than: str, run_id: str | None, apply_: bool, force_takeover: bool) -> None:
+def janitor(targets: tuple[str, ...], older_than: str, run_id: str | None, apply_: bool, force_takeover: bool) -> None:
     """List (and with --apply delete) leftovers of finished or crashed runs.
 
     With --run-id and --apply, a lease still held by that run is taken over (compare-and-swap) only when the run looks
-    dead: no renewal for 20 minutes, or the holder is this CI job; --force-takeover skips that check.
+    dead: no renewal for 20 minutes, or the holder is this CI job; --force-takeover skips that check. Several targets:
+    one child janitor process per target, in turn (--run-id and --force-takeover name one run of one target).
     """
     age = parse_duration(older_than)
     if run_id is not None and not RUN_ID_ARG_RE.match(run_id):
         raise click.UsageError(f"--run-id {run_id!r} is not a run id")
     if force_takeover and run_id is None:
         raise click.UsageError("--force-takeover needs --run-id")
-    with _session(target) as context:
+    names = target_names(targets, required=True)
+    if len(names) > 1:
+        if run_id is not None:
+            raise click.UsageError("--run-id and --force-takeover name one run of one target: give one target")
+        settings = _settings()
+        sys.exit(
+            run_targets(
+                names,
+                lambda entry: [
+                    "janitor",
+                    f"--target={entry.target}",
+                    f"--older-than={older_than}",
+                    *(["--apply"] if apply_ else []),
+                ],
+                settings=settings,
+                artifacts_root=settings.artifacts_root,
+                summary=False,
+                run_ids=False,  # a janitor child gets no --run-id: it sweeps under a run id of its own
+            )
+        )
+    with _session(names[0]) as context:
         context.load_target()
         context.verify()
         if apply_:
@@ -1717,6 +2413,39 @@ def report(directory: str) -> None:
     from otterdog_e2e import report as report_module
 
     _echo(report_module.build_summary(Path(directory)))
+
+
+def render_instances(instances: Sequence[InstanceInfo]) -> str:
+    """Table of ``otterdog-e2e targets``: instance, profile, org and env file, a ``problem:`` line under the instances
+    whose target cannot be loaded."""
+    if not instances:
+        return f"no target instance: no {CONFIG_HOME}/<instance>.env file and no targets/<profile>.yaml"
+    header = ("INSTANCE", "PROFILE", "ORG", "ENV FILE")
+    rows = [(info.name, info.profile or "-", info.org or "-", info.env_file or "-") for info in instances]
+    widths = [max(len(row[index]) for row in (header, *rows)) for index in range(3)]
+    lines = []
+    for row, info in zip((header, *rows), (None, *instances), strict=True):
+        lines.append(
+            "  ".join(value.ljust(width) for value, width in zip(row[:3], widths, strict=True)) + f"  {row[3]}"
+        )
+        if info is not None and info.problem:
+            lines.append(f"  problem: {info.problem}")
+    return "\n".join(lines)
+
+
+@main.command("targets")
+@click.option("--json", "as_json", is_flag=True, help="print the instances as JSON")
+@_handled
+def targets_command(as_json: bool) -> None:
+    """List the target instances: the env files ~/.config/otterdog-e2e/<instance>.env and the profiles of targets/
+    (instance, profile, org, env file; read-only, nothing is contacted)."""
+    from otterdog_e2e.batch import list_instances
+
+    instances = list_instances(_settings(), os.environ)
+    if as_json:
+        _echo_json([dataclasses.asdict(info) for info in instances])
+    else:
+        _echo(render_instances(instances))
 
 
 def register_environment_secrets(environ: Mapping[str, str], redactor: Redactor | None = None) -> int:
@@ -1751,8 +2480,24 @@ def scrub_artifacts(directory: str) -> None:
     _echo("no leak found")
 
 
+def cache_sidecars(base: Path, name: str) -> list[Path]:
+    """The sidecar files of the cache entry ``base/name``: its file lock ``<name>.lock`` (run scratch, source export,
+    ``build/<label>-cli`` install), the image build lock ``<name>.image.lock`` and the export marker
+    ``<name>.e2e-export.json`` (exact names: ``v1.2`` never owns the files of ``v1.2.1``)."""
+    from otterdog_e2e.sut.image import BUILD_LOCK_SUFFIX
+    from otterdog_e2e.sut.spec import EXPORT_MARKER_SUFFIX
+
+    return [base / f"{name}{suffix}" for suffix in (".lock", BUILD_LOCK_SUFFIX, EXPORT_MARKER_SUFFIX)]
+
+
 def prune_cache_dirs(cache_dir: Path, *, keep: int) -> list[Path]:
-    """Keep the ``keep`` newest entries of run/, build/, src/ and http-cache/ (sidecar ``<name>.*`` files go too)."""
+    """Keep the ``keep`` newest entries of run/, build/, src/ and http-cache/ (their exact sidecar files,
+    cache_sidecars, go too); an entry whose ``<name>.lock`` or ``<name>.image.lock`` is held right now (a running
+    session, an export, an install or an image build) is never removed. The image build locks of untrusted SUTs
+    (``untrusted/<label>.image.lock``) that nobody holds are removed as well."""
+    from otterdog_e2e.context import lock_held
+    from otterdog_e2e.sut.image import BUILD_LOCK_SUFFIX
+
     removed: list[Path] = []
     for sub in PRUNABLE_CACHE_DIRS:
         base = cache_dir / sub
@@ -1761,11 +2506,22 @@ def prune_cache_dirs(cache_dir: Path, *, keep: int) -> list[Path]:
         entries = [entry for entry in base.iterdir() if entry.is_dir() and not entry.is_symlink()]
         entries.sort(key=lambda entry: entry.stat().st_mtime, reverse=True)
         for entry in entries[keep:]:
+            sidecars = cache_sidecars(base, entry.name)
+            held = [path for path in sidecars if path.name.endswith(".lock") and lock_held(path)]
+            if held:
+                logger.warning("not pruning %s: %s is held (a running session or build)", entry, held[0].name)
+                continue
             shutil.rmtree(entry)
-            for sidecar in base.glob(f"{entry.name}.*"):
+            for sidecar in sidecars:
                 if sidecar.is_file() or sidecar.is_symlink():
                     sidecar.unlink()
             removed.append(entry)
+    untrusted = cache_dir / UNTRUSTED_CACHE_DIR
+    if untrusted.is_dir() and not untrusted.is_symlink():
+        for lock in sorted(untrusted.glob(f"*{BUILD_LOCK_SUFFIX}")):
+            if (lock.is_file() and not lock.is_symlink()) and not lock_held(lock):
+                lock.unlink()
+                removed.append(lock)
     return removed
 
 
@@ -1799,7 +2555,8 @@ def cache() -> None:
 )
 @_handled
 def cache_prune(keep: int) -> None:
-    """Remove old builds, venvs, images and run scratch directories."""
+    """Remove old builds, venvs, images and run scratch directories (never an entry whose lock a running session or
+    build holds) and the unheld image build locks of untrusted SUTs."""
     removed = prune_cache_dirs(_settings().cache_dir, keep=keep)
     images = prune_images(keep=keep)
     for path in removed:
@@ -1905,30 +2662,39 @@ class _ManifestServer(http.server.HTTPServer):
         self.timeout = 1.0
 
 
-def app_credentials_dir(target: Target) -> Path:
-    """~/.config/otterdog-e2e/<target>/ (exchange_code writes the key and secret there, 0600)."""
-    return CONFIG_HOME.expanduser() / target.name
+def app_credentials_dir(target: Target, environ: Mapping[str, str] | None = None) -> Path:
+    """<user config dir>/<target>/, below HOME of ``environ`` (settings.user_config_dir; default os.environ):
+    exchange_code writes the key and secret there (0600)."""
+    from otterdog_e2e.settings import user_config_dir
+
+    return user_config_dir(environ) / target.name
 
 
-def app_instructions(target: Target, result: Mapping[str, Any]) -> str:
-    """Next steps after the exchange (paths only: secrets are never printed)."""
+def app_instructions(target: Target, result: Mapping[str, Any], environ: Mapping[str, str] | None = None) -> str:
+    """Next steps after the exchange (paths only: secrets are never printed); the env file is the target's in the
+    user config dir below HOME of ``environ``."""
+    from otterdog_e2e.appmanifest import installation_url
+    from otterdog_e2e.settings import user_config_dir
+
     app = target.app
     id_env = app.id_env if app else "E2E_APP_ID"
     key_env = (app.private_key_file_env if app else None) or "E2E_APP_PRIVATE_KEY_FILE"
     secret_env = app.webhook_secret_env if app else "E2E_APP_WEBHOOK_SECRET"
-    return "\n".join(
-        [
-            f"GitHub App created: id {result.get('id')}, slug {result.get('slug')}",
-            f"private key (0600):    {result.get('pem_path')}",
-            f"webhook secret (0600): {result.get('secret_path')}",
-            f"add to {CONFIG_HOME}/{target.name}.env:",
-            f"  {id_env}={result.get('id')}",
-            f"  E2E_APP_SLUG={result.get('slug')}",
-            f"  {key_env}={result.get('pem_path')}",
-            f"  {secret_env}=<the content of {result.get('secret_path')}>",
-            f"then install it on {target.org} for All repositories: https://github.com/apps/{result.get('slug')}/installations/new",
-        ]
-    )
+    env_file = user_config_dir(environ) / f"{target.name}.env"
+    lines = [
+        f"GitHub App created: id {result.get('id')}, slug {result.get('slug')}",
+        f"private key (0600):    {result.get('pem_path')}",
+        f"webhook secret (0600): {result.get('secret_path')}",
+        f"add to {env_file}:",
+        f"  {id_env}={result.get('id')}",
+        f"  E2E_APP_SLUG={result.get('slug')}",
+        f"  {key_env}={result.get('pem_path')}",
+        f"  {secret_env}=<the content of {result.get('secret_path')}>",
+    ]
+    if result.get("env_path"):
+        lines.append(f"  (or append {result.get('env_path')}: the same lines, secret included)")
+    install = installation_url(str(result.get("slug")), target.org_id)
+    return "\n".join([*lines, f"then install it on {target.org} for All repositories: {install}"])
 
 
 @main.command("app-manifest")
@@ -1950,7 +2716,8 @@ def app_manifest(target: str, webhook_url: str, port: int, code: str | None) -> 
         code = ManifestFlow(loaded, webhook_url=webhook_url, port=port).run()
     else:
         REDACTOR.add(code)
-    _echo(app_instructions(loaded, exchange_code(code, out_dir=app_credentials_dir(loaded))))
+    result = exchange_code(code, out_dir=app_credentials_dir(loaded, context.environ))
+    _echo(app_instructions(loaded, result, context.environ))
 
 
 # --- inject: jsonnet files injected into a rendered configuration, without a scenario ------------------------------
@@ -2179,6 +2946,7 @@ def inject_command(
     from otterdog_e2e.naming import new_run_context
     from otterdog_e2e.scenarios.model import ScenarioError, load_adhoc_scenario
 
+    target = _single_target(target)  # a list of targets: refused before the ad-hoc scenario is written
     if offline and target:
         raise click.UsageError("--offline and --target exclude each other (an offline injection uses no target)")
     if run_id is not None and not RUN_ID_ARG_RE.match(run_id):
@@ -2230,3 +2998,213 @@ def inject_command(
     root = Path(artifacts).expanduser().resolve() if artifacts else settings.artifacts_root
     echo_inject_report(root / run_id, mode=request.mode, code=code, print_config=print_config)
     sys.exit(code)
+
+
+# --- setup and ci-sync: onboarding of a test org instance (otterdog_e2e.onboard, docs/onboarding.md) ---------------
+SETUP_ROTATABLE = ("admin", "oracle", "author", "approver", "outsider", "config_reader", "web", "app")
+
+
+def _instance(target: str) -> str:
+    """The one instance of setup / ci-sync (UsageError for an invalid name or a list of targets)."""
+    from otterdog_e2e.onboard.envfile import InstanceNameError, check_instance_name
+
+    try:
+        return check_instance_name(target)
+    except InstanceNameError as exc:
+        raise click.UsageError(f"--target: {exc} (setup and ci-sync take one instance)") from None
+
+
+def _setup_bootstrap(
+    instance: str, *, pristine: Mapping[str, str], wait_timeout: float = BOOTSTRAP_WAIT_TIMEOUT
+) -> None:
+    """``bootstrap --target <instance> --apply --wait`` started by the setup wizard (asks for the typed org login,
+    then waits for the invitations to be accepted, the memberships made public and the App installed). Each run gets
+    a FRESH copy of ``pristine`` (the environment before setup read any env file): load_env_files never overrides,
+    so values a former run loaded (an App replaced by setup meanwhile) would win over the env file otherwise."""
+    context = E2EContext.create(E2EOptions(target=instance), environ=dict(pristine))
+    context.start_session(argv=[REDACTOR(arg) for arg in sys.argv])
+    try:
+        Bootstrap(
+            context,
+            apply=True,
+            confirm=lambda prompt: str(click.prompt(prompt)),
+            wait=True,
+            wait_timeout=wait_timeout,
+        ).run()
+    finally:
+        context.close()
+
+
+def _setup_doctor(instance: str, *, pristine: Mapping[str, str]) -> None:
+    """``doctor --target <instance>`` started by the setup wizard (the table only: failures do not stop setup), on a
+    fresh copy of ``pristine`` (see _setup_bootstrap)."""
+    context = E2EContext.create(E2EOptions(target=instance), environ=dict(pristine), make_dirs=False)
+    _echo(render_rows(Doctor(context).run()))
+
+
+def _setup_manifest(port: int, open_url: Callable[[str], Any] | None) -> Callable[[Target, str], str]:
+    """The App manifest flow of the wizard: the loopback listener of app-manifest on ``port``."""
+
+    def ready(url: str) -> None:
+        """Tell where to confirm the App (and open it with --open)."""
+        _echo(f"open {url} in a browser logged in as an owner of the test org, then confirm the App")
+        if open_url is not None:
+            open_url(url)
+
+    def run_flow(target: Target, webhook_url: str) -> str:
+        """Serve the auto-posting manifest form and return the code of GitHub's redirect."""
+        return ManifestFlow(target, webhook_url=webhook_url, port=port).run(on_ready=ready)
+
+    return run_flow
+
+
+@main.command("setup")
+@click.option("--target", "target", required=True, help="instance name (env file ~/.config/otterdog-e2e/<name>.env)")
+@click.option("--profile", default=None, help="targets/<profile>.yaml of the instance (default: the org plan)")
+@click.option("--org", default=None, help="login of the dedicated test organization (default: stored or asked)")
+@click.option(
+    "--token-type",
+    type=click.Choice(["classic", "fine-grained"]),
+    default=None,
+    help="kind of the prefilled token URLs (default: the stored E2E_<ROLE>_TOKEN_TYPE, else classic)",
+)
+@click.option(
+    "--rotate",
+    multiple=True,
+    type=click.Choice(SETUP_ROTATABLE),
+    help="ask again for a role's token (or the web login, or a new App) even when the stored one is valid; repeatable",
+)
+@click.option("--from", "from_instance", default=None, help="copy the non-secret settings of another instance")
+@click.option(
+    "--expires-in",
+    default=90,
+    show_default=True,
+    type=click.IntRange(1, 366),
+    help="days of validity of the prefilled fine-grained tokens",
+)
+@click.option(
+    "--webhook-url", default=None, help="App webhook sink URL (https, non-loopback; default: stored or asked)"
+)
+@click.option("--port", default=8765, show_default=True, help="local callback port of the App manifest flow")
+@click.option(
+    "--wait-timeout",
+    default="30m",
+    show_default=True,
+    help="how long to wait for an invitation to be accepted or the App to be installed (90s, 10m, 1h; re-run setup "
+    "afterwards); bootstrap --wait started by setup waits as long",
+)
+@click.option("--open", "open_browser", is_flag=True, help="open the token, App and installation URLs in a browser")
+@_handled
+def setup_command(
+    target: str,
+    profile: str | None,
+    org: str | None,
+    token_type: str | None,
+    rotate: tuple[str, ...],
+    from_instance: str | None,
+    expires_in: int,
+    webhook_url: str | None,
+    port: int,
+    wait_timeout: str,
+    open_browser: bool,
+) -> None:
+    """Onboard a test org interactively: org, tokens of every role, web login, GitHub App, then bootstrap and doctor.
+
+    Every validated value is written at once to ~/.config/otterdog-e2e/<instance>.env (0600): an interrupted run
+    keeps its progress and the next one continues. Refused in CI. What GitHub does not let a program do (accounts,
+    token creation, org creation, App clicks) is printed as prefilled URLs.
+    """
+    import webbrowser
+
+    from otterdog_e2e.onboard.wizard import SetupError, SetupOptions, SetupWizard, WizardIO
+
+    pristine = dict(os.environ)  # before any env file was read: the wizard, bootstrap and doctor each get a copy
+    try:
+        timeout = parse_duration(wait_timeout).total_seconds()
+    except ValueError as exc:
+        raise click.UsageError(f"--wait-timeout: {exc}") from None
+    options = SetupOptions(
+        instance=_instance(target),
+        profile=profile,
+        org=org,
+        token_type=token_type,
+        rotate=rotate,
+        from_instance=from_instance,
+        expires_in=expires_in,
+        webhook_url=webhook_url,
+        open_urls=open_browser,
+        wait_timeout=timeout,
+    )
+    io = WizardIO(
+        prompt=lambda text, default: str(click.prompt(text, default=default)).strip(),
+        secret_prompt=lambda text: str(click.prompt(text, default="", hide_input=True, show_default=False)),
+        confirm=lambda text, default: bool(click.confirm(text, default=default)),
+        echo=_echo,
+        open_url=webbrowser.open,
+    )
+    wizard = SetupWizard(
+        options,
+        io,
+        environ=pristine,
+        settings=_settings(),
+        run_manifest=_setup_manifest(port, webbrowser.open if open_browser else None),
+        bootstrap=functools.partial(_setup_bootstrap, pristine=pristine, wait_timeout=timeout),
+        doctor=functools.partial(_setup_doctor, pristine=pristine),
+    )
+    try:
+        wizard.run()
+    except SetupError as exc:
+        raise click.ClickException(str(exc)) from None
+
+
+@main.command("ci-sync")
+@click.option("--target", "target", required=True, help="instance name (env file ~/.config/otterdog-e2e/<name>.env)")
+@click.option("--repo", default=None, help="owner/name of the harness repository (default: the checkout's)")
+@click.option(
+    "--reviewer",
+    "reviewers",
+    multiple=True,
+    help="required reviewer (login) of e2e-<instance>-untrusted, repeatable (default: your gh login)",
+)
+@click.option("--allow-self-review", is_flag=True, help="let a reviewer approve the untrusted runs they started")
+@click.option("--nightly", is_flag=True, help="also add the instance to E2E_TARGETS (nightly and janitor runs)")
+@click.option(
+    "--prune-branch-policies",
+    is_flag=True,
+    help="delete the deployment branch policies other than main of the environments (default: refuse them)",
+)
+@click.option("--apply", "apply_", is_flag=True, help="perform the changes (default: dry run, names only)")
+@_handled
+def ci_sync(
+    target: str,
+    repo: str | None,
+    reviewers: tuple[str, ...],
+    allow_self_review: bool,
+    nightly: bool,
+    prune_branch_policies: bool,
+    apply_: bool,
+) -> None:
+    """Create the CI environments of an instance and set their variables and secrets with YOUR gh login.
+
+    e2e-<instance> and e2e-<instance>-untrusted (required reviewers), e2e-<instance>-webui only with web credentials;
+    deployment branch main only (other policies refused unless --prune-branch-policies), the protections read back
+    before any secret; the names the workflows read, values from the instance env file (secrets on gh's stdin only);
+    E2E_INSTANCES gains the instance. Dry run by default; refused in CI.
+    """
+    from otterdog_e2e.onboard.cisync import CiSync, CiSyncError
+
+    sync = CiSync(
+        _instance(target),
+        environ=os.environ,
+        project_root=_settings().project_root,
+        repo=repo,
+        reviewers=reviewers,
+        allow_self_review=allow_self_review,
+        nightly=nightly,
+        prune_branch_policies=prune_branch_policies,
+        echo=_echo,
+    )
+    try:
+        sync.run(apply=apply_)
+    except CiSyncError as exc:
+        raise click.ClickException(str(exc)) from None

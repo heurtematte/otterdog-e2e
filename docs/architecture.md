@@ -2,13 +2,26 @@
 
 otterdog-e2e is a Python package (`src/otterdog_e2e`) with two entry points that share one composition root:
 
-- the `otterdog-e2e` command line (`cli.py`, click), for operations (doctor, bootstrap, janitor, relay, reports) and
-  for starting test sessions (`run`, `pr`, which call `pytest.main` in-process);
+- the `otterdog-e2e` command line (`cli.py`, click; also `python -m otterdog_e2e`), for operations (doctor,
+  bootstrap, janitor, relay, reports, the onboarding commands `setup` and `ci-sync`) and for starting test sessions
+  (`run`, `pr`, which call `pytest.main` in-process for one target, and start one child process per target for
+  several);
 - a pytest plugin (`pytest_plugin.py`, registered through the `pytest11` entry point), which turns tiers, scenario
   YAML files and markers into test items, gates them and reports them.
 
 Both build an `E2EContext` (`context.py`): the settings, the run context, the target, the verified organization, the
 capabilities, the org lease, the SUTs and every client and driver of a session.
+
+**Instances and profiles.** A target file `targets/<profile>.yaml` is a profile (`free`, `team`, `enterprise`) and
+holds no org-specific value; an instance is one test organization, named by `--target <instance>`, whose env file
+`~/.config/otterdog-e2e/<instance>.env` holds its organization, ids, logins, tokens and `E2E_PROFILE`.
+`settings.resolve_target_ref` maps a `--target` value to the instance, its profile and the file; `Target.name` is the
+instance and `Target.profile` the profile. A session serves one instance: env files fill the environment without
+overriding it, so `batch.py` runs several targets as one child process each (`procs.run_harness`, the parent's
+pristine environment, redacted and prefixed output, forwarded signals), sequentially or `--parallel` on distinct
+organizations (and distinct external webapps), refuses exported per-instance values that would serve every target,
+and writes the batch summary. `onboard/` writes the env file of an instance interactively (`setup`)
+and its CI environments through the operator's `gh` login (`ci-sync`); see [onboarding.md](onboarding.md).
 
 ## Components
 
@@ -29,7 +42,15 @@ flowchart LR
     CAPS["capabilities.py"]
     PROCS["procs.py<br/>sanitized subprocesses"]
     RED["redact.py"]
+    BATCH["batch.py<br/>several targets"]
   end
+  subgraph onb["onboard/"]
+    ENVF["envfile.py<br/>env file writer"]
+    TOK["tokens.py<br/>token URLs"]
+    WIZ["wizard.py<br/>setup"]
+    CIS["cisync.py<br/>ci-sync"]
+  end
+  CLI --> onb
   subgraph sut["sut/"]
     SPEC["spec.py<br/>parse, resolve, trust"]
     SRC["source.py<br/>upstream mirror, export"]
@@ -82,7 +103,8 @@ flowchart LR
 
 | Area | Modules | Role |
 |---|---|---|
-| core | `settings`, `safety`, `naming`, `capabilities`, `procs`, `redact`, `waiting` | target files and env files, the verified-org capability object, run ids and resource names, plan/probe capabilities, sanitized subprocesses, secret redaction, polling helpers |
+| core | `settings`, `safety`, `naming`, `capabilities`, `procs`, `redact`, `waiting`, `batch` | target files (profiles), instances and env files, the verified-org capability object, run ids and resource names, plan/probe capabilities, sanitized subprocesses (and the harness children of a batch), secret redaction, polling helpers, target lists and batch runs |
+| onboarding | `onboard/envfile`, `onboard/tokens`, `onboard/wizard`, `onboard/cisync` | the only writer of env files (atomic, 0600), the token requirements and prefilled creation URLs per role, the interactive `setup` of an instance, the CI environments, variables and secrets of `ci-sync` |
 | SUT | `sut/spec`, `sut/source`, `sut/version`, `sut/cli_install`, `sut/image`, `sut/template` | resolve a spec to a commit, export it from a blob-less mirror, compute its version, install its CLI (trusted only) or build its docker image, choose its base template |
 | otterdog driver | `otterdog/runtime`, `runner`, `workspace`, `render`, `output`, `baseline` | run the CLI on the host or in a container, prepare workspaces (`otterdog.json`, org config), render the two-layer org config, parse validate/plan/apply output, guard deletions and reset the org |
 | GitHub | `github/http`, `oracle`, `mutate`, `lease`, `janitor`, `app` | one HTTP client with retries, rate-limit handling and write guards; independent read-only ground truth; harness writes; the GitHub-side org lease and run ledger; leftovers cleanup; GitHub App authentication |
@@ -91,8 +113,9 @@ flowchart LR
 | scenarios | `scenarios/model`, `checks`, `engine`, `offline`, `collect`, `known_bugs`, `selection`, `inject` | YAML scenarios, oracle checks, the live/offline/differential engines, pytest collection, known otterdog bugs, tag selection from changed files, ad-hoc injection of jsonnet files (`otterdog-e2e inject`, `tests/adhoc`) |
 | reporting | `observe`, `differential`, `report`, `appmanifest` | observations, base vs head comparison, run summaries (with the coverage matrix of the run), the artifact scrubber, the GitHub App manifest flow |
 
-Rules every module follows: subprocesses only through `procs.run()` (a unit test greps for `subprocess.` outside
-`procs.py`), GitHub HTTP only through `GitHubHttp`, no secret ever logged or written unredacted.
+Rules every module follows: subprocesses only through `procs.run()` (and `procs.run_harness()` for the children of a
+batch; a unit test greps for `subprocess.` outside `procs.py`), GitHub HTTP only through `GitHubHttp`, no secret ever
+logged or written unredacted.
 
 ## Tiers and lanes
 
@@ -307,7 +330,7 @@ The details are in [security.md](security.md). In short:
 
 ```
 src/otterdog_e2e/        the harness package (resources/: org.jsonnet.j2, compose.e2e.yaml, hypercorn.toml.j2)
-targets/                 one YAML file per test organization
+targets/                 one YAML profile per kind of test organization (free, team, enterprise)
 scenarios/offline/       offline scenarios          scenarios/cli/, scenarios/regressions/   live CLI scenarios
 scenarios/enterprise/    enterprise scenarios       scenarios/otterdog-prs/<N>.yaml          PR manifests
 scenarios/fragments/     shared jsonnet fragments   scenarios/lib/                           jsonnet helper libraries

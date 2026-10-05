@@ -2,9 +2,11 @@
 #
 # Dispatched by a maintainer (gh workflow run, the Actions UI, or the otterdog-side `/e2e` comment trigger documented
 # in docs/testing-an-otterdog-pr.md, which uses a GitHub App token limited to Actions: write on this repository).
-# `resolve` validates the inputs in bash and checks with the GitHub API that the PR belongs to eclipse-csi/otterdog and
-# that the pinned sha is reachable from its head. e2e.yml then classifies the SUT `pr:<N>@<sha>` as untrusted and waits
-# for an approval of the `e2e-<target>-untrusted` environment before any secret is used.
+# `resolve` validates the inputs in bash (target: one instance or a comma separated list, each in the allowlist
+# E2E_INSTANCES, else E2E_TARGETS) and checks with the GitHub API that the PR belongs to eclipse-csi/otterdog and that
+# the pinned sha is reachable from its head. e2e.yml (one call; it runs one job per instance) then classifies the SUT
+# `pr:<N>@<sha>` as untrusted, and each job waits for an approval of its `e2e-<instance>-untrusted` environment
+# before any secret is used.
 name: e2e otterdog PR
 run-name: "e2e otterdog PR #${{ inputs.pr }} on ${{ inputs.target }}"
 
@@ -20,9 +22,8 @@ on:
         type: string
         required: true
       target:
-        description: "Target (targets/<name>.yaml)"
-        type: choice
-        options: [free, team, enterprise]
+        description: "Instance or comma separated instances (allowlist: E2E_INSTANCES)"
+        type: string
         default: free
         required: true
       suites:
@@ -56,6 +57,8 @@ jobs:
           PR: ${{ inputs.pr }}
           SHA: ${{ inputs.sha }}
           TARGET: ${{ inputs.target }}
+          # the instances that may be dispatched (JSON list): the allowlist of e2e.yml, checked again there
+          INSTANCES: ${{ vars.E2E_INSTANCES || vars.E2E_TARGETS || '["free","team","enterprise"]' }}
           SUITES: ${{ inputs.suites }}
           UPSTREAM: eclipse-csi/otterdog
           # read-only API access to the public upstream repository (anonymous requests share a 60/h IP budget)
@@ -65,7 +68,25 @@ jobs:
           fail() { echo "::error::$1"; exit 1; }
           [[ "$PR" =~ ^[0-9]{1,7}$ ]] || fail "pr must be a pull request number"
           [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || fail "sha must be the full 40-hex commit (lower case)"
-          case "$TARGET" in free | team | enterprise) ;; *) fail "target must be free, team or enterprise" ;; esac
+          jq -e 'type == "array" and all(.[]; type == "string")' <<< "$INSTANCES" > /dev/null \
+            || fail "the repository variable E2E_INSTANCES (or E2E_TARGETS) must be a JSON list of instance names"
+          # target: one instance or a comma separated list (spaces ignored), every instance in the allowlist
+          list="${TARGET//[[:space:]]/}"
+          [[ "$list" =~ ^[a-z0-9,-]{1,400}$ && "$list" != ,* && "$list" != *, && "$list" != *,,* ]] \
+            || fail "target must be an instance name or a comma separated list of instance names"
+          IFS=',' read -r -a names <<< "$list"
+          targets=()
+          for name in "${names[@]}"; do
+            [[ "$name" =~ ^[a-z0-9][a-z0-9-]{0,38}$ ]] || fail "invalid instance name: $name"
+            # reserved: the suffixes of the environments of an instance
+            case "$name" in *-untrusted | *-webui) fail "an instance name cannot end with -untrusted or -webui" ;; lists) fail "lists is a reserved name (the directory of the instance lists)" ;; esac
+            jq -e --arg name "$name" 'any(.[]; . == $name)' <<< "$INSTANCES" > /dev/null \
+              || fail "instance $name is not allowed (repository variable E2E_INSTANCES, else E2E_TARGETS)"
+            case " ${targets[*]} " in *" $name "*) ;; *) targets+=("$name") ;; esac
+          done
+          (( ${#targets[@]} >= 1 && ${#targets[@]} <= 8 )) || fail "target must list 1 to 8 instances"
+          printf -v target '%s,' "${targets[@]}"
+          target="${target%,}"
           [[ "$SUITES" =~ ^[a-z,]{1,120}$ ]] || fail "suites must be auto or a comma separated list"
           if [[ "$SUITES" != auto ]]; then
             IFS=',' read -r -a suites <<< "$SUITES"
@@ -87,14 +108,14 @@ jobs:
           esac
           {
             echo "sut=pr:$PR@$SHA"
-            echo "target=$TARGET"
+            echo "target=$target"
             echo "suites=$SUITES"
           } >> "$GITHUB_OUTPUT"
           {
             echo "### otterdog PR #$PR"
             echo
             echo "- pinned commit: \`$SHA\` (current head: \`$head_sha\`, $status)"
-            echo "- target: \`$TARGET\`, suites: \`$SUITES\`"
+            echo "- instances: \`$target\` (one job and one approval each), suites: \`$SUITES\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
   e2e:

@@ -128,7 +128,11 @@ class OptionSpec:
 
 
 OPTIONS: tuple[OptionSpec, ...] = (
-    OptionSpec("--e2e-target", "target name or path of targets/<name>.yaml [E2E_TARGET]"),
+    OptionSpec(
+        "--e2e-target",
+        "one target: an instance (~/.config/otterdog-e2e/<instance>.env with E2E_PROFILE), a profile of targets/ or a"
+        " target file [E2E_TARGET]",
+    ),
     OptionSpec("--e2e-sut", f"SUT spec under test [E2E_SUT, default {DEFAULT_SUT}]", DEFAULT_SUT),
     OptionSpec("--e2e-base-sut", "base SUT for differential runs; 'auto' = merge base of the SUT [E2E_BASE_SUT]"),
     OptionSpec(
@@ -380,7 +384,8 @@ def is_live(item: pytest.Item) -> bool:
 
 # --- collection -----------------------------------------------------------------------------------------------------
 def pytest_collection_modifyitems(session: pytest.Session, config: pytest.Config, items: list[pytest.Item]) -> None:
-    """Tier/scenario marks, --e2e-tags/--e2e-scenario selection, collection-time skips and known-bug xfails."""
+    """Tier/scenario marks, --e2e-tags/--e2e-scenario selection, collection-time skips and known-bug xfails; with live
+    items, --showlocals and a list of targets are usage errors."""
     for item in items:
         _apply_item_marks(item)
     _deselect(config, items, E2EOptions.from_config(config))
@@ -393,6 +398,7 @@ def pytest_collection_modifyitems(session: pytest.Session, config: pytest.Config
             _apply_known_bugs(item, bugs)
             _apply_collection_skips(item, context)
     _reject_showlocals(config, items)
+    _reject_target_list(context, items)
 
 
 def _apply_item_marks(item: pytest.Item) -> None:
@@ -539,6 +545,18 @@ def _reject_showlocals(config: pytest.Config, items: list[pytest.Item]) -> None:
     """--showlocals prints fixture values (tokens, keys) in tracebacks: refused when live items are selected."""
     if config.getoption("showlocals", False) and any(is_live(item) for item in items):
         raise pytest.UsageError("--showlocals (-l) is refused when live tests are selected: locals may hold secrets")
+
+
+def _reject_target_list(context: E2EContext, items: list[pytest.Item]) -> None:
+    """A session loads the env files of ONE org: a list of targets (a comma, @all, @<list>) in --e2e-target or
+    E2E_TARGET is refused when live items are selected (unit and offline sessions never load a target)."""
+    target = context.options.target or ""
+    if ("," in target or target.startswith("@")) and any(is_live(item) for item in items):
+        raise pytest.UsageError(
+            f"--e2e-target names one target (an instance, a profile or a target file), got {target!r}: a session"
+            " loads the env files of one org; run several targets with `otterdog-e2e run --target a,b` (one session"
+            " per target)"
+        )
 
 
 # --- gating ---------------------------------------------------------------------------------------------------------

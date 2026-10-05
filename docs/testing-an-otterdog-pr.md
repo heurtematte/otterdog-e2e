@@ -244,22 +244,37 @@ run|pr` command of the run.
 ```bash
 gh workflow run e2e-otterdog-pr.yml --repo <owner>/otterdog-e2e --ref main \
   -f pr=792 -f sha=<40-hex> -f target=free
+
+# several test organizations: one job per instance, each approved separately
+gh workflow run e2e-otterdog-pr.yml --repo <owner>/otterdog-e2e --ref main \
+  -f pr=792 -f sha=<40-hex> -f target=free,acme-a
 ```
 
-1. `resolve` (no secrets) checks `pr` (`^[0-9]{1,7}$`), `sha` (`^[0-9a-f]{40}$`), the target and the suites, and, with
-   the GitHub API, that the PR targets eclipse-csi/otterdog and that the sha is its head or an ancestor of it.
-2. `e2e.yml` classifies `pr:<n>@<sha>` (untrusted) and writes the review block to the job summary: PR title (as a
-   code span), author, head repository, pinned sha versus current head, number of changed files, and the changed
-   build or template files (`pyproject.toml`, `poetry.lock`, `docker/*`, Dockerfiles, `examples/template/*`).
-3. The `e2e` job waits for an approval of the `e2e-<target>-untrusted` environment. **Review the PR at the pinned sha
-   and the classify summary before approving**: once approved, the PR code runs with the credentials of the test
-   organization.
-4. The job runs `otterdog-e2e pr <n> --sha <sha> --target <target> --suite auto` in the lane `pr-fast`, sweeps its run
+`target` is one instance or a comma separated list of at most 8 instances (spaces ignored, duplicates dropped). An
+instance is a test organization with its environments `e2e-<instance>` and `e2e-<instance>-untrusted`
+([security.md](security.md#ci-environments)); every instance must be in the repository variable `E2E_INSTANCES`
+(while it is unset: `E2E_TARGETS`, else `free`, `team` and `enterprise`).
+
+1. `resolve` (no secrets) checks `pr` (`^[0-9]{1,7}$`), `sha` (`^[0-9a-f]{40}$`), each instance (name
+   `^[a-z0-9][a-z0-9-]{0,38}$`, no `-untrusted` or `-webui` suffix, in the allowlist) and the suites, and, with the
+   GitHub API, that the PR targets eclipse-csi/otterdog and that the sha is its head or an ancestor of it. It calls
+   `e2e.yml` once with the validated comma separated list.
+2. `e2e.yml` validates the instances again, classifies `pr:<n>@<sha>` (untrusted) and writes the review block to the
+   job summary: PR title (as a code span), author, head repository, pinned sha versus current head, number of changed
+   files, the changed build or template files (`pyproject.toml`, `poetry.lock`, `docker/*`, Dockerfiles,
+   `examples/template/*`) and the instances.
+3. One `e2e` job per instance waits for an approval of its `e2e-<instance>-untrusted` environment. **Review the PR at
+   the pinned sha and the classify summary before approving**: once approved, the PR code runs with the credentials of
+   that test organization. The jobs of the other instances keep running when one fails.
+4. Each job checks that its environment configures the instance (an environment that does not exist is created by
+   GitHub on the fly, unprotected: the job then fails before any SUT code runs), runs
+   `otterdog-e2e pr <n> --sha <sha> --target <instance> --suite auto` in the lane `pr-fast`, sweeps its run
    (`janitor --run-id`), scrubs and uploads the artifacts (7 days).
 
 ## Triggering from an otterdog pull request
 
-A maintainer can start the run from the PR with a `/e2e` comment. The trigger lives in eclipse-csi/otterdog and uses
+A maintainer can start the run from the PR with a `/e2e` comment (instance `free`), `/e2e <instance>` or
+`/e2e <instance>,<instance>` (several test organizations). The trigger lives in eclipse-csi/otterdog and uses
 a dedicated GitHub App whose only permission is **Actions: write** (plus the mandatory metadata read), installed only
 on the e2e repository: it can dispatch workflows there and do nothing else (no contents access, so a leaked token
 cannot change the e2e workflows). The head sha is read from the API when the comment is handled.
@@ -276,7 +291,7 @@ permissions: {}
 
 jobs:
   dispatch:
-    # "/e2e" or "/e2e <target>" on a pull request, by an owner or member of the organization
+    # "/e2e" or "/e2e <instance>[,<instance>...]" on a pull request, by an owner or member of the organization
     if: >-
       github.event.issue.pull_request &&
       startsWith(github.event.comment.body, '/e2e') &&
@@ -306,9 +321,13 @@ jobs:
         run: |
           set -euo pipefail
           sha="$(GH_TOKEN="$UPSTREAM_TOKEN" gh api "repos/$GITHUB_REPOSITORY/pulls/$PR" --jq .head.sha)"
+          # one instance or a comma separated list; e2e-otterdog-pr.yml validates each one against its allowlist
           target=free
-          if [[ "$BODY" =~ ^/e2e[[:space:]]+(free|team|enterprise)[[:space:]]*$ ]]; then
+          if [[ "$BODY" =~ ^/e2e[[:space:]]+([a-z0-9][a-z0-9,-]{0,200})[[:space:]]*$ ]]; then
             target="${BASH_REMATCH[1]}"
+          elif [[ ! "$BODY" =~ ^/e2e[[:space:]]*$ ]]; then
+            echo "::error::usage: /e2e or /e2e <instance>[,<instance>...]"
+            exit 1
           fi
           gh workflow run e2e-otterdog-pr.yml --repo "$E2E_REPO" --ref main \
             -f pr="$PR" -f sha="$sha" -f target="$target"
@@ -318,7 +337,9 @@ jobs:
 Notes:
 
 - `issue_comment` runs the workflow of the default branch; it never checks out the PR, and the comment reaches the
-  script only through `env:` and a regular expression;
+  script only through `env:` and a regular expression (lower case letters, digits, `-` and `,` only: a comment with
+  other arguments fails instead of falling back to `free`); the e2e repository decides which instances exist
+  (`E2E_INSTANCES`), so the trigger needs no list of them;
 - the dispatch targets `main` of the e2e repository, where the environment protections apply; the run still waits for
   an environment approval in the e2e repository;
 - the e2e run does not comment back on the otterdog PR (it holds no token for that): link the run, or paste the

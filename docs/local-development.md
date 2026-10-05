@@ -29,13 +29,16 @@ example), an otterdog command you replay by hand would act on real organizations
 | `offline` | offline tier of `SUT` (default `release:latest`) |
 | `lint-scenarios` | only the offline lint of every live scenario step (`run --suite offline -k lint`): run it before submitting a live scenario |
 | `inject ARGS='--fragment KIND=FILE ...'` | `otterdog-e2e inject` with `SUT` (offline; live with `TARGET`) |
-| `cli`, `webhooks`, `webapp`, `enterprise` | one live tier on `TARGET` |
+| `cli`, `webhooks`, `webapp`, `enterprise` | one live tier on `TARGET` (several instances: `TARGET=a,b`, `@all` or `@<list>`, and `PARALLEL=<n>`) |
 | `web-ui` | the web-UI tier on `TARGET` (`--suite web_ui --allow-web-ui`: the admin bot logs in, see below) |
 | `differential` | offline (+ live with `TARGET`) differential of `SUT` against `BASE_SUT` |
 | `e2e` | every tier (live ones skip without `TARGET`) |
 | `one SCENARIO=<glob>` | only matching scenarios (comma separated globs) |
 | `pr PR=<n> SHA=<sha>` | `otterdog-e2e pr` |
-| `doctor`, `bootstrap [APPLY=1]`, `janitor [APPLY=1] [OLDER_THAN=6h] [RUN_ID=<id>]` | org operations on `TARGET` |
+| `setup [FROM=<instance>] [PROFILE=<profile>]` | interactive onboarding of the instance `TARGET` (`--from`, `--profile`; [onboarding.md](onboarding.md)) |
+| `ci-sync [REVIEWER=<login>] [NIGHTLY=1] [APPLY=1]` | the GitHub environments, variables and secrets of the instance `TARGET` (dry run without `APPLY`; `--reviewer`, `--nightly`) |
+| `targets` | the instances (`~/.config/otterdog-e2e/<instance>.env`) and the profiles of `targets/` |
+| `doctor`, `bootstrap [APPLY=1] [WAIT=1]`, `janitor [APPLY=1] [OLDER_THAN=6h] [RUN_ID=<id>]` | org operations on `TARGET` (`doctor` and `janitor` accept several instances; `WAIT=1` needs `APPLY=1`) |
 | `relay [FORWARD_TO=<url>] [SINCE=10m]` | standalone delivery relay |
 | `report [RUN=<dir>]`, `scrub [RUN=<dir>]` | summary / scrub of a run (default: the newest run) |
 | `cache-prune [KEEP=3]`, `sut` | cache maintenance, resolve `SUT` |
@@ -43,7 +46,8 @@ example), an otterdog command you replay by hand would act on real organizations
 | `docs`, `docs-serve` | strict build of the documentation site into `site/`, live preview (see [Documentation site](#documentation-site)) |
 
 `ARGS` passes extra pytest arguments, e.g. `make cli TARGET=free ARGS='-x -k lifecycle'` (options that could change
-the SUT, load plugins or show locals are refused).
+the SUT, load plugins or show locals are refused). `TARGET` (default `$E2E_TARGET`) names an instance or a profile:
+[onboarding.md](onboarding.md#instances-and-profiles).
 
 ## Common workflows
 
@@ -77,7 +81,49 @@ make lint-scenarios        # = .venv/bin/otterdog-e2e run --suite offline --sut 
 with `--base-sut` and `web_ui` with `--allow-web-ui`.
 
 `otterdog-e2e -v ...` / `-vv ...` log at INFO/DEBUG (redacted). `otterdog-e2e sut resolve SPEC` shows what a spec
-resolves to (label, sha, version, trust, base sha, changed files).
+resolves to (label, sha, version, trust, base sha, changed files). `python -m otterdog_e2e` is the same command line
+as `.venv/bin/otterdog-e2e` (`.venv/bin/python -m otterdog_e2e doctor --target free`): batch runs start their
+children as `python -P -m otterdog_e2e`, with the interpreter of the parent (`-P`: an `otterdog_e2e` package in the
+current directory is never imported).
+
+## Several targets
+
+`otterdog-e2e targets` (`make targets`) lists the instances: every `~/.config/otterdog-e2e/<instance>.env` and every
+profile of `targets/`, with its profile, organization and env file, and a `problem:` line for an instance that cannot
+be loaded (read-only, no network; `--json` for scripts).
+
+`run`, `pr`, `doctor` and `janitor` accept several targets: a comma list or a repeated `--target`, `@all` (every
+instance with an env file) or `@<list>` (the file `~/.config/otterdog-e2e/lists/<list>`, one instance per line, `#`
+comments). Details and rules: [onboarding.md](onboarding.md#running-on-one-organization-or-a-list).
+
+```bash
+.venv/bin/otterdog-e2e targets
+.venv/bin/otterdog-e2e run --target free,acme-a --suite cli --scenario 'cli.my.*'   # one child process per target
+.venv/bin/otterdog-e2e run --target @all --suite cli --parallel 2 --fail-fast        # distinct orgs, at most 2 at once
+.venv/bin/otterdog-e2e doctor --target @all --json                                  # a JSON list, one entry per target
+make cli TARGET=free,acme-a PARALLEL=2
+make report RUN=artifacts/<run id>                                                   # one target's own report
+```
+
+- Each target runs in a child process (`python -P -m otterdog_e2e run --target=<instance> --run-id=<id> ...`, after
+  the `-v`/`-vv` of the batch command) with its own run id and artifacts directory; every line it prints is prefixed
+  with `[<instance>] `. `--run-id` is refused with several targets; janitor children get none (they sweep under a
+  run id of their own) and their lines show none.
+- With several targets an exported `E2E_ORG`, `E2E_ORG_ID` or `E2E_PROFILE` is refused, and so is an exported login
+  (`*_LOGIN`) or secret variable that an instance's env file sets to another value (the message names the variables
+  only): the exported value would serve every target. Unset them, or give one target.
+- The batch writes `<artifacts>/batch-<id>.md` and `.json` (one row per target: instance, profile, org, run id, exit
+  code, duration, results, the command reproducing it) and one redacted log per target,
+  `<artifacts>/batch-<id>-<instance>.log`.
+- The exit code is 0 only when every target passed, else the most severe child code (3 > 2 > 4 > 1 > 5).
+- Sequential by default; `--parallel N`: distinct organizations only, and distinct webapp URLs for `external`
+  transport targets; each relay webapp without a pinned `E2E_WEBAPP_PORT` gets a free loopback port, sessions testing
+  the same SUT build its webapp image once. `--fail-fast` starts no further target after a failure.
+- Ctrl-C (or SIGTERM) reaches every running child, which cleans up (sweep, lease release) before it exits; no
+  further target starts. Every command treats the first SIGTERM like Ctrl-C and ignores a second one during its
+  cleanup.
+- pytest called directly (`--e2e-target`, `E2E_TARGET`) takes one target: a list is refused when live tests are
+  selected.
 
 Before the first test, the session prepares every SUT and image the selected tests need. It prints
 `otterdog-e2e: preparing the head SUT (<spec>) ...` and records the durations in `run.json` (`sut_prepare_seconds`).
@@ -92,8 +138,8 @@ registers the `timeout` marker when pytest-timeout is disabled).
 
 The web-UI tier (`tests/web_ui`, [web-ui-testing.md](web-ui-testing.md)) lets otterdog log in to github.com as the
 admin bot of the target (password and TOTP seed). Prepare the bot once as described there (authenticator-app 2FA,
-setup key stored), put `E2E_ADMIN_PASSWORD` and `E2E_ADMIN_TOTP_SEED` in `~/.config/otterdog-e2e/<target>.env`
-(chmod 600), then:
+setup key stored), put `E2E_ADMIN_PASSWORD` and `E2E_ADMIN_TOTP_SEED` in `~/.config/otterdog-e2e/<instance>.env`
+(chmod 600; `setup --target <instance> --rotate web` asks for both), then:
 
 ```bash
 .venv/bin/otterdog-e2e doctor --target free          # web:* rows: credentials, seed, 2FA, browser, login gate (never logs in)
@@ -292,12 +338,18 @@ lease: stop it before starting a test session (or set `E2E_LEASE_WAIT` on the se
 | `build/<label>-cli` | host installations of trusted SUT CLIs |
 | `tools/poetry-<version>`, `poetry-cache/` | the pinned poetry used for SUT installs and its download cache |
 | `http-cache/<label>-offline` | otterdog's HTTP cache of offline commands per SUT (dummy token); the caches of live commands hold the token (pickled `Authorization` header) and stay in `run/<run_id>/http-cache/` |
-| `run/<run_id>` | private per-run scratch (deleted at session end) |
-| `untrusted/` | private exports of untrusted SUTs (deleted at exit) |
+| `run/<run_id>` | private per-run scratch (deleted at session end; `cache prune` never removes the one of a running session, whose lock `run/<run_id>.lock` is held) |
+| `untrusted/` | private exports of untrusted SUTs (deleted at exit) and their image build locks `<label>.image.lock` |
 
 ```bash
 make cache-prune KEEP=3      # keep the 3 newest entries of run/, build/, src/, http-cache/ and SUT images
 ```
+
+`cache prune` removes an older entry together with its exact sidecar files only (`<name>.lock`, `<name>.image.lock`,
+`<name>.e2e-export.json`: pruning `src/v1.2` never touches the files of `src/v1.2.1`), and keeps every entry whose
+`<name>.lock` or `<name>.image.lock` is held right now (a running session, a source export, an install or an image
+build, for example by a parallel batch). The image build locks of untrusted SUTs (`untrusted/<label>.image.lock`)
+are removed once nobody holds them.
 
 Docker images are tagged `otterdog-e2e/otterdog:<label>` (trusted) and `otterdog-e2e/untrusted:<label>`.
 
@@ -378,8 +430,12 @@ The workflow installs `docs/requirements.txt`: the docs group of `poetry.lock` w
 | Symptom | Cause and fix |
 |---|---|
 | `unshare` FAIL in doctor, offline commands refused in CI | unprivileged user namespaces are disabled (Ubuntu 24.04 AppArmor): `sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0`, or an AppArmor profile for `unshare` |
-| `live session setup failed: ...` on every live test | verification, isolation, scopes, lease or token problem: run `otterdog-e2e doctor --target <t>` |
-| `LeaseBusy` | another session holds the org lease (its holder and expiry are in the message); wait, set `E2E_LEASE_WAIT`, or, for a crashed run, `make janitor TARGET=<t> RUN_ID=<id> APPLY=1` |
+| `live session setup failed: ...` on every live test | verification, isolation, scopes, lease or token problem: run `otterdog-e2e doctor --target <instance>` |
+| `LeaseBusy` | another session holds the org lease (its holder and expiry are in the message); wait, set `E2E_LEASE_WAIT`, or, for a crashed run, `make janitor TARGET=<instance> RUN_ID=<id> APPLY=1` |
+| `target 'acme-a' not found: no profile targets/acme-a.yaml ... E2E_PROFILE is not set` | the instance has no env file or no `E2E_PROFILE`: `otterdog-e2e setup --target acme-a`, or add `E2E_PROFILE=<profile>` to `~/.config/otterdog-e2e/acme-a.env` |
+| `--target 'a,b': a list of targets (a,b / @all / @<list>) is only accepted by run, pr, doctor, janitor` | `bootstrap`, `relay`, `app-manifest`, `inject`, `setup` and `ci-sync` take one target: run them once per instance |
+| `--parallel: ... test the same organization` | two instances pin one organization, which serves one session at a time: drop `--parallel` |
+| `E2E_ORG is set in the environment: the env files never override the environment ...` (or `the environment overrides what the env files of the batch set differently: ...`) | a batch of several targets with an exported per-instance value, login or secret: unset the named variables (each env file keeps its own), or give one target |
 | `SafetyError` during a reset | an unmanaged org-level object (team, org secret/variable, ruleset, custom property) without a run id: delete it or declare it in the baseline |
 | skipped: `github rate budget` | an identity has less than `E2E_MIN_RATE_REMAINING` (default 800) core requests left; wait for the reset |
 | skipped: `GitHub App not ready` | App env missing, not installed on All repositories, or suspended: `doctor` shows which |

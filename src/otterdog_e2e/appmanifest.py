@@ -81,6 +81,12 @@ APP_ENV_NAMES = {
 LOGIN_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$")
 CODE_RE = re.compile(r"^[A-Za-z0-9_-]{8,256}$")
 _LOOPBACK_NAMES = ("localhost", "localhost.localdomain", "ip6-localhost", "ip6-loopback")
+# env-file values written bare (no shell or parse_env_text meaning); anything else is double-quoted with the escapes
+# settings.parse_env_text processes (\\ \" \$ \n \r \t)
+_BARE_ENV_VALUE_RE = re.compile(r"[A-Za-z0-9_./:@%+,=-]*")
+_ENV_ESCAPES = {"\\": "\\\\", '"': '\\"', "$": "\\$", "\n": "\\n", "\r": "\\r", "\t": "\\t"}
+# other line boundaries of str.splitlines() (parse_env_text splits on them): no escape can carry them
+_UNQUOTABLE_ENV_CHARS = frozenset("\v\f\x1c\x1d\x1e\x85\u2028\u2029")
 
 log = logging.getLogger(__name__)
 
@@ -241,8 +247,24 @@ def _write_private(path: Path, text: str) -> Path:
 
 
 def _env_value(value: str) -> str:
-    """Env-file value, double-quoted when it contains blanks or '#'."""
-    return f'"{value}"' if re.search(r"[\s#'\"]", value) else value
+    """Env-file value that settings.parse_env_text reads back exactly: bare when it only holds
+    ``[A-Za-z0-9_./:@%+,=-]``, else double-quoted with ``\\``, ``"`` and ``$`` escaped and newlines, carriage returns
+    and tabs written as ``\\n``, ``\\r``, ``\\t``; ValueError for the other line boundaries of str.splitlines().
+    A shell sourcing the file reads those three escapes as two literal characters: only the harness's parser is
+    exact."""
+    if _BARE_ENV_VALUE_RE.fullmatch(value):
+        return value
+    if any(char in _UNQUOTABLE_ENV_CHARS for char in value):
+        raise ValueError("an env-file value cannot hold vertical tabs, form feeds or Unicode line separators")
+    return '"' + "".join(_ENV_ESCAPES.get(char, char) for char in value) + '"'
+
+
+def installation_url(slug: str, org_id: int) -> str:
+    """Page installing the App on the org (GitHub preselects the account by its id): ``https://github.com/apps/
+    <slug>/installations/new/permissions?target_id=<org id>``."""
+    return (
+        f"{GITHUB_WEB}/apps/{urllib.parse.quote(slug, safe='')}/installations/new/permissions?target_id={int(org_id)}"
+    )
 
 
 def env_snippet(app_id: int, slug: str, pem_path: Path, webhook_secret: str) -> str:

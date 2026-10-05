@@ -34,6 +34,8 @@ SRC = Path(__file__).resolve().parents[2] / "src" / "otterdog_e2e"
 # ------------------------------------------------------------------------------------------------------------------
 PUBLIC_NAMES: dict[str, list[str]] = {
     "otterdog_e2e": ["__version__", "resource", "read_resource", "RESOURCE_NAMES"],
+    # python -m otterdog_e2e: the command line (the child process of each target of a batch)
+    "otterdog_e2e.__main__": ["main"],
     "otterdog_e2e.settings": [
         "HarnessSettings",
         "harness_settings",
@@ -50,6 +52,15 @@ PUBLIC_NAMES: dict[str, list[str]] = {
         "load_target",
         "resolve_identities",
         "resolve_app_credentials",
+        # instances bound to profiles (one test org = one instance)
+        "INSTANCE_NAME_RE",
+        "RESERVED_INSTANCE_NAMES",
+        "RESERVED_INSTANCE_SUFFIXES",
+        "PROFILE_ENV",
+        "TargetRef",
+        "resolve_target_ref",
+        "instance_name_problem",
+        "profile_names",
     ],
     "otterdog_e2e.safety": [
         "SafetyError",
@@ -81,7 +92,34 @@ PUBLIC_NAMES: dict[str, list[str]] = {
     "otterdog_e2e.capabilities": ["Cap", "PLAN_MATRIX", "PLANS", "Capabilities", "from_plan", "probe_capabilities"],
     "otterdog_e2e.redact": ["Redactor", "REDACTOR", "install_logging_filter", "SECRET_KEY_RE", "RedactingFilter"],
     "otterdog_e2e.waiting": ["WaitTimeoutError", "Deadline", "intervals", "poll", "wait_until", "retry"],
-    "otterdog_e2e.procs": ["sanitized_env", "run", "unshare_available", "set_default_home", "default_home"],
+    "otterdog_e2e.procs": [
+        "sanitized_env",
+        "run",
+        "unshare_available",
+        "set_default_home",
+        "default_home",
+        "run_harness",
+        "forward_signals",
+    ],
+    # several targets in one command: target lists, plans, one child process per target, batch summary
+    "otterdog_e2e.batch": [
+        "BatchError",
+        "is_target_list",
+        "parse_targets",
+        "env_file_instances",
+        "read_target_list",
+        "instance_environ",
+        "InstanceInfo",
+        "list_instances",
+        "BatchEntry",
+        "BatchPlan",
+        "BatchResult",
+        "plan_batch",
+        "run_batch",
+        "batch_exit_code",
+        "write_batch_summary",
+        "EXIT_SEVERITY",
+    ],
     "otterdog_e2e.github": [],
     "otterdog_e2e.github.http": ["GITHUB_API", "GitHubError", "GitHubHttp"],
     "otterdog_e2e.github.app": ["AppAuth"],
@@ -240,7 +278,7 @@ PUBLIC_NAMES: dict[str, list[str]] = {
         "compare",
     ],
     "otterdog_e2e.selection": ["PATH_RULES", "ALWAYS_TAGS", "select_tags"],
-    "otterdog_e2e.report": ["build_summary", "scrub_artifacts"],
+    "otterdog_e2e.report": ["build_summary", "scrub_artifacts", "run_overview", "tally_text"],
     "otterdog_e2e.known_bugs": ["KnownBug", "load"],
     "otterdog_e2e.inject": ["InjectError", "JsonnetFile", "SourceText", "FileContext", "load_source", "render_source"],
     "otterdog_e2e.appmanifest": [
@@ -250,6 +288,36 @@ PUBLIC_NAMES: dict[str, list[str]] = {
         "manifest_form_html",
         "exchange_code",
     ],
+    # onboarding of a test org instance: setup and ci-sync (docs/onboarding.md)
+    "otterdog_e2e.onboard": [],
+    "otterdog_e2e.onboard.envfile": [
+        "INSTANCE_NAME_RE",
+        "RESERVED_INSTANCE_SUFFIXES",
+        "EnvFileError",
+        "InstanceNameError",
+        "check_instance_name",
+        "instance_env_path",
+        "instance_app_dir",
+        "known_instances",
+        "format_env_value",
+        "read_env_file",
+        "update_env_file",
+    ],
+    "otterdog_e2e.onboard.tokens": [
+        "ROLE_TOKENS",
+        "RoleTokens",
+        "ADMIN_PERMISSIONS",
+        "ORACLE_PERMISSIONS",
+        "MEMBER_PERMISSIONS",
+        "missing_scopes",
+        "token_name",
+        "classic_token_url",
+        "fine_grained_token_url",
+        "token_url",
+        "token_steps",
+    ],
+    "otterdog_e2e.onboard.wizard": ["SetupWizard", "SetupOptions", "WizardIO", "SetupError", "COPYABLE_KEYS"],
+    "otterdog_e2e.onboard.cisync": ["CiSync", "CiSyncError", "Operation", "workflow_names", "environment_kinds"],
     "otterdog_e2e.context": ["E2EContext", "E2EOptions", "get_context", "E2E_CONTEXT_KEY"],
     "otterdog_e2e.pytest_plugin": [
         "pytest_addoption",
@@ -640,11 +708,13 @@ SIGNATURES: dict[str, list[str]] = {
     "otterdog_e2e.procs.sanitized_env": ["extra", "home", "keep_home", "base"],
     "otterdog_e2e.procs.run": ["argv", "cwd", "extra_env", "timeout", "input", "keep_home", "home", "check"],
     "otterdog_e2e.procs.unshare_available": [],
+    "otterdog_e2e.procs.run_harness": ["argv", "env", "on_line", "log_path"],
     "otterdog_e2e.settings.harness_settings": ["environ"],
     "otterdog_e2e.settings.find_project_root": ["start"],
     "otterdog_e2e.settings.load_env_files": ["target", "project_root", "environ"],
     "otterdog_e2e.settings.expand_env": ["value", "environ"],
     "otterdog_e2e.settings.load_target": ["name_or_path", "settings", "environ"],
+    "otterdog_e2e.settings.resolve_target_ref": ["name_or_path", "settings", "environ"],
     "otterdog_e2e.settings.resolve_identities": ["target", "environ"],
     "otterdog_e2e.settings.resolve_app_credentials": ["target", "environ"],
     "otterdog_e2e.settings.HarnessSettings.scratch": ["self", "run_id"],
@@ -726,6 +796,7 @@ SIGNATURES: dict[str, list[str]] = {
     "otterdog_e2e.github.mutate.Mutator.create_pull": ["self", "repo", "head", "base", "title", "body", "draft"],
     "otterdog_e2e.github.mutate.Mutator.merge_pull": ["self", "repo", "number", "method", "sha"],
     "otterdog_e2e.github.mutate.Mutator.create_repo": ["self", "name", "private", "description", "auto_init"],
+    "otterdog_e2e.github.mutate.Mutator.ensure_membership": ["self", "login", "role"],
     "otterdog_e2e.github.mutate.Mutator.delete_org_ruleset": ["self", "ruleset_id", "name"],
     # what ConfigRepoFlow and BlueprintHelper call (blueprints.py passes ref= and inputs= by keyword)
     "otterdog_e2e.github.mutate.Mutator.reopen_pull": ["self", "repo", "number"],
@@ -1034,9 +1105,11 @@ SIGNATURES: dict[str, list[str]] = {
     "otterdog_e2e.report.build_summary": ["artifacts_dir", "redactor"],
     "otterdog_e2e.report.scrub_artifacts": ["root", "redactor"],
     "otterdog_e2e.known_bugs.load": ["path"],
+    "otterdog_e2e.onboard.envfile.update_env_file": ["path", "updates", "header"],
     "otterdog_e2e.appmanifest.build_manifest": ["target", "webhook_url", "redirect_url"],
     "otterdog_e2e.appmanifest.manifest_form_html": ["org", "manifest", "state"],
     "otterdog_e2e.appmanifest.exchange_code": ["code", "out_dir"],
+    "otterdog_e2e.appmanifest.installation_url": ["slug", "org_id"],
 }
 
 # SPEC dataclass fields (actual fields must start with these, in this order; additive fields may follow)
@@ -1093,6 +1166,7 @@ DATACLASS_FIELDS: dict[str, list[str]] = {
         "baseline_settings",
         "source_path",
     ],
+    "otterdog_e2e.settings.TargetRef": ["instance", "profile", "path"],
     "otterdog_e2e.safety.VerifiedOrg": ["login", "org_id", "plan", "target", "verified_at", "org_json"],
     "otterdog_e2e.naming.RunContext": ["run_id", "created_at"],
     "otterdog_e2e.capabilities.Capabilities": ["plan", "caps", "probes"],
@@ -1501,11 +1575,13 @@ def test_cli_entry_point_lists_commands() -> None:
         "relay",
         "janitor",
         "report",
+        "targets",
         "scrub-artifacts",
         "cache",
     ):
         assert command in result.output
     assert "app-manifest" in result.output
+    assert "setup" in result.output and "ci-sync" in result.output
 
 
 # ------------------------------------------------------------------------------------------------------------------

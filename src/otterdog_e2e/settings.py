@@ -4,6 +4,13 @@
 ``${VAR}`` / ``${VAR:-default}`` expansion); identities are dedicated machine accounts whose logins are declared in the
 target (non-secret) and whose tokens come from environment variables named by ``token_env``.
 
+Instances and profiles: a target file ``targets/<profile>.yaml`` is a PROFILE (free, team, enterprise) holding no
+org-specific value; an INSTANCE is one test org, named by ``--target <instance>``, whose env file
+``~/.config/otterdog-e2e/<instance>.env`` holds the org, ids, logins, tokens and ``E2E_PROFILE=<profile>``.
+resolve_target_ref() maps a ``--target`` value to (instance, profile, file): a path is its own profile, a profile name
+is an instance bound to itself (``free`` stays valid), any other name needs E2E_PROFILE. ``Target.name`` is the
+instance, ``Target.profile`` the profile.
+
 Call order of a live session: ``harness_settings()`` -> ``load_env_files(target, root)`` (fills os.environ without
 overriding it) -> ``load_target()`` -> ``resolve_identities()`` / ``resolve_app_credentials()`` /
 ``resolve_web_credentials()``.
@@ -50,6 +57,8 @@ MIN_MARKER_LENGTH = 5
 IDENTITY_ROLES = ("admin", "oracle", "author", "approver", "outsider", "config_reader", "readonly")
 # identities that may share one token: the oracle falls back to the admin, both read-only roles may be one token
 SHAREABLE_TOKEN_GROUPS = (frozenset({"admin", "oracle"}), frozenset({"config_reader", "readonly"}))
+# identities that may declare one login (one account): the same pairs; every other role needs its own machine account
+SHAREABLE_LOGIN_GROUPS = SHAREABLE_TOKEN_GROUPS
 TRANSPORTS = ("relay", "external", "none")
 TEMPLATE_MODES = ("auto", "upstream", "publish", "url")
 # org settings the renderer always takes from the LIVE org (marker, plan, billing): never overridable (F1)
@@ -57,6 +66,14 @@ RESERVED_BASELINE_SETTINGS = ("plan", "description", "billing_email")
 # team names must equal their slugs: the webapp compares GraphQL team names with slugs
 TEAM_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 TARGET_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
+# instance names (one test org each): safe as GitHub environment (e2e-<instance>), concurrency group and artifact name
+INSTANCE_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,38}$")
+# the CI environments of an instance are e2e-<instance>, e2e-<instance>-untrusted and e2e-<instance>-webui
+RESERVED_INSTANCE_SUFFIXES = ("-untrusted", "-webui")
+# ~/.config/otterdog-e2e/<instance>/ holds the App credentials of an instance: lists/ holds the target lists (@<list>)
+RESERVED_INSTANCE_NAMES = ("lists",)
+PROFILE_ENV = "E2E_PROFILE"  # profile (targets/<profile>.yaml) of an instance: its env file or CI environment
+TARGET_FILE_SUFFIXES = (".yaml", ".yml")
 LOGIN_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9-]{0,38}$")
 REPO_NAME_RE = re.compile(r"^[A-Za-z0-9._-]{1,100}$")
 APP_SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
@@ -218,12 +235,25 @@ def harness_settings(environ: Mapping[str, str] | None = None) -> HarnessSetting
 
 
 # --- env files ------------------------------------------------------------------------------------------------------
+def looks_like_target_path(value: str) -> bool:
+    """True when a --target value is a target file path (``.yaml``/``.yml`` suffix or a directory separator)."""
+    return value.endswith(TARGET_FILE_SUFFIXES) or "/" in value or os.sep in value
+
+
+def _invalid_target_name(name: str) -> TargetError:
+    """TargetError for a malformed target name (a list of targets gets a hint: one session per target)."""
+    hint = ""
+    if "," in name or name.startswith("@"):
+        hint = "; a list of targets (a,b / @all / @<list>) is only accepted by otterdog-e2e run, pr, doctor and janitor"
+    return TargetError(f"invalid target name {name!r} (expected {TARGET_NAME_RE.pattern}){hint}")
+
+
 def target_env_name(target: str) -> str:
-    """Name used for a target's env files: the target name, or the stem of a target file path."""
-    looks_like_path = target.endswith((".yaml", ".yml")) or "/" in target or os.sep in target
-    name = Path(target).stem if looks_like_path else target
-    if not TARGET_NAME_RE.match(name):
-        raise ValueError(f"invalid target name {name!r} (expected {TARGET_NAME_RE.pattern})")
+    """Name used for a target's env files: the instance name, or the stem of a target file path (TargetError, a
+    ValueError, for malformed names)."""
+    name = Path(target).stem if looks_like_target_path(target) else target
+    if not TARGET_NAME_RE.fullmatch(name):
+        raise _invalid_target_name(name)
     return name
 
 
@@ -438,7 +468,8 @@ class WebappSpec:
 
 @dataclass(frozen=True)
 class Target:
-    """A parsed targets/<name>.yaml (SPEC 6.2)."""
+    """A parsed targets/<profile>.yaml (SPEC 6.2) for one instance: ``name`` is the instance, ``profile`` the file's
+    profile (the same for a profile named directly or a target file path)."""
 
     name: str
     description: str
@@ -467,6 +498,8 @@ class Target:
     saml_sso: bool = False
     # web_ui.probe_app_slug: a harmless GitHub App the web-UI tier installs and uninstalls (install-app/uninstall-app)
     web_probe_app_slug: str | None = None
+    # the profile (targets/<profile>.yaml) of the instance ``name`` (resolve_target_ref)
+    profile: str = ""
 
     def config_repo_for(self, run_ctx: RunContext) -> str:
         """Org config repo of a run: ``auto`` means the per-session repo ``e2e-<run>-config`` (F10)."""
@@ -788,7 +821,23 @@ def _identity_specs(top: _Section) -> dict[str, IdentitySpec]:
     admin = specs.get("admin")
     if admin is None or admin.login is None or admin.token_env is None:
         raise TargetError("identities.admin needs a login and a token_env")
+    _check_distinct_logins(specs)
     return specs
+
+
+def _check_distinct_logins(specs: Mapping[str, IdentitySpec]) -> None:
+    """TargetError when two roles declare one login (case-insensitive) outside SHAREABLE_LOGIN_GROUPS: a role is
+    proven by its account (bootstrap makes the oracle an org OWNER, the outsider must stay outside the org)."""
+    by_login: dict[str, set[str]] = {}
+    for name, spec in specs.items():
+        if spec.login:
+            by_login.setdefault(spec.login.lower(), set()).add(name)
+    for login, names in sorted(by_login.items()):
+        if len(names) > 1 and not any(names <= group for group in SHAREABLE_LOGIN_GROUPS):
+            raise TargetError(
+                f"identities {', '.join(sorted(names))} declare the same login {login!r}: use one machine account per"
+                " role (only admin and oracle, or config_reader and readonly, may be one account)"
+            )
 
 
 def _web_ui_part(top: _Section) -> str | None:
@@ -889,21 +938,110 @@ def _check_protected_names(names: Iterable[str]) -> None:
             raise TargetError(f"protected repository {name!r} looks like a run-prefixed name (e2e-<run id>-...)")
 
 
-def _target_path(name_or_path: str, settings: HarnessSettings) -> Path:
-    """Target file for a name (targets_dir/<name>.yaml) or a path (cwd-relative, then project-relative)."""
-    looks_like_path = name_or_path.endswith((".yaml", ".yml")) or "/" in name_or_path or os.sep in name_or_path
-    if looks_like_path:
-        path = Path(name_or_path).expanduser()
-        candidates = [path] if path.is_absolute() else [Path.cwd() / path, settings.project_root / path]
-    else:
-        if not TARGET_NAME_RE.match(name_or_path):
-            raise TargetError(f"invalid target name {name_or_path!r} (expected {TARGET_NAME_RE.pattern})")
-        candidates = [settings.targets_dir / f"{name_or_path}{suffix}" for suffix in (".yaml", ".yml")]
+@dataclass(frozen=True)
+class TargetRef:
+    """What a --target value names: the instance (env files, Target.name, run.json), its profile and the target file."""
+
+    instance: str
+    profile: str
+    path: Path
+
+
+def profile_names(settings: HarnessSettings) -> list[str]:
+    """Profiles of the project: the stems of targets/*.yaml and targets/*.yml (sorted)."""
+    if not settings.targets_dir.is_dir():
+        return []
+    stems = {
+        path.stem for path in settings.targets_dir.iterdir() if path.suffix in TARGET_FILE_SUFFIXES and path.is_file()
+    }
+    return sorted(stem for stem in stems if TARGET_NAME_RE.fullmatch(stem))
+
+
+def _profile_path(profile: str, settings: HarnessSettings) -> Path | None:
+    """targets_dir/<profile>.yaml (or .yml) when it exists."""
+    for suffix in TARGET_FILE_SUFFIXES:
+        candidate = settings.targets_dir / f"{profile}{suffix}"
+        if candidate.is_file():
+            return candidate.absolute()
+    return None
+
+
+def _target_file(path_text: str, settings: HarnessSettings) -> Path:
+    """Target file of a path-like --target value (cwd-relative, then project-relative)."""
+    path = Path(path_text).expanduser()
+    candidates = [path] if path.is_absolute() else [Path.cwd() / path, settings.project_root / path]
     for candidate in candidates:
         if candidate.is_file():
             return candidate.absolute()
-    available = sorted(p.stem for p in settings.targets_dir.glob("*.y*ml")) if settings.targets_dir.is_dir() else []
-    raise TargetError(f"target {name_or_path!r} not found (looked at {candidates[0]}; available: {available})")
+    raise TargetError(
+        f"target {path_text!r} not found (looked at {candidates[0]}; available: {profile_names(settings)})"
+    )
+
+
+def instance_name_problem(name: str) -> str | None:
+    """Why ``name`` cannot be an instance name (INSTANCE_NAME_RE, RESERVED_INSTANCE_NAMES, RESERVED_INSTANCE_SUFFIXES),
+    None when it can."""
+    if not INSTANCE_NAME_RE.fullmatch(name):
+        return f"invalid instance name {name!r} (expected {INSTANCE_NAME_RE.pattern})"
+    if name in RESERVED_INSTANCE_NAMES:
+        return (
+            f"invalid instance name {name!r}: the name is reserved (~/{USER_CONFIG_SUBDIR}/{name}/ holds the target"
+            " lists @<list>)"
+        )
+    reserved = next((suffix for suffix in RESERVED_INSTANCE_SUFFIXES if name.endswith(suffix)), None)
+    if reserved is not None:
+        base = name[: -len(reserved)]
+        return (
+            f"invalid instance name {name!r}: the suffix {reserved} is reserved (e2e-{name} is the CI environment of"
+            f" the instance {base!r})"
+        )
+    return None
+
+
+def resolve_target_ref(
+    name_or_path: str, settings: HarnessSettings, environ: Mapping[str, str] | None = None
+) -> TargetRef:
+    """The instance, profile and file a --target value names (TargetError otherwise).
+
+    A path is its own profile (instance = profile = file stem). A name with a targets/<name>.yaml file is the profile of
+    the same name (E2E_PROFILE naming another profile is ambiguous). Any other name is an instance (INSTANCE_NAME_RE,
+    no reserved suffix) whose E2E_PROFILE (read from ``environ``, filled from the instance's env files before) names
+    an existing profile.
+    """
+    env = os.environ if environ is None else environ
+    if looks_like_target_path(name_or_path):
+        path = _target_file(name_or_path, settings)
+        return TargetRef(path.stem, path.stem, path)
+    name = name_or_path
+    if not TARGET_NAME_RE.fullmatch(name):
+        raise _invalid_target_name(name)
+    declared = (env.get(PROFILE_ENV) or "").strip()
+    own = _profile_path(name, settings)
+    if own is not None:
+        if declared and declared != name:
+            raise TargetError(
+                f"target {name!r} is ambiguous: targets/{own.name} is the profile {name!r} but {PROFILE_ENV}={declared}"
+                f" binds the instance to the profile {declared!r}: unset {PROFILE_ENV} (or fix it in"
+                f" ~/{USER_CONFIG_SUBDIR}/{name}.env), or give the instance another name"
+            )
+        return TargetRef(name, name, own)
+    problem = instance_name_problem(name)
+    if problem is not None:
+        raise TargetError(problem)
+    available = profile_names(settings)
+    if not declared:
+        raise TargetError(
+            f"target {name!r} not found: no profile targets/{name}.yaml (available: {available}) and {PROFILE_ENV} is"
+            f" not set for the instance {name}: run `otterdog-e2e setup --target {name}`, or add"
+            f" {PROFILE_ENV}=<profile> to ~/{USER_CONFIG_SUBDIR}/{name}.env"
+        )
+    bound = _profile_path(declared, settings) if TARGET_NAME_RE.fullmatch(declared) else None
+    if bound is None:
+        raise TargetError(
+            f"{PROFILE_ENV}={declared!r} of the instance {name} names no profile of {settings.targets_dir}"
+            f" (available: {available})"
+        )
+    return TargetRef(name, declared, bound)
 
 
 def _read_yaml(path: Path) -> Mapping[str, Any]:
@@ -928,10 +1066,11 @@ def _expand_tree(node: Any, environ: Mapping[str, str]) -> Any:
     return node
 
 
-def _build_target(data: Mapping[str, Any], path: Path) -> Target:
-    """Validate an expanded target tree and build the Target."""
+def _build_target(data: Mapping[str, Any], ref: TargetRef) -> Target:
+    """Validate an expanded target tree and build the Target of the instance ``ref.instance`` (the file's ``name`` is
+    validated; it documents the profile)."""
     top = _Section(data, "", _TOP_KEYS)
-    name = _checked(top.required_text("name", path.stem), TARGET_NAME_RE, "name", "target name")
+    _checked(top.required_text("name", ref.path.stem), TARGET_NAME_RE, "name", "target name")
     github = _github_part(top)
     config = _config_part(top)
     admin_team, approval_team, contributors_team = _teams(top)
@@ -945,7 +1084,7 @@ def _build_target(data: Mapping[str, Any], path: Path) -> Target:
             "web_ui.probe_app_slug must not be the e2e GitHub App (the web-UI tier uninstalls the probe App)"
         )
     return Target(
-        name=name,
+        name=ref.instance,
         description=top.text("description", "") or "",
         org=github.org,
         org_id=github.org_id,
@@ -967,28 +1106,30 @@ def _build_target(data: Mapping[str, Any], path: Path) -> Target:
         fixture_repos=fixture_repos,
         extra_protected_repos=extra_protected,
         baseline_settings=_baseline_settings(top),
-        source_path=path,
+        source_path=ref.path,
         saml_sso=github.saml_sso,
         web_probe_app_slug=probe_app,
+        profile=ref.profile,
     )
 
 
 def load_target(name_or_path: str, settings: HarnessSettings, environ: Mapping[str, str] | None = None) -> Target:
-    """Load targets/<name>.yaml (or a path), expanding ``${...}`` from ``environ`` (os.environ); TargetError if invalid.
+    """Load the target of an instance, a profile or a path (resolve_target_ref), expanding ``${...}`` from
+    ``environ`` (os.environ); TargetError if invalid.
 
     A target naming a production org raises SafetyError (safety.check_org_allowed).
     """
     env = os.environ if environ is None else environ
-    path = _target_path(name_or_path, settings)
-    raw = _read_yaml(path)
+    ref = resolve_target_ref(name_or_path, settings, env)
+    raw = _read_yaml(ref.path)
     try:
         data = _expand_tree(raw, env)
     except ValueError as exc:
-        raise TargetError(f"{path}: {exc}") from exc
+        raise TargetError(f"{ref.path}: {exc}") from exc
     try:
-        return _build_target(data, path)
+        return _build_target(data, ref)
     except TargetError as exc:
-        raise TargetError(f"{path}: {exc}") from None
+        raise TargetError(f"{ref.path}: {exc}") from None
 
 
 # --- identities and App credentials ---------------------------------------------------------------------------------

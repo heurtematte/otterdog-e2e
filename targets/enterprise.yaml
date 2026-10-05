@@ -5,8 +5,10 @@
 #
 # Values come from the environment: ${VAR} or ${VAR:-default} (expanded after YAML parsing, never re-expanded).
 # Secrets are never written here: *_env keys hold the NAME of the environment variable that carries the secret.
-# Env files loaded without overriding the environment: ~/.config/otterdog-e2e/enterprise.env,
-# <root>/.env.e2e.enterprise, <root>/.env.e2e. Every identity MUST be a dedicated machine account that only belongs
+# This file is a PROFILE: it holds no org-specific value. An instance (one test org) uses it with --target <instance>
+# and E2E_PROFILE=enterprise in its env file; --target enterprise is the instance named after the profile. Env files
+# of the instance, loaded without overriding the environment: ~/.config/otterdog-e2e/<instance>.env,
+# <root>/.env.e2e.<instance>, <root>/.env.e2e. Every identity MUST be a dedicated machine account that only belongs
 # to test organizations (github.allowed_org_ids); classic PATs need the read:org scope.
 # Note: inside {flow, mappings} a ${...} value must be quoted ("${VAR}"), otherwise YAML reads '{' as syntax.
 name: enterprise
@@ -19,12 +21,13 @@ github:
   marker: "[otterdog-e2e]"              # must be contained in the org description
   # SAML SSO enforced on the org (or its enterprise)? otterdog's web client cannot log in through SSO: set it to
   # true and the web-UI tier is skipped (docs/web-ui-testing.md); the token tiers work with SSO-authorized PATs.
-  saml_sso: false
-  # Capability overrides, applied last (after the plan matrix and the probes; names = otterdog_e2e.capabilities.Cap
-  # values). A GHEC TRIAL org has no larger runners but includes Code Security / Secret Protection, so use:
-  #   capabilities: {add: [ghas_private], remove: [larger_runners]}
+  saml_sso: ${E2E_SAML_SSO:-false}
+  # Capability overrides, applied last (after the plan matrix and the probes; comma lists of
+  # otterdog_e2e.capabilities.Cap values). A GHEC TRIAL org has no larger runners but includes Code Security / Secret
+  # Protection, so its instance sets E2E_CAPABILITIES_ADD=ghas_private and E2E_CAPABILITIES_REMOVE=larger_runners
+  # (the literal form of a custom profile: capabilities: {add: [ghas_private], remove: [larger_runners]}).
   # GHAS_PRIVATE is never probed: add it only when GitHub Advanced Security / Code Security covers private repos.
-  capabilities: {add: [], remove: []}
+  capabilities: {add: "${E2E_CAPABILITIES_ADD:-}", remove: "${E2E_CAPABILITIES_REMOVE:-}"}
 config:
   configs_repo: ${E2E_CONFIGS_REPO:-otterdog-e2e-configs}     # in the test org: otterdog.json (webapp), lease + ledger refs
   org_config_repo: ${E2E_ORG_CONFIG_REPO:-auto}               # auto => per-session repo "e2e-<run>-config" (F10); or a fixed name (".otterdog")
@@ -78,6 +81,6 @@ baseline:
   # the template); a `workflows:` mapping here is merged over it.
   settings: {}
 # web-UI tier (docs/web-ui-testing.md), optional: a harmless GitHub App of the test org (no permissions, no events)
-# that the tier installs and uninstalls with otterdog install-app / uninstall-app; never the e2e App.
-# web_ui:
-#   probe_app_slug: e2e-probe-app
+# that the tier installs and uninstalls with otterdog install-app / uninstall-app; never the e2e App. Empty: none.
+web_ui:
+  probe_app_slug: ${E2E_WEB_PROBE_APP_SLUG:-}

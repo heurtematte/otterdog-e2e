@@ -61,6 +61,7 @@ validation:
 nav:
   - Home: index.md
   - Getting started:
+      - Onboarding a test organization: onboarding.md
       - GitHub Free organization: setup-free-org.md
       - GitHub Enterprise Cloud organization: setup-enterprise-org.md
       - The e2e GitHub App: github-app.md

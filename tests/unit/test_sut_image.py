@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import json
+import threading
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 import pytest
+from filelock import FileLock, Timeout
 
 from otterdog_e2e import procs
 from otterdog_e2e.safety import SafetyError
@@ -18,6 +20,7 @@ from otterdog_e2e.sut.image import (
     TRUSTED_LABEL,
     VERSION_LABEL,
     BuiltImage,
+    build_lock_path,
     build_webapp_image,
     check_extra_args,
     docker_available,
@@ -173,6 +176,69 @@ def test_untrusted_images_live_in_their_own_namespace_and_are_never_reused(tmp_p
     (argv,) = docker.builds()
     assert f"{TRUSTED_LABEL}=false" in _option_values(argv, "--label")
     assert not [call for call in docker.calls if call[1] == "image"]
+
+
+def test_builds_of_one_tag_hold_its_file_lock(tmp_path: Path, docker: FakeDocker) -> None:
+    """The reuse check and the docker build run under ``<label>.image.lock`` next to the source (parallel sessions of
+    one SUT build its image once); the lock is released afterwards, also after a failed build."""
+    sut = make_sut(tmp_path)
+    lock_path = build_lock_path(sut)
+    assert lock_path == sut.source_dir.parent / "main-d0d3b08.image.lock"
+    held: list[bool] = []
+    build = docker._build
+
+    def locked_build(args: list[str]) -> tuple[int, str, str]:
+        """Check that another holder cannot take the lock during the build."""
+        try:
+            with FileLock(str(lock_path), timeout=0):
+                held.append(False)
+        except Timeout:
+            held.append(True)
+        return build(args)
+
+    docker._build = locked_build  # type: ignore[method-assign]
+    build_webapp_image(sut)
+    assert held == [True]
+    with FileLock(str(lock_path), timeout=0):
+        pass  # released
+    docker.build_rc = 1
+    with pytest.raises(RuntimeError, match="docker build of"):
+        build_webapp_image(sut, force=True)
+    with FileLock(str(lock_path), timeout=0):
+        pass  # released after the failure too
+    untrusted = make_sut(tmp_path / "u", trusted=False)
+    assert build_lock_path(untrusted) == untrusted.source_dir.parent / "pr792-d0d3b08.image.lock"
+
+
+def test_a_concurrent_build_of_the_same_tag_waits_and_reuses_the_image(tmp_path: Path, docker: FakeDocker) -> None:
+    """A second session (thread) building the same trusted tag waits for the first build, then reuses its image."""
+    sut = make_sut(tmp_path)
+    started, release = threading.Event(), threading.Event()
+    build = docker._build
+
+    def slow_build(args: list[str]) -> tuple[int, str, str]:
+        """Build, wait for the test, then register the image as built (labels of the SUT)."""
+        started.set()
+        assert release.wait(10)
+        result = build(args)
+        docker.images["otterdog-e2e/otterdog:main-d0d3b08"] = _labels(sut)
+        return result
+
+    docker._build = slow_build  # type: ignore[method-assign]
+    images: list[BuiltImage] = []
+    first = threading.Thread(target=lambda: images.append(build_webapp_image(sut)))
+    first.start()
+    assert started.wait(10)
+    second = threading.Thread(target=lambda: images.append(build_webapp_image(sut)))
+    second.start()
+    second.join(0.3)
+    assert second.is_alive()  # waiting for the lock
+    release.set()
+    first.join(10)
+    second.join(10)
+    assert len(docker.builds()) == 1 and sorted(image.image_id for image in images) == sorted(
+        [IMAGE_ID, "sha256:cached"]
+    )
 
 
 def test_extra_build_args_are_appended(tmp_path: Path, docker: FakeDocker, monkeypatch: pytest.MonkeyPatch) -> None:

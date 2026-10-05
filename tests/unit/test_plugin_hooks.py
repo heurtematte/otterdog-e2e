@@ -867,6 +867,29 @@ def test_trust_code_refused_in_ci(inner: Inner, monkeypatch: pytest.MonkeyPatch)
     assert result.ret == pytest.ExitCode.USAGE_ERROR and "refused when CI is set" in result.stderr.str()
 
 
+@pytest.mark.parametrize("target", ["free,team", "@all", "@nightly"])
+def test_a_live_session_has_one_target(inner: Inner, monkeypatch: pytest.MonkeyPatch, target: str) -> None:
+    """--e2e-target (or E2E_TARGET) naming several targets is a usage error when live items are selected: a session
+    loads the env files of one org (otterdog-e2e run starts one session per target); sessions without live items
+    (unit, offline: an exported list for make) are not affected."""
+    inner.pytester.makepyfile(
+        test_live="""
+        import pytest
+
+        @pytest.mark.live
+        def test_live():
+            pass
+        """,
+        test_plain="def test_plain():\n    pass\n",
+    )
+    result = inner.run(f"--e2e-target={target}")
+    assert result.ret == pytest.ExitCode.USAGE_ERROR
+    assert "names one target" in result.stderr.str() and "otterdog-e2e run --target a,b" in result.stderr.str()
+    monkeypatch.setenv("E2E_TARGET", target)
+    assert inner.run().ret == pytest.ExitCode.USAGE_ERROR
+    inner.run("test_plain.py").assert_outcomes(passed=1)  # no live item selected
+
+
 def test_trust_code_needs_a_full_sha(inner: Inner) -> None:
     """--e2e-trust-code names exactly one commit: anything but 40 hex digits is a usage error."""
     inner.pytester.makepyfile(test_trust="def test_plain():\n    pass\n")

@@ -29,7 +29,7 @@ from otterdog_e2e.appmanifest import (
 )
 from otterdog_e2e.redact import REDACTOR
 from otterdog_e2e.safety import SafetyError
-from otterdog_e2e.settings import Target, WebappSpec
+from otterdog_e2e.settings import Target, WebappSpec, parse_env_text
 from otterdog_e2e.testing.fakes import FakeGitHubHttp, HttpCall
 
 DATA = Path(__file__).parent / "data"
@@ -442,3 +442,89 @@ def test_exchange_code_through_github_http(tmp_path: Path) -> None:
     assert result["id"] == 4242 and result["pem_path"].read_text() == PEM
     assert call.request.method == "POST" and "Authorization" not in call.request.headers
     assert call.request.headers["Accept"] == "application/vnd.github+json"
+
+
+# --- env snippet and installation URL -------------------------------------------------------------------------------
+@pytest.mark.parametrize(
+    "value",
+    [
+        "",
+        "plain-value_1.2",
+        "with space",
+        " leading and trailing ",
+        "x #not a comment",
+        "#hash",
+        'double"quote',
+        "'single'",
+        "back\\slash",
+        "\\n stays a backslash and an n",
+        "dollar$HOME",
+        "${E2E_ADMIN_TOKEN}",
+        "new\nline",
+        "carriage\rreturn",
+        "tab\tseparated",
+        "a=b",
+        "ünïcode-välue",
+    ],
+)
+def test_env_values_round_trip_through_parse_env_text(value: str) -> None:
+    """Every value written to the env snippet reads back exactly through settings.parse_env_text, on one line, with no
+    shell expansion left ($ escaped inside double quotes)."""
+    line = f"KEY={appmanifest._env_value(value)}"
+    assert "\n" not in line and "\r" not in line
+    assert parse_env_text(f"# comment\n{line}\nOTHER=1\n") == {"KEY": value, "OTHER": "1"}
+    assert "$" not in line.replace("\\$", "")
+
+
+def test_env_value_promises_the_harness_parser_only(tmp_path: Path) -> None:
+    """The escapes of _env_value are the harness parser's: a shell sourcing the line keeps ``\\n`` as a backslash and
+    an n, so the docstring promises an exact read back through parse_env_text only (never through a shell)."""
+    import shutil
+    import subprocess
+
+    doc = " ".join((appmanifest._env_value.__doc__ or "").split())
+    assert "(and a shell)" not in doc and "parse_env_text reads back exactly" in doc
+    line = f"KEY={appmanifest._env_value('new' + chr(10) + 'line')}"
+    assert parse_env_text(line) == {"KEY": "new\nline"}
+    bash = shutil.which("bash")
+    if bash is None:
+        pytest.skip("bash is not installed")
+    script = tmp_path / "snippet.env"
+    script.write_text(line + "\n", encoding="utf-8")
+    shell = subprocess.run(
+        [bash, "--noprofile", "--norc", "-c", f'. "{script}"; printf %s "$KEY"'],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=True,
+    )
+    assert shell.stdout == "new\\nline"  # a shell does not read the value back unchanged
+
+
+def test_plain_env_values_stay_bare_and_unrepresentable_ones_are_refused() -> None:
+    """Paths, slugs and hex secrets are written bare; line boundaries no escape can carry raise ValueError."""
+    for value in ("otterdog-e2e-org", "/home/u/.config/otterdog-e2e/free/app-7.private-key.pem", "0123abcdef", "4242"):
+        assert appmanifest._env_value(value) == value
+    for value in ("line\u2028separator", "form\ffeed", "vertical\vtab"):
+        with pytest.raises(ValueError, match="cannot hold"):
+            appmanifest._env_value(value)
+
+
+def test_env_snippet_round_trips(tmp_path: Path) -> None:
+    """The whole snippet (comments included) parses back to the App id, slug, key path and secret."""
+    pem = tmp_path / "dir with space" / "app-7.private-key.pem"
+    secret = 'e2e-snippet-se"cr$et\\x #1'
+    text = appmanifest.env_snippet(7, "otterdog-e2e-org", pem, secret)
+    assert parse_env_text(text) == {
+        "E2E_APP_ID": "7",
+        "E2E_APP_SLUG": "otterdog-e2e-org",
+        "E2E_APP_PRIVATE_KEY_FILE": str(pem),
+        "E2E_APP_WEBHOOK_SECRET": secret,
+    }
+
+
+def test_installation_url_preselects_the_org() -> None:
+    """The installation page of the App with the org id as target_id (GitHub preselects the account)."""
+    assert appmanifest.installation_url("otterdog-e2e-org", 424242) == (
+        "https://github.com/apps/otterdog-e2e-org/installations/new/permissions?target_id=424242"
+    )

@@ -153,8 +153,24 @@ def in_ci(environ: Mapping[str, str]) -> bool:
 
 
 def target_env_name(value: str) -> str:
-    """Name used for the env files of a target given by name or path (``targets/free.yaml`` -> ``free``)."""
-    return Path(value).stem if value.endswith((".yaml", ".yml")) or "/" in value else value
+    """Name used for the env files of a target given by name or path (``targets/free.yaml`` -> ``free``):
+    settings.target_env_name, which refuses malformed names (TargetError)."""
+    from otterdog_e2e import settings
+
+    return settings.target_env_name(value)
+
+
+def lock_held(path: Path) -> bool:
+    """True when another holder has the file lock ``path`` right now (a missing lock file is free; never waits)."""
+    import filelock
+
+    if not path.exists():
+        return False
+    try:
+        with filelock.FileLock(str(path), timeout=0):
+            return False
+    except filelock.Timeout:
+        return True
 
 
 def parse_duration(text: str) -> timedelta:
@@ -564,16 +580,7 @@ class E2EContext:
 
     def _scratch_unused(self) -> bool:
         """True when no session holds the run's scratch lock (checked by contexts that never started a session)."""
-        import filelock
-
-        path = self.scratch_lock_path()
-        if not path.exists():
-            return True
-        try:
-            with filelock.FileLock(str(path), timeout=0):
-                return True
-        except filelock.Timeout:
-            return False
+        return not lock_held(self.scratch_lock_path())
 
     # --- memoization and requirements ---------------------------------------------------------------------------
     def _memo(self, key: str, factory: Callable[[], T]) -> T:
@@ -639,7 +646,7 @@ class E2EContext:
         capabilities = self.probe()
         self.acquire_lease()
         self.write_run_info(
-            target={"name": target.name, "org": verified.login, "plan": verified.plan},
+            target={"name": target.name, "profile": target.profile, "org": verified.login, "plan": verified.plan},
             org=verified.login,
             plan=verified.plan,
             capabilities=capabilities.to_json(),

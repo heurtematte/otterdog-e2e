@@ -55,8 +55,13 @@ other check cannot reach a real organization.
 - the kind of every token is detected (`X-OAuth-Scopes` present on `GET /rate_limit`: classic; absent and
   `github_pat_` prefix: fine-grained) and must match `identities.<role>.token_type` when the target declares it
   (`classic` or `fine-grained`; `auto` by default, from `E2E_<ROLE>_TOKEN_TYPE` in the shipped targets);
-- two roles never share a token (except `oracle` falling back to `admin`, and `config_reader` with `readonly`);
+- two roles never share a token (except `oracle` falling back to `admin`, and `config_reader` with `readonly`), and
+  two roles never declare the same login, compared case-insensitively (with the same two exceptions): the target
+  does not load otherwise, since a role is proven by its account (bootstrap makes the oracle an owner, the outsider
+  must stay outside the organization);
 - logins are declared in the target (public data) and compared with `GET /user`; they are never derived from tokens.
+  `bootstrap` invites or promotes a separate oracle to owner only when the oracle's own token answers `GET /user`
+  with the declared login.
 
 ### Fine-grained personal access tokens (T1, T2)
 
@@ -146,8 +151,10 @@ key is written for a webapp stack (re-checked at every start) and for the instal
   `github.allowed_org_ids` that passes the denylist; enterprise and user installations are refused;
 - `installations_count` does not exceed the number of listed installations.
 
-A refusal is a `SafetyError`: webapp items fail with the reason (they are not skipped), and doctor's `app:owner` row
-fails. Use only the private App created in the test organization by `otterdog-e2e app-manifest`.
+A refusal is a `SafetyError`: webapp items fail with the reason (they are not skipped), doctor's `app:owner` row
+fails, and `setup` stops before it prints the installation link of a new or stored App (it names
+`setup --target <instance> --rotate app`). Use only the private App created in the test organization by
+`otterdog-e2e setup` or `otterdog-e2e app-manifest`.
 
 ### Org lease and run ledger (T4)
 
@@ -252,7 +259,61 @@ Every subprocess runs through `procs.run()` with a sanitized environment: variab
 askpass helpers, `PIP_*`, `POETRY_*`, `PYTHON*`, `KUBECONFIG` and the GitHub Actions files are removed; `HOME`
 points to the run's scratch directory; `GIT_CONFIG_GLOBAL=/dev/null`, `GIT_TERMINAL_PROMPT=0`, `NETRC=/dev/null`,
 `PYTHON_DOTENV_DISABLED=1`. Children run in their own process group, which is terminated on timeout or interrupt.
-Credentials reach otterdog only through the variables named in the generated `otterdog.json`.
+Credentials reach otterdog only through the variables named in the generated `otterdog.json`. The one exception is
+`procs.run_harness()`, which starts the harness itself for the targets of a batch (below).
+
+### Onboarding tools and multi-target runs (T1, T3, T4)
+
+`otterdog-e2e setup` and `otterdog-e2e ci-sync` ([onboarding.md](onboarding.md)) handle every credential of an
+instance; batch runs (`run`, `pr`, `doctor`, `janitor` with several targets) handle several organizations in one
+command.
+
+- **Env files** are written only by `onboard.envfile.update_env_file`: a fresh temporary file (mode 0600, `O_EXCL`,
+  `O_NOFOLLOW`) in the same directory, renamed over the old file (`os.replace`), so a crash never leaves a partial
+  file; it refuses a symlinked file or directory and anything that is not a regular file, creates a missing directory
+  with mode 0700, keeps comments and unrelated lines byte for byte, drops the earlier assignments of a key it replaces
+  (they may hold a former secret), and writes values that `settings.parse_env_text` reads back exactly (values it
+  cannot represent, a NUL or an unusual line separator, are refused). Its messages name keys, never values.
+- **Secrets never on a command line**: `setup` takes no secret as an option; tokens, the password and the TOTP setup
+  key are read with hidden prompts, registered with the redactor at once and never echoed (every printed line is
+  redacted). `ci-sync` passes each secret to `gh secret set` on its standard input; variables, the only values given
+  as arguments (`--body`), are refused when their name looks like a secret or their value holds a registered secret
+  or a line break. Both commands are refused when `CI` (or `GITHUB_ACTIONS`) is set.
+- **Tokens are checked before they are stored**: `setup` writes a role's token only after the checks every session
+  runs (login, kind, scopes, `check_identity_isolation`, the admin's owner membership), and refuses a token or an
+  account already stored for another role. It offers to widen `E2E_ALLOWED_ORG_IDS` (default No) only for the
+  organizations of other instances that are validated test organizations (their env file holds the admin login and
+  token, their target loads, and the token being checked reads their id and safety marker live), and writes the
+  allowlists only once the token passed every check. Besides the App manifest exchange and the `bootstrap` it
+  offers, its only writes to GitHub are the invitation of a fine-grained role's account and the withdrawal of such an
+  invitation of the same run that is still pending when the role ends without a token after a token of another
+  account was refused (admin token, write-scoped to the organization verified first: pin and plan). A new or stored
+  App passes `safety.verify_app` before setup prints its installation link.
+- **ci-sync uses your credential, never a machine account's**: it runs `gh` through `procs.run` with your `HOME` (your
+  `gh` login and configuration); the sanitized environment strips every `E2E_*` and token variable, and only
+  `GH_TOKEN`, `GITHUB_TOKEN`, `GH_HOST` and `GH_CONFIG_DIR` are passed on when you export them. It refuses to run when
+  one of them holds a token or secret of the instance, or when `gh` is logged in as one of the instance's machine
+  accounts. Its dry run prints names only. It refuses deployment branch policies other than `main` (unless
+  `--prune-branch-policies` deletes them) and reads each environment back before pushing its values: no secret goes
+  to an environment whose protections differ from the ones it set (custom branch policies, `main` only, and for the
+  untrusted one the required reviewers and prevent self-review).
+- **One organization per process**: env files fill the environment without overriding it, so the parent of a batch
+  never loads one into its own environment. It reads each target's env files into a private copy (to validate the
+  target and register its secrets with the redactor), and every child (`python -P -m otterdog_e2e`: the working
+  directory stays off `sys.path`, so no `otterdog_e2e` package of the current directory is imported by a process
+  holding every credential) receives the parent's pristine environment and loads the env files of its own target;
+  `doctor` checks each target with its own copy, in-process. Since an exported value wins over every env file, a
+  batch of several targets refuses an exported `E2E_ORG`, `E2E_ORG_ID` or `E2E_PROFILE`, and an exported login or
+  secret that an instance's env file sets differently (the message names variables, never values). A pytest session
+  with live tests refuses a list of targets.
+- **Batch outputs are redacted**: every line of a child is redacted before it is printed or appended to
+  `batch-<id>-<instance>.log` (mode 0600, never through a symlink); `batch-<id>.md`, `batch-<id>.json` and the job
+  summary are redacted too. While children run, the parent forwards SIGINT and SIGTERM to them instead of stopping
+  (a signal arriving while a child starts reaches it right after), so each child releases its lease and sweeps its
+  run; a child is killed (after a 10-minute grace) only when the parent itself fails. Every command turns the first
+  SIGTERM into a `KeyboardInterrupt`, like Ctrl-C, so its cleanup runs (lease release, scrub), and ignores a later
+  one while it cleans up. `--parallel` refuses two targets of the same organization and two `external` targets of
+  the same webapp URL.
 
 ### Scratch versus artifacts (T3)
 
@@ -302,26 +363,83 @@ selected.
 
 ## CI environments
 
-The workflows assume two environments per target (`free`, `team`, `enterprise`), plus an optional third one for the
-web-UI lane:
+The workflows run on **instances**. An instance is one test organization; its name matches
+`^[a-z0-9][a-z0-9-]{0,38}$` and does not end with `-untrusted` or `-webui` (the suffixes of its environments); the
+harness also reserves `lists` (the directory of the local target lists). Its configuration lives in two GitHub
+environments, plus an optional third one for the web-UI lane. The environment variable `E2E_PROFILE` names its
+profile `targets/<profile>.yaml`; the instances `free`, `team` and `enterprise` may omit it (an instance named after
+a profile uses that profile, and `E2E_PROFILE` must then be empty or equal to its name). Several organizations can
+therefore share a profile, for example the instances `acme-a` and `acme-b`, both with `E2E_PROFILE=free`.
 
 | Environment | Used by | Protection | Contents |
 |---|---|---|---|
-| `e2e-<target>` | `e2e.yml` for trusted SUTs (manual runs, nightly), `janitor.yml` | no required reviewers; deployment branches: `main` only | secrets and variables below |
-| `e2e-<target>-untrusted` | `e2e.yml` for untrusted SUTs (`e2e-otterdog-pr.yml`, `pr:`/untrusted `sha:` specs) | required reviewers (maintainers), prevent self-review, deployment branches: `main` only | same secrets and variables; `E2E_CONFIG_READ_TOKEN` is required for the webapp tier; never add web-UI credentials |
-| `e2e-<target>-webui` (optional) | `e2e-webui.yml` (dispatch, nightly `webui` job when `E2E_WEB_UI_ENABLED` is `true`), trusted SUTs only | deployment branches: `main` only (required reviewers block the nightly job) | `E2E_ADMIN_TOKEN`, optionally `E2E_ORACLE_TOKEN`, and the ONLY copy of `E2E_ADMIN_PASSWORD` and `E2E_ADMIN_TOTP_SEED`; the variables of `e2e-<target>` plus optionally `E2E_ADMIN_USERNAME`, `E2E_WEB_LOGIN_SPACING` |
+| `e2e-<instance>` | `e2e.yml` for trusted SUTs (manual runs, nightly), `janitor.yml` | no required reviewers; deployment branches: `main` only | secrets and variables below |
+| `e2e-<instance>-untrusted` | `e2e.yml` for untrusted SUTs (`e2e-otterdog-pr.yml`, `pr:`/untrusted `sha:` specs) | required reviewers (maintainers), prevent self-review, deployment branches: `main` only | same secrets and variables; `E2E_CONFIG_READ_TOKEN` is required for the webapp tier; never add web-UI credentials |
+| `e2e-<instance>-webui` (optional) | `e2e-webui.yml` (dispatch, nightly `webui` job when `E2E_WEB_UI_ENABLED` is `true`), trusted SUTs only | deployment branches: `main` only (required reviewers block the nightly job) | `E2E_ADMIN_TOKEN`, optionally `E2E_ORACLE_TOKEN`, and the ONLY copy of `E2E_ADMIN_PASSWORD` and `E2E_ADMIN_TOTP_SEED`; the variables of `e2e-<instance>` plus optionally `E2E_ADMIN_USERNAME`, `E2E_WEB_LOGIN_SPACING` |
+
+`otterdog-e2e ci-sync --target <instance>` prints the environments, protections, variables and secrets it would
+create from the instance's env file, and `--apply` writes them with your own `gh` login (secret values only on stdin).
 
 Secrets (environment secrets): `E2E_ADMIN_TOKEN` (required), `E2E_ORACLE_TOKEN`, `E2E_AUTHOR_TOKEN`,
 `E2E_APPROVER_TOKEN`, `E2E_OUTSIDER_TOKEN`, `E2E_CONFIG_READ_TOKEN`, `E2E_APP_PRIVATE_KEY` (the PEM),
 `E2E_APP_WEBHOOK_SECRET`.
 
-Variables (environment variables, identical in both environments of a target): `E2E_ORG`, `E2E_ORG_ID`,
-`E2E_ALLOWED_ORG_IDS`, `E2E_ADMIN_LOGIN`, `E2E_ORACLE_LOGIN`, `E2E_AUTHOR_LOGIN`, `E2E_APPROVER_LOGIN`,
-`E2E_OUTSIDER_LOGIN`, `E2E_CONFIG_READER_LOGIN`, `E2E_APP_ID`, `E2E_APP_SLUG`, and optionally `E2E_CONFIGS_REPO`,
-`E2E_ORG_CONFIG_REPO`, `E2E_DEFAULTS_REPO`, `E2E_TEMPLATE_MODE`, `E2E_TEMPLATE_URL`, `E2E_ADMIN_TEAM`,
-`E2E_APPROVAL_TEAM`, `E2E_CONTRIBUTORS_TEAM`, `E2E_VALIDATION_CONTEXT`, `E2E_SYNC_CONTEXT`, `E2E_WEBAPP_WORKERS`,
-`E2E_WEBAPP_PORT`, `E2E_MIN_RATE_REMAINING`, and the declared token kinds `E2E_ADMIN_TOKEN_TYPE`, `E2E_ORACLE_TOKEN_TYPE`, `E2E_AUTHOR_TOKEN_TYPE`, `E2E_APPROVER_TOKEN_TYPE`, `E2E_OUTSIDER_TOKEN_TYPE`, `E2E_CONFIG_READ_TOKEN_TYPE` (`auto`, `classic` or `fine-grained`). Repository variable: `E2E_TARGETS`, the JSON list of targets the nightly
-and janitor workflows run on (default `["free"]`); while it is unset, their scheduled runs are skipped.
+Variables (environment variables, identical in the environments of an instance): `E2E_PROFILE` (required unless
+the instance is named after its profile), `E2E_ORG`, `E2E_ORG_ID`, `E2E_ALLOWED_ORG_IDS`, `E2E_ADMIN_LOGIN`,
+`E2E_ORACLE_LOGIN`, `E2E_AUTHOR_LOGIN`, `E2E_APPROVER_LOGIN`, `E2E_OUTSIDER_LOGIN`, `E2E_CONFIG_READER_LOGIN`,
+`E2E_APP_ID`, `E2E_APP_SLUG`, and optionally `E2E_CONFIGS_REPO`, `E2E_ORG_CONFIG_REPO`, `E2E_DEFAULTS_REPO`,
+`E2E_TEMPLATE_MODE`, `E2E_TEMPLATE_URL`, `E2E_ADMIN_TEAM`, `E2E_APPROVAL_TEAM`, `E2E_CONTRIBUTORS_TEAM`,
+`E2E_VALIDATION_CONTEXT`, `E2E_SYNC_CONTEXT`, `E2E_WEBAPP_WORKERS`, `E2E_WEBAPP_PORT`, `E2E_MIN_RATE_REMAINING`, the
+per-instance values of the profile `E2E_SAML_SSO` (`true` when the organization enforces SAML SSO),
+`E2E_CAPABILITIES_ADD`, `E2E_CAPABILITIES_REMOVE` (comma separated capability names) and `E2E_WEB_PROBE_APP_SLUG`,
+and the declared token kinds `E2E_ADMIN_TOKEN_TYPE`, `E2E_ORACLE_TOKEN_TYPE`, `E2E_AUTHOR_TOKEN_TYPE`,
+`E2E_APPROVER_TOKEN_TYPE`, `E2E_OUTSIDER_TOKEN_TYPE`, `E2E_CONFIG_READ_TOKEN_TYPE` (`auto`, `classic` or
+`fine-grained`). Keep every `E2E_*` secret and variable of an instance in its environments: never at repository or
+organization level, where every job of the repository sees them (the `classify` jobs and the janitor's `check` job
+refuse `E2E_ORG`, `E2E_ORG_ID` and `E2E_PROFILE` there, see below).
+
+Repository variables:
+
+- `E2E_INSTANCES`: the JSON list of the instances that `e2e.yml`, `e2e-webui.yml` and `e2e-otterdog-pr.yml` accept,
+  for example `["free", "acme-a", "acme-b"]`. While it is unset, `E2E_TARGETS` is the allowlist, else
+  `["free", "team", "enterprise"]`. List an instance only once its environments exist (`ci-sync --apply` adds it);
+  it is a repository setting, so whoever may change the repository's Actions variables decides which test
+  organizations a dispatch can reach.
+- `E2E_TARGETS`: the JSON list of the instances the nightly and janitor workflows run on (default `["free"]`); while it
+  is unset, their scheduled runs are skipped. Each of them must be in `E2E_INSTANCES` too (`ci-sync --nightly`).
+- `E2E_WEB_UI_ENABLED` and `E2E_WEB_UI_TARGETS`: the nightly web-UI lane ([web-ui-testing.md](web-ui-testing.md));
+  the instances of `E2E_WEB_UI_TARGETS` must be in `E2E_INSTANCES` too.
+
+The `target` input of `e2e.yml`, `e2e-webui.yml` and `e2e-otterdog-pr.yml` is one instance or a comma separated list
+of at most 8 (spaces ignored, duplicates dropped):
+
+```bash
+gh workflow run e2e.yml -f target=free,acme-a -f sut=release:latest
+```
+
+The `classify` job validates the list without secrets and outputs it as a JSON list; the `e2e` job (`webui` in
+`e2e-webui.yml`) is a matrix over it (`fail-fast: false`; `max-parallel: 1` for the web-UI lane, whose bot logins come
+from shared runner IP ranges, and likewise for the nightly `webui` matrix, which calls `e2e-webui.yml` once per
+instance): one job per instance, each in the environments and the concurrency group of its instance. For an
+untrusted SUT every job waits for the approval of its own `e2e-<instance>-untrusted` environment.
+
+**Missing environments.** When a job names an environment that does not exist, GitHub creates it on the fly, without
+protection rules, reviewers, variables or secrets. An instance listed in the allowlist before its
+`e2e-<instance>-untrusted` environment exists would therefore start the job of an untrusted SUT without review. The
+workflows stop such a job before any SUT code runs:
+
+- the `classify` jobs of `e2e.yml` and `e2e-webui.yml`, and the `check` job of `janitor.yml` (no environment, no
+  secrets, before its matrix of instances), fail when `E2E_ORG`, `E2E_ORG_ID` or `E2E_PROFILE` is a repository or
+  organization variable (they have no environment, so that is all they see), so a job can only get these values
+  from its own environment;
+- every job of an instance (`e2e`, `webui`, `janitor`) runs an instance check right after loading its environment
+  variables, without secrets and before any harness step: it fails unless `E2E_ORG` and a numeric `E2E_ORG_ID` are set
+  and `targets/${E2E_PROFILE:-<instance>}.yaml` exists (and refuses an instance named after a profile whose
+  `E2E_PROFILE` names another one). The janitor, whose instances come from `E2E_TARGETS` without a `classify` job, also
+  checks the instance name there.
+
+Repository or organization level secrets would still reach an auto-created environment: never define `E2E_*` secrets
+outside the environments.
 
 What the workflows enforce (and `tests/unit/test_workflows_static.py` checks):
 
@@ -329,30 +447,33 @@ What the workflows enforce (and `tests/unit/test_workflows_static.py` checks):
   `docs.yml`, below); actions pinned to full commit shas; `actions/checkout` with `persist-credentials: false` (the
   SUT must not find the `GITHUB_TOKEN` in `.git/config`);
 - no `${{ }}` expression inside `run:` scripts: inputs and outputs reach scripts through `env:`, always quoted, and
-  are validated in bash (`target` allowlist, suites allowlist, tag/glob/`-k` character sets, `pr` and `sha` regular
-  expressions);
-- `e2e.yml` first runs a `classify` job without secrets: `otterdog-e2e sut classify` decides the trust (an untrusted
-  base SUT makes the run untrusted too) and writes, for untrusted SUTs, the PR title (as a code span), author, head
-  repository, pinned sha versus head and the changed build/template files into the step summary, which is what the
-  environment reviewer reads before approving;
-- the `e2e` job selects the environment from that classification, joins the concurrency group `e2e-<target>` (no
-  cancellation, queued runs wait), maps secrets on the harness steps only (the final janitor step gets the admin
-  token only; the `scrub-artifacts` step gets every secret of its job, since a separate step inherits none and the
-  scan must recognize leaked values without a token shape when the session step was killed before its own scrub),
-  times out after 150 minutes (the session step after 120), always runs `janitor --run-id <run> --apply` when the
-  session reached the test organization, and uploads artifacts only after `scrub-artifacts` succeeded;
+  are validated in bash (instance names, reserved suffixes and the `E2E_INSTANCES` allowlist, suites allowlist,
+  tag/glob/`-k` character sets, `pr` and `sha` regular expressions);
+- `e2e.yml` first runs a `classify` job without secrets: it validates the instances, then `otterdog-e2e sut classify`
+  decides the trust (an untrusted base SUT makes the run untrusted too) and writes, for untrusted SUTs, the PR title
+  (as a code span), author, head repository, pinned sha versus head and the changed build/template files into the step
+  summary, which is what the environment reviewer reads before approving;
+- the `e2e` job runs once per instance; each job selects the environment from that classification, joins the
+  concurrency group `e2e-<instance>` (no cancellation, queued runs wait), runs the instance check before any SUT code,
+  maps secrets on the harness steps only (the final janitor step gets the admin token only; the `scrub-artifacts` step
+  gets every secret of its job, since a separate step inherits none and the scan must recognize leaked values without
+  a token shape when the session step was killed before its own scrub), times out after 150 minutes (the session step
+  after 120), always runs `janitor --run-id <run> --apply` when the session reached the test organization, and uploads
+  artifacts only after `scrub-artifacts` succeeded;
 - `cache-mode: none` everywhere: no Actions cache is restored or saved, so an untrusted run cannot poison a later
   trusted one; the upstream mirror and tool venvs are rebuilt in every run;
 - `e2e-otterdog-pr.yml` is `workflow_dispatch` only (no `repository_dispatch`, no `pull_request_target`); its
-  `resolve` job checks with the GitHub API that the PR targets eclipse-csi/otterdog and that the pinned sha is
-  reachable from the PR head;
+  `resolve` job validates the instances like `e2e.yml` (which checks them again) and checks with the GitHub API that
+  the PR targets eclipse-csi/otterdog and that the pinned sha is reachable from the PR head; it calls `e2e.yml` once
+  with the comma separated instances;
 - `docs.yml` (the documentation site) uses no secret. Its build job runs for pull requests too, with `contents: read`
   plus `pages: read` (`actions/configure-pages`, on main only), and installs MkDocs from `docs/requirements.txt`
   (exact versions, `--require-hashes`, wheels only). Its deploy job, the only job of the repository allowed to write,
   holds just `pages: write` and `id-token: write`, runs only on `main` (never for a pull request) in the
   `github-pages` environment, and only publishes the artifact of the build job.
 
-What you must configure: the two environments per target with the protections above, the secrets and variables, a
+What you must configure: the two environments per instance with the protections above (and the third one for the
+web-UI lane), their secrets and variables (`otterdog-e2e ci-sync`), the repository variable `E2E_INSTANCES`, a
 ruleset on `main` of this repository (pull request with review, no bypass), and GitHub-hosted runners only (never run
 untrusted lanes on self-hosted or persistent runners). On a GitHub-hosted runner the PR code still controls the
 container it runs in and the image it builds; the reviewer gate and the account confinement are the real controls.
@@ -374,7 +495,7 @@ container it runs in and the image it builds; the reviewer gate and the account 
   release could change any setting of the test organization the bot can reach in the UI. GitHub may also challenge or
   lock the bot (device verification, unusual activity of CI IP ranges); the login gate stops after the first blocking
   failure, the account still has to be checked by hand. Logins from two machines with the same bot are not
-  coordinated (TOTP reuse): use one bot per target.
+  coordinated (TOTP reuse): use one bot per instance.
 
 ## Incident runbook
 
@@ -391,15 +512,18 @@ organization.
       secret (App settings, Webhook secret);
     - with the web-UI tier: the admin bot's password, its TOTP seed (remove the authenticator app from the account and
       add it again: a new setup key) and its web sessions (account settings, Sessions: revoke them), then
-      `E2E_ADMIN_PASSWORD`/`E2E_ADMIN_TOTP_SEED` in `e2e-<target>-webui` and in the local env files;
-    - the CI environment secrets of both environments and your local env files.
+      `E2E_ADMIN_PASSWORD`/`E2E_ADMIN_TOTP_SEED` in `e2e-<instance>-webui` and in the local env files
+      (`setup --target <instance> --rotate web`);
+    - the CI environment secrets of every environment of the instance and your local env files
+      (`setup --target <instance> --rotate <role>`, then `ci-sync --target <instance> --apply`).
 3. **Inspect** the organization: its audit log (organization settings, Logs, Audit log), owners
    (`GET /orgs/{org}/members?role=admin`), outside collaborators, deploy keys and default-branch heads of the
    configs, defaults and fixture repositories, organization and repository webhooks not pointing to
    `https://otterdog-e2e.invalid/`, the App hook URL, the `sut-*` tags of the defaults repository and the
    `e2e-lease` ref. Check the machine accounts' own security logs for new tokens, SSH keys or OAuth grants.
-4. **Clean up**: `otterdog-e2e janitor --target <t> --apply`, then `otterdog-e2e bootstrap --target <t> --apply` to
-   restore the baseline; delete the affected workflow artifacts (Actions run page, Artifacts).
+4. **Clean up**: `otterdog-e2e janitor --target <instance> --apply`, then
+   `otterdog-e2e bootstrap --target <instance> --apply` to restore the baseline; delete the affected workflow
+   artifacts (Actions run page, Artifacts).
 5. **Report**: inform the maintainers of this repository; for an otterdog vulnerability follow the Eclipse Foundation
    vulnerability reporting process (https://www.eclipse.org/security/). Unsuspend the App and lift the environment
    block only after the rotation.

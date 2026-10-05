@@ -2,7 +2,8 @@
 
 The webapp under test is a GitHub App backend: it authenticates with an App id and private key, receives the App's
 webhook deliveries at `/github-webhook/receive`, and acts on the organization with installation tokens. The harness
-therefore needs its own GitHub App per test organization, created from a manifest by `otterdog-e2e app-manifest`.
+therefore needs its own GitHub App per test organization (per instance), created from a manifest by
+`otterdog-e2e setup` ([onboarding.md](onboarding.md#the-app-step)) or `otterdog-e2e app-manifest`.
 
 ## Permissions and events
 
@@ -47,8 +48,24 @@ the webapp items (and doctor's `app:owner` row) instead of running them.
 
 ## Creating the App
 
-Prerequisites: the organization passed `bootstrap --apply` (the command refuses an organization without the safety
-marker), and you have a browser session as an organization owner (the admin machine account).
+Prerequisites: the organization passed `bootstrap --apply` (`app-manifest` refuses an organization without the
+safety marker, setup postpones the App until its bootstrap added it), and you have a browser session as an
+organization owner (the admin machine account).
+
+**With setup** (`otterdog-e2e setup --target <instance>`, the App step): setup runs the same manifest flow, then
+
+- takes the webhook sink URL from `--webhook-url`, the stored `E2E_APP_WEBHOOK_URL`, else asks it, and stores it as
+  `E2E_APP_WEBHOOK_URL` (reused by its re-runs and copied by `setup --from`);
+- writes `E2E_APP_ID`, `E2E_APP_SLUG`, `E2E_APP_PRIVATE_KEY_FILE` and `E2E_APP_WEBHOOK_SECRET` into the instance env
+  file itself (no snippet to append);
+- verifies the App first, a new one or the one stored (`safety.verify_app`, above): an App that fails gets no
+  installation link, setup stops with the reason and `otterdog-e2e setup --target <instance> --rotate app`;
+- prints the installation URL and polls `GET /orgs/{org}/installation` (App JWT) every 10 s until the App is
+  installed (`--wait-timeout`, default `30m`), then checks the installation;
+- on a fresh organization without the marker, offers the App right after the bootstrap it runs;
+- registers a new App with `--rotate app`.
+
+**With app-manifest**, step by step:
 
 ```bash
 .venv/bin/otterdog-e2e app-manifest --target free --webhook-url https://<sink>/otterdog-e2e
@@ -60,7 +77,7 @@ marker), and you have a browser session as an organization owner (the admin mach
 2. Confirm the creation on GitHub. GitHub redirects to `http://127.0.0.1:8765/callback?code=...&state=...`; the
    listener accepts only the `state` it generated, and never logs the request (it carries the code).
 3. The command exchanges the code (`POST /app-manifests/<code>/conversions`, valid one hour) and writes, with mode
-   0600 in `~/.config/otterdog-e2e/<target>/` (mode 0700):
+   0600 in `~/.config/otterdog-e2e/<instance>/` (mode 0700, below the `HOME` of the command's environment):
     - `app-<id>.private-key.pem`,
     - `app-<id>.webhook-secret`,
     - `app-<id>.env`: `E2E_APP_ID`, `E2E_APP_SLUG`, `E2E_APP_PRIVATE_KEY_FILE`, `E2E_APP_WEBHOOK_SECRET`.
@@ -73,15 +90,22 @@ marker), and you have a browser session as an organization owner (the admin mach
     cat ~/.config/otterdog-e2e/free/app-<id>.env >> ~/.config/otterdog-e2e/free.env
     ```
 
-    Install it on the organization with **All repositories** (`https://github.com/apps/<slug>/installations/new`):
-    the harness creates repositories during the run, and an installation limited to selected repositories is
-    refused.
+    Install it on the organization with **All repositories** with the printed URL
+    (`https://github.com/apps/<slug>/installations/new/permissions?target_id=<org id>`, the organization
+    preselected): the harness creates repositories during the run, and an installation limited to selected
+    repositories is refused.
 
-5. Run `bootstrap --target free --apply` again: it writes the webapp's `otterdog.json` to the configs repository and
-   probes the deliveries.
+5. Run `bootstrap --target free --apply --wait` again: it waits for the installation if needed (without `--wait` it
+   prints the installation URL and stops), writes the webapp's `otterdog.json` to the configs repository and probes
+   the deliveries.
 
 If the browser step cannot reach the local listener (remote machine), copy the `code` parameter of the redirect URL
-and run `otterdog-e2e app-manifest --target free --webhook-url <same URL> --exchange <code>` within the hour.
+and run `otterdog-e2e app-manifest --target free --webhook-url <same URL> --exchange <code>` within the hour (setup has
+no such fallback: use this command, add its lines to the env file, then run setup again, which keeps the App).
+
+Installing the App stays a click of an organization owner, and registering it a confirmation on github.com
+([What cannot be automated](onboarding.md#what-cannot-be-automated)): both commands print the URL, setup and
+`bootstrap --wait` then wait for the result.
 
 If GitHub returned no webhook secret, the command generates one, warns, and stores it: set the same value as the
 App's webhook secret in its GitHub settings (the relay signs forwarded deliveries with the local value anyway).
@@ -131,12 +155,14 @@ sequenceDiagram
 ## Rotating credentials
 
 - Private key: App settings, Private keys, generate a new key, update `E2E_APP_PRIVATE_KEY_FILE` (or the CI secret
-  `E2E_APP_PRIVATE_KEY`), then delete the old key.
+  `E2E_APP_PRIVATE_KEY`; `ci-sync --apply` sets it from the key file), then delete the old key.
+- A new App: `setup --target <instance> --rotate app` registers a new one and replaces the `E2E_APP_*` keys; delete the
+  old App afterwards (organization settings, GitHub Apps).
 - Webhook secret: set a new one in the App settings and in `E2E_APP_WEBHOOK_SECRET` (env file and CI secrets).
 - Suspending the installation revokes its tokens immediately; the webapp tiers are then skipped with the reason.
 
 One App webhook is shared by every run on the organization, which is one more reason why sessions on an organization
-are serialized (org lease, CI concurrency group `e2e-<target>`).
+are serialized (org lease, CI concurrency group `e2e-<instance>`).
 
 ## The probe App of the web-UI tier (optional)
 
@@ -148,7 +174,8 @@ tier ([web-ui-testing.md](web-ui-testing.md)) tests them with a second, harmless
    homepage URL, webhook **inactive**, **no** permissions, "Only on this account";
 2. do NOT install it; the test installs it with `install-app -a <slug>`, checks `GET /orgs/{org}/installations`,
    uninstalls it with `uninstall-app -a <slug>` and checks again;
-3. declare it in the target: `web_ui: {probe_app_slug: <slug>}`.
+3. declare it for the instance: `E2E_WEB_PROBE_APP_SLUG=<slug>` in its env file (and CI environments), which fills
+   `web_ui.probe_app_slug` of the profile.
 
 Since otterdog #693/#699 both commands resolve token-only credentials and fail at the web login with "username not
 available" (known bug KB-002): the test is a non-strict xfail until it is fixed. If a fixed release installs the App

@@ -151,6 +151,16 @@ def test_healthy_org_passes(world: World) -> None:
     assert table.exit_code == 0 and "STATUS" in table.output and "0 failure(s)" in table.output
 
 
+def test_target_row_names_the_instance_and_its_profile(world: World) -> None:
+    """target: ``instance (profile p, file): org (id), plan``; a load error hints at the instance env file."""
+    world.target = make_target("acme", profile="team", expected_plan="team", source_path=Path("targets/team.yaml"))
+    _code, rows = doctor_json()
+    assert rows["target"]["detail"] == f"acme (profile team, team.yaml): org {FAKE_ORG} (id 424242), team"
+    world.target_error = "no E2E_PROFILE"
+    _code, rows = doctor_json()
+    assert "<instance>.env with E2E_PROFILE=<profile>" in rows["target"]["remediation"]
+
+
 def test_missing_marker_fails_with_bootstrap_hint(world: World) -> None:
     """No safety marker: FAIL with the bootstrap remediation, exit 1."""
     world.description = "a real org?"

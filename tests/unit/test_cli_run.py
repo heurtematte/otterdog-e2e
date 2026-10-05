@@ -328,6 +328,8 @@ def test_makefile_web_ui_target_runs_the_web_ui_suite() -> None:
     """make web-ui runs the web_ui suite of SUT on TARGET with --allow-web-ui (both exist in the click application)."""
     makefile = (Path(__file__).resolve().parents[2] / "Makefile").read_text(encoding="utf-8")
     recipe = makefile.split("\nweb-ui: require-target ##", 1)[1].split("\n\n", 1)[0].splitlines()[1]
-    assert recipe == '\t$(E2E) run --target "$(TARGET)" --sut "$(SUT)" --suite web_ui --allow-web-ui $(ARGS)'
+    assert recipe == (
+        '\t$(E2E) run --target "$(TARGET)" --sut "$(SUT)" --suite web_ui --allow-web-ui $(PARALLEL_ARG) $(ARGS)'
+    )
     assert "web-ui" in makefile.split(".PHONY:", 1)[1].split("\n\n", 1)[0]
     assert "web_ui" in cli.SUITES and "--allow-web-ui" in {opt for param in cli.run.params for opt in param.opts}
