@@ -47,7 +47,7 @@ other check cannot reach a real organization.
 | `admin` | `repo`, `workflow`, `admin:org`, `admin:org_hook`, `delete_repo`, `read:org`, `read:user`, `user:email` | doctor also requires `repo`, `workflow`, `admin:org`, `admin:org_hook`, `delete_repo` (otterdog's requirement) |
 | `oracle` (optional, separate) | same as admin | must be an organization owner |
 | `author`, `approver`, `outsider` | `public_repo`, `repo`, `read:org`, `read:user`, `user:email`, `workflow` | use `public_repo` + `read:org` |
-| `config_reader`, `readonly` | fine-grained tokens only | public repositories, read-only |
+| `config_reader` | fine-grained tokens only | public repositories, read-only |
 
 - fine-grained tokens are accepted for every role except the `outsider`, under the rules of
   [Fine-grained personal access tokens](#fine-grained-personal-access-tokens-t1-t2) below (GitHub answers
@@ -55,11 +55,12 @@ other check cannot reach a real organization.
 - the kind of every token is detected (`X-OAuth-Scopes` present on `GET /rate_limit`: classic; absent and
   `github_pat_` prefix: fine-grained) and must match `identities.<role>.token_type` when the target declares it
   (`classic` or `fine-grained`; `auto` by default, from `E2E_<ROLE>_TOKEN_TYPE` in the shipped targets);
-- two roles never share a token (except `oracle` falling back to `admin`, and `config_reader` with `readonly`), and
-  two roles never declare the same login, compared case-insensitively (with the same two exceptions): the target
+- two roles never share a token (except `oracle` falling back to `admin`), and
+  two roles never declare the same login, compared case-insensitively (with the same exception): the target
   does not load otherwise, since a role is proven by its account (bootstrap makes the oracle an owner, the outsider
   must stay outside the organization);
-- logins are declared in the target (public data) and compared with `GET /user`; they are never derived from tokens.
+- logins are declared in the target (public data) and compared with `GET /user` by `doctor`, `setup` and bootstrap's
+  oracle check (a session does not repeat it); they are never derived from tokens.
   `bootstrap` invites or promotes a separate oracle to owner only when the oracle's own token answers `GET /user`
   with the declared login.
 
@@ -82,7 +83,7 @@ any other answer (403, 404, an error), and the `SafetyError` names the permissio
 | `admin`, `oracle` | `GET /orgs/{org}/actions/permissions` and `GET /orgs/{org}/hooks` | organization-owner data, reachable only through the organization permissions Administration (read) and Webhooks (read); organization permissions exist only on a token whose resource owner is that organization, and only an owner's token can read them |
 | `author`, `approver` | `GET /user/memberships/orgs/{org}`: `state` `active`, `organization.id` = the pinned id | the token user's membership, read through the organization permission Members (read), which again only applies to the token's resource owner |
 | `outsider` | refused | see below |
-| `config_reader`, `readonly` | unchanged (any non-classic token, visible memberships checked) | they only read public data |
+| `config_reader` | unchanged (any non-classic token, visible memberships checked) | it only reads public data |
 
 Without the organization login a fine-grained owner or member token is refused (fail closed). Classic tokens keep the
 account-membership and scope checks above.

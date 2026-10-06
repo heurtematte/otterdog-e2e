@@ -22,7 +22,7 @@ step by step, by hand: use them as the reference of what `setup` does, or when y
 By hand, before `setup` (no API can do these, see [What cannot be automated](#what-cannot-be-automated)):
 
 1. create the machine accounts (at least the admin; author, approver, outsider and config_reader for the webapp
-   flows and the negative tests), each with two-factor authentication;
+   flows and the negative tests, see [roles.md](roles.md)), each with two-factor authentication;
 2. signed in as the admin account, create the organization and keep it empty (no repositories, teams or
    organization secrets; Enterprise Cloud: [setup-enterprise-org.md](setup-enterprise-org.md)).
 

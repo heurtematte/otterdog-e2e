@@ -325,13 +325,19 @@ def test_isolation_allows_the_test_org_implicitly() -> None:
         ("author", MEMBER_SCOPES | {"admin:org"}, "admin:org are not allowed"),
         ("approver", {"delete_repo", "repo"}, "delete_repo are not allowed"),
         ("outsider", {"gist", "public_repo"}, "gist are not allowed"),
-        ("config_reader", {"repo", "admin:org_hook"}, "admin:org_hook are not allowed"),
     ],
 )
 def test_isolation_refuses_excess_scopes(role: str, scopes: set[str], message: str) -> None:
     """Classic scopes must be a subset of the role's allowed scopes."""
     with pytest.raises(SafetyError, match=f"{role}: token scopes {message}"):
         isolate(member_http(scopes=scopes, orgs=[]), role)
+
+
+def test_isolation_refuses_a_classic_config_reader_token() -> None:
+    """The config_reader only reads public repositories: a classic PAT, whatever its scopes, is refused."""
+    for scopes in (set(), {"public_repo"}):
+        with pytest.raises(SafetyError, match="config_reader: needs a fine-grained PAT"):
+            isolate(member_http(scopes=scopes, orgs=[]), "config_reader")
 
 
 # --- fine-grained tokens: isolation proven on the token ---------------------------------------------------------------
@@ -431,8 +437,8 @@ def test_other_token_kinds_are_refused_for_writing_roles(role: str) -> None:
 
 
 def test_other_token_kinds_stay_accepted_for_read_only_roles() -> None:
-    """config_reader/readonly keep their former rules (any non-classic token, visible memberships checked)."""
-    for role in ("config_reader", "readonly"):
+    """The config_reader keeps its former rules (any non-classic token, visible memberships checked)."""
+    for role in ("config_reader",):
         http = member_http(scopes=None, orgs=[], identity=role)
         http.token_kind = safety.OTHER_TOKEN
         isolate_fg(http, role)
@@ -486,7 +492,7 @@ def test_isolation_accepts_fine_grained_readers_and_tolerates_hidden_listings() 
     reader.add("GET", "/user/orgs", json=[])
     reader.add("GET", "/user/memberships/orgs", status=403, json={"message": "Resource not accessible"})
     isolate(reader, "config_reader")
-    isolate(member_http(scopes=None, orgs=[]), "readonly")
+    isolate(member_http(scopes=None, orgs=[]), "config_reader")
     with pytest.raises(SafetyError, match="acme-production"):
         isolate(member_http(scopes=None, orgs=[FOREIGN_ORG]), "config_reader")
 

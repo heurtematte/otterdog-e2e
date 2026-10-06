@@ -54,10 +54,10 @@ DEFAULT_UPSTREAM_REPO = "eclipse-csi/otterdog"
 USER_CONFIG_SUBDIR = ".config/otterdog-e2e"  # below HOME: <target>.env files and app-manifest outputs
 DEFAULT_MARKER = "[otterdog-e2e]"
 MIN_MARKER_LENGTH = 5
-IDENTITY_ROLES = ("admin", "oracle", "author", "approver", "outsider", "config_reader", "readonly")
-# identities that may share one token: the oracle falls back to the admin, both read-only roles may be one token
-SHAREABLE_TOKEN_GROUPS = (frozenset({"admin", "oracle"}), frozenset({"config_reader", "readonly"}))
-# identities that may declare one login (one account): the same pairs; every other role needs its own machine account
+IDENTITY_ROLES = ("admin", "oracle", "author", "approver", "outsider", "config_reader")
+# identities that may share one token: the oracle falls back to the admin
+SHAREABLE_TOKEN_GROUPS = (frozenset({"admin", "oracle"}),)
+# identities that may declare one login (one account): the same pair; every other role needs its own machine account
 SHAREABLE_LOGIN_GROUPS = SHAREABLE_TOKEN_GROUPS
 TRANSPORTS = ("relay", "external", "none")
 TEMPLATE_MODES = ("auto", "upstream", "publish", "url")
@@ -836,7 +836,7 @@ def _check_distinct_logins(specs: Mapping[str, IdentitySpec]) -> None:
         if len(names) > 1 and not any(names <= group for group in SHAREABLE_LOGIN_GROUPS):
             raise TargetError(
                 f"identities {', '.join(sorted(names))} declare the same login {login!r}: use one machine account per"
-                " role (only admin and oracle, or config_reader and readonly, may be one account)"
+                " role (only admin and oracle may be one account)"
             )
 
 

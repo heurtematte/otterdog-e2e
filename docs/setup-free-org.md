@@ -29,6 +29,9 @@ and refuses the session otherwise.
 | `config_reader` | for webapp tests of untrusted SUTs | read-only token of the webapp (`OTTERDOG_CONFIG_TOKEN`) | none needed |
 | `oracle` | optional | separate read-only ground truth (falls back to admin) | owner |
 
+What each role does in the tests, what is skipped without it, and how the roles interact with otterdog and the
+organization: [roles.md](roles.md).
+
 For every account:
 
 - enable two-factor authentication and keep the recovery codes in your password manager (the token tiers never use
@@ -38,8 +41,8 @@ For every account:
   using it. GitHub tags the pull requests of an account that never committed anything as `FIRST_TIMER`, a value
   otterdog's webhook models do not accept, so the webapp would ignore its PRs;
 - one token per account and role: two roles never share a token (only `oracle` may be omitted and fall back to
-  `admin`), and two roles never declare the same login (compared case-insensitively; only `admin` and `oracle`, or
-  `config_reader` and `readonly`, may be one account): a target declaring one login twice does not load.
+  `admin`), and two roles never declare the same login (compared case-insensitively; only `admin` and `oracle` may
+  be one account): a target declaring one login twice does not load.
 
 ## 2. The organization
 

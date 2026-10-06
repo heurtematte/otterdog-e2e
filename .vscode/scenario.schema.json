@@ -112,8 +112,7 @@
           "author",
           "approver",
           "outsider",
-          "config_reader",
-          "readonly"
+          "config_reader"
         ]
       }
     },

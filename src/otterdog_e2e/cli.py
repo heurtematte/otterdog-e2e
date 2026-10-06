@@ -485,7 +485,7 @@ class Doctor:
             "member of test orgs only, token scopes allowed"
             if info.kind == "classic"
             else f"{info.kind} token bound to {target.org}"
-            if name not in ("config_reader", "readonly")
+            if name != "config_reader"
             else f"{info.kind} token (read-only role)"
         )
         self.add(f"isolation:{name}", OK, detail)

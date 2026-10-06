@@ -76,7 +76,7 @@ make one TARGET=free SCENARIO=cli.example.repo-lifecycle
 | `min_plan` | `free` \| `team` \| `enterprise` | `free` | skipped on lower plans (adds `plan(...)` marks); offline scenarios use `variables.plan` instead |
 | `requires` | list of capabilities | `[]` | missing capability: the scenario is skipped |
 | `expect_failure_without` | list of capabilities | `[]` | missing capability: the steps run with their `on_missing_capability` overrides (negative test) |
-| `identities` | list of roles | `[]` | `author`, `approver`, `outsider`, `config_reader`, `oracle`, `readonly`, `admin`; missing ones skip the scenario |
+| `identities` | list of roles | `[]` | `author`, `approver`, `outsider`, `config_reader`, `oracle`, `admin`; missing ones skip the scenario ([roles.md](roles.md)) |
 | `tags` | list | `[]` | selection tags, `^[a-z0-9][a-z0-9_.-]*$` (vocabulary below) |
 | `known_bug` | `KB-<nnn>` | `null` | id from `scenarios/known_bugs.yaml`: every step inherits it (expected failures; the first one ends the run as XFAIL; infra, harness and cleanup failures stay failures; a run without the bug is an XPASS) |
 | `org_level` | bool | `false` | the scenario changes org-level state: full baseline reset as cleanup, plans not filtered by `-r` |

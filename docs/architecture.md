@@ -117,6 +117,10 @@ Rules every module follows: subprocesses only through `procs.run()` (and `procs.
 batch; a unit test greps for `subprocess.` outside `procs.py`), GitHub HTTP only through `GitHubHttp`, no secret ever
 logged or written unredacted.
 
+These components act on GitHub as machine accounts, one per role (`admin`, `oracle`, `author`, `approver`,
+`outsider`, `config_reader`): [roles.md](roles.md) describes each role and shows, in diagrams, how a scenario, the
+roles, otterdog (CLI and webapp) and the test organization interact.
+
 ## Tiers and lanes
 
 | Tier | Needs | Timeout per test |
@@ -232,7 +236,7 @@ flowchart LR
   subgraph host["CI runner or workstation"]
     H["harness"] -->|"docker compose up"| W["webapp under test<br/>127.0.0.1:port"]
     W --- M[("mongodb<br/>tmpfs")]
-    W --- V[("valkey")]
+    W --- V[("redis service<br/>valkey image")]
     RL["DeliveryRelay"] -->|"re-signed POST /github-webhook/receive"| W
   end
   GH["GitHub test org<br/>App installation"] -->|"App webhook"| SINK["non-loopback sink URL"]
@@ -241,7 +245,7 @@ flowchart LR
   W -->|"installation tokens"| GH
 ```
 
-- The stack (`webapp`, `mongodb`, `valkey`) runs with `docker compose -p otterdog-e2e-<run>`; only the webapp is
+- The stack (`webapp`, `mongodb`, and `redis`, which runs a valkey image) runs with `docker compose -p otterdog-e2e-<run>`; only the webapp is
   published, on 127.0.0.1. Every value reaches compose through the environment of the compose process; the App key
   is a compose secret file in the private scratch directory. `down -v --remove-orphans` always runs.
 - No tunnel: the App webhook points at a sink, GitHub records every delivery, and the relay polls the deliveries API,

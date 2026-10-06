@@ -394,14 +394,19 @@ def test_load_target_refuses_one_login_for_two_roles(harness: HarnessSettings, e
         free_target(harness, **env)
 
 
-def test_admin_and_oracle_or_both_read_only_roles_may_share_a_login(harness: HarnessSettings) -> None:
-    """The oracle may be the admin account (its fallback) and readonly the config_reader account."""
+def test_admin_and_oracle_may_share_a_login(harness: HarnessSettings) -> None:
+    """The oracle may be the admin account (its fallback); no other pair of roles may."""
     target = free_target(harness, E2E_ORACLE_LOGIN=ADMIN.upper())
     assert target.identities["oracle"].login == ADMIN.upper()
+    with pytest.raises(TargetError, match="only admin and oracle may be one account"):
+        free_target(harness, E2E_CONFIG_READER_LOGIN="e2e-reader", E2E_AUTHOR_LOGIN="E2E-reader")
+
+
+def test_readonly_is_no_identity_role(harness: HarnessSettings) -> None:
+    """The former readonly role is gone: a target declaring it does not load (unknown key)."""
     readonly = setter("identities.readonly", {"login": "e2e-reader", "token_env": "E2E_READONLY_TOKEN"})
-    name = variant(harness, readonly)
-    loaded = load_target(name, harness, {**ENV, "E2E_CONFIG_READER_LOGIN": "E2E-reader"})
-    assert loaded.identities["readonly"].login == "e2e-reader"
+    with pytest.raises(TargetError, match="readonly"):
+        load_target(variant(harness, readonly), harness, ENV)
 
 
 def test_resolve_identities_refuses_shared_tokens(harness: HarnessSettings, redactor: Redactor) -> None:
