@@ -24,8 +24,7 @@
         ],
         "./.vscode/any.schema.json": [
             "scenarios/known_bugs.yaml",
-            "scenarios/coverage.yaml",
-            "scenarios/otterdog-prs/*.yaml"
+            "scenarios/coverage.yaml"
         ]
     },
     "yaml.customTags": [

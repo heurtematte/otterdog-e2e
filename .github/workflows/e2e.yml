@@ -391,8 +391,8 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "$SUT" == pr:* ]]; then
-            # otterdog PR: the `pr` command derives tags from the changed files, loads
-            # scenarios/otterdog-prs/<N>.yaml and compares with the manifest base (default: merge base)
+            # otterdog PR: the `pr` command derives tags from the changed files, selects the scenarios
+            # referencing the PR and compares with the base of their references (default: merge base)
             spec="${SUT#pr:}"
             args=(pr "${spec%@*}" --sha "${spec#*@}" --target "$TARGET" --suite "${SUITES:-auto}")
           else

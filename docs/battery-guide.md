@@ -37,6 +37,10 @@ outlines as the YAML.
 6. **Update the coverage matrix** (section 7) and run `make check` and `make offline`.
 7. **Submit** with the checklist of section 9.
 
+`otterdog-e2e assist coverage` lists the gap and partial features with their outlines, and the `fill-coverage-gap`
+skill follows these steps with an AI agent, under the same gates and your review
+([ai-assistance.md](ai-assistance.md)).
+
 ## 2. Conventions
 
 ### Ids, files and priorities
@@ -117,7 +121,7 @@ otterdog prints secret values.
 | a new defect | `scenarios/known_bugs.yaml` + a `### KB-nnn` section of `docs/known-issues.md` (and its summary table row) |
 | a regression with `fixed_in` | `UNRELEASED_FIXES` of `tests/unit/test_yaml_cli.py` |
 | a live scenario with a probe | `PROBES` of `tests/cli/conftest.py` and the scenario's own `timeout` (only probe scenarios declare one) |
-| an otterdog PR with expected differential deltas | `scenarios/otterdog-prs/<n>.yaml` ([testing-an-otterdog-pr.md](testing-an-otterdog-pr.md)) |
+| an otterdog PR with expected differential deltas | a `references` entry `{pr: <n>, expected_deltas}` of the scenario of the behaviour ([testing-an-otterdog-pr.md](testing-an-otterdog-pr.md)) |
 
 New offline scenarios and new webapp/webhooks tests need no registration in the unit tests: every offline scenario
 file gets the metadata checks of `tests/unit/test_yaml_offline.py` (title, a description of 20 words or more, `offline`
@@ -141,7 +145,7 @@ fixtures, no blind sleeps).
 | `blueprints`, `policies` | `tests/webapp` with the `blueprints` fixture | 3.10 |
 | `webapp-runtime` (boot, environment, API, pages) | `tests/webapp` with `webapp_stack`, `webapp_env`, `webapp_api` | 3.11 |
 | web-only settings and UI commands | `tests/web_ui` | 3.12 |
-| `regressions`, `pending` (fixes and unmerged changes) | `scenarios/regressions`, PR manifests, differential | 3.13 |
+| `regressions`, `pending` (fixes and unmerged changes) | `scenarios/regressions`, scenario `references`, differential | 3.13 |
 
 ### 3.1 Offline validation rules
 
@@ -535,12 +539,14 @@ settings (no login) belongs to `tests/webapp/test_web_ui_flags.py`. Details: [we
 
 ### 3.13 Regressions, unmerged changes and differential runs
 
-- A regression of an otterdog fix is a live scenario of `scenarios/regressions` (`regression.<n>-<slug>`, tags
-  `regression` and `pr-<n>`, the PR or issue link and the known-bad version in the description, `fixed_in` for fixes
-  not released yet) or, offline, an offline scenario with `observe: true`.
-- A pending change (an otterdog PR, a maintainer branch) gets a PR manifest `scenarios/otterdog-prs/<n>.yaml`
-  (expected differential deltas, extra scenarios) and is tested with `otterdog-e2e pr <n> --sha <sha>` or
-  `--sut dirty:<checkout>` ([testing-an-otterdog-pr.md](testing-an-otterdog-pr.md)).
+- A regression of an otterdog fix is a live scenario of `scenarios/regressions` named after the behaviour
+  (`regression.<behaviour>`, never the PR number), with the tag `regression`, `references: [{pr: <n>}]` for the
+  fixing PR(s), the PR or issue link and the known-bad version in the description and `fixed_in` for fixes not
+  released yet; or, offline, an offline scenario with `observe: true`.
+- A pending change (an otterdog PR, a maintainer branch) is a `references` entry (`pr: <n>` or `change: <slug>`, with
+  its expected differential deltas, base and template) of the scenarios of the functionality it changes, never a
+  PR-named scenario or directory; it is tested with `otterdog-e2e pr <n> --sha <sha>` or
+  `run --sut dirty:<checkout> --change <slug>` ([testing-an-otterdog-pr.md](testing-an-otterdog-pr.md)).
 - `observe: true` offline scenarios are recorded on both SUT sides of a differential run; live scenarios with
   `observe: true` are observed with `validate` and `plan` only.
 
@@ -570,7 +576,7 @@ settings (no login) belongs to `tests/webapp/test_web_ui_flags.py`. Details: [we
 | webapp | `webapp`, `webapp_api`, `relay`, `config_flow`, `injector`, `app_auth`, `installation_id`, `webapp_image`, `webapp_case`, `webapp_scenario`, `webapp_stack`, `webapp_env`, `webapp_otterdog_json`, `dtrack_mock`, `blueprints`, `outsider_mutator`, `approver_mutator`, `contributor_mutator` |
 | webhooks | `webhook_helpers`, `org_level_reset` (+ the webapp ones) |
 | web_ui | `web_sut`, `web_reader`, `web_tier` |
-| differential | `base_sut`, `base_template_ref`, `pr_manifest`, `sut_pair` |
+| differential | `base_sut`, `base_template_ref`, `change_spec`, `sut_pair` |
 
 ### Python APIs
 

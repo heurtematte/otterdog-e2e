@@ -51,7 +51,7 @@ make offline     # offline tier of the latest otterdog release (docker for the w
 
 # differential proof of concept of otterdog#790: the offline tier of the head, then base and head CLIs on every
 # observed offline scenario, about 15 min warm
-.venv/bin/otterdog-e2e run --sut sha:9bdeb75 --suite offline,differential --pr-manifest scenarios/otterdog-prs/790.yaml
+.venv/bin/otterdog-e2e run --sut sha:9bdeb75 --change 790 --suite offline,differential
 ```
 
 The first run fetches the otterdog repository, installs each SUT and builds its webapp image; later runs reuse the
@@ -121,6 +121,16 @@ Every run's `summary.md` has a "Coverage matrix" section: the covered, partial a
 features whose covering items ran in that run. [docs/battery-guide.md](docs/battery-guide.md) explains how to close a
 gap: which harness API, YAML key, fixture or check kind to use for each kind of feature, and the conventions.
 
+## AI-assisted test writing
+
+The harness never calls an AI, but an agent can work with it. Deterministic `otterdog-e2e assist` commands gather
+context bundles (a pull request, a failed run, the coverage gaps) and validate what an agent writes; the agent skills
+of `.claude/skills/` use them to write the tests of an otterdog PR, triage a run and close coverage gaps, e.g.
+`/otterdog-pr-tests 790 <sha>`, `/triage-e2e-run latest` or `/fill-coverage-gap <feature>` in Claude Code, or in any
+agent supporting Agent Skills. Every proposal goes through `assist check`, the offline tier and your review; the
+skills never run live tiers, write to GitHub, commit or push unless you ask. See
+[docs/ai-assistance.md](docs/ai-assistance.md).
+
 ## Systems under test (SUT specs)
 
 | Spec | Meaning | Trust |
@@ -149,8 +159,8 @@ All commands are subcommands of `.venv/bin/otterdog-e2e` (`--help` on each one; 
 | `doctor --target T [--json]` | read-only checks: env, identities and their isolation, token kind and expiry, PAT scopes (classic) or permission probes (fine-grained), org id/plan/marker, memberships, teams, repositories, GitHub App, web-UI credentials and login gate (never logs in), docker, unshare (exit 1 on FAIL); several targets: one table each |
 | `bootstrap --target T [--apply [--wait [--wait-timeout 30m]]]` | idempotent org preparation: marker (typed confirmation), identities (a separate oracle invited as an owner when its own token proves its login), configs/defaults repositories, lease, template, baseline reset, App checks and delivery probe (dry run without `--apply`; `--wait`, only with `--apply`, waits for the invitations and the App installation) |
 | `sut resolve\|install\|image\|classify SPEC` | resolve a SUT to a commit, install its CLI (trusted only), build its webapp image, classify its trust |
-| `run [--target T] [--sut S] [--base-sut B] [--suite ...] [--tags ...] [--scenario ...] [-k EXPR] [pytest args]` | run tiers through pytest (also `--pr-manifest` (its `base` is the default `--base-sut`), `--reset-sut`, `--run-id`, `--artifacts`, `--webapp-image`, `--keep`, `--no-reset`, `--strict-diff`, `--allow-web-ui`); several targets (`a,b`, `@all`, `@<list>`): one child process each, `--parallel N`, `--fail-fast`, a batch summary |
-| `pr N --sha SHA [--target T] [--suite auto\|...] [--strict-diff] [--allow-web-ui]` | test upstream PR N at SHA: regression tiers, differential against its base, PR manifest scenarios (several targets like `run`) |
+| `run [--target T] [--sut S] [--base-sut B] [--suite ...] [--tags ...] [--scenario ...] [-k EXPR] [pytest args]` | run tiers through pytest (also `--change N\|slug` (the scenarios referencing the change: expected deltas, extra scenarios, its `base` is the default `--base-sut`; default: N of a `pr:N@<sha>` SUT), `--reset-sut`, `--run-id`, `--artifacts`, `--webapp-image`, `--keep`, `--no-reset`, `--strict-diff`, `--allow-web-ui`); several targets (`a,b`, `@all`, `@<list>`): one child process each, `--parallel N`, `--fail-fast`, a batch summary |
+| `pr N --sha SHA [--target T] [--suite auto\|...] [--strict-diff] [--allow-web-ui] [--change C]` | test upstream PR N at SHA: regression tiers, differential against its base, the scenarios referencing the PR (several targets like `run`) |
 | `relay --target T --forward-to URL [--since 10m] [--allow-remote]` | forward the App's webhook deliveries to a local webapp (holds the org lease) |
 | `janitor --target T [--older-than 6h] [--run-id ID [--force-takeover]] [--apply]` | list (and delete) leftovers of finished or crashed runs (a lease of `--run-id` renewed within 20 minutes is not taken over unless `--force-takeover`); several targets one after the other |
 | `report DIR` | print the summary of a run artifacts directory |
@@ -158,6 +168,7 @@ All commands are subcommands of `.venv/bin/otterdog-e2e` (`--help` on each one; 
 | `cache prune [--keep 3]` | drop old builds, sources, runs and images from the harness cache (never an entry whose lock a running session or build holds) |
 | `app-manifest --target T --webhook-url URL [--port 8765] [--exchange CODE]` | create the e2e GitHub App from a manifest |
 | `inject [--target T] [--sut S] --fragment KIND=FILE [--library NAME=FILE] [--overlay FILE] [--config/--base FILE] [--apply] [--print]` | try jsonnet files against a SUT without writing a scenario (offline by default; `--target`: live validate + plan, `--apply` with guards and cleanup) |
+| `assist pr-context N [--sha SHA] \| check [PATHS] [--sut S] [--no-lint] \| triage DIR\|latest [--baseline DIR] \| coverage [--status ...] [--feature ID]` | deterministic helpers of AI-assisted test writing: the context bundle of an otterdog PR, validation of the files an agent wrote, triage of a run's failures (after a scrub), the coverage gaps; `--json` on each ([ai-assistance.md](docs/ai-assistance.md)) |
 
 `run` refuses pass-through arguments that could change the SUT, load plugins or print secrets (`--e2e-*`, `-p`,
 `-c`, `-o`, `--rootdir`, `--showlocals`, `@file`, ...). Its exit code is pytest's; budget overruns never fail a run.
@@ -168,7 +179,7 @@ untrusted, so `pr --allow-web-ui` only passes the option on and the web tests sk
 
 The same options exist as pytest options when you call pytest directly: `--e2e-target`, `--e2e-sut`,
 `--e2e-base-sut`, `--e2e-reset-sut`, `--e2e-tags`, `--e2e-scenario`, `--e2e-artifacts`, `--e2e-run-id`,
-`--e2e-keep`, `--e2e-no-reset`, `--e2e-webapp-image`, `--e2e-pr-manifest`, `--e2e-strict-diff`,
+`--e2e-keep`, `--e2e-no-reset`, `--e2e-webapp-image`, `--e2e-change`, `--e2e-strict-diff`,
 `--e2e-no-http-cache`, `--e2e-allow-remote-webapp`, `--e2e-trust-code`, `--e2e-allow-web-ui` (most fall back to an
 `E2E_*` variable; `E2E_ALLOW_WEB_UI` only from the process environment).
 
@@ -248,8 +259,9 @@ The documentation is published at https://heurtematte.github.io/otterdog-e2e/ (M
 | [github-app.md](docs/github-app.md) | the e2e GitHub App: permissions, manifest flow, webhook sink, relay |
 | [writing-scenarios.md](docs/writing-scenarios.md) | the YAML scenario model, checks, rules, examples |
 | [battery-guide.md](docs/battery-guide.md) | authoring guide of the test battery: which harness API, YAML key, fixture or check kind closes which kind of coverage gap, conventions, the lint and the login budget |
+| [ai-assistance.md](docs/ai-assistance.md) | AI-assisted test writing: the `assist` commands and their bundles, the agent skills of `.claude/skills/` (PR tests, run triage, coverage gaps, scenarios), the safety model and the limits |
 | [web-ui-testing.md](docs/web-ui-testing.md) | the web-UI tier: web-only settings, the bot account, gating, the login gate, CI lane, recovery |
-| [testing-an-otterdog-pr.md](docs/testing-an-otterdog-pr.md) | `pr`, local checkouts, PR manifests, differential report, CI dispatch, the `/e2e` trigger |
+| [testing-an-otterdog-pr.md](docs/testing-an-otterdog-pr.md) | `pr`, local checkouts, scenario references (`--change`), differential report, CI dispatch, the `/e2e` trigger |
 | [local-development.md](docs/local-development.md) | Makefile, debugging, the relay with `make dev-webapp`, caches, troubleshooting |
 | [capability-matrix.md](docs/capability-matrix.md) | what each GitHub plan allows and how the harness gates scenarios |
 | [scenario-catalog.md](docs/scenario-catalog.md) | v1 scenarios, the test battery and the backlog |

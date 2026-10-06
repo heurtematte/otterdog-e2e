@@ -4,8 +4,8 @@ Every live scenario (scenarios/cli, scenarios/regressions, scenarios/enterprise)
 DifferentialRunner.observe_live: per step, the configuration is rendered with each side's own template, then
 ``validate`` and ``plan -n`` run with the base SUT, then with the head SUT. Nothing is ever applied and nothing needs
 a cleanup: step k plans against an organization without the objects of the earlier steps. The observations go to
-observations/{base,head}.jsonl next to the offline ones, so the session's differential report and the PR manifest
-check of test_offline_diff.py cover both.
+observations/{base,head}.jsonl next to the offline ones, so the session's differential report and the expected-delta
+check of the change under test (test_offline_diff.py) cover both.
 
 Items are live and differential: they need --e2e-target and --e2e-base-sut (skipped at collection otherwise), and
 the plugin gates them on the scenario's requires/plan/identities marks before any fixture runs. Like the offline

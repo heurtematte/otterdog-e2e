@@ -26,6 +26,11 @@ expected failures (engine.ScenarioOutcome.expected_failures) while the other ste
 ``workspace`` (otterdog.workspace.WorkspaceLayout) changes otterdog's own configuration for that step (otterdog.jsonnet,
 extra organizations, .otterdog-defaults.json, base_url, config_dir, no vendored template).
 
+``references`` (changes.parse_references) name the changes behind the behaviour a scenario pins: otterdog pull
+requests (``pr: <n>``) or named changes without one (``change: <slug>``), each with an optional note, the deltas it is
+expected to cause in this scenario between base and head (``expected_deltas``; a ``step`` pattern must match a step of
+the scenario), its differential ``base`` and ``template``. Scenarios are named after the behaviour, never after a PR.
+
 Jsonnet may come from files (otterdog_e2e.inject): a fragment entry or a step ``overlay`` is an inline string or
 ``{file: <path>, raw: <bool>, vars: <mapping>}``, scenario ``libraries`` map a jsonnet identifier to a path (or such
 a mapping) and are attached to the ConfigFragments of every step (render.py inlines them), offline steps may give a
@@ -53,6 +58,15 @@ import jinja2.sandbox
 import yaml
 
 from otterdog_e2e.capabilities import PLANS, Cap
+from otterdog_e2e.changes import (
+    DELTA_KEYS,
+    REFERENCE_KEYS,
+    SLUG_RE,
+    TEMPLATE_MODES,
+    ChangeError,
+    Reference,
+    parse_references,
+)
 from otterdog_e2e.inject import (
     CONFIG_ROLES,
     CONFIG_VARIABLES,
@@ -97,7 +111,6 @@ E2E_SECRET_REFERENCE_RE = re.compile(r"^(?!(?:pass|bitwarden|vault):)[a-z][a-z0-
 OFFLINE_SECRET_RE = re.compile(r"^pass:[A-Za-z0-9._/-]+(?::[A-Za-z0-9._/-]+)+$")
 DUMMY_HINT = "'********', 'e2e-dummy-<8 chars [0-9a-z]>' or a 'pass:<path>' reference"
 IGNORED_FILES = ("known_bugs.yaml",)
-IGNORED_DIRS = ("otterdog-prs",)
 SCENARIO_SUFFIXES = (".yaml", ".yml")
 
 # extra offline commands a step may run (observed by differential runs); each takes the vendored template (--local);
@@ -136,6 +149,7 @@ SCENARIO_KEYS = (
     "variables",
     "libraries",
     "fixed_in",
+    "references",
     "timeout",
     "steps",
     "cleanup",
@@ -326,6 +340,7 @@ class Scenario:
     fixed_in: str | None = None  # first otterdog version (PEP 440) with the fix/feature asserted: older SUTs skip
     timeout: int | None = None  # pytest timeout (s) of the scenario's item, instead of collect.scenario_timeout()
     libraries: dict[str, str] = field(default_factory=dict)  # name -> SourceText, attached to every step's fragments
+    references: list[Reference] = field(default_factory=list)  # changes (PRs) behind the behaviour (changes.py)
 
     @property
     def is_live(self) -> bool:
@@ -381,7 +396,7 @@ def _load(path: Path, files: FileContext) -> Scenario:
 
 
 def load_scenarios(directory: Path, *, tier: str | None = None) -> list[Scenario]:
-    """Load every *.yaml below ``directory`` (sorted; ignores otterdog-prs/ and known_bugs.yaml; duplicate ids fail)."""
+    """Load every *.yaml below ``directory`` (sorted; ignores known_bugs.yaml and dotfiles; duplicate ids fail)."""
     if tier is not None and tier not in TIERS:
         raise ScenarioError(f"unknown tier {tier!r}, expected one of {TIERS}")
     scenarios = [load_scenario(path) for path in scenario_files(Path(directory))]
@@ -398,7 +413,7 @@ def scenario_files(directory: Path) -> list[Path]:
         relative = path.relative_to(directory)
         if not path.is_file() or path.suffix not in SCENARIO_SUFFIXES or path.name in IGNORED_FILES:
             continue
-        if any(part in IGNORED_DIRS or part.startswith(".") for part in relative.parts):
+        if any(part.startswith(".") for part in relative.parts):
             continue
         found.append(path)
     return found
@@ -506,11 +521,12 @@ def _parse_scenario(data: Any, path: Path, files: FileContext) -> Scenario:
     tier = _tier(root.get("tier"), path)
     expect_failure_without = _capabilities(root.get("expect_failure_without"), "expect_failure_without")
     libraries = _libraries(root.get("libraries"), files)
+    steps = _parse_steps(root["steps"], tier=tier, negative=bool(expect_failure_without), files=files)
     scenario = Scenario(
         id=_str(root["id"], "id", pattern=ID_RE),
         title=_str(root["title"], "title"),
         tier=tier,
-        steps=_parse_steps(root["steps"], tier=tier, negative=bool(expect_failure_without), files=files),
+        steps=steps,
         source=path,
         libraries=libraries,
         description=_str(root.get("description", ""), "description", allow_empty=True),
@@ -529,6 +545,7 @@ def _parse_scenario(data: Any, path: Path, files: FileContext) -> Scenario:
         cleanup=_choice(root.get("cleanup", "auto"), CLEANUP_MODES, "cleanup"),
         fixed_in=_fixed_in(root.get("fixed_in")),
         timeout=_timeout(root.get("timeout")),
+        references=_references(root.get("references"), [step.name for step in steps]),
     )
     for step in scenario.steps:  # libraries go into every render of the scenario (the -BASE config included)
         step.fragments.libraries = dict(libraries)
@@ -611,6 +628,15 @@ def _fixed_in(value: Any) -> str | None:
     if "+" in text:
         raise ScenarioError(f"fixed_in: {text!r} has a local version part (+...), use the public version")
     return text
+
+
+def _references(value: Any, steps: list[str]) -> list[Reference]:
+    """``references``: the changes behind the scenario's behaviour (changes.parse_references; step patterns of
+    expected deltas must match a step)."""
+    try:
+        return parse_references(value, "references", steps=steps)
+    except ChangeError as exc:
+        raise ScenarioError(str(exc)) from None
 
 
 def _timeout(value: Any) -> int | None:
@@ -1866,6 +1892,37 @@ def json_schema() -> dict[str, Any]:
         "additionalProperties": False,
     }
     capabilities = {"type": "array", "items": {"enum": [cap.value for cap in Cap]}}
+    delta: dict[str, Any] = {
+        "type": "object",
+        "description": "a delta between base and head the change causes in this scenario (fnmatch patterns)",
+        "properties": {
+            "step": {"type": "string", "description": "step name pattern (a step of this scenario)"},
+            "kind": {"type": "string", "description": "observation kind pattern (cli, oracle, ...)"},
+            "key": {"type": "string", "description": "observation key pattern (validate, local-plan, ...)"},
+            "note": {"type": "string"},
+        },
+        "additionalProperties": False,
+    }
+    reference_properties: dict[str, Any] = {
+        "pr": {"type": "integer", "minimum": 1, "description": "eclipse-csi/otterdog pull request number"},
+        "change": {"type": "string", "pattern": SLUG_RE.pattern, "description": "named change without upstream PR"},
+        "note": {"type": "string", "description": "what the change did to this behaviour"},
+        "expected_deltas": {"type": "array", "items": delta},
+        "base": {"type": "string", "description": "differential base of the change (release, tag, branch or sha spec)"},
+        "template": {"enum": list(TEMPLATE_MODES), "description": "template both differential sides vendor"},
+    }
+    assert set(reference_properties) == set(REFERENCE_KEYS) and set(delta["properties"]) == set(DELTA_KEYS)
+    reference = {
+        "oneOf": [
+            {
+                "type": "object",
+                "properties": {key: value for key, value in reference_properties.items() if key != other},
+                "required": [required],
+                "additionalProperties": False,
+            }
+            for required, other in (("pr", "change"), ("change", "pr"))
+        ]
+    }
     properties: dict[str, Any] = {
         "id": {"type": "string", "pattern": ID_RE.pattern},
         "title": {"type": "string"},
@@ -1888,6 +1945,11 @@ def json_schema() -> dict[str, Any]:
             "additionalProperties": {"oneOf": [{"type": "string"}, file_ref]},
         },
         "fixed_in": {"type": "string", "description": "first otterdog version (PEP 440) the scenario asserts"},
+        "references": {
+            "type": "array",
+            "description": "otterdog pull requests (pr) or named changes (change) behind this behaviour",
+            "items": reference,
+        },
         "timeout": {"type": "integer", "minimum": 1, "description": "pytest timeout of the item, in seconds"},
         "steps": {"type": "array", "minItems": 1, "items": step},
         "cleanup": {"enum": list(CLEANUP_MODES)},

@@ -1,6 +1,6 @@
-# E-ORG-RULESET, known bug KB-008: #790 crashes for ORG rulesets whose status checks lack 'strict'.
-id: enterprise.org-ruleset.790-missing-strict
-title: "Org ruleset status checks without 'strict' (known bug KB-008, #790 AttributeError)"
+# E-ORG-RULESET, known bug KB-008: org rulesets whose status checks lack 'strict' crash validation since #790.
+id: enterprise.org-ruleset.missing-strict
+title: "Org ruleset status checks without 'strict' (known bug KB-008, AttributeError)"
 description: |
   #790 (9bdeb75) validates required_status_checks of rulesets through StatusCheckSettings.validate, which builds its
   message with parent_object.get_model_header(parent_object) (otterdog/models/ruleset.py:128-136). For an ORG ruleset
@@ -16,7 +16,13 @@ min_plan: enterprise
 requires: [otterdog_org_rulesets]
 fixed_in: "1.7.0.dev15"
 known_bug: KB-008
-tags: [rulesets, enterprise, known-bug, pr-790]
+tags: [rulesets, enterprise, known-bug]
+references:
+  - pr: 790
+    note: >-
+      "fix: validate required status checks of rulesets" (9bdeb75, otterdog 1.7.0.dev15) introduced the crash of
+      KB-008: StatusCheckSettings.validate calls get_model_header on the parent object, which an organization
+      ruleset's GitHubOrganization does not have; offline counterpart O-VAL-ORG-RULESET-STRICT
 steps:
   - name: validate
     fragments:

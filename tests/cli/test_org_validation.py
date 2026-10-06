@@ -2,7 +2,7 @@
 against the languages GitHub detected in the repository.
 
 A repository enabling the code scanning default setup with languages makes validation call GitHub: the repository
-must exist (#767, regression.767-code-scanning-new-repo) and every configured language must be among the languages
+must exist (#767, regression.code-scanning-new-repo) and every configured language must be among the languages
 GitHub detected (GET /repos/{org}/{repo}/languages; 'actions' always counts, GitHub names map to code scanning names,
 otterdog/models/repository.py:325-378). The test creates a public run repository with the SUT, commits a Python file
 with the admin Mutator and waits until otterdog itself reports Python (GitHub detects languages asynchronously), then

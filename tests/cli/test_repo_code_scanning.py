@@ -7,7 +7,7 @@ PATCH /repos/{owner}/{repo}/code-scanning/default-setup {state, query_suite, lan
 the setup is enabled (models/repository.py:734-760). Validation checks the configured languages against the languages
 GitHub detects in the repository (GET .../languages), 'actions' always counting as detected (#411, v1.0.x), and
 the read-back filters the 'javascript-typescript' value GitHub may report (#435). A repository that does not exist yet
-cannot be validated (#767: validation error, regression.767-code-scanning-new-repo), so the repository is created
+cannot be validated (#767: validation error, regression.code-scanning-new-repo), so the repository is created
 first; a probe commits a Python file and a workflow (only workflow_dispatch: it never runs) and waits until GitHub's
 language detection lists Python; the enable step then configures the 'extended' suite for ['actions', 'python'],
 the disable step turns the setup off. GitHub configures the default setup asynchronously: the state checks wait for

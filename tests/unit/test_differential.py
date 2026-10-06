@@ -1,10 +1,10 @@
-"""Unit tests of otterdog_e2e.differential: PR manifests, compare() and the markdown/JSON reports."""
+"""Unit tests of otterdog_e2e.differential: expected deltas, compare() and the markdown/JSON reports (the references
+that declare the expected deltas of a change: tests/unit/test_changes.py)."""
 
 from __future__ import annotations
 
 import json
 import re
-import textwrap
 from pathlib import Path
 
 import pytest
@@ -13,11 +13,8 @@ from otterdog_e2e.differential import (
     Delta,
     DiffReport,
     ExpectedDelta,
-    PrManifest,
-    PrManifestError,
     compare,
     compare_files,
-    load_pr_manifest,
     md_code,
     md_fence,
     truncate_lines,
@@ -42,103 +39,18 @@ def head(scenario: str, step: str, key: str, content: str, *, kind: str = "cli")
 # --- ExpectedDelta ------------------------------------------------------------------------------------------------
 def test_expected_delta_fields_are_fnmatch_patterns() -> None:
     """None matches anything; patterns use fnmatch (case-sensitive); keys also match without #n."""
-    assert ExpectedDelta("O-VAL-*").matches("O-VAL-790", "s", "cli", "validate")
-    assert ExpectedDelta("O-VAL-790", step="st*", kind="cli", key="val*").matches(
-        "O-VAL-790", "step1", "cli", "validate"
+    assert ExpectedDelta("O-VAL-*").matches("O-VAL-RULESET-STRICT", "s", "cli", "validate")
+    assert ExpectedDelta("O-VAL-RULESET-STRICT", step="st*", kind="cli", key="val*").matches(
+        "O-VAL-RULESET-STRICT", "step1", "cli", "validate"
     )
-    assert not ExpectedDelta("O-VAL-790", kind="oracle").matches("O-VAL-790", "s", "cli", "validate")
-    assert not ExpectedDelta("o-val-790").matches("O-VAL-790", "s", "cli", "validate")
+    assert not ExpectedDelta("O-VAL-RULESET-STRICT", kind="oracle").matches(
+        "O-VAL-RULESET-STRICT", "s", "cli", "validate"
+    )
+    assert not ExpectedDelta("o-val-790").matches("O-VAL-RULESET-STRICT", "s", "cli", "validate")
     assert ExpectedDelta("W-*", key="plan").matches("W-X", "s", "cli", "plan#2")
     assert not ExpectedDelta("W-*", step="other").matches("W-X", "", "cli", "plan")
     assert ExpectedDelta("W-*", step="").matches("W-X", "", "cli", "plan")
     assert ExpectedDelta("S", kind="cli").label() == "S/*/cli/*"
-
-
-# --- PR manifests -------------------------------------------------------------------------------------------------
-def _manifest(tmp_path: Path, text: str, name: str = "790.yaml") -> Path:
-    """Write a manifest file."""
-    path = tmp_path / name
-    path.write_text(textwrap.dedent(text), encoding="utf-8")
-    return path
-
-
-def test_load_full_manifest(tmp_path: Path) -> None:
-    """Every field is parsed; expected deltas accept mappings and bare scenario patterns."""
-    path = _manifest(
-        tmp_path,
-        """
-        pr: 790
-        title: "fix: status checks of rulesets without strict"
-        base: v1.6.1
-        template: head
-        tags: [validate, rulesets]
-        scenarios: [O-VAL-790, "cli.ruleset.*"]
-        scenario_dirs: [otterdog-prs/790]
-        expected_deltas:
-          - {scenario: O-VAL-790, step: validate, kind: cli, key: validate, note: "error -> warning"}
-          - O-LPLAN-*
-        markers: {check-merge: "<!-- Otterdog Comment: check-merge -->"}
-        notes: |
-          Reviewed by hand.
-        """,
-    )
-    manifest = load_pr_manifest(path)
-    assert manifest == PrManifest(
-        pr=790,
-        title="fix: status checks of rulesets without strict",
-        base="v1.6.1",
-        template="head",
-        tags=["validate", "rulesets"],
-        scenarios=["O-VAL-790", "cli.ruleset.*"],
-        scenario_dirs=["otterdog-prs/790"],
-        expected_deltas=[
-            ExpectedDelta("O-VAL-790", "validate", "cli", "validate", "error -> warning"),
-            ExpectedDelta("O-LPLAN-*"),
-        ],
-        markers={"check-merge": "<!-- Otterdog Comment: check-merge -->"},
-        notes="Reviewed by hand.\n",
-    )
-
-
-def test_minimal_and_local_manifests(tmp_path: Path) -> None:
-    """Only pr is required; pr 0 is a local change (any file name)."""
-    assert load_pr_manifest(_manifest(tmp_path, "pr: 792\n", "792.yaml")) == PrManifest(pr=792)
-    local = load_pr_manifest(_manifest(tmp_path, "pr: 0\nbase: v1.6.0\n", "local-check-merge.yaml"))
-    assert (local.pr, local.base, local.template) == (0, "v1.6.0", "own")
-
-
-@pytest.mark.parametrize(
-    ("text", "message"),
-    [
-        ("pr: 790\nscenarioz: []\n", "unknown keys \\['scenarioz'\\]"),
-        ("title: x\n", "'pr' must be a non-negative integer"),
-        ("pr: true\n", "'pr' must be"),
-        ("pr: -1\n", "'pr' must be"),
-        ("pr: '790'\n", "'pr' must be"),
-        ("pr: 791\n", "does not match the file name"),
-        ("pr: 790\ntemplate: mine\n", "'template' must be one of"),
-        ("pr: 790\ntags: smoke\n", "'tags' must be a list"),
-        ("pr: 790\nscenarios: ['']\n", "'scenarios' must be a list of non-empty strings"),
-        ("pr: 790\nscenario_dirs: [/etc]\n", "relative paths"),
-        ("pr: 790\nscenario_dirs: ['../outside']\n", "relative paths"),
-        ("pr: 790\nmarkers: {a: 1}\n", "'markers' must be a mapping"),
-        ("pr: 790\nexpected_deltas: {scenario: x}\n", "'expected_deltas' must be a list"),
-        ("pr: 790\nexpected_deltas: [{step: x}]\n", "needs a non-empty 'scenario'"),
-        ("pr: 790\nexpected_deltas: [{scenario: x, typo: 1}]\n", "unknown keys \\['typo'\\]"),
-        ("pr: 790\nexpected_deltas: [{scenario: x, kind: 3}]\n", "kind must be a string"),
-        ("pr: 790\nexpected_deltas: [3]\n", "must be a mapping or a scenario pattern"),
-        ("pr: 790\nnotes: [a]\n", "'notes' must be a string"),
-        ("- pr: 790\n", "must be a mapping"),
-        ("", "must be a mapping"),
-        ("pr: [unclosed\n", "invalid YAML"),
-    ],
-)
-def test_invalid_manifests(tmp_path: Path, text: str, message: str) -> None:
-    """Invalid manifests raise PrManifestError (a ValueError) naming the file."""
-    path = _manifest(tmp_path, text)
-    with pytest.raises(PrManifestError, match=message) as info:
-        load_pr_manifest(path)
-    assert isinstance(info.value, ValueError) and str(path) in str(info.value)
 
 
 # --- compare ------------------------------------------------------------------------------------------------------
@@ -183,8 +95,8 @@ def test_missing_observation_inside_a_comparable_scenario_is_a_delta() -> None:
 
 def test_expected_deltas_mark_deltas_and_unmatched_ones_are_kept() -> None:
     """ExpectedDelta matches flag deltas (with the note); declared deltas that never occur are reported."""
-    base = [obs("O-VAL-790", "v", "validate", "error"), obs("O-OTHER", "v", "validate", "a")]
-    new = [head("O-VAL-790", "v", "validate", "warning"), head("O-OTHER", "v", "validate", "b")]
+    base = [obs("O-VAL-RULESET-STRICT", "v", "validate", "error"), obs("O-OTHER", "v", "validate", "a")]
+    new = [head("O-VAL-RULESET-STRICT", "v", "validate", "warning"), head("O-OTHER", "v", "validate", "b")]
     expected = [ExpectedDelta("O-VAL-*", note="fixed by #790"), ExpectedDelta("W-STALE-*", note="webapp")]
     report = compare(base, new, base_label=BASE, head_label=HEAD, expected=expected)
     first, second = report.deltas
@@ -224,17 +136,20 @@ def test_compare_files_uses_recorded_sut_labels(tmp_path: Path) -> None:
 def _report() -> DiffReport:
     """A report with one unexpected, one expected delta, one unmatched expectation and one one-sided scenario."""
     base = [
-        obs("O-VAL-790", "validate", "validate", "exit_code: 2\nError: get_model_header"),
+        obs("O-VAL-RULESET-STRICT", "validate", "validate", "exit_code: 2\nError: get_model_header"),
         obs("O-LPLAN-ADD", "local-plan", "local-plan", "exit_code: 0\n" + "\n".join(f"line {i}" for i in range(100))),
         obs("O-SAME", "validate", "validate", "same"),
         obs("O-BASE-ONLY", "validate", "validate", "x"),
     ]
     new = [
-        head("O-VAL-790", "validate", "validate", "exit_code: 0\nValidation succeeded"),
+        head("O-VAL-RULESET-STRICT", "validate", "validate", "exit_code: 0\nValidation succeeded"),
         head("O-LPLAN-ADD", "local-plan", "local-plan", "exit_code: 0\n" + "\n".join(f"LINE {i}" for i in range(100))),
         head("O-SAME", "validate", "validate", "same"),
     ]
-    expected = [ExpectedDelta("O-VAL-790", note="#790 fixes the AttributeError"), ExpectedDelta("W-STALE-STATUS-792")]
+    expected = [
+        ExpectedDelta("O-VAL-RULESET-STRICT", note="#790 fixes the AttributeError"),
+        ExpectedDelta("W-PR-STALE-SNAPSHOT"),
+    ]
     return compare(base, new, base_label=BASE, head_label=HEAD, expected=expected)
 
 
@@ -246,13 +161,13 @@ def test_markdown_report_sections() -> None:
     assert "| Unexpected deltas | 1 |" in markdown and "| Expected deltas | 1 |" in markdown
     assert "| Unchanged observations | 1 |" in markdown and "| Not comparable scenarios | 1 |" in markdown
     assert "| `O-LPLAN-ADD` | 0 | 0 | 1 | **unexpected change** |" in markdown
-    assert "| `O-VAL-790` | 0 | 1 | 0 | expected change |" in markdown
+    assert "| `O-VAL-RULESET-STRICT` | 0 | 1 | 0 | expected change |" in markdown
     assert "| `O-SAME` | 1 | 0 | 0 | unchanged |" in markdown
     unexpected_at, expected_at = markdown.index("## Unexpected deltas (1)"), markdown.index("## Expected deltas (1)")
     assert unexpected_at < expected_at
     assert markdown.count("<details><summary>") == 2 and markdown.count("</details>") == 2
     assert "Note: #790 fixes the AttributeError" in markdown
-    assert "## Expected deltas not observed (1)" in markdown and "`W-STALE-STATUS-792/*/*/*`" in markdown
+    assert "## Expected deltas not observed (1)" in markdown and "`W-PR-STALE-SNAPSHOT/*/*/*`" in markdown
     assert "## Not comparable (1)" in markdown and "`O-BASE-ONLY` — recorded on base only" in markdown
 
 
@@ -303,7 +218,7 @@ def test_to_json_counts_and_write(tmp_path: Path) -> None:
     data = report.to_json()
     assert data["counts"] == {"unexpected": 1, "expected": 1}
     assert data["unmatched_expected"] == [
-        {"scenario": "W-STALE-STATUS-792", "step": None, "kind": None, "key": None, "note": ""}
+        {"scenario": "W-PR-STALE-SNAPSHOT", "step": None, "kind": None, "key": None, "note": ""}
     ]
     assert data["not_comparable_sides"] == {"O-BASE-ONLY": "base"}
     json.dumps(data)

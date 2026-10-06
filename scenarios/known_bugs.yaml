@@ -117,12 +117,12 @@
     - otterdog/models/github_organization.py:84-85
     - otterdog/models/github_organization.py:226-227
     - otterdog/models/__init__.py:566
-    - "e2e: scenarios/offline/val-790-org.yaml (O-VAL-790-ORG, tests/offline: exit 2 on 9bdeb75 and d0d3b08)"
+    - "e2e: scenarios/offline/validation/val-org-ruleset-strict.yaml (O-VAL-ORG-RULESET-STRICT, tests/offline: exit 2 on 9bdeb75 and d0d3b08)"
     - otterdog/models/ruleset.py:436-447
     - "e2e: scenarios/offline/validation/val-org-rulesets.yaml (steps review-count-range and deployment-rule declare the bug)"
   upstream: https://github.com/eclipse-csi/otterdog/pull/790
   fixed_in: null
-  scenarios: [enterprise.org-ruleset.790-missing-strict]
+  scenarios: [enterprise.org-ruleset.missing-strict]
 
 - id: KB-009
   title: organization rulesets are rejected unless settings.plan is enterprise, although GitHub Team supports them

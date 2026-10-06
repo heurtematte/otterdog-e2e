@@ -1,6 +1,6 @@
-# Regression #751 (v1.6.0): disabled rulesets whose ref conditions come back null.
-id: regression.751-disabled-ruleset
-title: "#751: a disabled ruleset without ref conditions converges"
+# Regression: disabled rulesets whose ref conditions come back null (fixed in v1.6.0, #751).
+id: regression.disabled-ruleset-without-refs
+title: "A disabled ruleset without ref conditions converges"
 description: |
   PR https://github.com/eclipse-csi/otterdog/pull/751 ("Handle null ref conditions in disabled rulesets"): GitHub can
   return a disabled ruleset with conditions = null; otterdog now normalizes absent/null ref filters to empty lists
@@ -11,7 +11,12 @@ description: |
   required_pull_request are null so that the suspected empty-status-checks bug (KB-021) cannot interfere.
 priority: P2
 min_plan: free
-tags: [rulesets, repo, regression, pr-751]
+tags: [rulesets, repo, regression]
+references:
+  - pr: 751
+    note: >-
+      "Handle null ref conditions in disabled rulesets" (v1.6.0): absent/null ref filters read as empty lists;
+      known-bad v1.5.0
 steps:
   - name: create
     fragments:

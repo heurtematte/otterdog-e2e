@@ -1,6 +1,6 @@
-# Regression #472 (v1.1.1): rename a repository and change its settings in one operation.
-id: regression.472-rename-and-modify
-title: "#472: rename a repository (aliases) and modify it in one apply"
+# Regression: rename a repository and change its settings in one operation (fixed in v1.1.1, #472).
+id: regression.rename-and-modify
+title: "Rename a repository (aliases) and modify it in one apply"
 description: |
   Issue https://github.com/eclipse-csi/otterdog/issues/472 ("Fix renaming a repository and modifying settings in a
   single operation"): with aliases: ['<old name>'] otterdog matches the live repository by its previous name and
@@ -11,7 +11,12 @@ description: |
   new name with the new settings and converge; the alias is then dropped and the plan must stay a no-op.
 priority: P1
 min_plan: free
-tags: [repo, regression, rename, pr-472]
+tags: [repo, regression, rename]
+references:
+  - pr: 472
+    note: >-
+      fix of v1.1.1: renaming a repository (aliases) and modifying its settings in one operation plans one change
+      (PATCH of the old name, then the topics PUT on the new name); known-bad v1.1.0
 steps:
   - name: create
     fragments:

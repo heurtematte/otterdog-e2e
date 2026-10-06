@@ -1,6 +1,7 @@
-# Offline tier (extension of SPEC 19, P1): the organization-ruleset side of eclipse-csi/otterdog#790.
-id: O-VAL-790-ORG
-title: Org ruleset status checks without 'strict' on an enterprise plan (#790 follow-up)
+# Offline tier (extension of SPEC 19, P1): validation of an ORGANIZATION ruleset whose status checks lack 'strict'
+# (the organization-ruleset side of eclipse-csi/otterdog#790; live counterpart: E-ORG-RULESET).
+id: O-VAL-ORG-RULESET-STRICT
+title: Org ruleset status checks without 'strict' on an enterprise plan
 description: >-
   #790 validates the required status checks of every ruleset. For an ORGANIZATION ruleset (enterprise plan, so the
   plan gate lets it through) whose required_status_checks has no 'strict', SUTs that contain #790 do not report the
@@ -15,6 +16,13 @@ priority: P1
 tags: [offline, rulesets, org-settings]
 observe: true
 variables: {plan: enterprise}
+references:
+  - pr: 790
+    note: >-
+      Deliberately referenced without an expected delta: base (b5f7bb1) validates this org ruleset, head (9bdeb75)
+      crashes with "'GitHubOrganization' object has no attribute 'get_model_header'" (exit 2) instead of reporting the
+      missing parameter, a defect introduced by #790 (KB-008) that the differential report must keep flagging as an
+      UNEXPECTED delta until it is fixed (live counterpart: E-ORG-RULESET, enterprise.org-ruleset.missing-strict).
 steps:
   - name: org-no-strict
     fragments:

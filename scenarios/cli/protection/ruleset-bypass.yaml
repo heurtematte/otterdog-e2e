@@ -9,7 +9,7 @@ description: |
   resolved through GET /orgs/{org}/teams/{slug}, read back through the organization's teams), each optionally with
   ':pull_request' (the default mode 'always' is read back without a suffix). A run team with push access to a public
   run repository is the team actor; the App actor is tested by cli.protection.app-checks and individual users by
-  regression.779-user-bypass-actors. The create step uses every role, the update step changes the modes and the
+  regression.user-bypass-actors. The create step uses every role, the update step changes the modes and the
   set; both converge. The last two steps reproduce known bugs, each one an expected failure of its own step while
   the bug exists (the other steps stay strict): an unknown role ('#Admin') passes validation and crashes the apply
   (KB-039), so the step asserts the validation error that should be reported; the documented explicit mode

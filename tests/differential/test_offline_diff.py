@@ -4,10 +4,10 @@ Every scenarios/offline/*.yaml with ``observe: true`` runs through DifferentialR
 (--e2e-base-sut, ``auto`` = merge base of the SUT) then the head SUT (--e2e-sut) render the same steps (deterministic
 offline run context) and record every command's normalized output into observations/{base,head}.jsonl; the plugin
 compares both files at session end into differential.{md,json} (--e2e-strict-diff fails the session on unexpected
-deltas). With a PR manifest (--e2e-pr-manifest or E2E_PR_MANIFEST, scenarios/otterdog-prs/<N>.yaml) its ``template``
-picks the template both sides vendor (own: each SUT its own examples/template; head/base: both use that side's) and
-test_pr_manifest_expected_deltas_observed, the last item of the module, checks that every expected delta of a
-scenario recorded on both sides was observed.
+deltas). With a change under test (--e2e-change or E2E_CHANGE, default: N of a pr:N@<sha> SUT), the ``template`` of
+the references of the scenarios referencing it picks the template both sides vendor (own: each SUT its own
+examples/template; head/base: both use that side's) and test_change_expected_deltas_observed, the last item of the
+module, checks that every expected delta of a scenario recorded on both sides was observed.
 
 A recording item fails only when its observations are meaningless: infrastructure problems (timeouts, sandbox or
 network errors) or harness problems (template vendoring, rendering). Scenario expectations are NOT asserted here:
@@ -24,8 +24,9 @@ from pathlib import Path
 
 import pytest
 
+from otterdog_e2e.changes import ChangeSpec
 from otterdog_e2e.context import SutPair, get_context
-from otterdog_e2e.differential import PrManifest, compare
+from otterdog_e2e.differential import compare
 from otterdog_e2e.observe import load_observations
 from otterdog_e2e.scenarios.collect import collect_scenarios, scenario_params
 from otterdog_e2e.scenarios.engine import INFRA_PREFIX, DifferentialRunner, ScenarioOutcome, SutSide
@@ -56,9 +57,9 @@ def template_dir(side: SutSide) -> Path:
     return side.installed.sut.source_dir / TEMPLATE_SOURCE_DIR
 
 
-def template_chooser(pair: SutPair, manifest: PrManifest | None) -> Callable[[SutSide], Path]:
-    """template_src_for of the runner: each side's own template, or the side the manifest's ``template`` names."""
-    mode = manifest.template if manifest is not None else "own"
+def template_chooser(pair: SutPair, change: ChangeSpec | None) -> Callable[[SutSide], Path]:
+    """template_src_for of the runner: each side's own template, or the side the change's ``template`` names."""
+    mode = change.template if change is not None else "own"
     if mode == "own":
         return template_dir
     chosen = template_dir(pair.head if mode == "head" else pair.base)
@@ -66,8 +67,8 @@ def template_chooser(pair: SutPair, manifest: PrManifest | None) -> Callable[[Su
 
 
 @pytest.fixture
-def runner(sut_pair: SutPair, pr_manifest: PrManifest | None) -> DifferentialRunner:
-    """DifferentialRunner over the offline sides (deterministic offline run context, templates per manifest).
+def runner(sut_pair: SutPair, change_spec: ChangeSpec | None) -> DifferentialRunner:
+    """DifferentialRunner over the offline sides (deterministic offline run context, templates per change).
 
     Each side's workspace root (and the container mount point of a docker side) is already a placeholder in its
     observations (context.workspace_literals), so printed config paths compare equal across sides.
@@ -76,13 +77,13 @@ def runner(sut_pair: SutPair, pr_manifest: PrManifest | None) -> DifferentialRun
         base=sut_pair.base,
         head=sut_pair.head,
         renderer_factory=None,
-        template_src_for=template_chooser(sut_pair, pr_manifest),
+        template_src_for=template_chooser(sut_pair, change_spec),
     )
 
 
 @EVERY_TAG
 @pytest.mark.timeout(3600)  # first differential item: resolves and installs both SUTs (or builds their images)
-def test_sides_are_ready(sut_pair: SutPair, pr_manifest: PrManifest | None) -> None:
+def test_sides_are_ready(sut_pair: SutPair, change_spec: ChangeSpec | None) -> None:
     """Both SUTs are installed, ship the example template and record into their own observation files."""
     for side in sut_pair:
         source = template_dir(side)
@@ -92,8 +93,12 @@ def test_sides_are_ready(sut_pair: SutPair, pr_manifest: PrManifest | None) -> N
     if base.sha == head.sha and not (base.is_dirty or head.is_dirty):
         warnings.warn(f"base and head are the same commit {head.sha[:12]}: no delta is expected", stacklevel=1)
     logger.info("differential: base %s (%s) vs head %s (%s)", base.label, base.sha[:12], head.label, head.sha[:12])
-    if pr_manifest is not None:
-        logger.info("PR manifest #%s (%s), template %s", pr_manifest.pr, pr_manifest.title, pr_manifest.template)
+    if change_spec is not None:
+        logger.info(
+            "change %s: %d referencing scenario(s), %d expected delta(s), base %s, template %s",
+            change_spec.label, len(change_spec.scenarios), len(change_spec.expected_deltas), change_spec.base or "-",
+            change_spec.template,
+        )  # fmt: skip
 
 
 def harness_problems(outcome: ScenarioOutcome) -> list[str]:
@@ -124,21 +129,22 @@ def test_offline_scenario_observed(
 
 
 @EVERY_TAG
-def test_pr_manifest_expected_deltas_observed(sut_pair: SutPair, pr_manifest: PrManifest | None) -> None:
-    """Every expected delta of the PR manifest whose scenario was recorded on both sides shows up as a delta
-    (``expected deltas not observed`` would mean the PR does not change what it claims to change)."""
-    if pr_manifest is None:
-        pytest.skip("no PR manifest (--e2e-pr-manifest / E2E_PR_MANIFEST)")
+def test_change_expected_deltas_observed(sut_pair: SutPair, change_spec: ChangeSpec | None) -> None:
+    """Every expected delta of the change under test (references of its scenarios) whose scenario was recorded on
+    both sides shows up as a delta (``expected deltas not observed`` would mean the change does not change what its
+    references claim)."""
+    if change_spec is None:
+        pytest.skip("no change under test (--e2e-change / E2E_CHANGE, or a pr:N@<sha> SUT)")
     base_file, head_file = sut_pair.base.recorder.out_file, sut_pair.head.recorder.out_file
     base, head = load_observations(base_file), load_observations(head_file)
     comparable = {o.scenario for o in base} & {o.scenario for o in head}
     applicable = [
         expected
-        for expected in pr_manifest.expected_deltas
+        for expected in change_spec.expected_deltas
         if any(fnmatch.fnmatchcase(scenario, expected.scenario) for scenario in comparable)
     ]
     if not applicable:
-        pytest.skip(f"no expected delta of PR #{pr_manifest.pr} concerns a scenario recorded in this session")
+        pytest.skip(f"no expected delta of change {change_spec.label} concerns a scenario recorded in this session")
     report = compare(
         base,
         head,
@@ -148,10 +154,11 @@ def test_pr_manifest_expected_deltas_observed(sut_pair: SutPair, pr_manifest: Pr
     )
     missing = report.unmatched_expected
     assert not missing, (
-        f"PR #{pr_manifest.pr}: expected delta(s) not observed between {report.base_label} and {report.head_label}: "
+        f"change {change_spec.label}: expected delta(s) not observed between {report.base_label} and "
+        f"{report.head_label}: "
         + "; ".join(f"{item.label()} ({item.note})" if item.note else item.label() for item in missing)
     )
     logger.info(
-        "PR #%s: %d expected delta(s) observed, %d unexpected", pr_manifest.pr, len(report.expected()),
+        "change %s: %d expected delta(s) observed, %d unexpected", change_spec.label, len(report.expected()),
         len(report.unexpected()),
     )  # fmt: skip

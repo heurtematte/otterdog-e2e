@@ -40,7 +40,7 @@ CLEARED_ENV = (
     "E2E_SCENARIO",
     "E2E_ARTIFACTS",
     "E2E_RUN_ID",
-    "E2E_PR_MANIFEST",
+    "E2E_CHANGE",
     "E2E_WEBAPP_IMAGE",
     "E2E_MIN_RATE_REMAINING",
     "GITHUB_STEP_SUMMARY",
@@ -648,22 +648,36 @@ def test_tags_spare_unit_and_offline_tiers_but_not_the_scenario_filter(inner: In
     assert kept(inner, "--e2e-scenario=O-*,W-*", "--e2e-tags=webapp") == {"test_offline", "test_webapp"}
 
 
-def test_pr_manifest_scenarios_pass_the_tags_filter(inner: Inner) -> None:
-    """The --e2e-pr-manifest scenarios are extra scenarios of --e2e-tags (still ANDed with --e2e-scenario)."""
+REFERENCING_TEST = """
+import pytest
+
+@pytest.mark.scenario("cli.repo.secrets", references=[{"pr": 790, "note": "the change under test"}])
+def test_referencing():
+    pass
+"""
+
+
+def test_scenarios_referencing_the_change_pass_the_tags_filter(inner: Inner) -> None:
+    """The scenarios referencing the change under test (--e2e-change, default: N of a pr:N@<sha> SUT) are extra
+    scenarios of --e2e-tags (still ANDed with --e2e-scenario); invalid references are usage errors."""
     inner.pytester.makepyfile(test_select=SELECTION)
-    manifest = inner.pytester.path / "790.yaml"
-    manifest.write_text("pr: 790\ntags: [validate]\nscenarios: [cli.repo.secrets]\n")
-    assert kept(inner, "--e2e-tags=smoke", f"--e2e-pr-manifest={manifest}") == ALL_SELECTION
-    assert kept(inner, "--e2e-tags=webapp", f"--e2e-pr-manifest={manifest}") == {
-        "test_repo_secrets",
-        "test_plain_helper",
-    }
-    narrowed = kept(inner, "--e2e-tags=webapp", "--e2e-scenario=cli.team.*", f"--e2e-pr-manifest={manifest}")
+    referencing = inner.settings.project_root / "tests" / "cli" / "test_referencing.py"
+    referencing.parent.mkdir(parents=True)
+    referencing.write_text(REFERENCING_TEST)
+    # the referencing module (a cli tier test of the project, scenario cli.repo.secrets) is collected too
+    assert kept(inner, "--e2e-tags=smoke", "--e2e-change=790") == {*ALL_SELECTION, "test_referencing"}
+    expected = {"test_repo_secrets", "test_plain_helper", "test_referencing"}
+    assert kept(inner, "--e2e-tags=webapp", "--e2e-change=#790") == expected
+    assert kept(inner, "--e2e-tags=webapp", f"--e2e-sut=pr:790@{'a' * 40}") == expected  # implied by the pr: SUT
+    assert kept(inner, "--e2e-tags=webapp", f"--e2e-sut=pr:791@{'a' * 40}") == {"test_plain_helper"}
+    assert kept(inner, "--e2e-tags=webapp", "--e2e-change=791") == {"test_plain_helper"}
+    narrowed = kept(inner, "--e2e-tags=webapp", "--e2e-scenario=cli.team.*", "--e2e-change=790")
     assert narrowed == set()
-    broken = inner.pytester.path / "broken.yaml"
-    broken.write_text("pr: [790]\n")
-    result = inner.run("--e2e-tags=smoke", f"--e2e-pr-manifest={broken}")
-    assert result.ret == pytest.ExitCode.USAGE_ERROR and "--e2e-pr-manifest" in result.stderr.str()
+    result = inner.run("--e2e-tags=smoke", "--e2e-change=not a change")
+    assert result.ret == pytest.ExitCode.USAGE_ERROR and "--e2e-change" in result.stderr.str()
+    referencing.write_text(REFERENCING_TEST.replace('"pr": 790', '"pr": 790, "base": "pr:1@x"'))
+    result = inner.run("--e2e-tags=smoke", "--e2e-change=790")
+    assert result.ret == pytest.ExitCode.USAGE_ERROR and "--e2e-change" in result.stderr.str()
 
 
 def test_scenario_parameters_get_scenario_marks(inner: Inner, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1035,7 +1049,13 @@ def test_strict_diff_fails_on_unexpected_deltas(inner: Inner) -> None:
 
     def line(role: str, content: str) -> str:
         """One observation record."""
-        record = {"sut": f"{role}-sut", "role": role, "scenario": "O-VAL-790", "step": "validate", "kind": "cli"}
+        record = {
+            "sut": f"{role}-sut",
+            "role": role,
+            "scenario": "O-VAL-RULESET-STRICT",
+            "step": "validate",
+            "kind": "cli",
+        }
         return json.dumps({**record, "key": "validate", "content": content, "meta": {}}) + "\n"
 
     base_line = line("base", "exit_code: 1\nAttributeError")

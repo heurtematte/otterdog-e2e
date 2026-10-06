@@ -21,8 +21,9 @@ blueprints.BlueprintHelper whose definitions, remediation PRs and workflow runs 
 
 Selection (scenarios.collect.item_selected): values inside --e2e-scenario (globs on scenario ids) or inside --e2e-tags
 are ORed, the two options are ANDed. tests/unit and tests/offline items (and items outside the tier directories that
-carry no e2e marker) are exempt from --e2e-tags, never from --e2e-scenario; the --e2e-pr-manifest ``scenarios`` pass
-the tags filter like tagged items.
+carry no e2e marker) are exempt from --e2e-tags, never from --e2e-scenario; the scenarios referencing the change under
+test (--e2e-change, E2E_CHANGE, default: N of a ``pr:N@<sha>`` --e2e-sut; changes.py) pass the tags filter like tagged
+items, and their expected deltas feed the session's differential report.
 """
 
 from __future__ import annotations
@@ -66,8 +67,8 @@ from otterdog_e2e.context import (
 if TYPE_CHECKING:
     from otterdog_e2e.blueprints import BlueprintHelper
     from otterdog_e2e.capabilities import Capabilities
+    from otterdog_e2e.changes import ChangeSpec
     from otterdog_e2e.config_repo import ConfigRepoFlow
-    from otterdog_e2e.differential import PrManifest
     from otterdog_e2e.github.app import AppAuth
     from otterdog_e2e.github.mutate import Mutator
     from otterdog_e2e.github.oracle import Oracle
@@ -155,7 +156,11 @@ OPTIONS: tuple[OptionSpec, ...] = (
     OptionSpec("--e2e-keep", "keep run resources after the session (no cleanup)", False, True),
     OptionSpec("--e2e-no-reset", "skip the baseline reset at first use", False, True),
     OptionSpec("--e2e-webapp-image", "use this prebuilt webapp image instead of building the SUT [E2E_WEBAPP_IMAGE]"),
-    OptionSpec("--e2e-pr-manifest", "otterdog PR manifest (scenarios/otterdog-prs/<N>.yaml) [E2E_PR_MANIFEST]"),
+    OptionSpec(
+        "--e2e-change",
+        "change under test: N or #N (an otterdog PR) or a change slug; the scenarios referencing it pass --e2e-tags and"
+        " their expected deltas feed the differential report (default: N of a pr:N@<sha> --e2e-sut) [E2E_CHANGE]",
+    ),
     OptionSpec("--e2e-strict-diff", "fail the session on unexpected differential deltas", False, True),
     OptionSpec("--e2e-no-http-cache", "disable the otterdog HTTP cache symlink", False, True),
     OptionSpec("--e2e-allow-remote-webapp", "allow a non-loopback external webapp / relay target", False, True),
@@ -392,6 +397,7 @@ def pytest_collection_modifyitems(session: pytest.Session, config: pytest.Config
     if not any(is_e2e(item) for item in items):
         return
     context = get_context(config)
+    _change_spec(context)  # an invalid --e2e-change or invalid/conflicting references are usage errors
     bugs = context.known_bugs()
     for item in items:
         if is_e2e(item):
@@ -433,29 +439,38 @@ def _apply_item_marks(item: pytest.Item) -> None:
 
 
 def _deselect(config: pytest.Config, items: list[pytest.Item], options: E2EOptions) -> None:
-    """Keep the items passing --e2e-scenario AND --e2e-tags (module docstring); the others are deselected."""
+    """Keep the items passing --e2e-scenario AND --e2e-tags (module docstring); the others are deselected.
+
+    The scenarios referencing the change under test are read only when an item fails the tags filter (such an item
+    is an e2e item, so the session context exists anyway)."""
     if not options.tags and not options.scenario:
         return
-    extra = _manifest_scenarios(options) if options.tags else ()
+    extra: list[tuple[str, ...]] = []
+
+    def change_scenarios() -> tuple[str, ...]:
+        """Ids of the scenarios referencing the change under test (read once)."""
+        if not extra:
+            spec = _change_spec(get_context(config)) if options.tags else None
+            extra.append(tuple(spec.scenarios) if spec is not None else ())
+        return extra[0]
+
     keep: list[pytest.Item] = []
     drop: list[pytest.Item] = []
     for item in items:
-        (keep if _selected(item, options.tags, options.scenario, extra) else drop).append(item)
+        (keep if _selected(item, options.tags, options.scenario, change_scenarios) else drop).append(item)
     if drop:
         config.hook.pytest_deselected(items=drop)
         items[:] = keep
 
 
-def _manifest_scenarios(options: E2EOptions) -> tuple[str, ...]:
-    """``scenarios`` of the --e2e-pr-manifest (extra scenarios of the tags filter); UsageError when invalid."""
-    if options.pr_manifest is None:
-        return ()
-    from otterdog_e2e.differential import load_pr_manifest
+def _change_spec(context: E2EContext) -> ChangeSpec | None:
+    """context.change_spec(); UsageError for a malformed --e2e-change or invalid or conflicting references."""
+    from otterdog_e2e.changes import ChangeError
 
     try:
-        return tuple(load_pr_manifest(options.pr_manifest).scenarios)
-    except (OSError, ValueError) as exc:
-        raise pytest.UsageError(f"--e2e-pr-manifest: {exc}") from exc
+        return context.change_spec()
+    except ChangeError as exc:
+        raise pytest.UsageError(f"--e2e-change: {exc}") from None
 
 
 def tags_exempt(item: pytest.Item) -> bool:
@@ -466,18 +481,17 @@ def tags_exempt(item: pytest.Item) -> bool:
     return tier in TAGS_EXEMPT_TIERS or (tier is None and not is_e2e(item))
 
 
-def _selected(item: pytest.Item, tags: Sequence[str], globs: Sequence[str], extra: Sequence[str]) -> bool:
-    """collect.item_selected for one item (its scenario id, tags markers and tier exemption)."""
+def _selected(item: pytest.Item, tags: Sequence[str], globs: Sequence[str], extra: Callable[[], Sequence[str]]) -> bool:
+    """collect.item_selected for one item (its scenario id, tags markers and tier exemption); ``extra`` gives the
+    scenarios passing the tags filter like tagged items, read only when the item fails the filter otherwise."""
     from otterdog_e2e.scenarios.collect import item_selected
 
-    return item_selected(
-        item_scenario_id(item),
-        item_tags(item),
-        globs=globs,
-        tags=tags,
-        tags_exempt=tags_exempt(item),
-        extra_scenarios=extra,
-    )
+    scenario_id, exempt = item_scenario_id(item), tags_exempt(item)
+    if item_selected(scenario_id, item_tags(item), globs=globs, tags=tags, tags_exempt=exempt):
+        return True
+    if not tags or scenario_id is None or not item_selected(scenario_id, (), globs=globs):
+        return False
+    return item_selected(scenario_id, (), globs=globs, tags=tags, extra_scenarios=extra())
 
 
 def known_bug_xfail(item: pytest.Item, reason: str) -> pytest.MarkDecorator:
@@ -1008,13 +1022,13 @@ def _write_differential(session: pytest.Session, context: E2EContext) -> None:
     from otterdog_e2e.observe import load_observations
 
     base, head = load_observations(base_file), load_observations(head_file)
-    manifest = _manifest_or_none(context)
+    spec = _change_spec_or_none(context)
     report = compare(
         base,
         head,
         base_label=_side_label(base, "base"),
         head_label=_side_label(head, "head"),
-        expected=manifest.expected_deltas if manifest is not None else (),
+        expected=spec.expected_deltas if spec is not None else (),
     )
     (context.artifacts_dir / "differential.md").write_text(redact.REDACTOR(report.to_markdown()), encoding="utf-8")
     text = json.dumps(report.to_json(), indent=2, sort_keys=True, default=str)
@@ -1025,12 +1039,12 @@ def _write_differential(session: pytest.Session, context: E2EContext) -> None:
         session.exitstatus = pytest.ExitCode.TESTS_FAILED
 
 
-def _manifest_or_none(context: E2EContext) -> PrManifest | None:
-    """The PR manifest, None when absent or invalid (logged)."""
+def _change_spec_or_none(context: E2EContext) -> ChangeSpec | None:
+    """The ChangeSpec of the change under test, None without a change or when its references are invalid (logged)."""
     try:
-        return context.pr_manifest()
+        return context.change_spec()
     except Exception as exc:  # noqa: BLE001 - every delta then counts as unexpected
-        logger.error("invalid PR manifest: %s", exc)
+        logger.error("invalid references of the change under test: %s", exc)
         return None
 
 
@@ -1199,9 +1213,9 @@ def base_template_ref(e2e: E2EContext) -> TemplateRef:
 
 
 @pytest.fixture(scope="session")
-def pr_manifest(request: pytest.FixtureRequest) -> PrManifest | None:
-    """PrManifest of --e2e-pr-manifest (None without one)."""
-    return _context(request).pr_manifest()
+def change_spec(request: pytest.FixtureRequest) -> ChangeSpec | None:
+    """ChangeSpec of the change under test (--e2e-change, default: N of a pr:N@<sha> SUT; None without one)."""
+    return _context(request).change_spec()
 
 
 @pytest.fixture(scope="session")

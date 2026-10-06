@@ -1,6 +1,6 @@
 """``otterdog-e2e`` command line (SPEC 16): doctor, bootstrap, sut, run, pr, relay, janitor, report, targets,
-scrub-artifacts, cache prune, app-manifest, inject, setup and ci-sync. Exit codes: pytest's for run/pr (the most severe
-child code with several targets); budget overruns never fail.
+scrub-artifacts, cache prune, app-manifest, inject, setup, ci-sync and assist. Exit codes: pytest's for run/pr (the most
+severe child code with several targets); budget overruns never fail.
 
 Every command builds an E2EContext (the composition root shared with the pytest plugin); collaborators are imported
 lazily so that ``--help`` stays fast. Errors are reported as redacted one-line messages (exit 1). ``run`` and ``pr``
@@ -51,7 +51,7 @@ from otterdog_e2e.context import (
 from otterdog_e2e.redact import REDACTOR
 
 if TYPE_CHECKING:
-    from otterdog_e2e.differential import PrManifest
+    from otterdog_e2e.changes import ChangeId, ChangeSpec
     from otterdog_e2e.github.app import AppAuth
     from otterdog_e2e.github.http import GitHubHttp
     from otterdog_e2e.github.janitor import JanitorItem
@@ -1711,14 +1711,14 @@ class RunRequest:
     scenario: str | None = None
     keyword: str | None = None
     run_id: str | None = None
-    pr_manifest: Path | None = None
+    change: str | None = None  # the change under test (ChangeId text: N or a slug), --e2e-change
     webapp_image: str | None = None
     artifacts: str | None = None
     keep: bool = False
     no_reset: bool = False
     strict_diff: bool = False
     extra: tuple[str, ...] = ()
-    extra_scenarios: tuple[str, ...] = ()  # PR manifest scenarios (informational: pytest reads --e2e-pr-manifest)
+    extra_scenarios: tuple[str, ...] = ()  # scenarios referencing the change (informational: pytest reads them)
     allow_web_ui: bool = False  # --e2e-allow-web-ui: web-UI items may log in as the admin bot (web_ui gating)
 
     def pytest_args(self, project_root: Path) -> list[str]:
@@ -1732,7 +1732,7 @@ class RunRequest:
             "--e2e-tags": self.tags,
             "--e2e-scenario": self.scenario,
             "--e2e-run-id": self.run_id,
-            "--e2e-pr-manifest": str(self.pr_manifest) if self.pr_manifest else None,
+            "--e2e-change": self.change,
             "--e2e-webapp-image": self.webapp_image,
             "--e2e-artifacts": self.artifacts,
         }
@@ -1751,9 +1751,6 @@ class RunRequest:
     def command_line(self, project_root: Path) -> str:
         """The equivalent ``otterdog-e2e run`` command (run.json ``command``: summary.md "How to reproduce"); the run
         id, artifacts root and keep flag are left out (a new run gets its own)."""
-        manifest = self.pr_manifest
-        if manifest is not None and manifest.is_absolute() and manifest.is_relative_to(project_root):
-            manifest = manifest.relative_to(project_root)
         argv = ["otterdog-e2e", "run", "--suite", ",".join(self.suites)]
         options = {
             "--target": self.target,
@@ -1763,7 +1760,7 @@ class RunRequest:
             "--tags": self.tags,
             "--scenario": self.scenario,
             "-k": self.keyword,
-            "--pr-manifest": str(manifest) if manifest is not None else None,
+            "--change": self.change,
             "--webapp-image": self.webapp_image,
         }
         argv += [part for flag, value in options.items() if value for part in (flag, value)]
@@ -1790,7 +1787,7 @@ class RunRequest:
             "--run-id": self.run_id,
             "--artifacts": self.artifacts,
             "--webapp-image": self.webapp_image,
-            "--pr-manifest": str(self.pr_manifest) if self.pr_manifest is not None else None,
+            "--change": self.change,
         }
         args = ["run", *(f"{flag}={value}" for flag, value in options.items() if value)]
         args += [f"-k{self.keyword}"] if self.keyword else []
@@ -1818,6 +1815,11 @@ SUITE_HELP = f"test tier(s) to run, repeatable or comma separated: {', '.join(SU
 ALLOW_WEB_UI_HELP = (
     "allow the web-UI tier (--e2e-allow-web-ui): otterdog logs in to github.com as the admin bot (web credentials,"
     " trusted SUTs only; docs/web-ui-testing.md)"
+)
+CHANGE_HELP = (
+    "change under test: N or #N (an otterdog PR) or a change slug; the scenarios referencing it (their references)"
+    " give the expected deltas of the differential, extra scenarios of --tags, the default --base-sut and the template"
+    " (default: N of a pr:N@<sha> SUT)"
 )
 
 
@@ -1982,14 +1984,7 @@ def run_targets(
 @click.option("--no-reset", is_flag=True, help="skip the baseline reset")
 @click.option("--strict-diff", is_flag=True, help="fail on unexpected differential deltas")
 @click.option("--allow-web-ui", is_flag=True, help=ALLOW_WEB_UI_HELP + "; adds web_ui to the default suites")
-@click.option(
-    "--pr-manifest",
-    "pr_manifest",
-    default=None,
-    type=click.Path(exists=True, dir_okay=False, path_type=Path),
-    help="PR manifest (scenarios/otterdog-prs/<N>.yaml): expected deltas, extra scenarios; its base is the default"
-    " --base-sut",
-)
+@click.option("--change", "change", default=None, help=CHANGE_HELP)
 @click.argument("pytest_args", nargs=-1, type=click.UNPROCESSED)
 @_handled
 def run(
@@ -2010,7 +2005,7 @@ def run(
     no_reset: bool,
     strict_diff: bool,
     allow_web_ui: bool,
-    pr_manifest: Path | None,
+    change: str | None,
     pytest_args: tuple[str, ...],
 ) -> None:
     """Run test suites through pytest (pass-through args checked by check_passthrough).
@@ -2027,9 +2022,9 @@ def run(
     if several and run_id:
         raise click.UsageError(RUN_ID_LIST_ERROR)
     settings = _settings()
-    manifest = _run_manifest(pr_manifest)
-    if not base_sut and manifest is not None and manifest.base:
-        base_sut = manifest.base
+    spec = _load_change(settings, _change_id(change, sut_spec))
+    if not base_sut and spec is not None and spec.base:
+        base_sut = spec.base
     request = RunRequest(
         suites=suites or default_suites(base_sut=base_sut, allow_web_ui=allow_web_ui),
         target=names[0] if len(names) == 1 else None,
@@ -2040,22 +2035,18 @@ def run(
         scenario=scenario,
         keyword=keyword,
         run_id=None if several else run_id or new_run_context().run_id,
-        pr_manifest=pr_manifest.resolve() if pr_manifest is not None else None,
+        change=str(spec.change) if spec is not None else None,
         webapp_image=webapp_image,
         artifacts=artifacts,
         keep=keep,
         no_reset=no_reset,
         strict_diff=strict_diff,
         extra=pytest_args,
-        extra_scenarios=tuple(manifest.scenarios) if manifest is not None else (),
+        extra_scenarios=tuple(spec.scenarios) if spec is not None else (),
         allow_web_ui=allow_web_ui,
     )
-    if manifest is not None:
-        _echo(
-            f"PR manifest #{manifest.pr} ({pr_manifest}): base {request.base_sut or '-'}, "
-            f"manifest scenarios {','.join(request.extra_scenarios) or '-'}",
-            err=True,
-        )
+    if spec is not None:
+        _echo(_change_line(spec, request.base_sut), err=True)
     if several:
         root = Path(artifacts).expanduser().resolve() if artifacts else settings.artifacts_root
         template = dataclasses.replace(request, artifacts=str(root))
@@ -2077,16 +2068,36 @@ def run(
     sys.exit(code)
 
 
-def _run_manifest(path: Path | None) -> PrManifest | None:
-    """The --pr-manifest of ``run`` loaded (UsageError when invalid), None without one."""
-    if path is None:
-        return None
-    from otterdog_e2e.differential import load_pr_manifest
+def _change_id(option: str | None, sut_spec: str | None) -> ChangeId | None:
+    """--change parsed, else N of a ``pr:N@<sha>`` SUT, else None (UsageError when malformed)."""
+    from otterdog_e2e.changes import ChangeError, default_change
 
     try:
-        return load_pr_manifest(path)
-    except (OSError, ValueError) as exc:
-        raise click.UsageError(f"--pr-manifest: {exc}") from exc
+        return default_change(option, sut_spec)
+    except ChangeError as exc:
+        raise click.UsageError(f"--change: {exc}") from None
+
+
+def _load_change(settings: HarnessSettings, change: ChangeId | None) -> ChangeSpec | None:
+    """The ChangeSpec of ``change`` from the repository's references (None without a change; UsageError for invalid
+    or conflicting references)."""
+    if change is None:
+        return None
+    from otterdog_e2e.changes import ChangeError, load_change
+
+    try:
+        return load_change(settings.scenarios_dir, settings.project_root / "tests", change)
+    except ChangeError as exc:
+        raise click.UsageError(f"--change {change}: {exc}") from None
+
+
+def _change_line(spec: ChangeSpec, base_sut: str | None) -> str:
+    """One line about the change under test: its referencing scenarios, expected deltas, base and template."""
+    scenarios = ",".join(spec.scenarios) or "none (no scenario references it)"
+    return (
+        f"change {spec.label}: referencing scenarios {scenarios}; {len(spec.expected_deltas)} expected delta(s); "
+        f"base {base_sut or '-'}; template {spec.template}"
+    )
 
 
 def pr_suites(value: str, target: str | None) -> tuple[str, ...]:
@@ -2099,45 +2110,40 @@ def pr_suites(value: str, target: str | None) -> tuple[str, ...]:
     return suites
 
 
-def load_manifest(settings: HarnessSettings, number: int) -> tuple[Path | None, PrManifest | None]:
-    """scenarios/otterdog-prs/<N>.yaml when it exists (its pr must be N)."""
-    from otterdog_e2e.differential import load_pr_manifest
-
-    path = settings.scenarios_dir / "otterdog-prs" / f"{number}.yaml"
-    if not path.is_file():
-        return None, None
-    manifest = load_pr_manifest(path)
-    if manifest.pr != number:
-        raise click.UsageError(f"{path} describes PR {manifest.pr}, not {number}")
-    return path, manifest
-
-
 def plan_pr(
-    number: int, sha: str, *, target: str | None, suites: str, settings: HarnessSettings, run_id: str | None = None
+    number: int,
+    sha: str,
+    *,
+    target: str | None,
+    suites: str,
+    settings: HarnessSettings,
+    run_id: str | None = None,
+    change: str | None = None,
 ) -> RunRequest:
-    """Resolve the PR (pin checked), load its manifest, derive base and tags (``run_id``: default a new one).
+    """Resolve the PR (pin checked), gather the references of its change, derive base and tags (``run_id``: default a
+    new one; ``change``: default the PR itself).
 
-    tags = selection.select_tags(changed files) + manifest tags. The manifest's ``scenarios`` are EXTRA scenarios:
-    pytest reads them from --e2e-pr-manifest and lets them pass the tags filter. They are never passed as
-    --e2e-scenario, which restricts every tier (offline and unit included) and is ANDed with --e2e-tags.
+    tags = selection.select_tags(changed files). The scenarios referencing the change are EXTRA scenarios: pytest
+    reads them (--e2e-change) and lets them pass the tags filter. They are never passed as --e2e-scenario, which
+    restricts every tier (offline and unit included) and is ANDed with --e2e-tags. The base is the ``base`` of the
+    references, else the merge base of the PR head (``auto``).
     """
     from otterdog_e2e.naming import new_run_context
     from otterdog_e2e.selection import select_tags
 
     spec = f"pr:{number}@{sha}"
+    change_spec = _load_change(settings, _change_id(change or str(number), spec))
     with _session(sut=spec, artifacts=False) as context:
         changed = list(context.resolve(spec).changed_files)
-    manifest_path, manifest = load_manifest(settings, number)
-    tags = select_tags(changed) | set(manifest.tags if manifest else ())
     return RunRequest(
         suites=pr_suites(suites, target),
         target=target,
         sut=spec,
-        base_sut=(manifest.base if manifest is not None and manifest.base else AUTO_BASE),
-        tags=",".join(sorted(tags)),
+        base_sut=(change_spec.base if change_spec is not None and change_spec.base else AUTO_BASE),
+        tags=",".join(sorted(select_tags(changed))),
         run_id=run_id or new_run_context().run_id,
-        pr_manifest=manifest_path,
-        extra_scenarios=tuple(manifest.scenarios) if manifest is not None else (),
+        change=str(change_spec.change) if change_spec is not None else None,
+        extra_scenarios=tuple(change_spec.scenarios) if change_spec is not None else (),
     )
 
 
@@ -2148,20 +2154,37 @@ PR_WEB_UI_NOTE = (
 
 
 def pr_command(
-    number: int, sha: str, *, target: str | None, suites: str, strict_diff: bool, allow_web_ui: bool
+    number: int,
+    sha: str,
+    *,
+    target: str | None,
+    suites: str,
+    strict_diff: bool,
+    allow_web_ui: bool,
+    change: str | None = None,
 ) -> list[str]:
-    """The ``otterdog-e2e pr`` command of one target (run.json ``command``: summary.md "How to reproduce")."""
+    """The ``otterdog-e2e pr`` command of one target (run.json ``command``: summary.md "How to reproduce");
+    ``change`` only when it is not the PR itself."""
     command = ["otterdog-e2e", "pr", str(number), "--sha", sha, *(["--target", target] if target else [])]
     command += [*(["--suite", suites] if suites != "auto" else []), *(["--strict-diff"] if strict_diff else [])]
+    command += ["--change", change] if change else []
     return command + (["--allow-web-ui"] if allow_web_ui else [])
 
 
 def pr_child_args(
-    number: int, sha: str, *, entry: BatchEntry, suites: str, strict_diff: bool, allow_web_ui: bool
+    number: int,
+    sha: str,
+    *,
+    entry: BatchEntry,
+    suites: str,
+    strict_diff: bool,
+    allow_web_ui: bool,
+    change: str | None = None,
 ) -> list[str]:
     """``pr`` arguments of the child process of one batch target (``--option=value`` forms, its own run id)."""
     args = ["pr", str(number), f"--sha={sha}", f"--target={entry.target}", f"--suite={suites}"]
     args += [f"--run-id={entry.run_id}", *(["--strict-diff"] if strict_diff else [])]
+    args += [f"--change={change}"] if change else []
     return args + (["--allow-web-ui"] if allow_web_ui else [])
 
 
@@ -2175,6 +2198,7 @@ def pr_child_args(
 @click.option("--run-id", default=None, help="run id (default: a new one; one target only)")
 @click.option("--parallel", default=1, show_default=True, type=click.IntRange(min=1), help=PARALLEL_HELP)
 @click.option("--fail-fast", is_flag=True, help=FAIL_FAST_HELP)
+@click.option("--change", "change", default=None, help="change under test (default: the PR itself); " + CHANGE_HELP)
 @_handled
 def pr(
     number: int,
@@ -2186,14 +2210,17 @@ def pr(
     run_id: str | None,
     parallel: int,
     fail_fast: bool,
+    change: str | None,
 ) -> None:
-    """Test otterdog PR NUMBER at SHA: regression suites, differential vs its base, manifest scenarios.
+    """Test otterdog PR NUMBER at SHA: regression suites, differential vs its base, the scenarios referencing it.
 
     Several targets: one child ``pr`` process per target with its own run id (sequential unless --parallel).
     """
     sha = sha.strip().lower()
     if number <= 0 or not FULL_SHA_RE.match(sha):
         raise click.UsageError("pr needs a positive PR number and --sha with the 40-hex head commit")
+    explicit = _change_id(change, None) if change is not None and change.strip() else None
+    change = str(explicit) if explicit is not None and explicit != _change_id(str(number), None) else None
     if run_id is not None and not RUN_ID_ARG_RE.match(run_id):
         raise click.UsageError(f"--run-id {run_id!r} is not a run id ({RUN_ID_ARG_RE.pattern})")
     names = target_names(targets)
@@ -2209,7 +2236,13 @@ def pr(
             run_targets(
                 names,
                 lambda entry: pr_child_args(
-                    number, sha, entry=entry, suites=suites, strict_diff=strict_diff, allow_web_ui=allow_web_ui
+                    number,
+                    sha,
+                    entry=entry,
+                    suites=suites,
+                    strict_diff=strict_diff,
+                    allow_web_ui=allow_web_ui,
+                    change=change,
                 ),
                 settings=settings,
                 artifacts_root=settings.artifacts_root,
@@ -2223,24 +2256,33 @@ def pr(
                         suites=suites,
                         strict_diff=strict_diff,
                         allow_web_ui=allow_web_ui,
+                        change=change,
                     )
                 ),
             )
         )
     target = names[0] if names else None
     request = dataclasses.replace(
-        plan_pr(number, sha, target=target, suites=suites, settings=settings, run_id=run_id),
+        plan_pr(number, sha, target=target, suites=suites, settings=settings, run_id=run_id, change=change),
         strict_diff=strict_diff,
         allow_web_ui=allow_web_ui,
     )
     _echo(
-        f"PR #{number} @ {sha[:12]}: base {request.base_sut}, tags {request.tags}, "
-        f"manifest scenarios {','.join(request.extra_scenarios) or '-'}",
+        f"PR #{number} @ {sha[:12]}: base {request.base_sut}, tags {request.tags}, change {request.change or '-'}, "
+        f"referencing scenarios {','.join(request.extra_scenarios) or '-'}",
         err=True,
     )
     if allow_web_ui:
         _echo(PR_WEB_UI_NOTE, err=True)
-    command = pr_command(number, sha, target=target, suites=suites, strict_diff=strict_diff, allow_web_ui=allow_web_ui)
+    command = pr_command(
+        number,
+        sha,
+        target=target,
+        suites=suites,
+        strict_diff=strict_diff,
+        allow_web_ui=allow_web_ui,
+        change=change,
+    )
     code = run_pytest(request.pytest_args(settings.project_root), command=shlex.join(command))
     _echo_run_report(settings, request, code)
     sys.exit(code)
@@ -2818,7 +2860,7 @@ def inject_pytest_args(
         "--e2e-tags=",
         "--e2e-scenario=",
         "--e2e-base-sut=",
-        "--e2e-pr-manifest=",
+        "--e2e-change=",
     ]
     values = {"--e2e-sut": sut, "--e2e-reset-sut": reset_sut, "--e2e-artifacts": artifacts}
     args += [f"{flag}={value}" for flag, value in values.items() if value]
@@ -3208,3 +3250,214 @@ def ci_sync(
         sync.run(apply=apply_)
     except CiSyncError as exc:
         raise click.ClickException(str(exc)) from None
+
+
+# --- assist: context bundles and checks of AI-assisted test writing (otterdog_e2e.assist, docs/ai-assistance.md) ----
+ASSIST_OUT_HELP = "directory receiving the bundle directory (default: <artifacts root>/assist)"
+ASSIST_JSON_HELP = "print the bundle summary as JSON"
+
+
+@main.group()
+def assist() -> None:
+    """Context bundles and checks for AI-assisted test writing (no AI is called: agents read the bundles)."""
+
+
+@contextlib.contextmanager
+def _assist_errors() -> Iterator[None]:
+    """AssistUsageError becomes a usage error (exit 2), AssistError a one-line error (exit 1)."""
+    from otterdog_e2e.assist.bundle import AssistError, AssistUsageError
+
+    try:
+        yield
+    except AssistUsageError as exc:
+        raise click.UsageError(str(exc)) from None
+    except AssistError as exc:
+        raise click.ClickException(REDACTOR(str(exc))) from None
+
+
+def _assist_out(out: Path | None, settings: HarnessSettings) -> Path:
+    """Parent directory of a bundle: --out, else <artifacts root>/assist."""
+    from otterdog_e2e.assist.bundle import assist_root
+
+    return out.expanduser().resolve() if out is not None else assist_root(settings.artifacts_root)
+
+
+def _echo_bundle(summary: Mapping[str, Any], *, as_json: bool, lines: Sequence[str]) -> None:
+    """The summary of a bundle: JSON, or ``lines`` and the bundle path."""
+    if as_json:
+        _echo_json(summary)
+        return
+    for line in lines:
+        _echo(line)
+    _echo(f"bundle: {summary['bundle']}")
+
+
+@assist.command("pr-context")
+@click.argument("number", type=click.IntRange(min=1))
+@click.option("--sha", default=None, help="40-hex commit of the PR to pin (default: the current head, printed)")
+@click.option(
+    "--upstream", default=None, help="owner/repo of otterdog (default: E2E_OTTERDOG_REPO, else eclipse-csi/otterdog)"
+)
+@click.option("--out", default=None, type=click.Path(file_okay=False, path_type=Path), help=ASSIST_OUT_HELP)
+@click.option("--json", "as_json", is_flag=True, help=ASSIST_JSON_HELP)
+@_handled
+def assist_pr_context(number: int, sha: str | None, upstream: str | None, out: Path | None, as_json: bool) -> None:
+    """Context bundle of the upstream otterdog PR NUMBER from anonymous public reads: the PR, its files and patches,
+    suggested tags, SUT and base, the coverage features it touches, related scenarios, the scenarios already
+    referencing the PR and the next commands."""
+    from otterdog_e2e.assist import pr_context
+    from otterdog_e2e.github.http import GitHubHttp
+    from otterdog_e2e.settings import UPSTREAM_REPO_RE
+
+    if sha is not None and not FULL_SHA_RE.match(sha.strip().lower()):
+        raise click.UsageError(f"--sha {sha!r} is not a 40-hex commit sha")
+    settings = _settings()
+    repo = upstream or settings.upstream_repo
+    if not UPSTREAM_REPO_RE.match(repo):
+        raise click.UsageError(f"--upstream must be <owner>/<repo>, got {repo!r}")
+    http = GitHubHttp(None, read_only=True, identity="anonymous")
+    with _assist_errors():
+        context = pr_context.build_pr_context(number, sha=sha, upstream=repo, http=http, settings=settings)
+        _path, summary = pr_context.write_pr_context(context, _assist_out(out, settings))
+    if sha is None:
+        _echo(f"pinned the current head {context.sha}: pass --sha {context.sha} to keep testing this commit", err=True)
+    head = "the current head" if summary["pin_is_head"] else "NOT the current head"
+    lines = [
+        f"PR #{number} ({repo}): {summary['changed_files']} changed file(s), pinned {context.sha} ({head})",
+        (
+            f"suggested: --sut {summary['suggested_sut']} --base-sut {summary['suggested_base'] or 'auto'}; "
+            f"tags {','.join(summary['suggested_tags'])}"
+        ),
+        (
+            f"touched coverage features: {summary['touched_features']}; related scenarios: {summary['related_scenarios']}; "
+            f"scenarios referencing #{number}: {', '.join(summary['referencing_scenarios']) or 'none yet'}"
+        ),
+        *(f"warning: {warning}" for warning in summary["warnings"]),
+    ]
+    _echo_bundle(summary, as_json=as_json, lines=lines)
+
+
+def _assist_lint(settings: HarnessSettings, sut_spec: str, scenario_ids: Sequence[str]) -> tuple[int, Path]:
+    """Offline lint of live scenarios: the ``-k lint`` items of the offline suite restricted to their ids, run like
+    ``run`` (untrusted SUTs in docker); pytest's output goes to stderr. Returns (pytest exit code, run directory)."""
+    from otterdog_e2e.assist.check import lint_keyword
+    from otterdog_e2e.naming import new_run_context
+
+    request = RunRequest(
+        suites=("offline",), sut=sut_spec, keyword=lint_keyword(scenario_ids), run_id=new_run_context().run_id
+    )
+    _echo(f"offline lint of {len(scenario_ids)} live scenario(s) with {sut_spec}: run {request.run_id}", err=True)
+    with contextlib.redirect_stdout(sys.stderr):
+        code = run_pytest(
+            request.pytest_args(settings.project_root), command=request.command_line(settings.project_root)
+        )
+    return code, _artifacts_dir(settings, request)
+
+
+@assist.command("check")
+@click.argument("paths", nargs=-1, type=click.Path(path_type=Path))
+@click.option(
+    "--sut",
+    "sut_spec",
+    default="release:latest",
+    show_default=True,
+    help="SUT of the offline lint of live scenarios (untrusted SUTs run in docker, as with run)",
+)
+@click.option("--no-lint", is_flag=True, help="skip the offline lint of the live scenarios")
+@click.option("--json", "as_json", is_flag=True, help="print the result as JSON")
+@_handled
+def assist_check(paths: tuple[Path, ...], sut_spec: str, no_lint: bool, as_json: bool) -> None:
+    """Validate the files an agent wrote: scenarios (their references included), scenarios/coverage.yaml,
+    known_bugs.yaml, jsonnet files and Python tests (default: the files changed under scenarios/ and tests/ according
+    to git status), then lint the live scenarios offline. Exit 1 when a problem is found."""
+    from otterdog_e2e.assist import check as check_module
+
+    settings = _settings()
+    deleted: list[str] = []
+    files = list(paths)
+    if not files:
+        try:
+            files, deleted = check_module.changed_files(settings.project_root)
+        except ValueError as exc:
+            raise click.ClickException(str(exc)) from None
+    result = check_module.check_files(settings.project_root, files, deleted)
+    skipped = check_module.lint_skipped(result, no_lint=no_lint)
+    if skipped is not None:
+        result.lint = {"ran": False, "skipped": skipped, "sut": sut_spec}
+    else:
+        _check_addopts(os.environ)
+        code, run_dir = _assist_lint(settings, sut_spec, sorted(result.live))
+        result.lint, problems = check_module.lint_result(run_dir, code, result.live, sut=sut_spec)
+        result.problems += problems
+    if as_json:
+        _echo_json(result.to_json())
+    else:
+        _echo(check_module.render_text(result))
+    sys.exit(0 if result.ok else 1)
+
+
+@assist.command("triage")
+@click.argument("run_dir", metavar="RUN_DIR|latest")
+@click.option("--baseline", default=None, help="run directory or run id to compare with: new vs already failing")
+@click.option("--out", default=None, type=click.Path(file_okay=False, path_type=Path), help=ASSIST_OUT_HELP)
+@click.option("--json", "as_json", is_flag=True, help=ASSIST_JSON_HELP)
+@_handled
+def assist_triage(run_dir: str, baseline: str | None, out: Path | None, as_json: bool) -> None:
+    """Triage bundle of a run directory (a path, a run id or latest): the directory is scrubbed first (no bundle when
+    a leak is found), then every failure is pre-classified (known-bug, infrastructure, harness, sut, unknown) with its
+    evidence, commands, output excerpts and artifact paths."""
+    from otterdog_e2e.assist import triage
+
+    settings = _settings()
+    with _assist_errors():
+        directory = triage.resolve_run_dir(run_dir, settings.artifacts_root)
+        base = triage.resolve_run_dir(baseline, settings.artifacts_root, allow_latest=False) if baseline else None
+        if base is not None and base == directory:
+            raise click.UsageError("--baseline names the triaged run itself")
+        logger.info(
+            "triage: %d secret value(s) of the environment registered", register_environment_secrets(os.environ)
+        )
+        scrub = triage.scrub_or_refuse(directory, REDACTOR)
+        data = triage.build_triage(directory, project_root=settings.project_root, baseline=base, scrub=scrub)
+        _path, summary = triage.write_triage(data, _assist_out(out, settings))
+    counts = ", ".join(f"{count} {name}" for name, count in summary["counts"].items() if count) or "none"
+    lines = [f"run {summary['run_id']} ({summary['run_dir']}): {summary['failures']} failure(s): {counts}"]
+    if summary["baseline"] is not None:
+        lines.append("baseline: " + ", ".join(f"{count} {name}" for name, count in summary["baseline"].items()))
+    if summary["xpassed"]:
+        lines.append(f"{summary['xpassed']} unexpectedly passing item(s): their known bug may be fixed")
+    _echo_bundle(summary, as_json=as_json, lines=lines)
+
+
+@assist.command("coverage")
+@click.option(
+    "--status", "statuses", multiple=True, help="gap, partial, covered or all; comma list (default: gap,partial)"
+)
+@click.option("--priority", "priorities", multiple=True, help="P0, P1, P2; comma list or repeated")
+@click.option("--area", "areas", multiple=True, help="area ids of scenarios/coverage.yaml; comma list or repeated")
+@click.option("--tier", "tiers", multiple=True, help="offline, cli, webhooks, webapp, web_ui, enterprise; comma list")
+@click.option("--feature", default=None, help="one feature id: details, what to imitate, commands (filters ignored)")
+@click.option("--out", default=None, type=click.Path(file_okay=False, path_type=Path), help=ASSIST_OUT_HELP)
+@click.option("--json", "as_json", is_flag=True, help=ASSIST_JSON_HELP)
+@_handled
+def assist_coverage(
+    statuses: tuple[str, ...],
+    priorities: tuple[str, ...],
+    areas: tuple[str, ...],
+    tiers: tuple[str, ...],
+    feature: str | None,
+    out: Path | None,
+    as_json: bool,
+) -> None:
+    """Features of scenarios/coverage.yaml to work on (sorted by priority, then status) with their gap outlines; with
+    --feature one feature, the tests to imitate and the commands that validate it and regenerate the matrix doc."""
+    from otterdog_e2e.assist import coverage
+
+    settings = _settings()
+    with _assist_errors():
+        query = coverage.parse_query(status=statuses, priority=priorities, area=areas, tier=tiers, feature=feature)
+        listing = coverage.build_coverage(settings.project_root, query)
+        _path, summary = coverage.write_coverage(listing, _assist_out(out, settings))
+    lines = [f"{item['priority']} {item['status']:<8} {item['tier']:<10} {item['id']}" for item in summary["features"]]
+    lines.append(f"{len(summary['features'])} feature(s) of {summary['totals']['features']}")
+    _echo_bundle(summary, as_json=as_json, lines=lines)

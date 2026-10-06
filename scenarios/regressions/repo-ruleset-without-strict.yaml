@@ -1,6 +1,6 @@
-# Regression #790 (merged as 9bdeb75, after v1.6.1): repo ruleset status checks without 'strict' fail validation.
-id: regression.790-repo-ruleset-without-strict
-title: "#790: repository ruleset status checks without 'strict' are a validation error"
+# Regression: repo ruleset status checks without 'strict' fail validation (merged as 9bdeb75, after v1.6.1, #790).
+id: regression.repo-ruleset-without-strict
+title: "Repository ruleset status checks without 'strict' are a validation error"
 description: |
   PR https://github.com/eclipse-csi/otterdog/pull/790 ("fix: validate required status checks of rulesets") makes
   Ruleset.validate call StatusCheckSettings.validate (otterdog/models/ruleset.py:123-136 and :454-455): a ruleset
@@ -9,13 +9,19 @@ description: |
   Known-bad: b5f7bb1 (9bdeb75^1, #791) and v1.6.1 - validation passed, plan showed '1 to add' and apply failed with
   "Error for key strict_required_status_checks_policy: 'strict'" (jsonbender), leaving nothing created.
   Validation only: nothing is applied. The org-ruleset variant crashes instead (KB-008, scenario
-  enterprise.org-ruleset.790-missing-strict).
+  enterprise.org-ruleset.missing-strict).
   Not released yet: 9bdeb75 is otterdog 1.7.0.dev15 (v1.6.1 + 15 commits), so
   fixed_in skips the scenario on older SUTs such as release:latest (ScenarioEngine.skip_reason).
 priority: P1
 min_plan: free
 fixed_in: "1.7.0.dev15"
-tags: [rulesets, repo, regression, pr-790]
+tags: [rulesets, repo, regression]
+references:
+  - pr: 790
+    note: >-
+      "fix: validate required status checks of rulesets", squash commit 9bdeb75 (otterdog 1.7.0.dev15): a ruleset
+      literal without 'strict' fails validation instead of the apply; known-bad b5f7bb1 (#791) and v1.6.1. Live,
+      validation only; the offline differential of #790 is O-VAL-RULESET-STRICT
 steps:
   - name: validate
     fragments:

@@ -252,7 +252,8 @@ def tier_dir(scenario: Scenario) -> str:
 
 
 def test_scenario_ids_follow_the_directory_convention() -> None:
-    """cli/ -> 'cli.', regressions/ -> 'regression.<pr>-', enterprise/ -> 'enterprise.' (subdirectories included)."""
+    """cli/ -> 'cli.', regressions/ -> 'regression.', enterprise/ -> 'enterprise.' (subdirectories included); the rest
+    of the id names the behaviour (a referenced PR goes into ``references``, never into the id)."""
     prefixes = {"cli": "cli.", "regressions": "regression.", "enterprise": "enterprise."}
     for scenario in live_scenarios():
         assert scenario.id.startswith(prefixes[tier_dir(scenario)]), (scenario.id, scenario.source)
@@ -279,15 +280,18 @@ def test_enterprise_scenarios_need_the_enterprise_plan() -> None:
 
 
 def test_regressions_document_the_pr_and_the_known_bad_version() -> None:
-    """Every regression names its upstream PR/issue (tag pr-<n> and a link) and the known-bad version."""
+    """Every regression references the upstream PR(s) of its fix (``references: [{pr: <n>}]``, linked in the
+    description), names the behaviour in its id and file name (never the PR number) and states the known-bad
+    version; ``pr-<n>`` tags are gone (the references carry the PR)."""
     for scenario in live_scenarios():
         if tier_dir(scenario) != "regressions":
             continue
-        numbers = [tag.removeprefix("pr-") for tag in scenario.tags if tag.startswith("pr-")]
-        assert numbers, f"{scenario.id}: no pr-<number> tag"
+        numbers = [reference.change.pr for reference in scenario.references if reference.change.pr is not None]
+        assert numbers, f"{scenario.id}: no references: [{{pr: <n>}}]"
         assert "regression" in scenario.tags, scenario.id
-        assert scenario.id.split(".", 1)[1].startswith(numbers[0]), (scenario.id, numbers)
+        assert not any(tag.startswith("pr-") for tag in scenario.tags), f"{scenario.id}: reference the PR instead"
         for number in numbers:
+            assert str(number) not in scenario.id and str(number) not in scenario.source.stem, (scenario.id, number)
             assert re.search(rf"otterdog/(pull|issues)/{number}\b", scenario.description), (scenario.id, number)
         assert "Known-bad" in scenario.description, f"{scenario.id}: no known-bad version in the description"
 
@@ -369,11 +373,11 @@ def test_long_scenarios_get_an_extended_timeout() -> None:
 
 
 UNRELEASED_FIXES = {  # scenario -> first otterdog version with the change it asserts (v1.6.1 + n commits on main)
-    "regression.767-code-scanning-new-repo": "1.7.0.dev2",
-    "regression.791-731-private-repo": "1.7.0.dev14",
-    "regression.790-repo-ruleset-without-strict": "1.7.0.dev15",
-    "regression.779-user-bypass-actors": "1.7.0.dev7",
-    "enterprise.org-ruleset.790-missing-strict": "1.7.0.dev15",  # #790 behaviour (BAT-05: KB-008 needs #790)
+    "regression.code-scanning-new-repo": "1.7.0.dev2",
+    "regression.private-repo-template-defaults": "1.7.0.dev14",
+    "regression.repo-ruleset-without-strict": "1.7.0.dev15",
+    "regression.user-bypass-actors": "1.7.0.dev7",
+    "enterprise.org-ruleset.missing-strict": "1.7.0.dev15",  # #790 behaviour (BAT-05: KB-008 needs #790)
 }
 
 
@@ -463,7 +467,7 @@ def test_private_repositories_are_never_created_by_their_first_apply(tmp_path: P
     creating ANY repository, which GitHub refuses for a private repository without Code Security (Free, and Team or
     Enterprise without it): the apply fails. A live scenario that runs on release:latest therefore creates its
     repositories public and makes them private in a later step (cli.repo.visibility); only scenarios that skip such
-    SUTs (fixed_in >= 1.7.0.dev14, e.g. regression.791-731-private-repo) may create a private repository directly."""
+    SUTs (fixed_in >= 1.7.0.dev14, e.g. regression.private-repo-template-defaults) may create a private repository directly."""
     from otterdog_e2e.sut.version import predates
 
     target = make_target()

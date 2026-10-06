@@ -178,6 +178,124 @@
       "type": "string",
       "description": "first otterdog version (PEP 440) the scenario asserts"
     },
+    "references": {
+      "type": "array",
+      "description": "otterdog pull requests (pr) or named changes (change) behind this behaviour",
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "pr": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "eclipse-csi/otterdog pull request number"
+              },
+              "note": {
+                "type": "string",
+                "description": "what the change did to this behaviour"
+              },
+              "expected_deltas": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "description": "a delta between base and head the change causes in this scenario (fnmatch patterns)",
+                  "properties": {
+                    "step": {
+                      "type": "string",
+                      "description": "step name pattern (a step of this scenario)"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "description": "observation kind pattern (cli, oracle, ...)"
+                    },
+                    "key": {
+                      "type": "string",
+                      "description": "observation key pattern (validate, local-plan, ...)"
+                    },
+                    "note": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "base": {
+                "type": "string",
+                "description": "differential base of the change (release, tag, branch or sha spec)"
+              },
+              "template": {
+                "enum": [
+                  "own",
+                  "head",
+                  "base"
+                ],
+                "description": "template both differential sides vendor"
+              }
+            },
+            "required": [
+              "pr"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "change": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]{0,62}$",
+                "description": "named change without upstream PR"
+              },
+              "note": {
+                "type": "string",
+                "description": "what the change did to this behaviour"
+              },
+              "expected_deltas": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "description": "a delta between base and head the change causes in this scenario (fnmatch patterns)",
+                  "properties": {
+                    "step": {
+                      "type": "string",
+                      "description": "step name pattern (a step of this scenario)"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "description": "observation kind pattern (cli, oracle, ...)"
+                    },
+                    "key": {
+                      "type": "string",
+                      "description": "observation key pattern (validate, local-plan, ...)"
+                    },
+                    "note": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "base": {
+                "type": "string",
+                "description": "differential base of the change (release, tag, branch or sha spec)"
+              },
+              "template": {
+                "enum": [
+                  "own",
+                  "head",
+                  "base"
+                ],
+                "description": "template both differential sides vendor"
+              }
+            },
+            "required": [
+              "change"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      }
+    },
     "timeout": {
       "type": "integer",
       "minimum": 1,

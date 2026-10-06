@@ -1050,7 +1050,7 @@ class DifferentialRunner:
         return (self.base, self.head)
 
     def observe_offline(self, scenario: Scenario) -> None:
-        """OfflineEngine per side (each side's own template unless the manifest requests the same template)."""
+        """OfflineEngine per side (each side's own template unless the change under test requests one side's)."""
         from otterdog_e2e.scenarios.offline import OfflineEngine
 
         for side in self.sides:

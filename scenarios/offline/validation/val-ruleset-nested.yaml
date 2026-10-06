@@ -8,7 +8,7 @@ description: >-
   instead of the ruleset (repository[name="r", repository=r], KB-055), so only the stable part
   after the header is asserted. Missing keys of a pull request or merge queue object replacing the template default
   are never reported although GitHub requires them (KB-031): those steps expect the 'has not set required parameter'
-  errors that status checks get since #790 (O-VAL-790).
+  errors that status checks get since #790 (O-VAL-RULESET-STRICT).
 priority: P1
 tags: [offline, rulesets]
 observe: true

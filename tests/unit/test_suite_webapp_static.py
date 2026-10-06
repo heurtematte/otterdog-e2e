@@ -63,7 +63,7 @@ CATALOGUE = {  # SPEC 19 (P0 unless noted)
     "W-AUTOMERGE": "P0",
     "W-DRIFT-CHECKSYNC": "P1",
     "W-REBASE-MULTI": "P1",
-    "W-STALE-STATUS-792": "P1",
+    "W-PR-STALE-SNAPSHOT": "P1",
     "W-CMD-CHECK-MERGE": "P2",  # manifest local-check-merge.yaml (local feature branch, skipped elsewhere)
     "W-PR-WEBUI": "P1",  # tests/webapp/test_web_ui_flags.py (docs/web-ui-testing.md: the webapp never uses the UI)
     "H-APP-DELIVERY": "P0",
@@ -493,7 +493,7 @@ def test_config_texts(tiers: Tiers) -> None:
     )
     assert wapp.harmless_repo(make_target()) == "otterdog-e2e-fixture-a"
     assert wapp.harmless_repo(make_target(fixture_repos=())) == "otterdog-e2e-configs"
-    assert wapp.slugify("W-STALE-STATUS-792") == "w-stale-status-792"
+    assert wapp.slugify("W-PR-STALE-SNAPSHOT") == "w-pr-stale-snapshot"
     hooks = tiers.conftest("webhooks").WebhookHelpers
     assert hooks.harmless_text(renderer, make_target(), "x") == wapp.config_text(
         renderer, overrides={"otterdog-e2e-fixture-a": "x"}

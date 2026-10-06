@@ -14,6 +14,7 @@ import textwrap
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import filelock
@@ -225,8 +226,6 @@ def test_fail_fast_stops_the_batch(world: Batch) -> None:
 def test_harness_args_round_trip(world: Batch, tmp_path: Path) -> None:
     """The child arguments of a request parse back into the very same pytest arguments (every option, flag and
     pass-through argument survives, values never read as options)."""
-    manifest = tmp_path / "790.yaml"
-    manifest.write_text("pr: 790\nbase: sha:b5f7bb1\nscenarios: [O-VAL-790]\n", encoding="utf-8")
     request = cli.RunRequest(
         suites=("cli", "webapp"),
         target="acme",
@@ -237,7 +236,7 @@ def test_harness_args_round_trip(world: Batch, tmp_path: Path) -> None:
         scenario="cli.repo.*",
         keyword="-weird and not slow",
         run_id="t3c7z8a5",
-        pr_manifest=manifest.resolve(),
+        change="check-merge",
         webapp_image="otterdog-e2e/otterdog:x",
         artifacts=str(tmp_path / "art"),
         keep=True,
@@ -271,6 +270,21 @@ def test_pr_starts_one_child_per_target(world: Batch) -> None:
     ]
     assert f"PR #790 @ {PIN[:12]} on 2 targets: acme, beta" in result.stderr
     assert len(list(world.settings.artifacts_root.glob("batch-*.json"))) == 1
+
+
+def test_pr_children_get_an_explicit_change() -> None:
+    """A --change other than the PR itself reaches the child pr commands and the reproduce command; the PR's own
+    number is implied (never repeated)."""
+    entry = SimpleNamespace(target="acme", run_id="t3c7z8a5")
+    args = cli.pr_child_args(
+        790, PIN, entry=entry, suites="auto", strict_diff=False, allow_web_ui=False, change="check-merge"
+    )  # type: ignore[arg-type]
+    assert args[-1] == "--change=check-merge"
+    assert "--change" not in " ".join(
+        cli.pr_child_args(790, PIN, entry=entry, suites="auto", strict_diff=False, allow_web_ui=False)  # type: ignore[arg-type]
+    )
+    command = cli.pr_command(790, PIN, target=None, suites="auto", strict_diff=False, allow_web_ui=False, change="792")
+    assert command[-2:] == ["--change", "792"]
 
 
 def test_pr_run_id(world: Batch, monkeypatch: pytest.MonkeyPatch) -> None:

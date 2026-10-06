@@ -12,7 +12,7 @@ description: |
   step and made private in the 'privileges' step, with allow_forking false (the template's
   members_can_fork_private_repositories false makes true a validation error, validation.repo.forking): otterdog
   before 1.7.0.dev14 cannot create a private repository on an organization without Code Security (the code scanning
-  default setup PATCH of new repositories fails, #791; regression.791-731-private-repo covers that path), and this
+  default setup PATCH of new repositories fails, #791; regression.private-repo-template-defaults covers that path), and this
   scenario must run strictly on release:latest and Free. The 'fork' step allows members to fork private repositories
   and turns the repository's allow_forking on in the same apply (settings are patched before repositories), which
   GitHub keeps; the other privileges are back to the template in that step (the baseline values, asserted too).

@@ -192,7 +192,7 @@ The battery is organized by tier (one directory below `tests/` each) and by kind
 | Python tests | `tests/<tier>/test_*.py` | pytest with the plugin's fixtures | flows YAML cannot express: CLI commands, the webapp PR workflow, App deliveries, the web UI |
 | ad-hoc injection | `tests/adhoc/` | `otterdog-e2e inject` | trying jsonnet files without writing a scenario |
 | shared jsonnet | `scenarios/fragments/`, `scenarios/lib/` | the scenarios and inject recipes | fragments and helper libraries inlined into the rendered configuration |
-| PR manifests | `scenarios/otterdog-prs/<N>.yaml` | `--pr-manifest`, `pr` | expected differential deltas and extra scenarios of an otterdog pull request |
+| scenario references | `references` of a YAML scenario, `references=` of a `pytest.mark.scenario` marker (`src/otterdog_e2e/changes.py`) | `--change`, `pr` (default: N of a `pr:N@<sha>` SUT) | the otterdog PRs or named changes behind a behaviour: expected differential deltas, base, template; the referencing scenarios pass the tags filter |
 
 Three registries keep the battery honest:
 
@@ -293,7 +293,7 @@ flowchart LR
   HD --> OH["observations/head.jsonl"]
   OB --> CMP["differential.compare"]
   OH --> CMP
-  MAN["PR manifest<br/>expected_deltas"] --> CMP
+  MAN["references of the change<br/>expected_deltas"] --> CMP
   CMP --> REP["differential.md / differential.json"]
 ```
 
@@ -302,7 +302,7 @@ the offline engine on both sides, selected live scenarios through `observe_live`
 `apply`; `tests/differential/test_live_diff.py` records the live scenarios with `observe: true`). Each observation
 is keyed by (scenario, step, kind, key) and normalized (ANSI, boxes, progress bars, run ids, shas, timestamps, scratch
 paths, each side's workspace root and docker mount, versions, the values of printed Python sets: KB-038). Deltas
-matching the PR manifest's `expected_deltas` are expected,
+matching the `expected_deltas` of the references of the change under test (`--change`) are expected,
 the others unexpected; `--e2e-strict-diff` turns unexpected deltas into a failed session.
 See [testing-an-otterdog-pr.md](testing-an-otterdog-pr.md).
 
@@ -336,7 +336,7 @@ The details are in [security.md](security.md). In short:
 src/otterdog_e2e/        the harness package (resources/: org.jsonnet.j2, compose.e2e.yaml, hypercorn.toml.j2)
 targets/                 one YAML profile per kind of test organization (free, team, enterprise)
 scenarios/offline/       offline scenarios          scenarios/cli/, scenarios/regressions/   live CLI scenarios
-scenarios/enterprise/    enterprise scenarios       scenarios/otterdog-prs/<N>.yaml          PR manifests
+scenarios/enterprise/    enterprise scenarios       (no PR directory: PRs are scenario references)
 scenarios/fragments/     shared jsonnet fragments   scenarios/lib/                           jsonnet helper libraries
 scenarios/known_bugs.yaml                           known otterdog defects (non-strict xfail)
 scenarios/coverage.yaml                             the coverage matrix (docs/coverage-matrix.md is generated from it)

@@ -1,8 +1,8 @@
 """W-CMD-UPDATE-BRANCH (P2): ``/otterdog update-branch [rebase|merge]`` and the outdated-branch note of the local
 feature branch feat/check-merge-command (pending features pending.update-branch-command, pending.outdated-branch-note).
 
-The commands exist only in the maintainer's local feature branch (manifest scenarios/otterdog-prs/
-local-check-merge.yaml, SUT ``dirty:<otterdog checkout>``, base v1.6.0): UpdateBranchCommentHandler matches
+The commands exist only in the maintainer's local feature branch (named change ``check-merge``, referenced below;
+SUT ``dirty:<otterdog checkout>``, base v1.6.0): UpdateBranchCommentHandler matches
 ``/otterdog\\s+update-branch(\\s+(rebase|merge))?`` (default rebase), UpdateBranchTask refuses everybody but the PR
 author and the admin teams (update_branch_comment.txt "Only the author of the pull request (@<author>) or a member of
 the admin team(s) ... is allowed to update its branch."), otherwise updates the branch through GraphQL
@@ -61,7 +61,18 @@ def _wait_new_head(s: WebappScenario, pr: ConfigPr, what: str) -> ConfigPr:
     return s.refreshed(pr)
 
 
-@pytest.mark.scenario("W-CMD-UPDATE-BRANCH", priority="P2")
+REFERENCES = [
+    {
+        "change": "check-merge",
+        "note": (
+            "tasks/update_branch.py and outdated_branch_note.txt of the check-merge change (feat/check-merge-command):"
+            " the '/otterdog update-branch' command and its '<!-- Otterdog Comment: update-branch -->' marker"
+        ),
+    }
+]
+
+
+@pytest.mark.scenario("W-CMD-UPDATE-BRANCH", priority="P2", references=REFERENCES)
 @pytest.mark.tags("webapp", "teams")
 @pytest.mark.identities("author", "approver")
 @pytest.mark.timeout(1800, func_only=True)  # two branch updates, each validated again

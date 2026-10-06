@@ -145,6 +145,8 @@ GITIGNORE_PATTERNS = (
     ".mypy_cache/",
     ".ruff_cache/",
     "site/",
+    ".claude/settings.local.json",
+    ".claude/worktrees/",
 )
 
 

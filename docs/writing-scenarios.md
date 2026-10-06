@@ -5,6 +5,9 @@ the step wants (as jsonnet fragments added to the baseline) and what otterdog an
 harness renders the configuration, runs otterdog, checks the output and the real GitHub state, and always cleans up.
 Python tests (webapp, webhooks, special cases) use the same fixtures and markers.
 
+An AI agent can draft scenarios with the `write-e2e-scenario` skill, which follows this page and validates every file
+with `otterdog-e2e assist check` and the offline tier before you review it ([ai-assistance.md](ai-assistance.md)).
+
 ## Where scenarios live
 
 | Directory | Tier | Collected by | Runs |
@@ -16,8 +19,9 @@ Python tests (webapp, webhooks, special cases) use the same fixtures and markers
 
 One scenario per `*.yaml` file. The `tier` may be omitted: it is inferred from the directory right below
 `scenarios/`, whose subdirectories only group files by topic (`scenarios/offline/cli/output/show.yaml` belongs to
-`offline`, not to the inner `cli/`), and a declared tier must match that directory. `scenarios/otterdog-prs/` (PR
-manifests) and `scenarios/known_bugs.yaml` are not scenarios. Keep scenario ids unique everywhere (the loader refuses
+`offline`, not to the inner `cli/`), and a declared tier must match that directory. `scenarios/known_bugs.yaml` and
+`scenarios/coverage.yaml` are not scenarios. Directories and files group scenarios by functionality, never by pull
+request: the otterdog PRs behind a behaviour go into the scenario's `references` (see [References](#references)). Keep scenario ids unique everywhere (the loader refuses
 duplicates among the directories a tier collects, e.g. `cli/` and `regressions/`). Each scenario becomes one pytest
 item, for example `tests/cli/test_scenarios.py::<test>[cli.repo.lifecycle]`. The differential tier records the
 offline scenarios marked `observe: true` on the base and on the head SUT.
@@ -83,6 +87,7 @@ make one TARGET=free SCENARIO=cli.example.repo-lifecycle
 | `observe` | bool | `false` | record the outputs for differential runs |
 | `variables` | mapping | `{}` | extra Jinja variables; `plan` overrides the plan rendered into the settings |
 | `libraries` | mapping | `{}` | jsonnet libraries inlined into every rendered configuration of the scenario: `<name>: <path>` or `<name>: {file, raw, vars}` ([Injecting jsonnet from files](#injecting-jsonnet-from-files)) |
+| `references` | list | `[]` | the otterdog PRs (`pr: <n>`) or named changes without PR (`change: <slug>`) behind the behaviour, each with an optional `note`, `expected_deltas` (`{step?, kind?, key?, note?}`), `base` and `template` ([References](#references)) |
 | `fixed_in` | PEP 440 version | `null` | first otterdog version with the fix or feature the scenario asserts (e.g. `"1.7.0.dev15"`): older SUTs skip it (live and offline tiers; differential runs record it on both sides) |
 | `timeout` | positive int | tier timeout | pytest timeout of the item in seconds; default: the tier timeout (cli/enterprise 600, offline 300), plus 600 for `org_level` live scenarios |
 | `steps` | list, required | | at least one step |
@@ -849,8 +854,33 @@ a mismatch in a scenario of a known bug the SUT has is an expected failure. Run 
 With `observe: true`, the offline engine records every command of every step (`validate`, `local-plan`, `show`,
 `commands`) through the recorder of each SUT side; differential runs compare base and head per
 (scenario, step, kind, key). Live scenarios are observed with `validate` and `plan` only (never `apply`), so their
-step *k* always plans against an org without the objects of earlier steps. Expected deltas are declared in the PR
-manifest ([testing-an-otterdog-pr.md](testing-an-otterdog-pr.md)).
+step *k* always plans against an org without the objects of earlier steps. Expected deltas are declared in the
+`references` of the scenario (below).
+
+## References
+
+Scenarios are named and grouped by the behaviour they pin, never by pull request: no id, file or directory carries a
+PR number (`assist check` and the unit tests refuse it). The changes behind the behaviour are listed in
+`references`, one entry per change, appended when the behaviour evolves:
+
+```yaml
+id: O-VAL-RULESET-STRICT
+references:
+  - pr: 790                                   # an eclipse-csi/otterdog pull request (or change: <slug>)
+    note: what the PR changed in this behaviour, the known-bad version
+    base: sha:b5f7bb1c79ad29cdcde8506f5fa7ec4c070ffda8   # optional differential base of the change
+    template: own                             # optional: own, head or base
+    expected_deltas:                          # optional: what differs between base and head in THIS scenario
+      - {step: no-strict, kind: cli, key: validate, note: head refuses the ruleset; base validated it}
+```
+
+Exactly one of `pr` (positive number) and `change` (a slug such as `check-merge`, for a change without upstream PR);
+a `step` pattern must match a step of the scenario; a change appears once per scenario; `base` is a release, tag,
+branch or sha spec; two references of one change with different `base` or `template` values are a collection error.
+Python tests pass the same list as `pytest.mark.scenario("<id>", references=[...])` (a literal or a module constant,
+no `step`). Add a reference when a PR implements, fixes or changes the behaviour (a regression references its fix):
+`otterdog-e2e run --change <n>` (or a `pr:<n>@<sha>` SUT) then selects the referencing scenarios, uses their expected
+deltas in `differential.md` and their base and template ([testing-an-otterdog-pr.md](testing-an-otterdog-pr.md)).
 
 ## Known bugs
 
@@ -934,7 +964,7 @@ instead (`SUT_EXPECTATIONS` in `tests/offline/test_scenarios.py`).
 
 `.vscode/settings.json` maps `scenarios/{offline,cli,regressions,enterprise}/*.yaml` to
 `.vscode/scenario.schema.json` (VS Code YAML extension: completion and key checks). It also maps
-`scenarios/known_bugs.yaml` and `scenarios/otterdog-prs/*.yaml` to a permissive schema, because SchemaStore would
+`scenarios/known_bugs.yaml` and `scenarios/coverage.yaml` to a permissive schema, because SchemaStore would
 otherwise apply its unrelated CrowdSec "scenario" schema to them. The schema is generated from the loader's constants and
 knows the file forms (`{file, raw, vars}`, `libraries`, `overlay`, `config`, `base_config`), the step options
 (`known_bug`, `workspace`, the plan/apply flags, `validate.verbose`, `infos`, `exit_code`). The loader stays the
@@ -976,7 +1006,7 @@ Markers: `live`, `offline`, `webapp`, `docker`, `differential`, `requires(*caps)
 Session fixtures: `harness`, `run_ctx`, `e2e`, `target`, `identities`, `verified_org`, `oracle`, `mutator`,
 `mutators`, `outsider_mutator`, `approver_mutator`, `contributor_mutator` (the author identity; these three gate on
 their identity like `identities(...)`), `capabilities`, `sut`, `reset_sut`, `base_sut`, `template_ref`,
-`base_template_ref`, `pr_manifest`, `renderer`, `workspace`, `otterdog`, `reset_cli`, `baseline`, `scenario_engine`,
+`base_template_ref`, `change_spec`, `renderer`, `workspace`, `otterdog`, `reset_cli`, `baseline`, `scenario_engine`,
 `app_auth`, `installation_id`, `webapp_image`, `webapp`, `webapp_api`, `relay`, `config_flow`, `injector`,
 `webapp_stack` (the compose stack; items using it skip with another transport). Function fixtures: `scenario_vars`,
 `fresh_workspace`, `webapp_case` (isolation of one webapp test: main reset to the baseline and the webapp quiet
@@ -1099,6 +1129,7 @@ restore rules.
 - offline `plan` expectations come with `base_fragments` (or `base_config`); Info assertions with `verbose: true`;
 - capabilities declared (`requires`, `expect_failure_without`, `min_plan`, `identities`);
 - tags from the vocabulary; `observe: true` for offline scenarios worth comparing across SUT versions;
+- named after the behaviour; the PRs behind it in `references` (with the expected deltas they cause);
 - long or shared jsonnet in files (`scenarios/fragments/`, helpers in `scenarios/lib/`), live steps lint-clean
   offline (`otterdog-e2e run --suite offline -k lint`);
 - run it alone first: `make one SCENARIO=<id> [TARGET=free]`, then read `artifacts/<run>/summary.md` and the `cli/`

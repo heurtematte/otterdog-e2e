@@ -1,6 +1,6 @@
-# Regression #779 (f055d51, after v1.6.1): individual users as ruleset bypass actors.
-id: regression.779-user-bypass-actors
-title: "#779: an individual user ('@login') as a ruleset bypass actor"
+# Regression: individual users as ruleset bypass actors (f055d51, after v1.6.1, #779).
+id: regression.user-bypass-actors
+title: "An individual user ('@login') as a ruleset bypass actor"
 description: |
   PR https://github.com/eclipse-csi/otterdog/pull/779 ("feat: support individual users as ruleset bypass actors"):
   '@<login>' (no '/') in bypass_actors is now a User actor, its id resolved with GET /users/{login}
@@ -17,7 +17,12 @@ description: |
 priority: P2
 min_plan: free
 fixed_in: "1.7.0.dev7"
-tags: [rulesets, repo, regression, pr-779]
+tags: [rulesets, repo, regression]
+references:
+  - pr: 779
+    note: >-
+      "feat: support individual users as ruleset bypass actors", f055d51 (otterdog 1.7.0.dev7): '@<login>' is a User
+      actor resolved with GET /users/{login} and read back as '@<login>'; known-bad v1.6.1
 steps:
   - name: user-actor
     fragments:

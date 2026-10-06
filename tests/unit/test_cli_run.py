@@ -126,29 +126,56 @@ def test_run_accepts_comma_separated_suites(project: dict[str, Any]) -> None:
     assert result.exit_code == 2 and "bogus" in result.output
 
 
-def test_run_pr_manifest_option(project: dict[str, Any], tmp_path: Path) -> None:
-    """--pr-manifest is passed as --e2e-pr-manifest (absolute path); its base is the default --base-sut, so the
-    default suites include differential; an explicit --base-sut wins; an invalid manifest is a usage error."""
-    manifest = tmp_path / "790.yaml"
-    manifest.write_text("pr: 790\nbase: sha:b5f7bb1\nscenarios: [O-VAL-790]\n")
-    result = CliRunner().invoke(cli.main, ["run", "--sut", "sha:9bdeb75", "--pr-manifest", str(manifest)])
+REFERENCING_SCENARIO = """\
+id: O-VAL-EXAMPLE
+title: Example
+references:
+  - pr: 790
+    base: sha:b5f7bb1
+    expected_deltas: [{step: no-strict, key: validate}]
+steps:
+  - name: no-strict
+"""
+
+
+def write_reference(settings: Any, text: str = REFERENCING_SCENARIO) -> Path:
+    """A scenario of the project referencing #790."""
+    path = settings.scenarios_dir / "offline" / "val-example.yaml"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text)
+    return path
+
+
+def test_run_change_option(project: dict[str, Any]) -> None:
+    """--change is passed as --e2e-change; the base of its references is the default --base-sut, so the default
+    suites include differential; an explicit --base-sut wins; a pr: SUT implies its change; invalid changes or
+    references are usage errors."""
+    path = write_reference(project["settings"])
+    result = CliRunner().invoke(cli.main, ["run", "--sut", "sha:9bdeb75", "--change", "#790"])
     assert result.exit_code == 3, result.output
     args = project["args"]
-    assert f"--e2e-pr-manifest={manifest.resolve()}" in args and "--e2e-base-sut=sha:b5f7bb1" in args
-    assert project["command"].endswith("--base-sut sha:b5f7bb1 --pr-manifest 790.yaml")  # relative to the project
+    assert "--e2e-change=790" in args and "--e2e-base-sut=sha:b5f7bb1" in args
+    assert project["command"].endswith("--sut sha:9bdeb75 --base-sut sha:b5f7bb1 --change 790")
     assert [Path(arg).name for arg in args if not arg.startswith("-")][-1] == "differential"
-    assert "PR manifest #790" in result.output and "manifest scenarios O-VAL-790" in result.output
+    assert "change #790: referencing scenarios O-VAL-EXAMPLE; 1 expected delta(s); base sha:b5f7bb1" in result.output
     project.pop("args")
     result = CliRunner().invoke(
-        cli.main, ["run", "--suite", "offline,differential", "--base-sut", "tag:v1.6.0", "--pr-manifest", str(manifest)]
+        cli.main, ["run", "--suite", "offline,differential", "--base-sut", "tag:v1.6.0", "--change", "790"]
     )
     assert result.exit_code == 3 and "--e2e-base-sut=tag:v1.6.0" in project["args"]
     project.pop("args")
-    (tmp_path / "bad.yaml").write_text("pr: [not a number]\n")
-    result = CliRunner().invoke(cli.main, ["run", "--pr-manifest", str(tmp_path / "bad.yaml")])
-    assert result.exit_code == 2 and "--pr-manifest" in result.output and "args" not in project
-    result = CliRunner().invoke(cli.main, ["run", "--pr-manifest", str(tmp_path / "missing.yaml")])
-    assert result.exit_code == 2 and "args" not in project
+    result = CliRunner().invoke(cli.main, ["run", "--suite", "offline", "--sut", f"pr:790@{PIN}"])
+    assert result.exit_code == 3 and "--e2e-change=790" in project["args"]
+    assert "--e2e-base-sut=sha:b5f7bb1" in project["args"]
+    project.pop("args")
+    result = CliRunner().invoke(cli.main, ["run", "--suite", "offline", "--sut", "sha:9bdeb75"])
+    assert result.exit_code == 3 and not [arg for arg in project["args"] if arg.startswith("--e2e-change")]
+    project.pop("args")
+    result = CliRunner().invoke(cli.main, ["run", "--change", "Not A Change"])
+    assert result.exit_code == 2 and "--change" in result.output and "args" not in project
+    path.write_text(REFERENCING_SCENARIO.replace("sha:b5f7bb1", "pr:1@x"))
+    result = CliRunner().invoke(cli.main, ["run", "--change", "790"])
+    assert result.exit_code == 2 and "--change 790" in result.output and "args" not in project
 
 
 def test_run_rejects_dangerous_passthrough(project: dict[str, Any], monkeypatch: pytest.MonkeyPatch) -> None:
@@ -178,16 +205,12 @@ class Resolved:
     changed_files: list[str] = field(default_factory=lambda: ["otterdog/webapp/webhook/__init__.py", "README.md"])
 
 
-def test_pr_plans_tags_manifest_and_base(project: dict[str, Any], monkeypatch: pytest.MonkeyPatch) -> None:
-    """pr: tags from the changed files + manifest tags, base, the pinned spec; manifest scenarios stay extra scenarios
-    of the tags filter (read by the plugin from --e2e-pr-manifest), never an --e2e-scenario restriction."""
+def test_pr_plans_tags_change_and_base(project: dict[str, Any], monkeypatch: pytest.MonkeyPatch) -> None:
+    """pr: tags from the changed files, the base of the references of the PR, the pinned spec; the scenarios
+    referencing the PR stay extra scenarios of the tags filter (read by the plugin from --e2e-change), never an
+    --e2e-scenario restriction."""
     settings = project["settings"]
-    manifests = settings.scenarios_dir / "otterdog-prs"
-    manifests.mkdir(parents=True)
-    (manifests / "790.yaml").write_text(
-        "pr: 790\ntitle: ruleset status checks\nbase: tag:v1.6.0\ntags: [validate]\nscenarios: [O-VAL-790]\n"
-    )
-    monkeypatch.setattr("otterdog_e2e.sut.spec.parse_sut_spec", lambda raw: raw)
+    write_reference(settings, REFERENCING_SCENARIO.replace("sha:b5f7bb1", "tag:v1.6.0"))
     monkeypatch.setattr("otterdog_e2e.sut.spec.resolve_sut", lambda spec, settings, http=None: Resolved())
     monkeypatch.setattr("otterdog_e2e.github.http.GitHubHttp", lambda token, **kw: FakeGitHubHttp())
     selected: list[list[str]] = []
@@ -199,14 +222,32 @@ def test_pr_plans_tags_manifest_and_base(project: dict[str, Any], monkeypatch: p
     args = project["args"]
     assert f"--e2e-sut=pr:790@{PIN}" in args and "--e2e-base-sut=tag:v1.6.0" in args
     tags = next(arg for arg in args if arg.startswith("--e2e-tags=")).split("=", 1)[1].split(",")
-    assert tags == ["smoke", "validate", "webapp"] and selected == [Resolved().changed_files]
-    assert f"--e2e-pr-manifest={manifests / '790.yaml'}" in args
+    assert tags == ["smoke", "webapp"] and selected == [Resolved().changed_files]
+    assert "--e2e-change=790" in args
     assert not [arg for arg in args if arg.startswith("--e2e-scenario")]
-    assert "manifest scenarios O-VAL-790" in result.output
+    assert "referencing scenarios O-VAL-EXAMPLE" in result.output
     assert "--e2e-strict-diff" in args and "--e2e-target=free" in args
     assert project["command"] == f"otterdog-e2e pr 790 --sha {PIN} --target free --strict-diff"
     dirs = [Path(arg).name for arg in args if not arg.startswith("-")]
     assert dirs == ["offline", "differential", "cli", "webhooks", "webapp", "enterprise"]
+
+
+def test_pr_change_option(project: dict[str, Any], monkeypatch: pytest.MonkeyPatch) -> None:
+    """pr --change: another change than the PR (its references give the base), recorded in the command; the PR's own
+    number is the default and never repeated; without a base in the references the base is the merge base (auto)."""
+    write_reference(project["settings"], REFERENCING_SCENARIO.replace("pr: 790", "change: check-merge"))
+    monkeypatch.setattr("otterdog_e2e.sut.spec.resolve_sut", lambda spec, settings, http=None: Resolved())
+    monkeypatch.setattr("otterdog_e2e.selection.select_tags", lambda files: {"smoke"})
+    result = CliRunner().invoke(cli.main, ["pr", "790", "--sha", PIN, "--change", "check-merge"])
+    assert result.exit_code == 3, result.output
+    assert "--e2e-change=check-merge" in project["args"] and "--e2e-base-sut=sha:b5f7bb1" in project["args"]
+    assert project["command"] == f"otterdog-e2e pr 790 --sha {PIN} --change check-merge"
+    result = CliRunner().invoke(cli.main, ["pr", "790", "--sha", PIN, "--change", "#790"])
+    assert result.exit_code == 3, result.output
+    assert "--e2e-change=790" in project["args"] and "--e2e-base-sut=auto" in project["args"]
+    assert project["command"] == f"otterdog-e2e pr 790 --sha {PIN}"
+    result = CliRunner().invoke(cli.main, ["pr", "790", "--sha", PIN, "--change", "bad change"])
+    assert result.exit_code == 2 and "--change" in result.output
 
 
 def test_pr_validates_its_arguments(project: dict[str, Any]) -> None:

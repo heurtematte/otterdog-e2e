@@ -1,6 +1,6 @@
-# Regression #562 (v1.2.0): a ruleset with an empty status_checks list must not send a status-check rule.
-id: regression.562-ruleset-empty-status-checks
-title: "#562: ruleset with empty status checks is created without a required_status_checks rule"
+# Regression: a ruleset with an empty status_checks list must not send a status-check rule (fixed in v1.2.0, #562).
+id: regression.ruleset-empty-status-checks
+title: "Ruleset with empty status checks is created without a required_status_checks rule"
 description: |
   Issue https://github.com/eclipse-csi/otterdog/issues/562 ("Correctly handle rulesets with empty status_checks"):
   an empty status_checks list means "no status checks" and no required_status_checks rule is sent
@@ -12,7 +12,11 @@ description: |
   cli.kb.ruleset-default-status-checks), and this regression must not be masked by that known bug.
 priority: P1
 min_plan: free
-tags: [rulesets, repo, regression, pr-562]
+tags: [rulesets, repo, regression]
+references:
+  - pr: 562
+    note: >-
+      fix of v1.2.0: an empty status_checks list sends no required_status_checks rule; known-bad v1.1.1
 steps:
   - name: create
     fragments:

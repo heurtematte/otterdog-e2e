@@ -25,13 +25,13 @@ make pr PR=792 SHA=<40-hex> TARGET=free
    credentials only in a 0600 env-file. Resets, cleanups and PR-text guards use the trusted reset SUT
    (`release:latest`). Docker is therefore required.
 3. **Select**: tags are derived from the changed files (`git diff` between the merge base and the pin, mapped by
-   `otterdog_e2e.selection.PATH_RULES`; `smoke` always), plus the manifest's `tags`; the manifest's `scenarios` are
-   selected in addition. The offline tier always runs in full; the differential and live tiers run the selected
+   `otterdog_e2e.selection.PATH_RULES`; `smoke` always); the scenarios whose `references` name the PR (the change
+   under test, `--change` to pick another one) are selected in addition. The offline tier always runs in full; the differential and live tiers run the selected
    scenarios.
 4. **Run** the suites: `auto` (default) = `offline` and `differential`, plus `cli`, `webhooks`, `webapp` and
    `enterprise` when a target is given. `--suite` takes an explicit comma separated list.
-5. **Compare**: the base SUT is the manifest's `base`, or `auto` (the merge base of the pin with the PR's base
-   branch). Both sides record their observations; `differential.md` and `differential.json` classify every delta.
+5. **Compare**: the base SUT is the `base` the references of the PR declare, or `auto` (the merge base of the pin
+   with the PR's base branch). Both sides record their observations; `differential.md` and `differential.json` classify every delta.
    `--strict-diff` fails the run on unexpected deltas.
 
 Before the first test runs, the plugin resolves and installs every SUT the selected tests need, and builds the
@@ -80,18 +80,18 @@ is not a `run`/`pr` option; call pytest directly:
   `git status`, HEAD, refs, stash, the content hash of every file and the mtimes of `.git` and `.git/index` were
   identical before and after an offline run.
 
-`run --pr-manifest PATH` applies a manifest to a local SUT: its `expected_deltas` and `scenarios` are used, and its
-`base` becomes the default `--base-sut`, which also adds the differential suite when no `--suite` is given. Its
-`tags` are not added (pass `--tags` yourself; `pr` adds them). The environment fallback `E2E_PR_MANIFEST` and the
-pytest option `--e2e-pr-manifest` still work:
+`run --change <N|#N|slug>` applies the references of a change to any SUT (default: N of a `pr:N@<sha>` SUT): the
+scenarios referencing it pass `--tags`, their expected deltas classify the differential, their `base` becomes the
+default `--base-sut` (which also adds the differential suite when no `--suite` is given) and their `template` picks
+the templates. The pytest option is `--e2e-change` (environment fallback `E2E_CHANGE`); pytest needs the base
+explicitly:
 
 ```bash
 .venv/bin/otterdog-e2e run --target free --sut dirty:../otterdog \
-  --pr-manifest scenarios/otterdog-prs/local-check-merge.yaml          # base tag:v1.6.0 from the manifest
+  --change check-merge                                                 # base tag:v1.6.0 from the references
 
 .venv/bin/python -m pytest tests/offline tests/differential \
-  --e2e-sut dirty:../otterdog --e2e-base-sut tag:v1.6.0 \
-  --e2e-pr-manifest scenarios/otterdog-prs/local-check-merge.yaml
+  --e2e-sut dirty:../otterdog --e2e-base-sut tag:v1.6.0 --e2e-change check-merge
 ```
 
 ## Regression scenarios of unreleased fixes (`fixed_in`)
@@ -100,7 +100,7 @@ A regression scenario asserts the behaviour a fix introduced, so it fails on eve
 scenario declares the first otterdog version containing the fix:
 
 ```yaml
-id: regression.790-repo-ruleset-without-strict
+id: regression.repo-ruleset-without-strict
 fixed_in: "1.7.0.dev15"     # 9bdeb75 = v1.6.1 + 15 commits
 ```
 
@@ -109,106 +109,94 @@ The live engine (tiers `cli`, `enterprise`) and the offline engine skip the scen
 `branch:main`, PR and local builds containing the fix run them. A differential run records the scenario on both sides
 anyway, because the difference is the point. The version is a heuristic: a PR branched off an old main can have a
 higher dev number without the fix. When ancestry matters, the offline tier decides with git
-(`tests/offline/conftest.py` SutHistory), as O-VAL-790 does.
+(`tests/offline/conftest.py` SutHistory), as O-VAL-RULESET-STRICT does.
 
 Known bugs follow the same idea. A `scenarios/known_bugs.yaml` entry with `status: fixed` no longer turns its tests
 into xfails: they guard against the regression. The exception is a SUT whose version predates a PEP 440 `fixed_in`;
 there the xfail stays, with "SUT ... predates the fix" in its reason.
 
-## PR manifests
+## Scenario references
 
-`scenarios/otterdog-prs/<N>.yaml` describes what a PR is expected to change. The file name must equal `pr`; a local
-change without an upstream PR uses `pr: 0` and any other file name.
+Scenarios are organised by functionality, never by pull request: the tests of a PR extend the scenario of the
+behaviour it changes (or add a generic one named after that behaviour), and the scenario records the PR, or the PRs
+when the behaviour evolved several times, in its `references`. A YAML scenario has a top-level `references` list; a
+Python test passes the same list as the `references` keyword of its `pytest.mark.scenario(...)` marker (a literal or a
+module constant). With an AI agent, the `otterdog-pr-tests` skill finds the scenarios of the PR from
+`otterdog-e2e assist pr-context`, extends them, runs the offline and differential tiers on the pinned PR in docker
+and explains every delta for your review ([ai-assistance.md](ai-assistance.md)).
 
 | Key | Default | Meaning |
 |---|---|---|
-| `pr` | required | PR number (`0` for a local change) |
-| `title` | `""` | free text |
-| `base` | `null` | base SUT spec for `pr` (default: the merge base) |
+| `pr` | one of `pr`/`change` | eclipse-csi/otterdog pull request number |
+| `change` | one of `pr`/`change` | slug of a named change without upstream PR (e.g. a maintainer branch: `check-merge`) |
+| `note` | `""` | what the change did to this behaviour (known-bad version, evidence, what must not change) |
+| `expected_deltas` | `[]` | deltas the change causes in THIS scenario between base and head (below) |
+| `base` | `null` | differential base of the change (a release, tag, branch or sha spec; default: the merge base) |
 | `template` | `own` | `own` (each side vendors its own `examples/template`), `head` or `base` (both sides use that side's template), to separate code changes from template changes |
-| `tags` | `[]` | tags added to the selection |
-| `scenarios` | `[]` | scenario id globs selected in addition to the tag selection |
-| `scenario_dirs` | `[]` | relative scenario directories with PR-specific scenarios |
-| `expected_deltas` | `[]` | deltas the PR should cause (below) |
-| `markers` | `{}` | extra otterdog comment markers the PR introduces (name to marker text), for its webapp tests |
-| `notes` | `""` | free text |
 
-An expected delta is a mapping `{scenario, step, kind, key, note}` (fnmatch patterns, unset fields match anything; a
-key also matches without its `#n` repetition suffix) or a bare scenario pattern. Observations of CLI commands have
+The scenario model validates the references (unknown keys, types, a step pattern that matches no step of the
+scenario, a `step` in a Python test, duplicates); two references of one change with different `base` or `template`
+values are a collection error, so declare them once per change. `assist check` and the unit tests also refuse a
+scenario id or file name that carries the number of a PR it references.
+
+An expected delta is a mapping `{step, kind, key, note}` (fnmatch patterns, unset fields match anything, the scenario
+is the referencing one; a key also matches without its `#n` repetition suffix). Observations of CLI commands have
 `kind: cli` and the command as key (`validate`, `local-plan`, `show`, `show-default`, `canonical-diff`,
-`list-projects`, `version`; live: `validate`, `plan`).
+`list-projects`, `version`; live: `validate`, `plan`). A change is selected with `--change` (`run`, `pr`), pytest
+`--e2e-change` or `E2E_CHANGE`; by default it is N of a `pr:N@<sha>` SUT, and `pr N` uses N.
 
-Abridged from the manifests in the repository:
+Abridged from the repository:
 
 ```yaml
-# scenarios/otterdog-prs/790.yaml
-pr: 790
-title: "fix: validate required status checks of rulesets"
-base: sha:b5f7bb1c79ad29cdcde8506f5fa7ec4c070ffda8   # first parent of the squash commit: the delta is #790 alone
-template: own
-tags: [rulesets, offline]
-scenarios: [O-VAL-790, O-VAL-790-ORG]
-expected_deltas:
-  - scenario: O-VAL-790
-    step: no-strict
-    kind: cli
-    key: validate
-    note: head reports the missing required_status_checks.strict as a validation error; base failed at apply time
-  - scenario: O-VAL-790
-    step: no-strict
-    kind: cli
-    key: local-plan
-    note: head aborts local-plan on the validation error; base planned the ruleset
+# scenarios/offline/validation/val-ruleset-strict.yaml
+id: O-VAL-RULESET-STRICT
+references:
+  - pr: 790
+    note: squash commit 9bdeb75; base = its first parent, so the delta is #790 alone
+    base: sha:b5f7bb1c79ad29cdcde8506f5fa7ec4c070ffda8
+    template: own
+    expected_deltas:
+      - step: no-strict
+        kind: cli
+        key: validate
+        note: head reports the missing required_status_checks.strict as a validation error; base failed at apply time
+      - step: no-strict
+        kind: cli
+        key: local-plan
+        note: head aborts local-plan on the validation error; base planned the ruleset
+
+# scenarios/offline/validation/val-org-ruleset-strict.yaml: referenced WITHOUT expected delta (head crashes, KB-008)
+id: O-VAL-ORG-RULESET-STRICT
+references:
+  - pr: 790
+    note: the crash introduced by #790 must stay an unexpected delta until it is fixed
 ```
 
-```yaml
-# scenarios/otterdog-prs/792.yaml
-pr: 792
-title: "fix: do not revert pull request status with an outdated snapshot"
-template: own
-tags: [webapp]
-scenarios: [W-STALE-STATUS-792]
-expected_deltas:
-  - scenario: W-STALE-STATUS-792
-    note: after a merge, a stale converted_to_draft snapshot leaves the PR merged on head; base reopens it
-```
-
-```yaml
-# scenarios/otterdog-prs/local-check-merge.yaml
-pr: 0
-title: "feat: /otterdog check-merge and /otterdog update-branch commands (local, uncommitted)"
-base: tag:v1.6.0
-template: own
-tags: [webapp]
-scenarios: [W-CMD-CHECK-MERGE]
-expected_deltas:
-  - scenario: W-CMD-CHECK-MERGE
-    note: head answers /otterdog check-merge with a check-merge comment and never merges; base has no such command
-markers:
-  check-merge: "<!-- Otterdog Comment: check-merge -->"
+```python
+# tests/webapp/test_stale_status.py (W-PR-STALE-SNAPSHOT) and tests/webapp/test_check_merge.py (W-CMD-CHECK-MERGE)
+@pytest.mark.scenario("W-PR-STALE-SNAPSHOT", priority="P1", references=REFERENCES)  # {pr: 792, expected_deltas: ...}
+@pytest.mark.scenario("W-CMD-CHECK-MERGE", priority="P2", references=CHECK_MERGE_REFERENCES)  # {change: check-merge, base: tag:v1.6.0}
 ```
 
 The differential proof of concept of #790 needs no GitHub organization at all:
 
 ```bash
-.venv/bin/otterdog-e2e run --sut sha:9bdeb75 --suite offline,differential \
-  --pr-manifest scenarios/otterdog-prs/790.yaml                         # base sha:b5f7bb1 from the manifest
+.venv/bin/otterdog-e2e run --sut sha:9bdeb75 --change 790 --suite offline,differential   # base sha:b5f7bb1 from the references
 ```
 
-With warm caches it takes about 15 minutes (the offline tier of the head runs first). The verified outcome is 363
-passed, 29 skipped and 27 xfailed (registered known bugs), with `differential: 1 unexpected, 2 expected delta(s)`:
+With warm caches it takes 15 to 30 minutes (the offline tier of the head runs first). The verified outcome is 388
+passed, 8 skipped and 30 xfailed (registered known bugs), with `differential: 1 unexpected, 2 expected delta(s)`:
 
-- expected: `O-VAL-790 / no-strict / cli / validate` goes from exit 0 `Validation succeeded` to exit 1 `has not set
+- expected: `O-VAL-RULESET-STRICT / no-strict / cli / validate` goes from exit 0 `Validation succeeded` to exit 1 `has not set
   required parameter 'required_status_checks.strict'`, and `.../local-plan` goes from `Plan: 2 to add` to an abort
   with exit 1;
-- unexpected: `O-VAL-790-ORG / org-no-strict / cli / validate` goes from exit 0 to exit 2 `'GitHubOrganization'
+- unexpected: `O-VAL-ORG-RULESET-STRICT / org-no-strict / cli / validate` goes from exit 0 to exit 2 `'GitHubOrganization'
   object has no attribute 'get_model_header'`. This is a defect #790 introduced (KB-008), and the report keeps
   flagging it until upstream fixes it, so `--strict-diff` fails this run;
-- the other 684 observations of the 59 observed scenarios are unchanged, for example O-VAL-SYNTAX, whose jsonnet
+- the other 696 observations of the 59 observed scenarios are unchanged, for example O-VAL-SYNTAX, whose jsonnet
   error prints a different workspace path on each side.
 
-Check a manifest with
-`.venv/bin/python -c 'import sys; from pathlib import Path; from otterdog_e2e.differential import load_pr_manifest; print(load_pr_manifest(Path(sys.argv[1])))' scenarios/otterdog-prs/790.yaml`.
+Check the references of the scenarios you changed with `.venv/bin/otterdog-e2e assist check <files>`.
 
 ## Reading the differential report
 
@@ -218,13 +206,13 @@ Check a manifest with
    expected deltas not observed;
 2. a scenario table (unchanged, expected, unexpected, result);
 3. **Unexpected deltas**: one collapsible block per (scenario, step, kind, key) with a unified diff of the normalized
-   base and head outputs: regressions, or behaviour changes the manifest should declare;
+   base and head outputs: regressions, or behaviour changes a reference should declare;
 4. **Expected deltas**: changes matched by `expected_deltas`, with their note;
 5. **Expected deltas not observed**: declared deltas that did not happen (the fix may not work, or the scenario did not
    run);
 6. **Not comparable**: scenarios recorded on one side only (for example a scenario that crashed on one side).
 
-The last item of the differential tier fails when an expected delta of the manifest concerns a scenario recorded on
+The last item of the differential tier fails when an expected delta of the change concerns a scenario recorded on
 both sides but did not happen: the PR does not change what it claims to change.
 
 Outputs are normalized before the comparison (ANSI codes, boxes, progress bars, scratch paths, each side's workspace

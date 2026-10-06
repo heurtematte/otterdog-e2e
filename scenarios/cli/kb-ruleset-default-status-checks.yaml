@@ -9,7 +9,7 @@ description: |
   configured object with null and reports a change on every plan (models/__init__.py:449-473). import writes
   'required_status_checks: null' for that reason. This scenario creates a ruleset with the template default and
   asserts convergence; it is expected to fail (xfail) while the bug exists. Regression #562 itself (the apply
-  succeeds) is covered by regression.562-ruleset-empty-status-checks.
+  succeeds) is covered by regression.ruleset-empty-status-checks.
 priority: P2
 min_plan: free
 known_bug: KB-021

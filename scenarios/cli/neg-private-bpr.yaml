@@ -13,7 +13,7 @@ description: |
   both (example of a library used by an inline fragment, docs/writing-scenarios.md).
   The repository is created PUBLIC in a first step and made private by the next one: otterdog before 1.7.0.dev14
   cannot create a private repository on an organization without Code Security (the code scanning default setup
-  PATCH of new repositories fails, #791; regression.791-731-private-repo covers that path).
+  PATCH of new repositories fails, #791; regression.private-repo-template-defaults covers that path).
 priority: P0
 min_plan: free
 tags: [bpr, repo, discovery, private]

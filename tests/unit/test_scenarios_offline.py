@@ -368,14 +368,14 @@ def test_observe_offline_runs_base_then_head_with_their_own_templates(
     runner = DifferentialRunner(
         base=base, head=head, renderer_factory=None, template_src_for=lambda s: Path(f"/src/{s.role}/examples/template")
     )
-    text = "id: O-VAL-790\ntitle: v\nsteps: [{fragments: {}, validate: {}}]\n"
+    text = "id: O-VAL-RULESET-STRICT\ntitle: v\nsteps: [{fragments: {}, validate: {}}]\n"
     runner.observe_offline(write_scenario(tmp_path, text))
     assert [src for src, _ in _fakes] == [Path("/src/base/examples/template"), Path("/src/head/examples/template")]
     for current in (base, head):
         assert [c.command for c in current.cli.calls] == ["validate", "show"]  # show ran despite the base failure
-        assert current.recorder.scopes == [("O-VAL-790", "step-1")]
+        assert current.recorder.scopes == [("O-VAL-RULESET-STRICT", "step-1")]
         assert [c.kwargs["observe"] for c in current.cli.calls] == ["validate", "show"]
-    assert not runner.outcomes["O-VAL-790"]["base"].ok and runner.outcomes["O-VAL-790"]["head"].ok
+    assert not runner.outcomes["O-VAL-RULESET-STRICT"]["base"].ok and runner.outcomes["O-VAL-RULESET-STRICT"]["head"].ok
 
 
 def test_fixed_in_skips_older_suts_except_in_differential_runs(tmp_path: Path, _fakes: list[tuple[Path, Path]]) -> None:

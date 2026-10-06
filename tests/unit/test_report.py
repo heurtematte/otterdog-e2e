@@ -102,12 +102,17 @@ def _results() -> list[dict[str, Any]]:
 
 def _differential() -> dict[str, Any]:
     """differential.json with one unexpected and one expected delta."""
-    base = [Observation("v1.6.1", "base", s, "v", "cli", "validate", "a", {}) for s in ("O-VAL-790", "O-X", "O-SAME")]
+    base = [
+        Observation("v1.6.1", "base", s, "v", "cli", "validate", "a", {})
+        for s in ("O-VAL-RULESET-STRICT", "O-X", "O-SAME")
+    ]
     head = [
         Observation("pr792", "head", s, "v", "cli", "validate", c, {})
-        for s, c in (("O-VAL-790", "b"), ("O-X", "c"), ("O-SAME", "a"))
+        for s, c in (("O-VAL-RULESET-STRICT", "b"), ("O-X", "c"), ("O-SAME", "a"))
     ]
-    return compare(base, head, base_label="v1.6.1", head_label="pr792", expected=[ExpectedDelta("O-VAL-790")]).to_json()
+    return compare(
+        base, head, base_label="v1.6.1", head_label="pr792", expected=[ExpectedDelta("O-VAL-RULESET-STRICT")]
+    ).to_json()
 
 
 @pytest.fixture

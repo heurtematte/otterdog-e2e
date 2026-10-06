@@ -1,4 +1,4 @@
-"""W-STALE-STATUS-792 (P1): a stale webhook snapshot must not turn a merged PR back to open (otterdog PR #792).
+"""W-PR-STALE-SNAPSHOT (P1): a stale webhook snapshot must not turn a merged PR back to open (fixed by otterdog #792).
 
 Mechanics (FACTS tests.json "BRANCH 1", scenario CS792-01): tasks store the webhook snapshot they were scheduled with
 when they finish (``update_or_create_pull_request``); before #792 the snapshot's lifecycle fields (status, draft,
@@ -13,9 +13,9 @@ of /api/pullrequests/open. SUTs without the fix (v1.6.1, main 9bdeb75) show it `
 scenarios/known_bugs.yaml). Unless the webapp image is known to contain the fix commit 2c5f977 (the PR's first commit,
 which fixes this strictly-older variant), the test is a NON-strict xfail limited to StaleStatusRegressionError: base
 SUTs xfail, fixed ones xpass (also after a squash merge upstream, whose commit sha differs), and any other failure
-(infra, flow) still fails. The before/after records are written to <artifacts>/webapp/w-stale-status-792.json
-either way: that file is the base-vs-head evidence of manifest 792 (the in-session differential only compares CLI
-observations).
+(infra, flow) still fails. The before/after records are written to <artifacts>/webapp/w-pr-stale-snapshot.json
+either way: that file is the base-vs-head evidence of the expected delta its reference to #792 declares (the
+in-session differential only compares CLI observations, so the report lists that delta as not observed).
 """
 
 from __future__ import annotations
@@ -44,7 +44,38 @@ class StaleStatusRegressionError(AssertionError):
     """A stale snapshot moved a merged PR back in its lifecycle (the bug otterdog#792 fixes)."""
 
 
-@pytest.mark.scenario("W-STALE-STATUS-792", priority="P1")
+REFERENCES = [
+    {
+        "pr": 792,
+        "note": (
+            "fix/stale-pr-status-overwrite (open when referenced): head d0d3b0832d8e21a9da86e0ef967859d2634af894 = 4"
+            " commits on top of main 9bdeb75 touching only otterdog/webapp/db/service.py (update_or_create_pull_request)"
+            " and its test: 2c5f977 do not revert pull request status with an outdated snapshot, e3285b6 make the"
+            " status update atomic, f0bf0c6 make the creation race in the test, d0d3b08 do not go back in the lifecycle"
+            " within the same second. Bug on the base: a task scheduled with a webhook snapshot stores the snapshot's"
+            " lifecycle fields when it finishes, so a late snapshot (the backed-off sync check, any stale 'open' event)"
+            " turns a merged PR back to 'open' (incident osgi/.eclipsefdn#25). No base: the differential compares with"
+            " the merge base of the PR head (9bdeb75, `otterdog-e2e pr 792 --sha d0d3b08...`, --base-sut auto); the"
+            " head is an untrusted pr: SUT (docker image) and the webapp tier needs a config_reader identity. The PR"
+            " changes the webapp's database layer only: the CLI is identical, so every offline scenario must be"
+            " unchanged between base and head (any offline delta is unexpected); no bot comment or commit status may"
+            " be created by the injected stale event on either side, only the stored pull request state differs."
+        ),
+        "template": "own",
+        "expected_deltas": [
+            {
+                "note": (
+                    "after a merge, a stale converted_to_draft snapshot injected with a valid signature (204) leaves the"
+                    " PR merged on head (it stays in /api/pullrequests/merged, merged_at/closed_at kept); on base it"
+                    " reappears in /api/pullrequests/open with status open and merged_at null"
+                )
+            }
+        ],
+    }
+]
+
+
+@pytest.mark.scenario("W-PR-STALE-SNAPSHOT", priority="P1", references=REFERENCES)
 @pytest.mark.tags("webapp", "webhooks-app")
 def test_stale_snapshot_keeps_merged_status(
     request: pytest.FixtureRequest, webapp_scenario: WebappScenario, injector: WebhookInjector, installation_id: int

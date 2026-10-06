@@ -42,8 +42,8 @@ from otterdog_e2e.redact import REDACTOR
 if TYPE_CHECKING:
     from otterdog_e2e.blueprints import BlueprintHelper
     from otterdog_e2e.capabilities import Capabilities
+    from otterdog_e2e.changes import ChangeId, ChangeSpec
     from otterdog_e2e.config_repo import ConfigRepoFlow
-    from otterdog_e2e.differential import PrManifest
     from otterdog_e2e.github.app import AppAuth
     from otterdog_e2e.github.http import GitHubHttp
     from otterdog_e2e.github.janitor import Janitor, JanitorItem
@@ -85,7 +85,7 @@ OPTION_ENV: Mapping[str, str] = {
     "e2e_artifacts": "E2E_ARTIFACTS",
     "e2e_run_id": "E2E_RUN_ID",
     "e2e_webapp_image": "E2E_WEBAPP_IMAGE",
-    "e2e_pr_manifest": "E2E_PR_MANIFEST",
+    "e2e_change": "E2E_CHANGE",
     "e2e_allow_web_ui": "E2E_ALLOW_WEB_UI",  # a flag: true/1/yes enables it
 }
 DEFAULT_SUT = "release:latest"
@@ -284,7 +284,7 @@ class E2EOptions:
     keep: bool = False
     no_reset: bool = False
     webapp_image: str | None = None
-    pr_manifest: Path | None = None
+    change: str | None = None
     strict_diff: bool = False
     no_http_cache: bool = False
     allow_remote_webapp: bool = False
@@ -303,7 +303,7 @@ class E2EOptions:
             """Boolean option value."""
             return bool(config.getoption(dest, False))
 
-        artifacts, manifest = text("e2e_artifacts"), text("e2e_pr_manifest")
+        artifacts = text("e2e_artifacts")
         return cls(
             target=text("e2e_target"),
             sut=text("e2e_sut") or DEFAULT_SUT,
@@ -316,7 +316,7 @@ class E2EOptions:
             keep=flag("e2e_keep"),
             no_reset=flag("e2e_no_reset"),
             webapp_image=text("e2e_webapp_image"),
-            pr_manifest=Path(manifest).expanduser() if manifest else None,
+            change=text("e2e_change"),
             strict_diff=flag("e2e_strict_diff"),
             no_http_cache=flag("e2e_no_http_cache"),
             allow_remote_webapp=flag("e2e_allow_remote_webapp"),
@@ -1843,18 +1843,27 @@ class E2EContext:
 
         return self._memo("known_bugs", build)
 
-    def pr_manifest(self) -> PrManifest | None:
-        """The --e2e-pr-manifest PrManifest (None when not given)."""
+    def change(self) -> ChangeId | None:
+        """The change under test: --e2e-change (E2E_CHANGE), else N of a ``pr:N@<sha>`` --e2e-sut, else None
+        (changes.ChangeError when --e2e-change is malformed)."""
+        from otterdog_e2e.changes import default_change
 
-        def build() -> PrManifest | None:
-            """Load the manifest."""
-            if self.options.pr_manifest is None:
+        return default_change(self.options.change, self.options.sut)
+
+    def change_spec(self) -> ChangeSpec | None:
+        """The ChangeSpec of the change under test: the scenarios referencing it, their expected deltas, base and
+        template (None without a change; changes.ChangeError for invalid or conflicting references)."""
+
+        def build() -> ChangeSpec | None:
+            """Gather the references of the repository."""
+            change = self.change()
+            if change is None:
                 return None
-            from otterdog_e2e import differential
+            from otterdog_e2e.changes import load_change
 
-            return differential.load_pr_manifest(self.options.pr_manifest)
+            return load_change(self.settings.scenarios_dir, self.settings.project_root / "tests", change)
 
-        return self._memo("pr_manifest", build)
+        return self._memo("change_spec", build)
 
 
 ORGANIZATION_OVERRIDES = frozenset({"admin_teams", "approval_teams"})  # keys of publish_otterdog_json(organization=)

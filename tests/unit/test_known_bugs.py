@@ -31,7 +31,7 @@ VALID = """
   status: fixed
   fixed_in: pr-792
   upstream: https://github.com/eclipse-csi/otterdog/pull/792
-  scenarios: [W-STALE-STATUS-792]
+  scenarios: [W-PR-STALE-SNAPSHOT]
 - id: KB-003
   title: unpaginated variable reads
 """
@@ -105,7 +105,7 @@ def test_invalid_files(tmp_path: Path, text: str, match: str) -> None:
 def test_bugs_for_scenario_and_references(tmp_path: Path) -> None:
     """A scenario links through its own known_bug field or through a bug's scenarios list."""
     bugs = load(write(tmp_path, VALID))
-    assert [b.id for b in bugs_for_scenario(bugs, "W-STALE-STATUS-792")] == ["KB-002"]
+    assert [b.id for b in bugs_for_scenario(bugs, "W-PR-STALE-SNAPSHOT")] == ["KB-002"]
     assert [b.id for b in bugs_for_scenario(bugs, "C-NEG-VALIDATION", declared="KB-001")] == ["KB-001"]
     assert [b.id for b in bugs_for_scenario(bugs, "other", declared="KB-003")] == ["KB-003"]
     with pytest.raises(KeyError, match="KB-999"):
@@ -113,7 +113,7 @@ def test_bugs_for_scenario_and_references(tmp_path: Path) -> None:
     problems = check_references(bugs, [("C-NEG-VALIDATION", "KB-001"), ("x", "KB-999")])
     assert problems == [
         "scenario 'x' declares unknown known bug 'KB-999'",
-        "KB-002 lists unknown scenario 'W-STALE-STATUS-792'",
+        "KB-002 lists unknown scenario 'W-PR-STALE-SNAPSHOT'",
     ]
 
 
@@ -121,10 +121,10 @@ def test_step_level_references(tmp_path: Path) -> None:
     """Step-level known bugs must exist and stay out of the bug's scenarios list (that would xfail the whole item),
     unless the scenario declares the same bug itself."""
     bugs = load(write(tmp_path, VALID))
-    pairs = [("C-NEG-VALIDATION", "KB-001"), ("W-STALE-STATUS-792", None), ("offline.x", None)]
-    steps = [("offline.x", "crash", "KB-003"), ("offline.x", "typo", "KB-999"), ("W-STALE-STATUS-792", "s", "KB-002")]
+    pairs = [("C-NEG-VALIDATION", "KB-001"), ("W-PR-STALE-SNAPSHOT", None), ("offline.x", None)]
+    steps = [("offline.x", "crash", "KB-003"), ("offline.x", "typo", "KB-999"), ("W-PR-STALE-SNAPSHOT", "s", "KB-002")]
     listed = (
-        "KB-002 lists scenario 'W-STALE-STATUS-792', whose step 's' declares it: the whole item would xfail"
+        "KB-002 lists scenario 'W-PR-STALE-SNAPSHOT', whose step 's' declares it: the whole item would xfail"
         " (keep step-level bugs out of the bug's scenarios list)"
     )
     assert check_references(bugs, pairs, steps) == [

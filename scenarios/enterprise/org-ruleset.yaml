@@ -6,7 +6,7 @@ description: |
   active org ruleset on every default branch would block push-config and the webapp) on their default branch, with
   linear history. otterdog validates org rulesets against the CONFIGURED plan (enterprise only); GitHub offers them
   on Team too (KB-009). The status-check variant without 'strict' crashes validation (KB-008, scenario
-  enterprise.org-ruleset.790-missing-strict) and is kept separate so this lifecycle is never masked by it. The
+  enterprise.org-ruleset.missing-strict) and is kept separate so this lifecycle is never masked by it. The
   update step switches to 'evaluate' (enterprise only); the repo-conditions step adds exclude_repo_names (a second run
   repository matching the include pattern is excluded by name) and protect_repo_names (the repository_name condition's
   'protected' flag: matching repositories cannot be renamed or deleted, models/organization_ruleset.py:96-97, :119-121),

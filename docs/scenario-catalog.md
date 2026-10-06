@@ -36,8 +36,8 @@ items with `--scenario` / `--e2e-scenario`.
 | O-VAL-SYNTAX | a jsonnet syntax error is a load error (`failed to load configuration`) | P0 | verified | `O-VAL-SYNTAX` (`val-syntax.yaml`) | CLI-01, CLI-02 |
 | O-VAL-PLAN-GATE | an organization ruleset with plan `free` is rejected (requires enterprise) | P0 | verified | `O-VAL-PLAN-GATE` (`val-plan-gate.yaml`) | PLAN-GATE-FREE-001, MOD-GATE-FREE-01, CFG-10 |
 | O-VAL-ORGSECRET-PRIVATE-FREE | an org secret with `visibility: private` is rejected on free | P0 | verified | `O-VAL-ORGSECRET-PRIVATE-FREE` | PLAN-GATE-FREE-001, MOD-GATE-FREE-01 |
-| O-VAL-790 | ruleset status checks without `strict` (#790); differential proof of concept | P0 | verified | `O-VAL-790` (`val-790.yaml`; SUT-dependent expectation by git ancestry) | CS790-01, CS790-02, MOD-DIFF-790-01 |
-| O-VAL-790-ORG | the organization-ruleset side of #790: SUTs with #790 crash (KB-008, reported as xfail when detected) | P1 | verified | `O-VAL-790-ORG` (`val-790-org.yaml`) | CS790-03 |
+| O-VAL-RULESET-STRICT | ruleset status checks without `strict` (#790); differential proof of concept | P0 | verified | `O-VAL-RULESET-STRICT` (`val-ruleset-strict.yaml`; SUT-dependent expectation by git ancestry) | CS790-01, CS790-02, MOD-DIFF-790-01 |
+| O-VAL-ORG-RULESET-STRICT | the organization-ruleset side of #790: SUTs with #790 crash (KB-008, reported as xfail when detected) | P1 | verified | `O-VAL-ORG-RULESET-STRICT` (`val-org-ruleset-strict.yaml`) | CS790-03 |
 | O-LPLAN-ADD | `local-plan` of an added repository | P0 | verified | `O-LPLAN-ADD` | CLI-03, MOD-LOCALPLAN-01 |
 | O-LPLAN-CHANGE | `local-plan` of changed attributes | P0 | verified | `O-LPLAN-CHANGE` | CLI-03, MOD-LOCALPLAN-01 |
 | O-LPLAN-REMOVE | `local-plan` of a removed repository and nested objects | P0 | verified | `O-LPLAN-REMOVE` | CLI-03, MOD-LOCALPLAN-01 |
@@ -73,12 +73,12 @@ open, see [known-issues.md](known-issues.md)):
 
 | Id | Scenario | Priority | Status | Gating |
 |---|---|---|---|---|
-| `regression.472-rename-and-modify` | rename a repository and change it in one apply (#472) | P1 | implemented | |
-| `regression.562-ruleset-empty-status-checks` | ruleset with empty status checks (#562) | P1 | implemented | |
-| `regression.751-disabled-ruleset` | disabled ruleset whose ref conditions come back null (#751) | P2 | implemented | |
-| `regression.767-code-scanning-new-repo` | code scanning languages on a not-yet-existing repository (#767) | P1 | implemented | `fixed_in: 1.7.0.dev2` |
-| `regression.790-repo-ruleset-without-strict` | repository ruleset without `strict` is a validation error (#790) | P1 | implemented | `fixed_in: 1.7.0.dev15` |
-| `regression.791-731-private-repo` | private repository with the template defaults (#791, #731, #635) | P1 | implemented | `fixed_in: 1.7.0.dev14` |
+| `regression.rename-and-modify` | rename a repository and change it in one apply (#472) | P1 | implemented | |
+| `regression.ruleset-empty-status-checks` | ruleset with empty status checks (#562) | P1 | implemented | |
+| `regression.disabled-ruleset-without-refs` | disabled ruleset whose ref conditions come back null (#751) | P2 | implemented | |
+| `regression.code-scanning-new-repo` | code scanning languages on a not-yet-existing repository (#767) | P1 | implemented | `fixed_in: 1.7.0.dev2` |
+| `regression.repo-ruleset-without-strict` | repository ruleset without `strict` is a validation error (#790) | P1 | implemented | `fixed_in: 1.7.0.dev15` |
+| `regression.private-repo-template-defaults` | private repository with the template defaults (#791, #731, #635) | P1 | implemented | `fixed_in: 1.7.0.dev14` |
 | `cli.kb.apply-exit-code` | KB-001: apply exits 0 on validation errors (`tests/cli/test_known_bugs.py`) | - | implemented | xfail KB-001 |
 | `cli.kb.variables-pagination` | KB-003: more than 10 variables | P2 | implemented | xfail KB-003 |
 | `cli.kb.webhook-url-alias` | KB-004: webhook URL change through `aliases` | P2 | implemented | xfail KB-004 |
@@ -109,10 +109,10 @@ open, see [known-issues.md](known-issues.md)):
 | W-AUTOMERGE | auto-merge by author and approver | P0 | implemented | `tests/webapp/test_merge_apply.py` | AM-AUTHOR-01, AM-APPROVAL-01 |
 | W-DRIFT-CHECKSYNC | drift on a run repository, `/otterdog check-sync`: check-sync comment and failed sync description or out-of-sync text | P1 | implemented | `tests/webapp/test_commands.py` | PR-DRIFT-01, REG-765 |
 | W-REBASE-MULTI | rebase merge of a multi-commit PR applies every commit (#773) | P1 | implemented | `tests/webapp/test_merge_apply.py` | AP-REBASE-01, REG-773 |
-| W-STALE-STATUS-792 | a stale `converted_to_draft` snapshot after the merge must not reopen the PR (#792; expected delta of manifest 792) | P1 | implemented | `tests/webapp/test_stale_status.py` (non-strict xfail unless the image contains the fix) | CS792-01, CS792-02, CS792-03, OPR-STALE-01, WH-ORDER-001, APP-PR-03 |
-| W-CMD-CHECK-MERGE | `/otterdog check-merge` posts an eligibility comment (previous one minimized) and never merges; skipped unless the webapp's source has the feature (local branch feat/check-merge-command, manifest local-check-merge) | P2 | implemented | `tests/webapp/test_check_merge.py` | CM-01, CM-02, OPR-CHECKMERGE-01 |
+| W-PR-STALE-SNAPSHOT | a stale `converted_to_draft` snapshot after the merge must not reopen the PR (#792; expected delta of its reference to #792) | P1 | implemented | `tests/webapp/test_stale_status.py` (non-strict xfail unless the image contains the fix) | CS792-01, CS792-02, CS792-03, OPR-STALE-01, WH-ORDER-001, APP-PR-03 |
+| W-CMD-CHECK-MERGE | `/otterdog check-merge` posts an eligibility comment (previous one minimized) and never merges; skipped unless the webapp's source has the feature (local branch feat/check-merge-command, named change `check-merge` of its references) | P2 | implemented | `tests/webapp/test_check_merge.py` | CM-01, CM-02, OPR-CHECKMERGE-01 |
 | W-PR-WEBUI | a config PR changing a web-only setting (`members_can_delete_issues`) is flagged ("require accessing the Web UI"), not auto-mergeable, applied partially once merged; the live setting stays unchanged (REST) and `/otterdog done` completes the PR (no web credentials) | P1 | implemented | `tests/webapp/test_web_ui_flags.py` | PR-WEBUI-01 |
-| W-LIFECYCLE-792 | regression check of #792: a full PR lifecycle still records every task result | P0 | planned | | CS792-05 |
+| W-LIFECYCLE-TASK-RESULTS | regression check (#792): a full PR lifecycle still records every task result | P0 | planned | | CS792-05 |
 
 ### Web UI (`tests/web_ui`)
 
@@ -140,19 +140,19 @@ logins (they could lock the bot out).
 | Id | Scenario | Priority | Status | Implemented by | Sources |
 |---|---|---|---|---|---|
 | E-ORG-ROLE | custom organization role (oracle check kind `org_role`) | P0 | implemented | `enterprise.org-role` | MOD-ENT-ROLES-01, PRV-ENT-ROLE-01 |
-| E-ORG-RULESET | organization ruleset; known bug #790 (`AttributeError` for status checks without `strict`) | P0 | implemented | `enterprise.org-ruleset`, `enterprise.org-ruleset.790-missing-strict` (xfail KB-008), `enterprise.kb.org-ruleset-repo-patterns` (xfail KB-023) | MOD-ENT-ORS-01, PRV-ENT-ORS-01, CS790-03 |
+| E-ORG-RULESET | organization ruleset; known bug #790 (`AttributeError` for status checks without `strict`) | P0 | implemented | `enterprise.org-ruleset`, `enterprise.org-ruleset.missing-strict` (xfail KB-008), `enterprise.kb.org-ruleset-repo-patterns` (xfail KB-023) | MOD-ENT-ORS-01, PRV-ENT-ORS-01, CS790-03 |
 | E-PRIVATE-BPR | branch protection on a private repository | P0 | implemented | `enterprise.private-bpr` | MOD-ENT-PRIV-01, CLI-16 |
 | E-ENV-REVIEWERS-PRIVATE | environment reviewers on a private repository | P0 | implemented | `enterprise.env-reviewers-private` | MOD-ENT-PRIV-01, ENV-PLAN-001 |
 
-### Differential (`tests/differential`) and PR manifests (`scenarios/otterdog-prs`)
+### Differential (`tests/differential`) and changes referenced by scenarios (`references`)
 
 | Id | Scenario | Priority | Status | Implemented by | Sources |
 |---|---|---|---|---|---|
 | D-OFFLINE | every offline scenario with `observe: true`, on both sides | P0 | verified | `tests/differential/test_offline_diff.py` | CLI-03, CFG-19 |
 | D-LIVE-PLAN | `observe_live` (validate + plan, never apply) of the live scenarios with `observe: true` | P1 | implemented | `tests/differential/test_live_diff.py` (needs a target and a base SUT) | CLI-23, MOD-DIFF-GENERIC-01, DEP-DIFF-01 |
-| PR-790 | `790.yaml`: expected delta on O-VAL-790 | P0 | verified | 2 expected deltas observed; the O-VAL-790-ORG crash stays unexpected (KB-008) | CS790-01, MOD-DIFF-790-01 |
-| PR-792 | `792.yaml`: webapp tag, expected delta on W-STALE-STATUS-792 | P1 | verified (offline part), implemented (webapp part) | untrusted head `sha:d0d3b08` in docker vs `sha:9bdeb75`: 0 offline deltas, as the manifest states; W-STALE-STATUS-792 needs a target | CS792-01, APP-PR-03 |
-| PR-CHECK-MERGE | `local-check-merge.yaml`: `dirty:../otterdog` feat/check-merge-command, base v1.6.0, marker check-merge, scenario W-CMD-CHECK-MERGE | P2 | verified (offline part), implemented (webapp part) | `dirty:` checkout vs `tag:v1.6.0`: 0 offline deltas (wave-2 run); W-CMD-CHECK-MERGE needs a target | CM-01, CM-02, OPR-CHECKMERGE-01 |
+| PR-790 | `--change 790`: references of O-VAL-RULESET-STRICT (2 expected deltas, base `sha:b5f7bb1`) and O-VAL-ORG-RULESET-STRICT | P0 | verified | 2 expected deltas observed; the O-VAL-ORG-RULESET-STRICT crash stays unexpected (KB-008) | CS790-01, MOD-DIFF-790-01 |
+| PR-792 | `--change 792`: reference of W-PR-STALE-SNAPSHOT (expected delta, merge base) | P1 | verified (offline part), implemented (webapp part) | untrusted head `sha:d0d3b08` in docker vs `sha:9bdeb75`: 0 offline deltas, as the reference states; W-PR-STALE-SNAPSHOT needs a target | CS792-01, APP-PR-03 |
+| PR-CHECK-MERGE | `--change check-merge`: `dirty:../otterdog` feat/check-merge-command, base v1.6.0 (references of W-CMD-CHECK-MERGE, W-CMD-CHECK-MERGE-REFRESH, W-CMD-UPDATE-BRANCH) | P2 | verified (offline part), implemented (webapp part) | `dirty:` checkout vs `tag:v1.6.0`: 0 offline deltas (wave-2 run); W-CMD-CHECK-MERGE needs a target | CM-01, CM-02, OPR-CHECKMERGE-01 |
 
 ### Harness features
 
@@ -291,7 +291,7 @@ yet. Known-bug items assert the correct behaviour and run as non-strict expected
 
 | Id | Scenario | Priority | Status | Implemented by | Features (coverage.yaml) |
 |---|---|---|---|---|---|
-| `regression.779-user-bypass-actors` | #779: an individual user ('@login') as a ruleset bypass actor | P2 | implemented | `regressions/779-user-bypass-actors.yaml` (fixed_in 1.7.0.dev7) | `rulesets.bypass-actors`, `regression.779-user-bypass-actors` |
+| `regression.user-bypass-actors` | an individual user ('@login') as a ruleset bypass actor | P2 | implemented | `regressions/user-bypass-actors.yaml` (fixed_in 1.7.0.dev7) | `rulesets.bypass-actors`, `regression.779-user-bypass-actors` |
 
 ### Enterprise scenarios (`scenarios/enterprise`)
 
@@ -489,12 +489,12 @@ the entry is still open); the others are still planned or future.
 |---|---|---|---|---|
 | C-ORG-SETTINGS | organization REST settings lifecycle (org level) | P0 | implemented: `cli.org.profile`, `cli.org.member-privileges`, `cli.org.signoff`, `cli.org.security-managers`, `cli.org.code-security-defaults` | MOD-ORGSET-REST-01, CLI-09 |
 | C-ORG-SECRETS | organization secrets lifecycle, `--update-secrets`, selected repositories | P0 | implemented: `cli.org.secret`, `cli.org.secret-private`, `cli.kb.org-secret-same-apply` (KB-022) | MOD-OSEC-01, PRV-SECVAR-01 |
-| C-REPO-PRIVATE | private repository and visibility-dependent fields; private repositories do not break import/plan on Free (#731, #791) | P0 | implemented: `cli.repo.visibility`, `cli.environment.private`, `regression.791-731-private-repo` | MOD-REPO-PRIV-01, REG-731-FREE, REG-767-791, MOD-DIFF-791-01 |
-| C-REPO-RENAME | rename through aliases, repo-filter isolation | P0 | verified offline: `O-LPLAN-RENAME`, `O-LPLAN-FILTER` (KB-077); live: `regression.472-rename-and-modify` (implemented) | MOD-REPO-RENAME-01, CLI-24 |
+| C-REPO-PRIVATE | private repository and visibility-dependent fields; private repositories do not break import/plan on Free (#731, #791) | P0 | implemented: `cli.repo.visibility`, `cli.environment.private`, `regression.private-repo-template-defaults` | MOD-REPO-PRIV-01, REG-731-FREE, REG-767-791, MOD-DIFF-791-01 |
+| C-REPO-RENAME | rename through aliases, repo-filter isolation | P0 | verified offline: `O-LPLAN-RENAME`, `O-LPLAN-FILTER` (KB-077); live: `regression.rename-and-modify` (implemented) | MOD-REPO-RENAME-01, CLI-24 |
 | C-CACHE-LIMIT | Actions cache storage limit on Free without billing; endpoint path check | P0 | implemented: `cli.org.cache-size`, `cli.repo.cache-limit` | MOD-FREE-CACHE-01, CACHE-LIMIT-001, PRV-ACT-01 |
 | C-HTTP-CACHE | a warm otterdog HTTP cache still detects out-of-band changes | P0 | implemented: `cli.http-cache` | PRV-CACHE-01 |
 | C-CRED-ERRORS | credential, scope and API error contract (messages, exit codes) | P0 | implemented in part: `cli.plan.missing-web-credentials`, `cli.token-scopes`, `cli.config-repo.missing`; verified offline: `O-LPLAN-ERRORS`, `O-CREDENTIALS-PROVIDERS` | CLI-21, PRV-ERR-01 |
-| C-BYPASS-ACTORS | ruleset bypass actors of every kind, user actors (#779), unknown actor types kept | P0 | implemented: `cli.ruleset.bypass` (KB-052 step), `cli.protection.app-checks`, `regression.779-user-bypass-actors`; unknown actor types planned | PRV-RS-01, BYPASS-USER-779, BYPASS-UNKNOWN-001, MOD-DIFF-767-779-01 |
+| C-BYPASS-ACTORS | ruleset bypass actors of every kind, user actors (#779), unknown actor types kept | P0 | implemented: `cli.ruleset.bypass` (KB-052 step), `cli.protection.app-checks`, `regression.user-bypass-actors`; unknown actor types planned | PRV-RS-01, BYPASS-USER-779, BYPASS-UNKNOWN-001, MOD-DIFF-767-779-01 |
 | C-TEMPLATE-HOOKS | template hook contract in the CLI | P0 | verified offline: `O-TEMPLATE-HOOK-VALIDATE`, `O-TEMPLATE-HOOK-PRE-ADD`; validate-team, post-add-objects and the live part planned | CFG-08, MOD-HOOKS-01 |
 | C-ORG-ACTIONS | organization and repository Actions settings, org coercion | P1 | implemented: `cli.org.actions-allowed`, `cli.org.actions-enabled-repositories`, `cli.org.workflow-permissions`, `cli.repo.actions`, `cli.repo.org-coerced` | MOD-ORGWF-01, MOD-REPOWF-01, PRV-ACT-01 |
 | C-REPO-ARCHIVE | archive and unarchive ordering | P1 | implemented: `cli.repo.archive` | MOD-REPO-ARCHIVE-01 |
@@ -603,13 +603,13 @@ the entry is still open); the others are still planned or future.
 
 | Id | Scenario | Priority | Status | Sources |
 |---|---|---|---|---|
-| D-TEMPLATE-MATRIX | base versus PR code crossed with base versus PR template (manifest `template`) | P0 | planned | CFG-06 |
+| D-TEMPLATE-MATRIX | base versus PR code crossed with base versus PR template (reference `template`) | P0 | planned | CFG-06 |
 | D-API-RECORDER | record the GitHub API calls of both sides and compare them | P0 | planned | PRV-DIFF-01 |
 | D-WEBAPP | differential run of the webapp suite (merge-base image versus PR image) | P0 | planned | APP-PR-01, DEP-DIFF-01 |
 | D-CHECK-STATUS | `check-status` JSON as the live-state oracle, base versus head | P1 | planned | REG-CHECK-STATUS-ORACLE |
 | D-DEFAULTS-BLAST-RADIUS | blast radius of an otterdog-defaults template change | P1 | planned | CFG-26 |
 | D-REPLAY-BURST | replay a captured delivery burst concurrently (#792 race) | P1 | planned | DEP-DIFF-02 |
-| D-CROSS-VERSION-790 | PR validated by the base build, merged after the upgrade to the head build | P2 | planned | CS790-05 |
+| D-CROSS-VERSION-VALIDATION | PR validated by the base build, merged after the upgrade to the head build | P2 | planned | CS790-05 |
 
 ### Web UI
 

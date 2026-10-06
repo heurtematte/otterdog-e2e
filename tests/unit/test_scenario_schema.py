@@ -126,8 +126,8 @@ def test_schema_knows_the_file_forms() -> None:
 
 
 def test_vscode_maps_scenario_files_to_the_schemas() -> None:
-    """settings.json maps the scenario directories to the schema, known_bugs.yaml, the coverage matrix and the PR
-    manifests to a permissive one (otherwise SchemaStore's unrelated CrowdSec 'scenario' schema reports false errors)."""
+    """settings.json maps the scenario directories to the schema, known_bugs.yaml and the coverage matrix to a
+    permissive one (otherwise SchemaStore's unrelated CrowdSec 'scenario' schema reports false errors)."""
     settings = json.loads((ROOT / ".vscode" / "settings.json").read_text(encoding="utf-8"))
     mapping = settings["yaml.schemas"]
     assert set(mapping[f"./{SCHEMA_FILE}"]) == {
@@ -136,7 +136,6 @@ def test_vscode_maps_scenario_files_to_the_schemas() -> None:
     assert set(mapping["./.vscode/any.schema.json"]) == {
         "scenarios/known_bugs.yaml",
         "scenarios/coverage.yaml",
-        "scenarios/otterdog-prs/*.yaml",
     }
     permissive = json.loads((ROOT / ".vscode" / "any.schema.json").read_text(encoding="utf-8"))
     assert set(permissive) <= {"$schema", "title", "description"}, "the permissive schema must accept anything"

@@ -271,14 +271,40 @@ PUBLIC_NAMES: dict[str, list[str]] = {
     "otterdog_e2e.observe": ["Observation", "ObservationRecorder", "load_observations"],
     "otterdog_e2e.differential": [
         "ExpectedDelta",
-        "PrManifest",
-        "load_pr_manifest",
         "Delta",
         "DiffReport",
         "compare",
     ],
+    # scenario references to otterdog PRs / named changes and the ChangeSpec of a differential run (SPEC 14)
+    "otterdog_e2e.changes": [
+        "ChangeError",
+        "ChangeId",
+        "ChangeSpec",
+        "DeltaPattern",
+        "Reference",
+        "ReferencingScenario",
+        "parse_references",
+        "default_change",
+        "conflicts",
+        "change_spec",
+        "collect_references",
+        "load_change",
+    ],
     "otterdog_e2e.selection": ["PATH_RULES", "ALWAYS_TAGS", "select_tags"],
     "otterdog_e2e.report": ["build_summary", "scrub_artifacts", "run_overview", "tally_text"],
+    # the coverage matrix (scenarios/coverage.yaml): checks and rendering of tests/unit/test_coverage_matrix.py
+    "otterdog_e2e.coverage_matrix": [
+        "MatrixProject",
+        "MatrixError",
+        "load_matrix",
+        "outline_needs",
+        "source_path",
+        "template_keys",
+        "model_keys",
+        "render_details",
+        "EXPECTED_INVENTORY",
+        "REGENERATE",
+    ],
     "otterdog_e2e.known_bugs": ["KnownBug", "load"],
     "otterdog_e2e.inject": ["InjectError", "JsonnetFile", "SourceText", "FileContext", "load_source", "render_source"],
     "otterdog_e2e.appmanifest": [
@@ -330,6 +356,63 @@ PUBLIC_NAMES: dict[str, list[str]] = {
         "OPTIONS",
     ],
     "otterdog_e2e.cli": ["main"],
+    # AI-assisted test writing: context bundles and checks of ``otterdog-e2e assist`` (docs/ai-assistance.md)
+    "otterdog_e2e.assist": [],
+    "otterdog_e2e.assist.bundle": [
+        "AssistError",
+        "AssistUsageError",
+        "UNTRUSTED_INTRO",
+        "UNTRUSTED_NOTICE",
+        "assist_root",
+        "write_bundle",
+        "fence_for",
+        "fenced",
+        "untrusted_block",
+        "code_span",
+        "truncate_text",
+    ],
+    "otterdog_e2e.assist.repo": ["ProjectIndex", "ScenarioRef", "read_scenario_ref", "python_scenario_refs"],
+    "otterdog_e2e.assist.pr_context": [
+        "PATCH_MAX_LINES",
+        "PATCH_MAX_BYTES",
+        "DIFF_MAX_BYTES",
+        "PrContext",
+        "fetch_pull",
+        "build_pr_context",
+        "render_diff",
+        "render_markdown",
+        "write_pr_context",
+    ],
+    "otterdog_e2e.assist.check": [
+        "Problem",
+        "CheckResult",
+        "Checker",
+        "changed_files",
+        "file_kind",
+        "check_files",
+        "lint_skipped",
+        "lint_keyword",
+        "lint_result",
+        "render_text",
+    ],
+    "otterdog_e2e.assist.triage": [
+        "CATEGORIES",
+        "RULES",
+        "resolve_run_dir",
+        "latest_run_dir",
+        "scrub_or_refuse",
+        "classify",
+        "build_triage",
+        "render_markdown",
+        "write_triage",
+    ],
+    "otterdog_e2e.assist.coverage": [
+        "CoverageQuery",
+        "parse_query",
+        "build_coverage",
+        "render_markdown",
+        "write_coverage",
+    ],
     # web-UI tier (docs/web-ui-testing.md)
     "otterdog_e2e.webui": [],
     "otterdog_e2e.webui.mapping": ["WebSetting", "WEB_SETTINGS", "WEB_KEYS", "REST_FIELDS", "source_problems"],
@@ -1098,12 +1181,31 @@ SIGNATURES: dict[str, list[str]] = {
     "otterdog_e2e.observe.ObservationRecorder.scope": ["self", "scenario", "step"],
     "otterdog_e2e.observe.ObservationRecorder.record": ["self", "kind", "key", "content", "meta"],
     "otterdog_e2e.observe.load_observations": ["path"],
-    "otterdog_e2e.differential.load_pr_manifest": ["path"],
+    "otterdog_e2e.changes.parse_references": ["value", "where", "steps"],
+    "otterdog_e2e.changes.default_change": ["option", "sut"],
+    "otterdog_e2e.changes.change_spec": ["change", "entries"],
+    "otterdog_e2e.changes.collect_references": ["scenarios_dir", "tests_dir"],
+    "otterdog_e2e.changes.load_change": ["scenarios_dir", "tests_dir", "change"],
     "otterdog_e2e.differential.compare": ["base", "head", "base_label", "head_label", "expected"],
     "otterdog_e2e.differential.DiffReport.to_markdown": ["self", "max_diff_lines"],
     "otterdog_e2e.selection.select_tags": ["changed_files"],
     "otterdog_e2e.report.build_summary": ["artifacts_dir", "redactor"],
     "otterdog_e2e.report.scrub_artifacts": ["root", "redactor"],
+    "otterdog_e2e.coverage_matrix.MatrixProject.all_problems": ["self"],
+    "otterdog_e2e.assist.bundle.write_bundle": ["parent", "name", "files", "marker", "redactor"],
+    "otterdog_e2e.assist.pr_context.build_pr_context": [
+        "number",
+        "sha",
+        "upstream",
+        "http",
+        "settings",
+        "risky_patterns",
+    ],
+    "otterdog_e2e.assist.check.check_files": ["project_root", "paths", "deleted"],
+    "otterdog_e2e.assist.check.lint_result": ["run_dir", "exit_code", "live", "sut"],
+    "otterdog_e2e.assist.triage.scrub_or_refuse": ["directory", "redactor"],
+    "otterdog_e2e.assist.triage.build_triage": ["directory", "project_root", "baseline", "scrub"],
+    "otterdog_e2e.assist.coverage.build_coverage": ["root", "query"],
     "otterdog_e2e.known_bugs.load": ["path"],
     "otterdog_e2e.onboard.envfile.update_env_file": ["path", "updates", "header"],
     "otterdog_e2e.appmanifest.build_manifest": ["target", "webhook_url", "redirect_url"],
@@ -1299,18 +1401,11 @@ DATACLASS_FIELDS: dict[str, list[str]] = {
     "otterdog_e2e.scenarios.engine.SutSide": ["role", "installed", "cli", "recorder", "template"],
     "otterdog_e2e.observe.Observation": ["sut", "role", "scenario", "step", "kind", "key", "content", "meta"],
     "otterdog_e2e.differential.ExpectedDelta": ["scenario", "step", "kind", "key", "note"],
-    "otterdog_e2e.differential.PrManifest": [
-        "pr",
-        "title",
-        "base",
-        "template",
-        "tags",
-        "scenarios",
-        "scenario_dirs",
-        "expected_deltas",
-        "markers",
-        "notes",
-    ],
+    "otterdog_e2e.changes.ChangeId": ["pr", "slug"],
+    "otterdog_e2e.changes.DeltaPattern": ["step", "kind", "key", "note"],
+    "otterdog_e2e.changes.Reference": ["change", "note", "expected_deltas", "base", "template"],
+    "otterdog_e2e.changes.ReferencingScenario": ["scenario", "source", "kind", "reference", "test"],
+    "otterdog_e2e.changes.ChangeSpec": ["change", "base", "template", "scenarios", "expected_deltas", "referencing"],
     "otterdog_e2e.differential.Delta": [
         "scenario",
         "step",
@@ -1324,6 +1419,8 @@ DATACLASS_FIELDS: dict[str, list[str]] = {
     ],
     "otterdog_e2e.differential.DiffReport": ["base_label", "head_label", "deltas", "unchanged", "not_comparable"],
     "otterdog_e2e.known_bugs.KnownBug": ["id", "title", "status", "evidence", "upstream", "fixed_in", "scenarios"],
+    "otterdog_e2e.assist.check.Problem": ["file", "location", "message"],
+    "otterdog_e2e.assist.repo.ScenarioRef": ["id", "kind", "path", "tier"],
 }
 
 
@@ -1547,7 +1644,7 @@ def test_plugin_registers_markers_and_options(pytestconfig: pytest.Config) -> No
         "--e2e-keep",
         "--e2e-no-reset",
         "--e2e-webapp-image",
-        "--e2e-pr-manifest",
+        "--e2e-change",
         "--e2e-strict-diff",
         "--e2e-no-http-cache",
         "--e2e-allow-remote-webapp",
@@ -1582,6 +1679,11 @@ def test_cli_entry_point_lists_commands() -> None:
         assert command in result.output
     assert "app-manifest" in result.output
     assert "setup" in result.output and "ci-sync" in result.output
+    assert "assist" in result.output
+    assist = CliRunner().invoke(main, ["assist", "--help"])
+    assert assist.exit_code == 0
+    for command in ("pr-context", "check", "triage", "coverage"):
+        assert command in assist.output
 
 
 # ------------------------------------------------------------------------------------------------------------------
@@ -2555,9 +2657,9 @@ def test_differential_value_objects() -> None:
     """ExpectedDelta matching and DiffReport partitions."""
     from otterdog_e2e.differential import Delta, DiffReport, ExpectedDelta
 
-    expected = ExpectedDelta("O-VAL-790", kind="cli")
-    assert expected.matches("O-VAL-790", "s1", "cli", "validate")
-    assert not expected.matches("O-VAL-790", "s1", "oracle", "x")
+    expected = ExpectedDelta("O-VAL-RULESET-STRICT", kind="cli")
+    assert expected.matches("O-VAL-RULESET-STRICT", "s1", "cli", "validate")
+    assert not expected.matches("O-VAL-RULESET-STRICT", "s1", "oracle", "x")
     deltas = [
         Delta("a", "s", "cli", "k", "1", "2", "-1\n+2", True),
         Delta("b", "s", "cli", "k", None, "2", "+2", False),

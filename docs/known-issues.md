@@ -28,6 +28,9 @@ How the registry is used:
   ([setup-free-org.md](setup-free-org.md#fine-grained-personal-access-tokens)). The matrix features
   they affect list them in `known_bugs`. A bug that only one step of a YAML scenario exercises is declared by that
   step (`known_bug` of the step) and is not listed in `scenarios`: its section names the step, its evidence the file.
+- `otterdog-e2e assist triage` pre-classifies the failures of a run, and the `triage-e2e-run` skill drafts new
+  entries and sections in this format with an AI agent ([ai-assistance.md](ai-assistance.md)); a human checks the
+  evidence and the reproduction before an entry is merged.
 
 ## Reproducing offline
 
@@ -79,7 +82,7 @@ shortened to the relevant lines.
 | KB-005 | one-way dict diffs (team_permissions/custom_properties removals) | confirmed | model | `cli.kb.team-permissions-removal` |
 | KB-006 | org cache storage-limit on `/orgs/...` instead of `/organizations/...` | suspected | provider | - |
 | KB-007 | cache storage-limit PUT although the GET said unavailable | suspected | provider | - |
-| KB-008 | org ruleset validation AttributeError (#790, deployment rules) | confirmed | model | `enterprise.org-ruleset.790-missing-strict` |
+| KB-008 | org ruleset validation AttributeError (#790, deployment rules) | confirmed | model | `enterprise.org-ruleset.missing-strict` |
 | KB-009 | org rulesets rejected unless plan enterprise (#776) | confirmed | model | - |
 | KB-010 | canonical-diff labels inverted | confirmed | CLI | - |
 | KB-011 | check-status always exits 0 | confirmed | CLI | `cli.kb.check-status-exit-code` |
@@ -328,7 +331,7 @@ write `max_cache_size_gb::: <n>` and require the capability.
 ### KB-008 — org ruleset validation raises AttributeError for incomplete nested rules (#790) and deployment rules
 
 Status: **confirmed** · Upstream: https://github.com/eclipse-csi/otterdog/pull/790 ·
-Scenarios: `enterprise.org-ruleset.790-missing-strict`
+Scenarios: `enterprise.org-ruleset.missing-strict`
 
 Evidence: `otterdog/models/ruleset.py:128-136`, `otterdog/models/ruleset.py:57-65`, `otterdog/models/ruleset.py:240-247`,
 `otterdog/models/ruleset.py:451-458`, `otterdog/models/github_organization.py:84-85`,
@@ -342,7 +345,7 @@ posts the generic "Validation failed while evaluating the configuration". The va
 and `required_merge_queue` (any unset parameter) use the same call, but they never report a missing parameter
 (KB-031), so only their range and enum checks can reach it. Only reachable with
 `settings.plan: enterprise`, because other plans reject org rulesets first (KB-009). Repository rulesets are fine and
-get the intended error (`regression.790-repo-ruleset-without-strict`).
+get the intended error (`regression.repo-ruleset-without-strict`).
 
 #### Reproduction
 
@@ -363,12 +366,13 @@ $ otterdog validate -c otterdog.json --local e2e-test-org         # exit code 2
 │ Error:   'GitHubOrganization' object has no attribute 'get_model_header'
 ```
 
-Offline evidence in this project: `O-VAL-790-ORG` (`scenarios/offline/val-790-org.yaml`, checked by
+Offline evidence in this project: `O-VAL-ORG-RULESET-STRICT` (`scenarios/offline/validation/val-org-ruleset-strict.yaml`, checked by
 `tests/offline/test_scenarios.py`) renders exactly this case on the e2e offline organization. On SUTs containing #790
 (9bdeb75, d0d3b08) `validate --local` exits 2 with the AttributeError and the test reports it as an xfail. On SUTs
 without #790 (v1.6.1, b5f7bb1) the org ruleset validates and the test passes. The scenario is deliberately not
 listed under `scenarios` in `known_bugs.yaml`: that would add an xfail on every SUT, and SUTs without #790 would then
-show XPASS. In the #790 differential (`scenarios/otterdog-prs/790.yaml`) the crash is the one *unexpected* delta.
+show XPASS. In the #790 differential (`--change 790`: the references of O-VAL-RULESET-STRICT and O-VAL-ORG-RULESET-STRICT) the
+crash is the one *unexpected* delta.
 
 #### Deployment rules (since before v1.6.1)
 
@@ -636,8 +640,8 @@ Evidence: `otterdog/webapp/db/service.py:505-564`, `otterdog/webapp/tasks/check_
 unconditionally. CheckConfigurationInSyncTask sleeps at least 60 s (backoff) while holding the snapshot of the open
 PR, so it can turn a merged PR back to `open`. Upstream incident: osgi/.eclipsefdn#25. PR #792 makes the update
 conditional and atomic. Once it is merged, set `fixed_in: pr-792`. The deterministic e2e check (injecting a stale
-`converted_to_draft` snapshot after the merge) belongs to the webapp tier (W-STALE-STATUS-792, manifest
-scenarios/otterdog-prs/792.yaml).
+`converted_to_draft` snapshot after the merge) belongs to the webapp tier (W-PR-STALE-SNAPSHOT, whose reference to
+#792 declares the expected delta).
 
 ### KB-019 — the sync status is `success` even when the configuration is out of sync
 

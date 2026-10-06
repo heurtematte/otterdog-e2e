@@ -179,9 +179,9 @@ def test_scenario_selected(tmp_path: Path, globs: tuple[str, ...], tags: tuple[s
     assert scenario_selected(scenario, globs=globs, tags=tags) is selected
 
 
-def test_scenario_selected_exemption_and_manifest_scenarios(tmp_path: Path) -> None:
-    """tags_exempt (tests/unit, tests/offline) ignores --e2e-tags, never --e2e-scenario; manifest scenarios pass the
-    tags filter like tagged items."""
+def test_scenario_selected_exemption_and_change_scenarios(tmp_path: Path) -> None:
+    """tags_exempt (tests/unit, tests/offline) ignores --e2e-tags, never --e2e-scenario; the scenarios referencing the
+    change under test pass the tags filter like tagged items."""
     scenario = load_scenario(write(tmp_path, "cli/team.yaml", LIVE))
     assert scenario_selected(scenario, tags=("webapp",), tags_exempt=True)
     assert not scenario_selected(scenario, globs=("O-*",), tags=("webapp",), tags_exempt=True)

@@ -53,8 +53,8 @@ FORWARD_TO ?= http://127.0.0.1:5000/github-webhook/receive
 SINCE ?= 10m
 KEEP ?= 3
 ARTIFACTS ?= $(or $(E2E_ARTIFACTS),artifacts)
-# newest run directory below the artifacts root (evaluated only by the targets that use it)
-RUN ?= $(shell ls -1td "$(ARTIFACTS)"/*/ 2>/dev/null | head -n 1)
+# newest run directory below the artifacts root, the assist bundles excepted (evaluated only by the targets that use it)
+RUN ?= $(shell ls -1td "$(ARTIFACTS)"/*/ 2>/dev/null | grep -v '/assist/$$' | head -n 1)
 PARALLEL_ARG = $(if $(PARALLEL),--parallel "$(PARALLEL)")
 
 .PHONY: help init unit lint format typecheck check offline lint-scenarios cli webhooks webapp web-ui enterprise \

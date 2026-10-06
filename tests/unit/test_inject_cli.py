@@ -81,7 +81,7 @@ def test_offline_injection(session: dict[str, Any], tmp_path: Path) -> None:
         "--e2e-tags=",
         "--e2e-scenario=",
         "--e2e-base-sut=",
-        "--e2e-pr-manifest=",
+        "--e2e-change=",
     ]
     scenario = session["scenario"]
     assert scenario.tier == "offline" and scenario.variables == {"label": "x", "plan": "team"}

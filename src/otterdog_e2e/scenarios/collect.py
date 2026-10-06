@@ -14,8 +14,8 @@ filters; inside one filter the comma separated values are ORed (any glob matches
 fnmatch; the item carries any of the tags), between the two filters it is AND; an empty filter keeps everything.
 Items of tests/unit and tests/offline (TAGS_EXEMPT_TIERS) are exempt from ``--e2e-tags`` (the offline regression tier
 always runs in full) but not from ``--e2e-scenario``: once globs are given, items without a matching scenario id
-(unit tests included) are deselected. A PR manifest's ``scenarios`` (``--e2e-pr-manifest``) are extra scenarios of the
-tags filter: an item whose scenario id matches one of them passes it like a tagged item.
+(unit tests included) are deselected. The scenarios referencing the change under test (``--e2e-change``, changes.py)
+are extra scenarios of the tags filter: an item whose scenario id matches one of them passes it like a tagged item.
 """
 
 from __future__ import annotations
@@ -89,13 +89,24 @@ def scenario_marks(scenario: Scenario) -> list[pytest.MarkDecorator]:
 
 
 def collect_scenarios(directories: Sequence[Path], *, tier: str | None = None) -> list[Scenario]:
-    """Scenarios of several directories (load_scenarios each; ids must be unique across them)."""
+    """Scenarios of several directories (load_scenarios each; ids must be unique across them, and the references of
+    one change must not declare different ``base`` or ``template`` values: changes.conflicts)."""
+    from otterdog_e2e.changes import ReferencingScenario, conflicts
+
     scenarios = [scenario for directory in directories for scenario in load_scenarios(directory, tier=tier)]
     seen: dict[str, Path] = {}
     for scenario in scenarios:
         if scenario.id in seen:
             raise ScenarioError(f"duplicate scenario id {scenario.id!r} in {seen[scenario.id]} and {scenario.source}")
         seen[scenario.id] = scenario.source
+    entries = [
+        ReferencingScenario(scenario.id, scenario.source, "yaml", reference)
+        for scenario in scenarios
+        for reference in scenario.references
+    ]
+    problems = conflicts(entries)
+    if problems:
+        raise ScenarioError("; ".join(problems))
     return scenarios
 
 

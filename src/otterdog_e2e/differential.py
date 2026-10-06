@@ -1,9 +1,10 @@
-"""Differential comparison of base vs head observations and otterdog PR manifests (SPEC 14, F6).
+"""Differential comparison of base vs head observations (SPEC 14, F6).
 
 Only scenarios recorded on BOTH sides are compared; others are listed as not comparable, never as deltas. Within a
-comparable scenario an observation missing on one side is a delta (base or head is None). A PR manifest
-(scenarios/otterdog-prs/<N>.yaml) declares the scenarios to run and the deltas the PR is expected to cause; expected
-deltas match with fnmatch patterns (None = any), and those that match nothing are reported as "not observed".
+comparable scenario an observation missing on one side is a delta (base or head is None). The scenarios referencing
+the change under test declare the deltas it is expected to cause (``references[].expected_deltas``, gathered by
+changes.load_change into ExpectedDelta items); expected deltas match with fnmatch patterns (None = any), and those
+that match nothing are reported as "not observed".
 """
 
 from __future__ import annotations
@@ -13,12 +14,10 @@ import fnmatch
 import html
 import json
 import re
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import asdict, dataclass, field
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
-
-import yaml
 
 from otterdog_e2e.observe import base_key, duplicate_key, load_observations
 from otterdog_e2e.redact import REDACTOR, Redactor
@@ -26,7 +25,6 @@ from otterdog_e2e.redact import REDACTOR, Redactor
 if TYPE_CHECKING:
     from otterdog_e2e.observe import Observation
 
-TEMPLATE_MODES = ("own", "head", "base")  # which template each side uses (default: each SUT's own)
 MARKDOWN_FILE = "differential.md"
 JSON_FILE = "differential.json"
 MARKDOWN_MAX_BYTES = 900 * 1024  # stays below GitHub's 1 MiB job summary limit
@@ -34,13 +32,9 @@ SIDES = ("base", "head")
 _FENCE_RE = re.compile(r"`{3,}")
 
 
-class PrManifestError(ValueError):
-    """Invalid PR manifest (unknown keys, wrong types or values)."""
-
-
 @dataclass
 class ExpectedDelta:
-    """A delta a PR is expected to cause; fields are fnmatch patterns, None fields match anything."""
+    """A delta a change is expected to cause; fields are fnmatch patterns, None fields match anything."""
 
     scenario: str
     step: str | None = None
@@ -61,147 +55,6 @@ class ExpectedDelta:
     def label(self) -> str:
         """``scenario/step/kind/key`` with ``*`` for unset fields."""
         return "/".join(part if part is not None else "*" for part in (self.scenario, self.step, self.kind, self.key))
-
-
-@dataclass
-class PrManifest:
-    """scenarios/otterdog-prs/<N>.yaml (``pr: 0`` for a local change without an upstream PR)."""
-
-    pr: int
-    title: str = ""
-    base: str | None = None
-    template: str = "own"
-    tags: list[str] = field(default_factory=list)
-    scenarios: list[str] = field(default_factory=list)
-    scenario_dirs: list[str] = field(default_factory=list)
-    expected_deltas: list[ExpectedDelta] = field(default_factory=list)
-    markers: dict[str, str] = field(default_factory=dict)
-    notes: str = ""
-
-
-MANIFEST_KEYS = frozenset(PrManifest.__dataclass_fields__)
-EXPECTED_DELTA_KEYS = frozenset(ExpectedDelta.__dataclass_fields__)
-
-
-class _ManifestReader:
-    """Typed accessors over the raw mapping of one manifest file (errors name the file and the key)."""
-
-    def __init__(self, path: Path, data: Mapping[str, Any]) -> None:
-        """Bind the file path (for messages) and its decoded mapping."""
-        self.path = path
-        self.data = data
-
-    def error(self, message: str) -> PrManifestError:
-        """PrManifestError prefixed with the manifest path."""
-        return PrManifestError(f"{self.path}: {message}")
-
-    def pr(self) -> int:
-        """Required non-negative integer ``pr`` (a numeric file name must equal it)."""
-        value = self.data.get("pr")
-        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-            raise self.error("'pr' must be a non-negative integer (0 for a local change)")
-        if self.path.stem.isdigit() and int(self.path.stem) != value:
-            raise self.error(f"'pr: {value}' does not match the file name")
-        return value
-
-    def text(self, key: str, default: str = "") -> str:
-        """Optional string (None -> default)."""
-        value = self.data.get(key)
-        if value is None:
-            return default
-        if not isinstance(value, str):
-            raise self.error(f"'{key}' must be a string")
-        return value
-
-    def optional_text(self, key: str) -> str | None:
-        """Optional non-empty string or None."""
-        value = self.text(key)
-        return value or None
-
-    def strings(self, key: str) -> list[str]:
-        """Optional list of non-empty strings."""
-        value = self.data.get(key)
-        if value is None:
-            return []
-        if not isinstance(value, list) or not all(isinstance(item, str) and item for item in value):
-            raise self.error(f"'{key}' must be a list of non-empty strings")
-        return list(value)
-
-    def relative_dirs(self, key: str) -> list[str]:
-        """List of relative directories (no absolute paths, no '..')."""
-        values = self.strings(key)
-        for value in values:
-            path = PurePosixPath(value)
-            if path.is_absolute() or ".." in path.parts:
-                raise self.error(f"'{key}' entries must be relative paths without '..': {value!r}")
-        return values
-
-    def string_map(self, key: str) -> dict[str, str]:
-        """Optional mapping of strings to strings."""
-        value = self.data.get(key)
-        if value is None:
-            return {}
-        if not isinstance(value, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in value.items()):
-            raise self.error(f"'{key}' must be a mapping of strings to strings")
-        return dict(value)
-
-    def expected_deltas(self) -> list[ExpectedDelta]:
-        """``expected_deltas``: mappings {scenario, step?, kind?, key?, note?} or bare scenario patterns."""
-        value = self.data.get("expected_deltas")
-        if value is None:
-            return []
-        if not isinstance(value, list):
-            raise self.error("'expected_deltas' must be a list")
-        return [self.expected_delta(index, item) for index, item in enumerate(value)]
-
-    def expected_delta(self, index: int, item: Any) -> ExpectedDelta:
-        """One expected delta entry."""
-        where = f"expected_deltas[{index}]"
-        if isinstance(item, str) and item:
-            return ExpectedDelta(scenario=item)
-        if not isinstance(item, dict):
-            raise self.error(f"{where} must be a mapping or a scenario pattern")
-        unknown = sorted(set(item) - EXPECTED_DELTA_KEYS)
-        if unknown:
-            raise self.error(f"{where} has unknown keys {unknown}")
-        if not isinstance(item.get("scenario"), str) or not item["scenario"]:
-            raise self.error(f"{where} needs a non-empty 'scenario' pattern")
-        for name in ("step", "kind", "key"):
-            if item.get(name) is not None and not isinstance(item[name], str):
-                raise self.error(f"{where}.{name} must be a string")
-        note = item.get("note") or ""
-        if not isinstance(note, str):
-            raise self.error(f"{where}.note must be a string")
-        return ExpectedDelta(item["scenario"], item.get("step"), item.get("kind"), item.get("key"), note)
-
-
-def load_pr_manifest(path: Path) -> PrManifest:
-    """Load and validate a PR manifest (ValueError on unknown keys or bad values)."""
-    try:
-        data = yaml.safe_load(path.read_text(encoding="utf-8"))
-    except yaml.YAMLError as exc:
-        raise PrManifestError(f"{path}: invalid YAML: {exc}") from exc
-    reader = _ManifestReader(path, data if isinstance(data, dict) else {})
-    if not isinstance(data, dict):
-        raise reader.error("a PR manifest must be a mapping")
-    unknown = sorted(set(data) - MANIFEST_KEYS)
-    if unknown:
-        raise reader.error(f"unknown keys {unknown} (allowed: {sorted(MANIFEST_KEYS)})")
-    template = reader.text("template", "own")
-    if template not in TEMPLATE_MODES:
-        raise reader.error(f"'template' must be one of {TEMPLATE_MODES}, not {template!r}")
-    return PrManifest(
-        pr=reader.pr(),
-        title=reader.text("title"),
-        base=reader.optional_text("base"),
-        template=template,
-        tags=reader.strings("tags"),
-        scenarios=reader.strings("scenarios"),
-        scenario_dirs=reader.relative_dirs("scenario_dirs"),
-        expected_deltas=reader.expected_deltas(),
-        markers=reader.string_map("markers"),
-        notes=reader.text("notes"),
-    )
 
 
 @dataclass
@@ -402,7 +255,7 @@ def _verdict(report: DiffReport) -> str:
     if unexpected:
         return f"**{unexpected} unexpected delta(s)** between base and head."
     if report.deltas:
-        return "Only expected deltas: every difference is declared by the PR manifest."
+        return "Only expected deltas: every difference is declared by the references of the change."
     return "No differences between base and head on the comparable scenarios."
 
 
@@ -496,15 +349,15 @@ class _MarkdownWriter:
         return "\n".join(lines)
 
     def unmatched_section(self) -> list[str]:
-        """Expected deltas (PR manifest) that matched no delta."""
+        """Expected deltas (references of the change) that matched no delta."""
         items = self.report.unmatched_expected
         if not items:
             return []
         lines = [f"- {md_code(item.label())}" + (f" — {item.note}" if item.note else "") for item in items]
         header = (
             f"## Expected deltas not observed ({len(items)})\n\n"
-            "The PR manifest declares these deltas but base and head behaved identically (or the scenario was not "
-            "comparable): the change may not have the intended effect."
+            "The references of the change declare these deltas but base and head behaved identically (or the scenario "
+            "was not comparable): the change may not have the intended effect."
         )
         return [header + "\n\n" + "\n".join(lines)]
 

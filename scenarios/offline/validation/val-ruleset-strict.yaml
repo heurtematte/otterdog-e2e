@@ -1,0 +1,84 @@
+# Offline tier (SPEC 19): validation of the required status checks of a repository ruleset ('strict' parameter).
+# Also the differential proof of concept of eclipse-csi/otterdog#790 (references below):
+#   otterdog-e2e run --sut sha:9bdeb75 --change 790 --suite offline,differential
+# (or: pytest tests/offline tests/differential --e2e-sut=sha:9bdeb75 --e2e-base-sut=sha:b5f7bb1 --e2e-change=790)
+# then read <artifacts>/<run>/differential.md: the two expected deltas below, plus ONE unexpected delta on
+# O-VAL-ORG-RULESET-STRICT (see its reference): every other observation is unchanged.
+id: O-VAL-RULESET-STRICT
+title: Ruleset status checks without 'strict' are a validation error
+description: >-
+  A repository ruleset whose required_status_checks object replaces the template default (no 'strict') passed
+  validation before eclipse-csi/otterdog#790 and only failed at apply time ("Error for key
+  strict_required_status_checks_policy: 'strict'"). SUTs that contain #790 (squash commit 9bdeb75) report "has not
+  set required parameter 'required_status_checks.strict'" as a validation error and abort local-plan; older SUTs
+  validate the configuration and plan the ruleset. The first step is SUT-dependent, so its YAML only records the
+  outcome (tests/offline/test_scenarios.py asserts the result that matches the SUT's history and the reference to
+  #790 below declares the expected differential deltas). The second step sets 'strict' and must validate and plan
+  identically on every SUT: the fix must not reject complete status checks.
+priority: P0
+tags: [offline, rulesets]
+observe: true
+variables: {plan: free}
+references:
+  - pr: 790
+    note: >-
+      "fix: validate required status checks of rulesets": Ruleset.validate calls StatusCheckSettings.validate, so a
+      ruleset whose status checks lack 'strict' is refused at validation instead of failing at apply. Merged by squash
+      as 9bdeb75f3e82a6cbd107d6bc3c9ec90392475c08 (PR head 0cee9e3). The base is the first parent of the squash commit,
+      b5f7bb1 (#791), so the only difference between both sides is #790 itself (otterdog/models/ruleset.py +3 lines,
+      tests/models/test_ruleset.py); through the PR flow (otterdog-e2e pr 790 --sha
+      0cee9e302282fefa092b4e0767248a997a9272ea, untrusted pr: SUT in docker) this base overrides the merge base of the
+      PR head with main (a77ad1c, #784), which predates #791 and would add #791's own changes to the comparison. The
+      example template is identical on both sides, so template own and head give the same observations. Step
+      with-strict ('strict' set) and every other offline scenario are expected to be unchanged: the fix must not
+      reject complete status checks.
+    base: sha:b5f7bb1c79ad29cdcde8506f5fa7ec4c070ffda8
+    template: own
+    expected_deltas:
+      - step: no-strict
+        kind: cli
+        key: validate
+        note: >-
+          head reports "has not set required parameter 'required_status_checks.strict'" as a validation error (exit 1);
+          base validated the ruleset and only failed at apply time ("Error for key strict_required_status_checks_policy")
+      - step: no-strict
+        kind: cli
+        key: local-plan
+        note: >-
+          head aborts local-plan on the validation error (exit 1, no Plan: line); base planned the repository and its
+          ruleset (Plan: 2 to add)
+steps:
+  - name: no-strict
+    base_fragments: {}
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-rs') {
+            rulesets: [
+              orgs.newRepoRuleset('{{ p }}-rs-main') {
+                include_refs+: ['~DEFAULT_BRANCH'],
+                required_status_checks: { status_checks: ['ci'] },
+              },
+            ],
+          }
+    plan: {expect: any}
+  - name: with-strict
+    base_fragments: {}
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-rs') {
+            rulesets: [
+              orgs.newRepoRuleset('{{ p }}-rs-main') {
+                include_refs+: ['~DEFAULT_BRANCH'],
+                required_status_checks+: { strict: true, status_checks+: ['ci'] },
+              },
+            ],
+          }
+    validate: {ok: true, errors: 0}
+    plan:
+      expect: changes
+      contains:
+        - 'add repository[name="{{ p }}-rs"]'
+        - 'add repo_ruleset[name="{{ p }}-rs-main", repository={{ p }}-rs]'
+      counts: {add: 2, change: 0, delete: 0}

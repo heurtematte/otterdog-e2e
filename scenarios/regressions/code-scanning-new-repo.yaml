@@ -1,6 +1,6 @@
-# Regression #767 (8e3a359, after v1.6.1): code scanning languages on a repository that does not exist yet.
-id: regression.767-code-scanning-new-repo
-title: "#767: code_scanning_default_languages on a not-yet-existing repository is a validation error"
+# Regression: code scanning languages on a repository that does not exist yet (8e3a359, after v1.6.1, #767).
+id: regression.code-scanning-new-repo
+title: "code_scanning_default_languages on a not-yet-existing repository is a validation error"
 description: |
   PR https://github.com/eclipse-csi/otterdog/pull/767: when a repository enables the code scanning default setup with
   languages but does not exist yet, validation lists the org repositories (live: GitHubProvider.get_repos) and
@@ -14,7 +14,12 @@ description: |
 priority: P1
 min_plan: free
 fixed_in: "1.7.0.dev2"
-tags: [repo, regression, code-scanning, pr-767]
+tags: [repo, regression, code-scanning]
+references:
+  - pr: 767
+    note: >-
+      8e3a359 (otterdog 1.7.0.dev2): validation reports code_scanning_default_languages on a repository that does not
+      exist yet; known-bad v1.6.1
 steps:
   - name: validate
     fragments:

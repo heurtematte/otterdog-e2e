@@ -1,8 +1,10 @@
-"""The YAML of scenarios/offline and the PR manifests of scenarios/otterdog-prs (no network, no otterdog, no docker).
+"""The YAML of scenarios/offline and the references of the repository's scenarios (no network, no otterdog, no docker).
 
 Every offline scenario loads with the strict model, renders for the offline organization exactly as OfflineEngine
-renders it, and follows the catalogue conventions; every PR manifest loads and only refers to offline scenarios and
-steps that exist; the #790 manifest classifies proof-of-concept-shaped observations as expected and unexpected deltas.
+renders it, and follows the catalogue conventions; the references of every scenario (YAML and Python tests) load, the
+references of one change agree on its base and template, and the migrated changes (#790, #792, check-merge) keep the
+expectations of their former PR manifests; the references to #790 classify proof-of-concept-shaped observations as
+expected and unexpected deltas.
 """
 
 from __future__ import annotations
@@ -14,41 +16,42 @@ from types import SimpleNamespace
 
 import pytest
 
-from otterdog_e2e.differential import PrManifest, compare, load_pr_manifest
+from otterdog_e2e.changes import ChangeId, ChangeSpec, ReferencingScenario, change_spec, collect_references, conflicts
+from otterdog_e2e.differential import compare
 from otterdog_e2e.observe import Observation
 from otterdog_e2e.scenarios.collect import scenario_marks
 from otterdog_e2e.scenarios.model import Scenario, load_scenario, load_scenarios, render_step, scenario_files
 from otterdog_e2e.scenarios.offline import OFFLINE_ORG, OfflineEngine, offline_run_context
 from otterdog_e2e.selection import SCENARIO_TAGS
-from otterdog_e2e.sut.spec import parse_sut_spec
 from otterdog_e2e.sut.template import offline_template
 from otterdog_e2e.testing.fakes import FakeCli
 
 PROJECT = Path(__file__).resolve().parents[2]
 OFFLINE_DIR = PROJECT / "scenarios" / "offline"
-MANIFEST_DIR = PROJECT / "scenarios" / "otterdog-prs"
 # SPEC 19 offline catalogue (YAML scenarios; O-VERSION, O-WEB-BOOT and O-WEB-SIG are Python tests of tests/offline)
 CATALOGUE = {
     "O-VAL-OK": "P0",
     "O-VAL-SYNTAX": "P0",
     "O-VAL-PLAN-GATE": "P0",
     "O-VAL-ORGSECRET-PRIVATE-FREE": "P0",
-    "O-VAL-790": "P0",
+    "O-VAL-RULESET-STRICT": "P0",
     "O-LPLAN-ADD": "P0",
     "O-LPLAN-CHANGE": "P0",
     "O-LPLAN-REMOVE": "P0",
     "O-SHOW-DEFAULT": "P0",
     "O-CANON": "P1",
 }
-EXTENSIONS = {"O-VAL-790-ORG": "P1"}  # offline reproduction of the #790 org-ruleset crash (E-ORG-RULESET offline)
+# offline reproduction of the org-ruleset crash of #790 (E-ORG-RULESET offline)
+EXTENSIONS = {"O-VAL-ORG-RULESET-STRICT": "P1"}
 # every offline scenario file (catalogue, extensions and the battery's scenarios) gets the metadata and render checks
 SCENARIO_IDS = sorted(
     {**CATALOGUE, **EXTENSIONS, **{load_scenario(path).id: "" for path in scenario_files(OFFLINE_DIR)}}
 )
 # fragment keys whose snippets set fields instead of naming objects (offline settings may set the profile)
 UNNAMED_FRAGMENT_KEYS = frozenset({"settings", "extra"})
-MARKER_RE = re.compile(r"^<!-- Otterdog Comment: (?P<name>[a-z][a-z-]*) -->$")
 BASE_790 = "b5f7bb1c79ad29cdcde8506f5fa7ec4c070ffda8"  # first parent of the #790 squash commit 9bdeb75
+# a run of 3+ digits in a scenario id or file name reads as a PR or issue number (name the behaviour instead)
+NUMBER_RE = re.compile(r"(?<![0-9])[0-9]{3,}(?![0-9])")
 
 
 @cache
@@ -58,9 +61,14 @@ def offline_scenarios() -> dict[str, Scenario]:
 
 
 @cache
-def manifests() -> dict[str, PrManifest]:
-    """scenarios/otterdog-prs/*.yaml by file name."""
-    return {path.name: load_pr_manifest(path) for path in sorted(MANIFEST_DIR.glob("*.yaml"))}
+def references() -> tuple[ReferencingScenario, ...]:
+    """Every references entry of the repository (YAML scenarios and Python tests)."""
+    return tuple(collect_references(PROJECT / "scenarios", PROJECT / "tests"))
+
+
+def spec(change: str) -> ChangeSpec:
+    """The ChangeSpec of a change of the repository."""
+    return change_spec(ChangeId.parse(change), references())
 
 
 def offline_engine() -> OfflineEngine:
@@ -166,56 +174,74 @@ def test_canonical_diff_checks_content_and_an_empty_diff() -> None:
 
 
 def test_sut_dependent_steps_leave_the_varying_expectation_out() -> None:
-    """O-VAL-790/no-strict and O-VAL-790-ORG only record validation (their outcome depends on the SUT and is asserted
-    by tests/offline/test_scenarios.py); the strict variant of O-VAL-790 must pass on every SUT."""
-    no_strict, with_strict = offline_scenarios()["O-VAL-790"].steps
+    """O-VAL-RULESET-STRICT/no-strict and O-VAL-ORG-RULESET-STRICT only record validation (their outcome depends on the SUT and is asserted
+    by tests/offline/test_scenarios.py); the strict variant of O-VAL-RULESET-STRICT must pass on every SUT."""
+    no_strict, with_strict = offline_scenarios()["O-VAL-RULESET-STRICT"].steps
     assert (no_strict.name, with_strict.name) == ("no-strict", "with-strict")
     assert no_strict.validate is None and no_strict.plan is not None and no_strict.plan.expect == "any"
     assert no_strict.base_fragments is not None, "local-plan must run: its abort on head is an expected delta"
     assert with_strict.validate is not None and with_strict.validate.ok is True
     assert with_strict.plan is not None and with_strict.plan.counts == {"add": 2, "change": 0, "delete": 0}
-    org = offline_scenarios()["O-VAL-790-ORG"]
+    org = offline_scenarios()["O-VAL-ORG-RULESET-STRICT"]
     (org_step,) = org.steps
     assert org_step.name == "org-no-strict" and org_step.validate is None and org.variables["plan"] == "enterprise"
 
 
-# --- scenarios/otterdog-prs ------------------------------------------------------------------------------------------
-def test_manifests_load() -> None:
-    """Every manifest loads; numeric names equal the PR, pr 0 is a local change; bases are never PR specs."""
-    found = manifests()
-    assert set(found) == {"790.yaml", "792.yaml", "local-check-merge.yaml"}
-    for name, manifest in found.items():
-        stem = Path(name).stem
-        assert manifest.pr == (int(stem) if stem.isdigit() else 0)
-        if manifest.base is not None:
-            assert parse_sut_spec(manifest.base).kind in ("release", "tag", "branch", "sha"), name
-        assert manifest.title and manifest.expected_deltas and manifest.scenarios and manifest.template == "own"
-        assert set(manifest.tags) <= set(SCENARIO_TAGS)
+# --- references --------------------------------------------------------------------------------------------------
+def test_references_load_and_agree() -> None:
+    """Every reference loads (YAML scenarios through the model, Python tests from their markers) and the references of
+    one change never declare two bases or two templates; there is no PR manifest directory any more."""
+    assert references(), "the repository's scenarios reference otterdog PRs"
+    assert conflicts(references()) == []
+    assert not (PROJECT / "scenarios" / "otterdog-prs").exists(), "one mechanism: the references of the scenarios"
+    for entry in references():
+        if entry.kind == "yaml":
+            assert entry.reference in load_scenario(entry.source).references, entry
 
 
-def test_manifests_name_existing_offline_scenarios_and_steps() -> None:
-    """Offline references (O-*) of a manifest are scenarios of scenarios/offline, with existing step names."""
-    scenarios = offline_scenarios()
-    for name, manifest in manifests().items():
-        for pattern in [*manifest.scenarios, *(delta.scenario for delta in manifest.expected_deltas)]:
-            if pattern.startswith("O-"):
-                assert pattern in scenarios, f"{name}: unknown offline scenario {pattern}"
-        for delta in manifest.expected_deltas:
-            if delta.scenario in scenarios and delta.step is not None:
-                assert delta.step in {step.name for step in scenarios[delta.scenario].steps}, f"{name}: {delta}"
+def test_scenarios_are_named_after_the_behaviour() -> None:
+    """No scenario id or scenario file name carries the number of a PR it references (nor any PR-like number): the
+    PR goes into the references."""
+    by_id = {entry.scenario: entry for entry in references()}
+    for scenario_id, entry in by_id.items():
+        numbers = {str(item.reference.change.pr) for item in references() if item.scenario == scenario_id}
+        assert not NUMBER_RE.search(scenario_id), f"{scenario_id}: name the behaviour, reference the PR"
+        if entry.kind == "yaml":
+            assert not set(NUMBER_RE.findall(entry.source.stem)) & numbers, entry.source
+    for directory in ("offline", "cli", "regressions", "enterprise"):
+        for path in scenario_files(PROJECT / "scenarios" / directory):
+            assert not NUMBER_RE.search(path.stem), f"{path}: name the file after the behaviour"
+            assert not NUMBER_RE.search(load_scenario(path).id), f"{path}: name the scenario after the behaviour"
 
 
-def test_manifest_markers_and_bases() -> None:
-    """markers map a name to the hidden comment marker otterdog writes first in its bot comments; bases as documented
-    (790: first parent of the squash commit, 792: merge base, local change: v1.6.0)."""
-    for name, manifest in manifests().items():
-        for key, marker in manifest.markers.items():
-            match = MARKER_RE.match(marker)
-            assert match is not None and match.group("name") == key, f"{name}: {key}: {marker!r}"
-    local = manifests()["local-check-merge.yaml"]
-    assert local.markers == {"check-merge": "<!-- Otterdog Comment: check-merge -->"} and local.base == "tag:v1.6.0"
-    assert manifests()["792.yaml"].base is None
-    assert manifests()["790.yaml"].base == f"sha:{BASE_790}"
+def test_790_references_keep_the_manifest_expectations() -> None:
+    """#790: base = first parent of the squash commit, template own, the two expected deltas on step no-strict of
+    O-VAL-RULESET-STRICT, the org-ruleset crash (O-VAL-ORG-RULESET-STRICT) referenced WITHOUT an expected delta."""
+    found = spec("790")
+    assert found.base == f"sha:{BASE_790}" and found.template == "own"
+    assert {"O-VAL-RULESET-STRICT", "O-VAL-ORG-RULESET-STRICT"} <= set(found.scenarios)
+    assert {(d.scenario, d.step, d.kind, d.key) for d in found.expected_deltas} == {
+        ("O-VAL-RULESET-STRICT", "no-strict", "cli", "validate"),
+        ("O-VAL-RULESET-STRICT", "no-strict", "cli", "local-plan"),
+    }
+    assert all(delta.note for delta in found.expected_deltas)
+    steps = {step.name for step in offline_scenarios()["O-VAL-RULESET-STRICT"].steps}
+    assert {delta.step for delta in found.expected_deltas} <= steps
+
+
+def test_792_and_check_merge_references_keep_the_manifest_expectations() -> None:
+    """#792: the webapp test W-PR-STALE-SNAPSHOT with its expected delta, no base (merge base), template own; the
+    named change check-merge: base v1.6.0, its expected delta on W-CMD-CHECK-MERGE, the comment markers in its note."""
+    stale = spec("#792")
+    assert stale.scenarios == ["W-PR-STALE-SNAPSHOT"] and stale.base is None and stale.template == "own"
+    assert [(d.scenario, d.step, d.kind, d.key) for d in stale.expected_deltas] == [
+        ("W-PR-STALE-SNAPSHOT", None, None, None)
+    ]
+    local = spec("check-merge")
+    assert local.base == "tag:v1.6.0" and local.template == "own" and "W-CMD-CHECK-MERGE" in local.scenarios
+    assert [d.scenario for d in local.expected_deltas] == ["W-CMD-CHECK-MERGE"]
+    notes = " ".join(entry.reference.note for entry in local.referencing)
+    assert "<!-- Otterdog Comment: check-merge -->" in notes and "<!-- Otterdog Comment: update-branch -->" in notes
 
 
 def observation(role: str, scenario: str, step: str, key: str, content: str) -> Observation:
@@ -223,31 +249,29 @@ def observation(role: str, scenario: str, step: str, key: str, content: str) -> 
     return Observation(f"sha-{role}", role, scenario, step, "cli", key, content)
 
 
-def test_790_manifest_classifies_the_proof_of_concept() -> None:
+def test_790_references_classify_the_proof_of_concept() -> None:
     """Base b5f7bb1 vs head 9bdeb75: the #790 validate/local-plan changes are expected, the org-ruleset crash stays
     unexpected, an unchanged observation is no delta, and no expected delta is missing."""
-    manifest = manifests()["790.yaml"]
-    assert {(d.scenario, d.step, d.kind, d.key) for d in manifest.expected_deltas} == {
-        ("O-VAL-790", "no-strict", "cli", "validate"),
-        ("O-VAL-790", "no-strict", "cli", "local-plan"),
-    }
+    found = spec("790")
     ok = "exit_code: 0\n  Validation succeeded\n"
     base = [
-        observation("base", "O-VAL-790", "no-strict", "validate", ok),
-        observation("base", "O-VAL-790", "no-strict", "local-plan", "exit_code: 0\n  Plan: 2 to add\n"),
-        observation("base", "O-VAL-790", "with-strict", "validate", ok),
-        observation("base", "O-VAL-790-ORG", "org-no-strict", "validate", ok),
+        observation("base", "O-VAL-RULESET-STRICT", "no-strict", "validate", ok),
+        observation("base", "O-VAL-RULESET-STRICT", "no-strict", "local-plan", "exit_code: 0\n  Plan: 2 to add\n"),
+        observation("base", "O-VAL-RULESET-STRICT", "with-strict", "validate", ok),
+        observation("base", "O-VAL-ORG-RULESET-STRICT", "org-no-strict", "validate", ok),
     ]
     head = [
-        observation("head", "O-VAL-790", "no-strict", "validate", "exit_code: 1\nError: ... 'strict'.\n"),
-        observation("head", "O-VAL-790", "no-strict", "local-plan", "exit_code: 1\nError: ... 'strict'.\n"),
-        observation("head", "O-VAL-790", "with-strict", "validate", ok),
-        observation("head", "O-VAL-790-ORG", "org-no-strict", "validate", "exit_code: 2\nError: AttributeError\n"),
+        observation("head", "O-VAL-RULESET-STRICT", "no-strict", "validate", "exit_code: 1\nError: ... 'strict'.\n"),
+        observation("head", "O-VAL-RULESET-STRICT", "no-strict", "local-plan", "exit_code: 1\nError: ... 'strict'.\n"),
+        observation("head", "O-VAL-RULESET-STRICT", "with-strict", "validate", ok),
+        observation(
+            "head", "O-VAL-ORG-RULESET-STRICT", "org-no-strict", "validate", "exit_code: 2\nError: AttributeError\n"
+        ),
     ]
-    report = compare(base, head, base_label="sha-b5f7bb1", head_label="sha-9bdeb75", expected=manifest.expected_deltas)
+    report = compare(base, head, base_label="sha-b5f7bb1", head_label="sha-9bdeb75", expected=found.expected_deltas)
     assert sorted((d.scenario, d.key) for d in report.expected()) == [
-        ("O-VAL-790", "local-plan"),
-        ("O-VAL-790", "validate"),
+        ("O-VAL-RULESET-STRICT", "local-plan"),
+        ("O-VAL-RULESET-STRICT", "validate"),
     ]
-    assert [(d.scenario, d.key) for d in report.unexpected()] == [("O-VAL-790-ORG", "validate")]
+    assert [(d.scenario, d.key) for d in report.unexpected()] == [("O-VAL-ORG-RULESET-STRICT", "validate")]
     assert report.unchanged == 1 and report.unmatched_expected == [] and report.not_comparable == []

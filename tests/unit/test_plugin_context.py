@@ -14,6 +14,7 @@ import pytest
 
 from otterdog_e2e import context as context_module
 from otterdog_e2e.capabilities import Cap, from_plan
+from otterdog_e2e.changes import ChangeError, ChangeId
 from otterdog_e2e.context import (
     ContextError,
     E2EContext,
@@ -178,7 +179,7 @@ def test_options_from_config(tmp_path: Path) -> None:
         "e2e_artifacts": str(tmp_path / "art"),
         "e2e_run_id": None,
         "e2e_keep": True,
-        "e2e_pr_manifest": "scenarios/otterdog-prs/790.yaml",
+        "e2e_change": " #790 ",
         "e2e_trust_code": None,
     }
     config = SimpleNamespace(getoption=lambda dest, default=None: values.get(dest, default))
@@ -189,7 +190,7 @@ def test_options_from_config(tmp_path: Path) -> None:
     assert options.tags == ("smoke", "repo") and options.scenario == ("cli.*",)
     assert options.artifacts == tmp_path / "art"
     assert options.keep and not options.no_reset
-    assert options.pr_manifest == Path("scenarios/otterdog-prs/790.yaml")
+    assert options.change == "#790"
 
 
 # --- creation and teardown --------------------------------------------------------------------------------------------
@@ -1157,17 +1158,28 @@ def test_run_info_and_results_are_redacted(tmp_path: Path) -> None:
     assert len(lines) == 2 and json.loads(lines[0])["failure"] == "boom ***"
 
 
-def test_known_bugs_and_manifest(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """known_bugs.yaml is optional; the PR manifest only loads when given."""
+def test_known_bugs_and_change(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """known_bugs.yaml is optional; the change under test is --e2e-change, else N of a pr: SUT, and its references
+    are gathered once."""
     context = new_context(tmp_path)
-    assert context.known_bugs() == {} and context.pr_manifest() is None
+    assert context.known_bugs() == {} and context.change() is None and context.change_spec() is None
     (tmp_path / "scenarios").mkdir()
     (tmp_path / "scenarios" / "known_bugs.yaml").write_text("- {id: KB-001, title: t}\n")
     monkeypatch.setattr("otterdog_e2e.known_bugs.load", lambda path: {"KB-001": SimpleNamespace(id="KB-001")})
     assert set(new_context(tmp_path).known_bugs()) == {"KB-001"}
-    loaded: list[Path] = []
-    monkeypatch.setattr("otterdog_e2e.differential.load_pr_manifest", lambda path: loaded.append(path) or "manifest")
-    assert new_context(tmp_path, pr_manifest=Path("m.yaml")).pr_manifest() == "manifest" and loaded == [Path("m.yaml")]
+    loaded: list[tuple[Path, Path, ChangeId]] = []
+    monkeypatch.setattr(
+        "otterdog_e2e.changes.load_change",
+        lambda *args: loaded.append(args) or "spec",  # type: ignore[func-returns-value]
+    )
+    context = new_context(tmp_path, change="check-merge")
+    assert context.change() == ChangeId(slug="check-merge") and context.change_spec() == "spec"
+    assert context.change_spec() == "spec" and loaded == [
+        (tmp_path / "scenarios", tmp_path / "tests", context.change())
+    ]
+    assert new_context(tmp_path, sut=f"pr:792@{'a' * 40}").change() == ChangeId(pr=792)
+    with pytest.raises(ChangeError):
+        new_context(tmp_path, change="Not a change").change_spec()
 
 
 def test_offline_sut_pair(tmp_path: Path, suts: dict[str, Any]) -> None:

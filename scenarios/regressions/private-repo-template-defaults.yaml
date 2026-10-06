@@ -1,6 +1,6 @@
-# Regressions #791 (b5f7bb1), #731 (v1.5.0) and #635 (v1.3.1): a private repository with template defaults.
-id: regression.791-731-private-repo
-title: "#791/#731/#635: create and re-plan a private repository with the template defaults"
+# Regressions: a private repository with the template defaults (#791 b5f7bb1, #731 v1.5.0, #635 v1.3.1).
+id: regression.private-repo-template-defaults
+title: "Create and re-plan a private repository with the template defaults"
 description: |
   A private run repository with the example template defaults (code scanning default setup not configured, fork PR
   approval policy set) must be created by one clean apply and then converge, on every plan including Free:
@@ -19,7 +19,20 @@ description: |
 priority: P1
 min_plan: free
 fixed_in: "1.7.0.dev14"
-tags: [repo, rulesets, regression, private, pr-791, pr-731, pr-635]
+tags: [repo, rulesets, regression, private]
+references:
+  - pr: 791
+    note: >-
+      "disable code scanning of new repos only when configured", b5f7bb1 (otterdog 1.7.0.dev14): the apply no longer
+      fails on private repositories without GHAS; known-bad f055d51 (#779)
+  - pr: 731
+    note: >-
+      "fix ruleset on private repo regarding paid plan" (v1.5.0): 403/404 when reading the rulesets of a private
+      repository on Free are tolerated; known-bad v1.4.0
+  - pr: 635
+    note: >-
+      v1.3.1 (upstream issue 635): fork PR approval calls are skipped for private repositories (GitHub answers 422);
+      known-bad v1.3.0
 steps:
   - name: create
     fragments:

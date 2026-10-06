@@ -71,6 +71,7 @@ nav:
       - Writing scenarios: writing-scenarios.md
       - Writing the test battery: battery-guide.md
       - Web-UI testing: web-ui-testing.md
+      - AI-assisted test writing: ai-assistance.md
   - Testing otterdog PRs:
       - Testing a pull request or a checkout: testing-an-otterdog-pr.md
   - Reference:

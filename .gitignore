@@ -15,6 +15,10 @@ artifacts/
 # the documentation site built by `make docs` (MkDocs)
 site/
 
+# --- agents: local Claude Code settings and agent worktrees (the skills of .claude/skills/ are tracked) ---
+.claude/settings.local.json
+.claude/worktrees/
+
 # --- Python tooling ---
 .venv/
 __pycache__/

@@ -14,7 +14,7 @@ description: |
   the repository.
   The repository is created PUBLIC in a first step and made private by the next one: otterdog before 1.7.0.dev14
   cannot create a private repository on an organization without Code Security (the code scanning default setup
-  PATCH of new repositories fails, #791; regression.791-731-private-repo covers that path).
+  PATCH of new repositories fails, #791; regression.private-repo-template-defaults covers that path).
 priority: P2
 min_plan: team
 requires: [private_repo_environments]

@@ -304,7 +304,7 @@ features:
     ui_only: false
     priority: P0
     status: covered
-    covered_by: [O-VAL-OK, O-VAL-SYNTAX, O-VAL-PLAN-GATE, O-VAL-ORGSECRET-PRIVATE-FREE, O-VAL-790, cli.secrets]
+    covered_by: [O-VAL-OK, O-VAL-SYNTAX, O-VAL-PLAN-GATE, O-VAL-ORGSECRET-PRIVATE-FREE, O-VAL-RULESET-STRICT, cli.secrets]
     notes: "the stray quote of the warning-only summary (\"Validation succeeded': 0 info(s), 1 warning(s), 0 error(s)\") is verified offline; validate needs GitHub only for teams (org members) and code scanning languages"
 
   - id: cli.validate.missing-config
@@ -763,7 +763,7 @@ features:
     ui_only: false
     priority: P0
     status: covered
-    covered_by: [O-VAL-790, regression.767-code-scanning-new-repo, regression.790-repo-ruleset-without-strict]
+    covered_by: [O-VAL-RULESET-STRICT, regression.code-scanning-new-repo, regression.repo-ruleset-without-strict]
 
   - id: cli.plan.errors
     area: cli
@@ -1542,7 +1542,7 @@ features:
     ui_only: false
     priority: P2
     status: covered
-    covered_by: [enterprise.kb.org-ruleset-repo-patterns, O-VAL-790-ORG, enterprise.org-ruleset.790-missing-strict, O-VAL-ORG-RULESETS]
+    covered_by: [enterprise.kb.org-ruleset-repo-patterns, O-VAL-ORG-RULESET-STRICT, enterprise.org-ruleset.missing-strict, O-VAL-ORG-RULESETS]
     known_bugs: [KB-008, KB-023]
     notes: "verified offline with variables.plan enterprise: 'nomatch-*' -> \"org_ruleset[name=\"ors\"] has an 'include_repo_names' pattern 'nomatch-*' that does not match any existing repository\"; protect without names -> \"... has 'protect_repo_names' set to 'True' but 'include_repo_names' and 'exclude_repo_names' are empty.\"; required_pull_request count 11 or requires_deployments crash with AttributeError (get_model_header / environments), exit 2. include/exclude no-match and protect warnings, target/enforcement/ref-pattern errors with the org_ruleset header, valid control planned; KB-023 (second pattern) and KB-008 (review count 11, deployment rule: AttributeError 'environments') as step-level expected failures."
 
@@ -1733,10 +1733,10 @@ features:
     ui_only: false
     priority: P2
     status: covered
-    covered_by: [regression.767-code-scanning-new-repo, O-VAL-REPO, tests/cli/test_org_validation.py::test_code_scanning_languages_must_be_detected]
+    covered_by: [regression.code-scanning-new-repo, O-VAL-REPO, tests/cli/test_org_validation.py::test_code_scanning_languages_must_be_detected]
     known_bugs: [KB-034, KB-038]
     findings: [F-11]
-    notes: "offline (O-VAL-REPO): the query suite enum ('full' refused) and the language enum ('cobol' refused, stable prefix only: set order, KB-038; every supported language validates), with the default setup disabled so that no language detection reads GitHub. Live (cli.validate.code-scanning-languages): once GitHub detected Python, 'go' is refused naming 'Detected languages: Python', python and actions validate, 'cobol' is refused by the enum (stable prefix only: set order, KB-038) and by the detection (2 errors, exit 2: KB-034); new repositories in regression.767-code-scanning-new-repo."
+    notes: "offline (O-VAL-REPO): the query suite enum ('full' refused) and the language enum ('cobol' refused, stable prefix only: set order, KB-038; every supported language validates), with the default setup disabled so that no language detection reads GitHub. Live (cli.validate.code-scanning-languages): once GitHub detected Python, 'go' is refused naming 'Detected languages: Python', python and actions validate, 'cobol' is refused by the enum (stable prefix only: set order, KB-038) and by the detection (2 errors, exit 2: KB-034); new repositories in regression.code-scanning-new-repo."
 
   - id: validation.repo.archived-bpr
     area: validation
@@ -1817,7 +1817,7 @@ features:
     ui_only: false
     priority: P1
     status: covered
-    covered_by: [O-VAL-790, regression.790-repo-ruleset-without-strict, O-VAL-RULESET-NESTED]
+    covered_by: [O-VAL-RULESET-STRICT, regression.repo-ruleset-without-strict, O-VAL-RULESET-NESTED]
     known_bugs: [KB-031, KB-055]
     findings: [F-04]
     notes: "review count 11/-1, merge queue FAST/-1/-5, valid limits planned; messages asserted after the header (they name the repository twice: KB-055); KB-031 step-level for missing PR and merge-queue keys."
@@ -1948,7 +1948,7 @@ features:
     ui_only: false
     priority: P1
     status: covered
-    covered_by: [regression.472-rename-and-modify, O-LPLAN-RENAME]
+    covered_by: [regression.rename-and-modify, O-LPLAN-RENAME]
     known_bugs: [KB-004]
     notes: "verified offline: base newRepo('old') {description: 'a'}, config newRepo('new') {aliases: ['old'], description: 'b'} -> '~ repository[name=\"new\"]' with '~ description = \"a\" -> \"b\"' and '~ name = \"old\" -> \"new\"', 'Plan: 0 to add, 2 to change, 0 to delete.'; without the alias: '- remove repository[name=\"old\"]' + '+ add repository[name=\"new\"]' (1 to add, 1 to delete). alias with changes (name line + nested object under the new name, 0/3/0), alias only (0/1/0), no alias (1/0/1), dangling alias (plain add), webhook alias association; KB-004 step-level (url change expected)."
 
@@ -2066,7 +2066,7 @@ features:
     ui_only: false
     priority: P1
     status: covered
-    covered_by: [regression.791-731-private-repo, O-LPLAN-IGNORED-FIELDS]
+    covered_by: [regression.private-repo-template-defaults, O-LPLAN-IGNORED-FIELDS]
     notes: "verified offline: a private repository changing secret_scanning 'enabled' -> 'disabled' and push protection: Plan 0/0/0. The private-repository regression converges with the template's security defaults, which only works because they are excluded. private security, pages disabled/workflow, code scanning suite, model-only creation fields (forked_repository, fork_default_branch_only, auto_init) with controls."
 
   - id: plan-semantics.ignored-org-actions
@@ -3069,9 +3069,9 @@ features:
     ui_only: false
     priority: P1
     status: covered
-    covered_by: [regression.791-731-private-repo, enterprise.private-bpr, cli.neg.private-bpr, cli.repo.visibility]
+    covered_by: [regression.private-repo-template-defaults, enterprise.private-bpr, cli.neg.private-bpr, cli.repo.visibility]
     known_bugs: [KB-065]
-    notes: "An existing repository goes public -> private (allow_forking false, exactly 2 changes) -> public. Each switch must plan a change, never a remove+add. Creating a private repository directly is covered by regression.791-731-private-repo only (otterdog 1.7.0.dev14+): older SUTs, release:latest included, fail it without Code Security (#791), so the other private-repository scenarios create their repository public and make it private in the next step."
+    notes: "An existing repository goes public -> private (allow_forking false, exactly 2 changes) -> public. Each switch must plan a change, never a remove+add. Creating a private repository directly is covered by regression.private-repo-template-defaults only (otterdog 1.7.0.dev14+): older SUTs, release:latest included, fail it without Code Security (#791), so the other private-repository scenarios create their repository public and make it private in the next step."
 
   - id: repositories.default-branch
     area: repositories
@@ -3131,7 +3131,7 @@ features:
     ui_only: false
     priority: P1
     status: covered
-    covered_by: [regression.767-code-scanning-new-repo, regression.791-731-private-repo, tests/cli/test_repo_code_scanning.py::test_code_scanning_default_setup]
+    covered_by: [regression.code-scanning-new-repo, regression.private-repo-template-defaults, tests/cli/test_repo_code_scanning.py::test_code_scanning_default_setup]
     notes: "An existing repository; a probe commits a Python file and a dispatch-only workflow and waits until Python is detected. The setup is then configured with the extended suite for languages [actions, python] (state check timeout 600 s before converge) and disabled."
 
   - id: repositories.pages
@@ -3199,7 +3199,7 @@ features:
     ui_only: false
     priority: P1
     status: covered
-    covered_by: [regression.472-rename-and-modify]
+    covered_by: [regression.rename-and-modify]
     notes: "34 aliases in 20 Eclipse orgs; offline counterpart: plan-semantics.rename-aliases"
 
   - id: repositories.extend
@@ -3294,7 +3294,7 @@ features:
     ui_only: false
     priority: P2
     status: covered
-    covered_by: [regression.791-731-private-repo, cli.repo.actions]
+    covered_by: [regression.private-repo-template-defaults, cli.repo.actions]
     notes: "all_external_contributors on a public repository, read through repo_fork_pr_approval."
 
   - id: repo-workflows.cache-size
@@ -3489,7 +3489,7 @@ features:
     ui_only: false
     priority: P1
     status: covered
-    covered_by: [cli.ruleset.public, regression.751-disabled-ruleset, O-VAL-OK, O-VAL-790]
+    covered_by: [cli.ruleset.public, regression.disabled-ruleset-without-refs, O-VAL-OK, O-VAL-RULESET-STRICT]
 
   - id: rulesets.targets
     area: rulesets
@@ -3526,7 +3526,7 @@ features:
     ui_only: false
     priority: P1
     status: covered
-    covered_by: [cli.ruleset.public, regression.751-disabled-ruleset, enterprise.org-ruleset]
+    covered_by: [cli.ruleset.public, regression.disabled-ruleset-without-refs, enterprise.org-ruleset]
 
   - id: rulesets.rules
     area: rulesets
@@ -3555,7 +3555,7 @@ features:
     ui_only: false
     priority: P1
     status: covered
-    covered_by: [cli.ruleset.bypass, cli.protection.app-checks, regression.779-user-bypass-actors]
+    covered_by: [cli.ruleset.bypass, cli.protection.app-checks, regression.user-bypass-actors]
     known_bugs: [KB-039, KB-052]
     findings: [F-12]
     notes: "22 Eclipse rulesets use bypass_actors+ ('#OrganizationAdmin', '@<org>/eclipsefdn-releng'); the webapp's own config-repo ruleset needs '#OrganizationAdmin'. Covers #OrganizationAdmin, #RepositoryAdmin, #Maintain:pull_request, #Write, a team, then mode changes; the App actor (app-checks); the user actor (779, fixed_in 1.7.0.dev7). Known-bug steps: '#Admin' (KB-039) and explicit ':always' (KB-052)."
@@ -3587,7 +3587,7 @@ features:
     ui_only: false
     priority: P1
     status: covered
-    covered_by: [cli.ruleset.public, regression.562-ruleset-empty-status-checks, cli.neg.private-ruleset, cli.ruleset.pull-request]
+    covered_by: [cli.ruleset.public, regression.ruleset-empty-status-checks, cli.neg.private-ruleset, cli.ruleset.pull-request]
     known_bugs: [KB-031]
     findings: [F-04]
     notes: "Count 0 with every flag on, then count 3 with every flag off, then required_pull_request null removes the rule."
@@ -3604,7 +3604,7 @@ features:
     ui_only: false
     priority: P1
     status: covered
-    covered_by: [cli.ruleset.public, regression.562-ruleset-empty-status-checks, cli.kb.ruleset-any-status-check, cli.kb.ruleset-default-status-checks, O-VAL-790, regression.790-repo-ruleset-without-strict, cli.ruleset.status-checks, cli.protection.app-checks]
+    covered_by: [cli.ruleset.public, regression.ruleset-empty-status-checks, cli.kb.ruleset-any-status-check, cli.kb.ruleset-default-status-checks, O-VAL-RULESET-STRICT, regression.repo-ruleset-without-strict, cli.ruleset.status-checks, cli.protection.app-checks]
     known_bugs: [KB-020, KB-021, KB-054]
     notes: "do_not_enforce_on_create, the plain context and '15368:<ctx>' (GitHub Actions integration id) are strict; the installed App slug is in app-checks. Known-bug steps for 'github-actions:<ctx>' and '<installed app id>:<ctx>' never converge (KB-054)."
 
@@ -4850,7 +4850,7 @@ features:
     ui_only: false
     priority: P1
     status: covered
-    covered_by: [O-VAL-790, regression.790-repo-ruleset-without-strict, O-VAL-790-ORG, enterprise.org-ruleset.790-missing-strict, tests/differential/test_offline_diff.py::test_pr_manifest_expected_deltas_observed]
+    covered_by: [O-VAL-RULESET-STRICT, regression.repo-ruleset-without-strict, O-VAL-ORG-RULESET-STRICT, enterprise.org-ruleset.missing-strict, tests/differential/test_offline_diff.py::test_change_expected_deltas_observed]
     known_bugs: [KB-008]
 
   - id: regression.791-code-scanning-new-repos
@@ -4863,11 +4863,11 @@ features:
     ui_only: false
     priority: P1
     status: partial
-    covered_by: [regression.791-731-private-repo]
+    covered_by: [regression.private-repo-template-defaults]
     gap_outline:
-      scenario: regression.791-731-private-repo
+      scenario: regression.private-repo-template-defaults
       steps:
-        - "regression.791-731-private-repo declares fixed_in 1.7.0.dev14: it runs on SUTs containing the fix (branch:main, PR builds) and is skipped on release:latest"
+        - "regression.private-repo-template-defaults declares fixed_in 1.7.0.dev14: it runs on SUTs containing the fix (branch:main, PR builds) and is skipped on release:latest"
       assertions:
         - "covered on the default SUT once a release contains the fix (otterdog >= 1.7.0.dev14)"
       needs:
@@ -4883,12 +4883,12 @@ features:
     ui_only: false
     priority: P2
     status: partial
-    covered_by: [regression.779-user-bypass-actors]
+    covered_by: [regression.user-bypass-actors]
     notes: "fixed_in 1.7.0.dev7 (f055d51 = v1.6.1 + 7). The user actor in the default mode, then pull_request mode, converging; skips on release:latest."
     gap_outline:
-      scenario: regression.779-user-bypass-actors
+      scenario: regression.user-bypass-actors
       steps:
-        - "regression.779-user-bypass-actors declares fixed_in 1.7.0.dev7: it runs on SUTs containing the fix (branch:main, PR builds) and is skipped on release:latest"
+        - "regression.user-bypass-actors declares fixed_in 1.7.0.dev7: it runs on SUTs containing the fix (branch:main, PR builds) and is skipped on release:latest"
       assertions:
         - "covered on the default SUT once a release contains the fix (otterdog >= 1.7.0.dev7)"
       needs:
@@ -4942,11 +4942,11 @@ features:
     ui_only: false
     priority: P1
     status: partial
-    covered_by: [regression.767-code-scanning-new-repo]
+    covered_by: [regression.code-scanning-new-repo]
     gap_outline:
-      scenario: regression.767-code-scanning-new-repo
+      scenario: regression.code-scanning-new-repo
       steps:
-        - "regression.767-code-scanning-new-repo declares fixed_in 1.7.0.dev2: it runs on SUTs containing the fix (branch:main, PR builds) and is skipped on release:latest"
+        - "regression.code-scanning-new-repo declares fixed_in 1.7.0.dev2: it runs on SUTs containing the fix (branch:main, PR builds) and is skipped on release:latest"
       assertions:
         - "covered on the default SUT once a release contains the fix (otterdog >= 1.7.0.dev2)"
       needs:
@@ -5001,7 +5001,7 @@ features:
     ui_only: false
     priority: P2
     status: covered
-    covered_by: [regression.751-disabled-ruleset]
+    covered_by: [regression.disabled-ruleset-without-refs]
 
   - id: regression.731-private-repo-rulesets
     area: regressions
@@ -5013,7 +5013,7 @@ features:
     ui_only: false
     priority: P1
     status: covered
-    covered_by: [regression.791-731-private-repo, cli.neg.private-ruleset]
+    covered_by: [regression.private-repo-template-defaults, cli.neg.private-ruleset]
 
   - id: regression.718-unknown-properties
     area: regressions
@@ -5162,8 +5162,8 @@ features:
     ui_only: false
     priority: P1
     status: covered
-    covered_by: [regression.791-731-private-repo, cli.repo.visibility, cli.org.member-privileges]
-    notes: "Released in v1.3.1: cli.repo.visibility and cli.org.member-privileges plan, apply and converge private repositories (created public, then made private: #791) on release:latest, so the fork PR approval reads and patches of private repositories run there; regression.791-731-private-repo (fixed_in 1.7.0.dev14) also creates one directly."
+    covered_by: [regression.private-repo-template-defaults, cli.repo.visibility, cli.org.member-privileges]
+    notes: "Released in v1.3.1: cli.repo.visibility and cli.org.member-privileges plan, apply and converge private repositories (created public, then made private: #791) on release:latest, so the fork PR approval reads and patches of private repositories run there; regression.private-repo-template-defaults (fixed_in 1.7.0.dev14) also creates one directly."
 
   - id: regression.603-automerge-problems-comment
     area: regressions
@@ -5214,7 +5214,7 @@ features:
     ui_only: false
     priority: P1
     status: covered
-    covered_by: [regression.562-ruleset-empty-status-checks]
+    covered_by: [regression.ruleset-empty-status-checks]
     known_bugs: [KB-021]
 
   - id: regression.472-rename-and-modify
@@ -5227,7 +5227,7 @@ features:
     ui_only: false
     priority: P1
     status: covered
-    covered_by: [regression.472-rename-and-modify]
+    covered_by: [regression.rename-and-modify]
 
   - id: regression.450-pages-required-fields
     area: regressions
@@ -5311,7 +5311,7 @@ features:
     status: covered
     covered_by: [tests/webapp/test_stale_status.py::test_stale_snapshot_keeps_merged_status]
     known_bugs: [KB-018]
-    notes: "manifest scenarios/otterdog-prs/792.yaml (W-STALE-STATUS-792)"
+    notes: "W-PR-STALE-SNAPSHOT references #792 with its expected delta (--change 792)"
 
   - id: pending.check-merge-command
     area: pending
@@ -5324,7 +5324,7 @@ features:
     priority: P2
     status: covered
     covered_by: [tests/webapp/test_check_merge.py::test_check_merge_command]
-    notes: "manifest scenarios/otterdog-prs/local-check-merge.yaml (W-CMD-CHECK-MERGE)"
+    notes: "W-CMD-CHECK-MERGE references the named change check-merge (base v1.6.0, --change check-merge)"
 
   - id: pending.update-branch-command
     area: pending

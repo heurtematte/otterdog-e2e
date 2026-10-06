@@ -370,7 +370,7 @@ build: about 2900 tests). The suite also writes nothing below `$HOME` when `E2E_
 ## Editor
 
 `.vscode/settings.json` maps the scenario files to `.vscode/scenario.schema.json` (YAML extension: completion and key
-checks), and `scenarios/known_bugs.yaml`, `scenarios/coverage.yaml` and the PR manifests to a permissive schema, so
+checks), and `scenarios/known_bugs.yaml`, `scenarios/coverage.yaml` to a permissive schema, so
 SchemaStore's unrelated CrowdSec "scenario" schema no longer reports false errors. See
 [writing-scenarios.md](writing-scenarios.md#editor-support) for regenerating it.
 

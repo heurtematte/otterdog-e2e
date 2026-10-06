@@ -99,9 +99,9 @@ def has_commit(history: History, commit: str, what: str) -> bool | None:
     return found
 
 
-def expect_790(outcome: ScenarioOutcome, history: History) -> None:
-    """O-VAL-790 step no-strict: SUTs containing #790 refuse the ruleset at validation (and local-plan aborts);
-    older SUTs validate it and plan the repository and its ruleset."""
+def expect_ruleset_strict(outcome: ScenarioOutcome, history: History) -> None:
+    """O-VAL-RULESET-STRICT step no-strict: SUTs containing #790 refuse the ruleset at validation (and local-plan
+    aborts); older SUTs validate it and plan the repository and its ruleset."""
     step = step_outcome(outcome, "no-strict")
     validate, local_plan = result_of(step, "validate"), result_of(step, "local-plan")
     validation, plan = validate.validation(), local_plan.plan()
@@ -130,9 +130,9 @@ def expect_790(outcome: ScenarioOutcome, history: History) -> None:
     )
 
 
-def expect_790_org(outcome: ScenarioOutcome, history: History) -> None:
-    """O-VAL-790-ORG: without #790 the org ruleset validates; with it the missing 'strict' must be a validation
-    error, and the AttributeError crash of current SUTs is an expected failure (known upstream defect)."""
+def expect_org_ruleset_strict(outcome: ScenarioOutcome, history: History) -> None:
+    """O-VAL-ORG-RULESET-STRICT: without #790 the org ruleset validates; with it the missing 'strict' must be a
+    validation error, and the AttributeError crash of current SUTs is an expected failure (known upstream defect)."""
     validate = result_of(step_outcome(outcome, "org-no-strict"), "validate")
     validation, text = validate.validation(), normalize_text(validate.output)
     has_fix = has_commit(history, FIX_790, "#790")
@@ -152,6 +152,6 @@ def expect_790_org(outcome: ScenarioOutcome, history: History) -> None:
 
 
 SUT_EXPECTATIONS: dict[str, tuple[Callable[[ScenarioOutcome, History], None], ...]] = {
-    "O-VAL-790": (expect_790,),
-    "O-VAL-790-ORG": (expect_790_org,),
+    "O-VAL-RULESET-STRICT": (expect_ruleset_strict,),
+    "O-VAL-ORG-RULESET-STRICT": (expect_org_ruleset_strict,),
 }

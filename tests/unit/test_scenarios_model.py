@@ -284,12 +284,11 @@ def test_duplicate_step_names(tmp_path: Path) -> None:
     assert [step.name for step in load_scenario(path).steps] == ["step-1", "step-2"]
 
 
-def test_load_scenarios_ignores_manifests_known_bugs_and_dotfiles(tmp_path: Path) -> None:
-    """Recursive and sorted; otterdog-prs/, known_bugs.yaml, dotfiles and non-YAML files are skipped."""
+def test_load_scenarios_ignores_known_bugs_and_dotfiles(tmp_path: Path) -> None:
+    """Recursive and sorted; known_bugs.yaml, dotfiles and non-YAML files are skipped."""
     write(tmp_path, "cli/b.yaml", MINIMAL.replace("cli.repo.basic", "b"))
     write(tmp_path, "cli/a.yaml", MINIMAL.replace("cli.repo.basic", "a"))
     write(tmp_path, "offline/o.yml", "id: o\ntitle: o\nsteps: [{fragments: {}}]\n")
-    write(tmp_path, "otterdog-prs/790.yaml", "pr: 790\nexpected_deltas: []\n")
     write(tmp_path, "known_bugs.yaml", "- {id: KB-001, title: x}\n")
     write(tmp_path, "cli/.draft.yaml", "not: a scenario\n")
     write(tmp_path, "cli/notes.txt", "ignored\n")
