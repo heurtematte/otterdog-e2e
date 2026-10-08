@@ -12,6 +12,7 @@ import pytest
 from click.testing import CliRunner
 
 from otterdog_e2e import cli
+from otterdog_e2e.cli import doctor as cli_doctor
 from otterdog_e2e.safety import SafetyError
 from otterdog_e2e.settings import AppCredentials, Target, TargetError
 from otterdog_e2e.testing.fakes import (
@@ -59,7 +60,7 @@ class World:
 def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
     """A healthy test org, App and environment."""
     world = World()
-    world.http("admin", scopes=set(cli.REQUIRED_ADMIN_SCOPES) | {"read:org"})
+    world.http("admin", scopes=set(cli_doctor.REQUIRED_ADMIN_SCOPES) | {"read:org"})
     for name in ("author", "approver", "outsider"):
         world.http(name, scopes={"public_repo"})
     world.http("config_reader", scopes=None)
@@ -190,7 +191,7 @@ def fine_grained_admin(world: World, *, missing: tuple[str, ...] = (), **kw: Any
     client.token_kind = "fine-grained"
     for key, value in kw.items():
         setattr(client, key, value)
-    for path, _permission in cli.FINE_GRAINED_OWNER_READS:
+    for path, _permission in cli_doctor.FINE_GRAINED_OWNER_READS:
         concrete = path.format(org=FAKE_ORG, repo="otterdog-e2e-configs")
         if concrete in missing:
             hint = {"X-Accepted-GitHub-Permissions": "secrets=read"}
@@ -246,7 +247,7 @@ def test_fine_grained_admin_write_probe_on_paid_plans(world: World) -> None:
     client.add("GET", f"/orgs/{FAKE_ORG}/rulesets", json=[], repeat=True)
     _code, rows = doctor_json()
     assert rows["permissions:admin"]["status"] == "OK"
-    assert rows["permissions:admin"]["detail"].startswith(f"{len(cli.FINE_GRAINED_OWNER_READS) + 1} read probes")
+    assert rows["permissions:admin"]["detail"].startswith(f"{len(cli_doctor.FINE_GRAINED_OWNER_READS) + 1} read probes")
 
 
 def test_declared_token_type_mismatch_fails(world: World) -> None:
@@ -367,6 +368,9 @@ def test_url_template_should_be_pinned(world: World) -> None:
 
 def test_render_rows_layout() -> None:
     """Fix lines only under WARN/FAIL rows; totals at the end."""
-    rows = [cli.CheckRow("a", "OK", "fine", "unused"), cli.CheckRow("longer-name", "FAIL", "broken", "repair it")]
-    text = cli.render_rows(rows)
+    rows = [
+        cli_doctor.CheckRow("a", "OK", "fine", "unused"),
+        cli_doctor.CheckRow("longer-name", "FAIL", "broken", "repair it"),
+    ]
+    text = cli_doctor.render_rows(rows)
     assert "unused" not in text and "fix: repair it" in text and text.endswith("1 ok, 0 warning(s), 1 failure(s)")

@@ -22,6 +22,10 @@ import pytest
 from click.testing import CliRunner
 
 from otterdog_e2e import cli
+from otterdog_e2e.cli import common as cli_common
+from otterdog_e2e.cli import doctor as cli_doctor
+from otterdog_e2e.cli import maintenance as cli_maintenance
+from otterdog_e2e.cli import run as cli_run
 from otterdog_e2e.redact import Redactor
 from otterdog_e2e.settings import HarnessSettings
 from otterdog_e2e.testing.fakes import fake_sha, make_settings
@@ -87,7 +91,7 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Batch:
     (root / "targets").mkdir(parents=True)
     for profile in ("free", "team"):
         shutil.copy(PROJECT / "targets" / f"{profile}.yaml", root / "targets" / f"{profile}.yaml")
-    for suite in cli.SUITES:
+    for suite in cli_run.SUITES:
         (root / "tests" / suite).mkdir(parents=True)
     home = tmp_path / "home"
     config = home / ".config" / "otterdog-e2e"
@@ -100,7 +104,14 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Batch:
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.setattr("otterdog_e2e.settings.harness_settings", lambda environ=None: state.settings)
     fresh = Redactor()
-    for module in ("otterdog_e2e.settings", "otterdog_e2e.batch", "otterdog_e2e.cli", "otterdog_e2e.procs"):
+    for module in (
+        "otterdog_e2e.settings",
+        "otterdog_e2e.batch",
+        "otterdog_e2e.cli.common",
+        "otterdog_e2e.cli.doctor",
+        "otterdog_e2e.cli.run",
+        "otterdog_e2e.procs",
+    ):
         monkeypatch.setattr(f"{module}.REDACTOR", fresh)
     monkeypatch.setattr("otterdog_e2e.procs.run_harness", state.runner)
 
@@ -109,7 +120,7 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Batch:
         state.pytest_calls.append(list(args))
         return 0
 
-    monkeypatch.setattr(cli, "run_pytest", run_pytest)
+    monkeypatch.setattr(cli_run, "run_pytest", run_pytest)
     state.instance("acme", "free", 11)
     state.instance("beta", "team", 22)
     state.instance("free", None, 33)
@@ -226,7 +237,7 @@ def test_fail_fast_stops_the_batch(world: Batch) -> None:
 def test_harness_args_round_trip(world: Batch, tmp_path: Path) -> None:
     """The child arguments of a request parse back into the very same pytest arguments (every option, flag and
     pass-through argument survives, values never read as options)."""
-    request = cli.RunRequest(
+    request = cli_run.RunRequest(
         suites=("cli", "webapp"),
         target="acme",
         sut="branch:main",
@@ -276,14 +287,16 @@ def test_pr_children_get_an_explicit_change() -> None:
     """A --change other than the PR itself reaches the child pr commands and the reproduce command; the PR's own
     number is implied (never repeated)."""
     entry = SimpleNamespace(target="acme", run_id="t3c7z8a5")
-    args = cli.pr_child_args(
+    args = cli_run.pr_child_args(
         790, PIN, entry=entry, suites="auto", strict_diff=False, allow_web_ui=False, change="check-merge"
     )  # type: ignore[arg-type]
     assert args[-1] == "--change=check-merge"
     assert "--change" not in " ".join(
-        cli.pr_child_args(790, PIN, entry=entry, suites="auto", strict_diff=False, allow_web_ui=False)  # type: ignore[arg-type]
+        cli_run.pr_child_args(790, PIN, entry=entry, suites="auto", strict_diff=False, allow_web_ui=False)  # type: ignore[arg-type]
     )
-    command = cli.pr_command(790, PIN, target=None, suites="auto", strict_diff=False, allow_web_ui=False, change="792")
+    command = cli_run.pr_command(
+        790, PIN, target=None, suites="auto", strict_diff=False, allow_web_ui=False, change="792"
+    )
     assert command[-2:] == ["--change", "792"]
 
 
@@ -291,12 +304,12 @@ def test_pr_run_id(world: Batch, monkeypatch: pytest.MonkeyPatch) -> None:
     """pr --run-id: one target only, validated, passed to plan_pr (the child of a batch gets its own)."""
     planned: list[Any] = []
 
-    def plan_pr(number: int, sha: str, **kwargs: Any) -> cli.RunRequest:
+    def plan_pr(number: int, sha: str, **kwargs: Any) -> cli_run.RunRequest:
         """Record the plan request."""
         planned.append(kwargs)
-        return cli.RunRequest(suites=("offline",), sut=f"pr:{number}@{sha}", run_id=kwargs["run_id"])
+        return cli_run.RunRequest(suites=("offline",), sut=f"pr:{number}@{sha}", run_id=kwargs["run_id"])
 
-    monkeypatch.setattr(cli, "plan_pr", plan_pr)
+    monkeypatch.setattr(cli_run, "plan_pr", plan_pr)
     assert invoke("pr", "790", "--sha", PIN, "--target", "acme", "--run-id", "t3c7z8a5").exit_code == 0
     assert planned[0]["run_id"] == "t3c7z8a5" and "--e2e-run-id=t3c7z8a5" in world.pytest_calls[0]
     result = invoke("pr", "790", "--sha", PIN, "--target", "acme,beta", "--run-id", "t3c7z8a5")
@@ -394,7 +407,7 @@ def test_the_termination_guard_is_installed_for_the_command_and_restored(
 
     monkeypatch.setattr("otterdog_e2e.batch.list_instances", list_instances)
     assert invoke("targets").exit_code == 0
-    assert getattr(seen[0], "__self__", None).__class__ is cli.TerminationGuard
+    assert getattr(seen[0], "__self__", None).__class__ is cli_common.TerminationGuard
     assert {sig: signal.getsignal(sig) for sig in before} == before
 
 
@@ -403,11 +416,11 @@ def test_the_guard_ignores_a_sigterm_after_a_first_interruption(monkeypatch: pyt
     first interruption; an interrupted in-process pytest session (exit code 2) counts too."""
     import click
 
-    guard = cli.TerminationGuard()
+    guard = cli_common.TerminationGuard()
     with pytest.raises(KeyboardInterrupt):
         guard.on_sigterm(signal.SIGTERM, None)
     guard.on_sigterm(signal.SIGTERM, None)  # ignored: the cleanup is running
-    other = cli.TerminationGuard()
+    other = cli_common.TerminationGuard()
     assert other.install()
     try:
         with pytest.raises(KeyboardInterrupt):
@@ -415,11 +428,11 @@ def test_the_guard_ignores_a_sigterm_after_a_first_interruption(monkeypatch: pyt
         other.on_sigterm(signal.SIGTERM, None)
     finally:
         other.uninstall()
-    third = cli.TerminationGuard()
+    third = cli_common.TerminationGuard()
     monkeypatch.setattr("pytest.main", lambda args: 2)
     with click.Context(cli.main) as context:
-        context.meta[cli._GUARD_KEY] = third
-        assert cli.run_pytest(["tests/unit"]) == 2
+        context.meta[cli_common._GUARD_KEY] = third
+        assert cli_run.run_pytest(["tests/unit"]) == 2
     assert third.interrupted
 
 
@@ -430,15 +443,15 @@ def test_doctor_checks_every_target_with_its_own_environment(world: Batch, monke
     before = dict(os.environ)
     seen: dict[str, str | None] = {}
 
-    def run(self: cli.Doctor) -> list[cli.CheckRow]:
+    def run(self: cli_doctor.Doctor) -> list[cli_doctor.CheckRow]:
         """Load the target and report its org (beta FAILs)."""
         seen[f"before:{self.ctx.options.target}"] = self.ctx.environ.get("E2E_ORG")
         target = self.ctx.load_target()
         seen[str(target.name)] = self.ctx.environ.get("E2E_ORG")
-        self.add("target", cli.FAIL if target.name == "beta" else cli.OK, f"{target.name} {target.org}")
+        self.add("target", cli_doctor.FAIL if target.name == "beta" else cli_doctor.OK, f"{target.name} {target.org}")
         return self.rows
 
-    monkeypatch.setattr(cli.Doctor, "run", run)
+    monkeypatch.setattr(cli_doctor.Doctor, "run", run)
     result = invoke("doctor", "--target", "acme,beta", "--json")
     assert result.exit_code == 1, result.output
     reports = json.loads(result.stdout)
@@ -528,7 +541,8 @@ def test_cache_prune_keeps_the_scratch_of_running_sessions(tmp_path: Path, monke
     assert result.exit_code == 0, result.output
     assert sorted(path.name for path in (cache / "run").iterdir()) == ["r1", "r1.lock", "r3", "r3.lock"]
     assert "pruned 1 cache entry" in result.output
-    assert sorted(path.name for path in cli.prune_cache_dirs(cache, keep=1)) == ["r1"]  # released: pruned now
+    pruned = cli_maintenance.prune_cache_dirs(cache, keep=1)
+    assert sorted(path.name for path in pruned) == ["r1"]  # released: pruned now
 
 
 def test_cache_prune_removes_exact_sidecars_and_keeps_held_entries(
@@ -553,7 +567,7 @@ def test_cache_prune_removes_exact_sidecars_and_keeps_held_entries(
         filelock.FileLock(str(src / "v1.1.image.lock"), timeout=0),
         filelock.FileLock(str(untrusted / "pr-2-def.image.lock"), timeout=0),
     ):
-        removed = cli.prune_cache_dirs(cache, keep=1)
+        removed = cli_maintenance.prune_cache_dirs(cache, keep=1)
     assert sorted(path.name for path in removed) == ["pr-1-abc.image.lock", "v1.0", "v1.2"]
     kept = sorted(path.name for path in src.iterdir())
     assert kept == sorted(f"{name}{suffix}" for name in ("v1.2.1", "v1.1") for suffix in ("", *sidecars))

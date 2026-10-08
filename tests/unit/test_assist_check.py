@@ -624,7 +624,7 @@ def command(project: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
         (run / "results.jsonl").write_text("".join(json.dumps(row) + "\n" for row in state["rows"]))
         return int(state["code"])
 
-    monkeypatch.setattr(cli, "run_pytest", run_pytest)
+    monkeypatch.setattr("otterdog_e2e.cli.assist.run_pytest", run_pytest)
     state["settings"] = settings
     return state
 

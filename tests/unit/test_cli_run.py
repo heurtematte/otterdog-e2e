@@ -12,6 +12,8 @@ import pytest
 from click.testing import CliRunner
 
 from otterdog_e2e import cli
+from otterdog_e2e.cli import common as cli_common
+from otterdog_e2e.cli import run as cli_run
 from otterdog_e2e.testing.fakes import FakeGitHubHttp, fake_sha, make_settings
 
 PIN = fake_sha("pr-head")
@@ -44,7 +46,7 @@ PIN = fake_sha("pr-head")
 def test_check_passthrough_rejects(arg: str) -> None:
     """Arguments able to change the SUT, plugins or configuration (or to print locals) are refused."""
     with pytest.raises(click.UsageError, match="not allowed"):
-        cli.check_passthrough(["-x", arg])
+        cli_common.check_passthrough(["-x", arg])
 
 
 @pytest.mark.parametrize(
@@ -52,13 +54,13 @@ def test_check_passthrough_rejects(arg: str) -> None:
 )
 def test_check_passthrough_accepts(arg: str) -> None:
     """Harmless pytest options and paths pass (``-r`` takes its characters as a value)."""
-    cli.check_passthrough([arg])
+    cli_common.check_passthrough([arg])
 
 
 @pytest.fixture
 def project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     """A project root with suite dirs; pytest.main is captured (returns 3)."""
-    for suite in cli.SUITES:
+    for suite in cli_run.SUITES:
         (tmp_path / "tests" / suite).mkdir(parents=True)
     settings = make_settings(tmp_path)
     captured: dict[str, Any] = {"code": 3}
@@ -69,7 +71,7 @@ def project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
         captured["args"], captured["command"] = list(args), command
         return int(captured["code"])
 
-    monkeypatch.setattr(cli, "run_pytest", run_pytest)
+    monkeypatch.setattr(cli_run, "run_pytest", run_pytest)
     monkeypatch.delenv("PYTEST_ADDOPTS", raising=False)
     captured["settings"] = settings
     return captured
@@ -254,10 +256,10 @@ def test_pr_validates_its_arguments(project: dict[str, Any]) -> None:
     """The sha must be a 40-hex pin; suites are validated."""
     result = CliRunner().invoke(cli.main, ["pr", "790", "--sha", "abc"])
     assert result.exit_code == 2 and "40-hex" in result.output
-    assert cli.pr_suites("auto", None) == ("offline", "differential")
-    assert cli.pr_suites("offline,cli", "free") == ("offline", "cli")
+    assert cli_run.pr_suites("auto", None) == ("offline", "differential")
+    assert cli_run.pr_suites("offline,cli", "free") == ("offline", "cli")
     with pytest.raises(click.UsageError):
-        cli.pr_suites("offline,bogus", None)
+        cli_run.pr_suites("offline,bogus", None)
 
 
 def test_classify_trusted_spec_writes_outputs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -320,7 +322,7 @@ def test_run_web_ui_suite_and_allow_flag(project: dict[str, Any]) -> None:
     assert project["command"] == "otterdog-e2e run --suite web_ui --target free --allow-web-ui"
     result = CliRunner().invoke(cli.main, ["run", "--suite", "web_ui", "--target", "free"])
     assert result.exit_code == 3 and "--e2e-allow-web-ui" not in project["args"]
-    assert "web_ui" in cli.SUITE_HELP and "--allow-web-ui" in CliRunner().invoke(cli.main, ["run", "--help"]).output
+    assert "web_ui" in cli_run.SUITE_HELP and "--allow-web-ui" in CliRunner().invoke(cli.main, ["run", "--help"]).output
 
 
 def test_run_default_suites_include_web_ui_only_when_allowed(project: dict[str, Any]) -> None:
@@ -329,19 +331,19 @@ def test_run_default_suites_include_web_ui_only_when_allowed(project: dict[str, 
     assert result.exit_code == 3, result.output
     dirs = [Path(arg).name for arg in project["args"] if not arg.startswith("-")]
     assert dirs == ["offline", "cli", "webhooks", "webapp", "enterprise", "differential", "web_ui"]
-    assert cli.default_suites(base_sut=None, allow_web_ui=False) == cli.DEFAULT_SUITES
-    assert cli.default_suites(base_sut=None, allow_web_ui=True) == (*cli.DEFAULT_SUITES, "web_ui")
-    assert cli.parse_suites(["offline,web_ui"]) == ("offline", "web_ui")
+    assert cli_run.default_suites(base_sut=None, allow_web_ui=False) == cli_run.DEFAULT_SUITES
+    assert cli_run.default_suites(base_sut=None, allow_web_ui=True) == (*cli_run.DEFAULT_SUITES, "web_ui")
+    assert cli_run.parse_suites(["offline,web_ui"]) == ("offline", "web_ui")
 
 
 def test_request_maps_allow_web_ui_without_changing_other_arguments(tmp_path: Path) -> None:
     """RunRequest.allow_web_ui adds exactly --e2e-allow-web-ui (pytest) and --allow-web-ui (command line)."""
-    base = cli.RunRequest(suites=("web_ui",), target="free", strict_diff=True)
-    allowed = cli.RunRequest(suites=("web_ui",), target="free", strict_diff=True, allow_web_ui=True)
+    base = cli_run.RunRequest(suites=("web_ui",), target="free", strict_diff=True)
+    allowed = cli_run.RunRequest(suites=("web_ui",), target="free", strict_diff=True, allow_web_ui=True)
     (tmp_path / "tests" / "web_ui").mkdir(parents=True)
     assert allowed.pytest_args(tmp_path) == [*base.pytest_args(tmp_path), "--e2e-allow-web-ui"]
     assert allowed.command_line(tmp_path) == base.command_line(tmp_path) + " --allow-web-ui"
-    assert not cli.RunRequest(suites=("cli",)).allow_web_ui
+    assert not cli_run.RunRequest(suites=("cli",)).allow_web_ui
 
 
 def test_pr_passes_allow_web_ui_and_explains_the_untrusted_sut(
@@ -373,4 +375,5 @@ def test_makefile_web_ui_target_runs_the_web_ui_suite() -> None:
         '\t$(E2E) run --target "$(TARGET)" --sut "$(SUT)" --suite web_ui --allow-web-ui $(PARALLEL_ARG) $(ARGS)'
     )
     assert "web-ui" in makefile.split(".PHONY:", 1)[1].split("\n\n", 1)[0]
-    assert "web_ui" in cli.SUITES and "--allow-web-ui" in {opt for param in cli.run.params for opt in param.opts}
+    options = {opt for param in cli_run.run.params for opt in param.opts}
+    assert "web_ui" in cli_run.SUITES and "--allow-web-ui" in options

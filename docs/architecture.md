@@ -2,15 +2,20 @@
 
 otterdog-e2e is a Python package (`src/otterdog_e2e`) with two entry points that share one composition root:
 
-- the `otterdog-e2e` command line (`cli.py`, click; also `python -m otterdog_e2e`), for operations (doctor,
-  bootstrap, janitor, relay, reports, the onboarding commands `setup` and `ci-sync`) and for starting test sessions
-  (`run`, `pr`, which call `pytest.main` in-process for one target, and start one child process per target for
-  several);
+- the `otterdog-e2e` command line (the `cli/` package, click; also `python -m otterdog_e2e`), for operations
+  (doctor, bootstrap, janitor, relay, reports, the onboarding commands `setup` and `ci-sync`) and for starting test
+  sessions (`run`, `pr`, which call `pytest.main` in-process for one target, and start one child process per target
+  for several); `cli/common.py` holds the click group and the helpers every command shares, and each command family
+  has its module (`doctor`, `bootstrap`, `sut`, `run`, `ops`, `maintenance`, `app_manifest`, `inject`, `onboarding`,
+  `assist`);
 - a pytest plugin (`pytest_plugin.py`, registered through the `pytest11` entry point), which turns tiers, scenario
   YAML files and markers into test items, gates them and reports them.
 
-Both build an `E2EContext` (`context.py`): the settings, the run context, the target, the verified organization, the
-capabilities, the org lease, the SUTs and every client and driver of a session.
+Both build an `E2EContext` (the `context/` package): the settings, the run context, the target, the verified
+organization, the capabilities, the org lease, the SUTs and every client and driver of a session. `context/core.py`
+assembles it from one class per facet over the shared state of `context/state.py`: `live` (target, verification,
+GitHub clients, App, org lease), `sut` (SUTs, otterdog drivers, differential sides), `webui`, `webapp` and `rundata`
+(scenario variables, rate budget, known bugs, change under test).
 
 **Instances and profiles.** A target file `targets/<profile>.yaml` is a profile (`free`, `team`, `enterprise`) and
 holds no org-specific value; an instance is one test organization, named by `--target <instance>`, whose env file
@@ -28,10 +33,10 @@ and its CI environments through the operator's `gh` login (`ci-sync`); see [onbo
 ```mermaid
 flowchart LR
   subgraph entry["entry points"]
-    CLI["otterdog-e2e CLI<br/>cli.py"]
+    CLI["otterdog-e2e CLI<br/>cli/"]
     PLUGIN["pytest plugin<br/>pytest_plugin.py"]
   end
-  CTX["E2EContext<br/>context.py"]
+  CTX["E2EContext<br/>context/"]
   CLI --> CTX
   PLUGIN --> CTX
 

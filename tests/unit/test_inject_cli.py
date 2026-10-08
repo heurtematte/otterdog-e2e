@@ -13,6 +13,7 @@ import yaml
 from click.testing import CliRunner
 
 from otterdog_e2e import cli
+from otterdog_e2e.cli import inject as cli_inject
 from otterdog_e2e.inject import ADHOC_ENV, InjectRequest, write_adhoc_result
 from otterdog_e2e.scenarios.model import load_adhoc_scenario
 from otterdog_e2e.testing.fakes import make_settings
@@ -46,7 +47,7 @@ def session(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
         (run_dir / "results.jsonl").write_text(json.dumps({**line, "outcome": captured["outcome"]}) + "\n")
         return int(captured["code"])
 
-    monkeypatch.setattr(cli, "run_pytest", run_pytest)
+    monkeypatch.setattr(cli_inject, "run_pytest", run_pytest)
     captured["settings"] = settings
     return captured
 
@@ -185,14 +186,14 @@ def test_command_line_and_adhoc_item(tmp_path: Path) -> None:
         apply=True,
         variables={"plan": "team", "n": 5, "s": "a b"},
     )
-    line = cli.inject_command_line(request, target="free", sut=None, reset_sut=None, no_reset=True)
+    line = cli_inject.inject_command_line(request, target="free", sut=None, reset_sut=None, no_reset=True)
     assert line == (
         "otterdog-e2e inject --target free --fragment repositories=/u/r.jsonnet --library e2e=/u/l.libsonnet "
         "--overlay /u/o.jsonnet --plan team --var n=5 --var 's=a b' --apply --no-reset"
     )
-    assert cli.adhoc_item(tmp_path) is None
+    assert cli_inject.adhoc_item(tmp_path) is None
     (tmp_path / "results.jsonl").write_text('{"nodeid": "tests/offline/x"}\nnot json\n{"nodeid": "tests/adhoc/t"}\n')
-    assert cli.adhoc_item(tmp_path) == {"nodeid": "tests/adhoc/t"}
+    assert cli_inject.adhoc_item(tmp_path) == {"nodeid": "tests/adhoc/t"}
 
 
 def test_the_generated_yaml_is_the_documented_scenario(session: dict[str, Any], tmp_path: Path) -> None:

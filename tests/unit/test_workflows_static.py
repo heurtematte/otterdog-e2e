@@ -428,7 +428,7 @@ def test_multi_line_scripts_fail_fast() -> None:
 
 
 def test_harness_commands_and_options_exist() -> None:
-    """Every otterdog-e2e command and long option used by a workflow exists in src/otterdog_e2e/cli.py."""
+    """Every otterdog-e2e command and long option used by a workflow exists in src/otterdog_e2e/cli/."""
     commands, options = click_commands(), known_long_options()
     seen: set[str] = set()
     for name, job_id, index, step in all_steps():

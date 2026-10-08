@@ -7,7 +7,7 @@ import os
 import re
 import threading
 from collections.abc import Callable
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field, make_dataclass, replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
@@ -19,6 +19,11 @@ import requests
 from click.testing import CliRunner
 
 from otterdog_e2e import cli
+from otterdog_e2e.cli import app_manifest as cli_app_manifest
+from otterdog_e2e.cli import bootstrap as cli_bootstrap
+from otterdog_e2e.cli import common as cli_common
+from otterdog_e2e.cli import maintenance as cli_maintenance
+from otterdog_e2e.cli import ops as cli_ops
 from otterdog_e2e.context import E2EContext, E2EOptions
 from otterdog_e2e.github.janitor import JanitorItem
 from otterdog_e2e.redact import Redactor
@@ -202,7 +207,7 @@ def bootstrap(org: Org, *, confirm: str = FAKE_ORG, clock: Clock | None = None, 
     prompts: list[str] = []
     clock = clock or Clock()
     context = E2EContext.create(E2EOptions(target="fake", run_id=FAKE_RUN_ID), environ={})
-    cli.Bootstrap(
+    cli_bootstrap.Bootstrap(
         context,
         apply=True,
         confirm=lambda text: prompts.append(text) or confirm,
@@ -213,11 +218,13 @@ def bootstrap(org: Org, *, confirm: str = FAKE_ORG, clock: Clock | None = None, 
     return prompts
 
 
-def verified_steps(org: Org, *, apply: bool = True, clock: Clock | None = None, **options: Any) -> cli.Bootstrap:
+def verified_steps(
+    org: Org, *, apply: bool = True, clock: Clock | None = None, **options: Any
+) -> cli_bootstrap.Bootstrap:
     """A Bootstrap on a fresh context after its verify step (its waits driven by ``clock``)."""
     clock = clock or Clock()
     context = E2EContext.create(E2EOptions(target="fake", run_id=FAKE_RUN_ID), environ={})
-    runner = cli.Bootstrap(
+    runner = cli_bootstrap.Bootstrap(
         context, apply=apply, confirm=lambda text: FAKE_ORG, sleep=clock.sleep, clock=clock, **options
     )
     runner.verify()
@@ -333,7 +340,7 @@ def test_the_delivery_probe_waits_as_long_as_every_delivery_wait() -> None:
     from otterdog_e2e.config_repo import ConfigRepoFlow
 
     flow_default = inspect.signature(ConfigRepoFlow).parameters["delivery_timeout"].default
-    assert cli.DELIVERY_PROBE_TIMEOUT == flow_default == 300
+    assert cli_bootstrap.DELIVERY_PROBE_TIMEOUT == flow_default == 300
 
 
 def test_bootstrap_delivery_probe_timeout(org: Org, heavy: dict[str, Any]) -> None:
@@ -345,7 +352,9 @@ def test_bootstrap_delivery_probe_timeout(org: Org, heavy: dict[str, Any]) -> No
         org.oracle.add_repo(repo)
     org.oracle.set("branch_sha", "otterdog-e2e-configs", "main", value=fake_sha("main"))
     context = E2EContext.create(E2EOptions(target="fake", run_id=FAKE_RUN_ID), environ={})
-    runner = cli.Bootstrap(context, apply=True, confirm=lambda text: "", sleep=lambda s: None, probe_timeout=0)
+    runner = cli_bootstrap.Bootstrap(
+        context, apply=True, confirm=lambda text: "", sleep=lambda s: None, probe_timeout=0
+    )
     with pytest.raises(click.ClickException, match=r"no push delivery.*minutes late"):
         runner.run()
     assert admin_calls(org, "delete_ref")
@@ -706,7 +715,7 @@ def test_bootstrap_command_wait_options(org: Org, monkeypatch: pytest.MonkeyPatc
             """Record the run."""
             created["ran"] = True
 
-    monkeypatch.setattr(cli, "Bootstrap", Recorder)
+    monkeypatch.setattr(cli_bootstrap, "Bootstrap", Recorder)
     for argv, wait, timeout in (
         (["--apply", "--wait", "--wait-timeout", "90s"], True, 90),
         (["--apply", "--wait", "--wait-timeout", "1800"], True, 1800),
@@ -728,12 +737,12 @@ def test_janitor_filter_rules() -> None:
     """Exact --run-id, else runs older than the cutoff; never the janitor's own run; only purgeable runs."""
     now = datetime(2026, 10, 2, tzinfo=UTC)
     context = SimpleNamespace(run_ctx=SimpleNamespace(run_id="zzzzzz00"), purgeable=lambda run_id: run_id != "t3c7z8c7")
-    by_age = cli.janitor_filter(context, older_than=timedelta(hours=6), run_id=None, now=now)  # type: ignore[arg-type]
+    by_age = cli_ops.janitor_filter(context, older_than=timedelta(hours=6), run_id=None, now=now)  # type: ignore[arg-type]
     assert by_age(FAKE_RUN_ID)  # 2025: old enough
     assert not by_age("t3c7z8c7")  # not purgeable
     assert not by_age("zzzzzz00")  # the janitor's own run
     assert not by_age("garbage")
-    exact = cli.janitor_filter(context, older_than=timedelta(hours=6), run_id=OTHER_RUN, now=now)  # type: ignore[arg-type]
+    exact = cli_ops.janitor_filter(context, older_than=timedelta(hours=6), run_id=OTHER_RUN, now=now)  # type: ignore[arg-type]
     assert exact(OTHER_RUN) and not exact(FAKE_RUN_ID)
 
 
@@ -849,7 +858,7 @@ def test_relay_loop_prints_and_survives_errors(capsys: pytest.CaptureFixture[str
         [delivery()], RuntimeError("github hiccup"), [delivery(event="push", action=None, pull_number=None)]
     )
     sleeps: list[float] = []
-    cli.relay_loop(relay, sleep=sleeps.append, max_polls=3)  # type: ignore[arg-type]
+    cli_ops.relay_loop(relay, sleep=sleeps.append, max_polls=3)  # type: ignore[arg-type]
     out = capsys.readouterr().out
     assert "12:30:05 pull_request/opened #3 -> 204" in out and "12:30:05 push -> 204" in out
     assert sleeps == [5.0, 5.0, 5.0] and relay.stopped
@@ -863,7 +872,7 @@ def test_relay_loop_stops_on_ctrl_c() -> None:
         """Simulate Ctrl-C."""
         raise KeyboardInterrupt
 
-    cli.relay_loop(relay, sleep=interrupt)  # type: ignore[arg-type]
+    cli_ops.relay_loop(relay, sleep=interrupt)  # type: ignore[arg-type]
     assert relay.stopped
 
 
@@ -874,7 +883,7 @@ def test_relay_command_holds_the_lease(org: Org, monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr(
         "otterdog_e2e.webhooks.relay.DeliveryRelay", lambda app, **kw: created.update(kw) or FakeRelay()
     )
-    monkeypatch.setattr(cli, "relay_loop", lambda relay, **kw: created.setdefault("lease", list(org.lease.calls)))
+    monkeypatch.setattr(cli_ops, "relay_loop", lambda relay, **kw: created.setdefault("lease", list(org.lease.calls)))
     before = datetime.now(UTC)
     result = CliRunner().invoke(
         cli.main,
@@ -900,7 +909,8 @@ def test_report_and_scrub_commands(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     assert result.exit_code == 0 and "no leak" in result.output
 
 
-# unique values: registered with the redactor of the test only (cli.REDACTOR is replaced by a fresh one)
+# unique values: registered with the redactor of the test only (the REDACTOR of scrub-artifacts and of the
+# command output is replaced by a fresh one)
 WEB_PASSWORD = "e2e-web-password-not-token-shaped-7f3a"
 TOTP_SEED = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP"
 
@@ -910,7 +920,8 @@ def test_scrub_registers_the_secrets_of_the_environment(tmp_path: Path, monkeypa
     seed (no token shape, unknown to a fresh CI process) is found, the file deleted and the exit code 1; other
     variables are no secrets."""
     fresh = Redactor()
-    monkeypatch.setattr(cli, "REDACTOR", fresh)
+    monkeypatch.setattr(cli_maintenance, "REDACTOR", fresh)
+    monkeypatch.setattr(cli_common, "REDACTOR", fresh)
     monkeypatch.delenv("GITHUB_ACTIONS", raising=False)  # no ::add-mask:: lines (they would print the values)
     run_dir = tmp_path / "artifacts" / "t3c7z8a5"
     (run_dir / "cli" / "0001-plan").mkdir(parents=True)
@@ -941,11 +952,11 @@ def test_register_environment_secrets_counts_registered_values() -> None:
         "E2E_ADMIN_USERNAME": "e2e-admin-login-name",
         "PATH": "/usr/bin:/bin",
     }
-    assert cli.register_environment_secrets(environ, fresh) == 2
+    assert cli_maintenance.register_environment_secrets(environ, fresh) == 2
     assert (
         fresh("e2e-admin-token-value-1 e2e-hook-secret-value-2 e2e-admin-login-name") == "*** *** e2e-admin-login-name"
     )
-    assert cli.register_environment_secrets({}, fresh) == 0
+    assert cli_maintenance.register_environment_secrets({}, fresh) == 0
 
 
 def test_cache_prune_keeps_the_newest_entries(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -982,7 +993,7 @@ def test_prune_images_keeps_the_newest_tags(monkeypatch: pytest.MonkeyPatch) -> 
 
     monkeypatch.setattr("otterdog_e2e.sut.image.docker_available", lambda: True)
     monkeypatch.setattr("otterdog_e2e.procs.run", run)
-    removed = cli.prune_images(keep=1)
+    removed = cli_maintenance.prune_images(keep=1)
     assert removed == ["otterdog-e2e/otterdog:old", "otterdog-e2e/untrusted:old"]
     assert ["docker", "image", "rm", "otterdog-e2e/otterdog:old"] in calls
 
@@ -996,7 +1007,7 @@ def test_manifest_flow_verifies_state(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "otterdog_e2e.appmanifest.manifest_form_html", lambda org, manifest, state: f"<form {org} {state}>"
     )
-    flow = cli.ManifestFlow(
+    flow = cli_app_manifest.ManifestFlow(
         make_target(), webhook_url="https://sink.example.org/x", port=0, state="the-state", timeout=30
     )
     responses: list[tuple[int, str]] = []
@@ -1028,7 +1039,7 @@ def test_manifest_flow_verifies_state(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_manifest_flow_rejects_malformed_codes() -> None:
     """Callbacks without a plausible code are refused."""
-    flow = cli.ManifestFlow(make_target(), webhook_url="https://sink.example.org/x", port=0, state="s")
+    flow = cli_app_manifest.ManifestFlow(make_target(), webhook_url="https://sink.example.org/x", port=0, state="s")
     assert flow.callback({"state": ["s"], "code": ["x"]})[0] == 400
     assert flow.callback({"state": ["s"]})[0] == 400 and flow.code is None
 
@@ -1077,9 +1088,9 @@ def test_app_credentials_dir_and_instructions_use_home_of_the_environ(tmp_path: 
     target = make_target("my-instance")
     environ = {"HOME": str(tmp_path)}
     config = tmp_path / ".config" / "otterdog-e2e"
-    assert cli.app_credentials_dir(target, environ) == config / "my-instance"
+    assert cli_app_manifest.app_credentials_dir(target, environ) == config / "my-instance"
     result = {"id": 7, "slug": "otterdog-e2e-x", "pem_path": "k.pem", "secret_path": "s", "env_path": "app-7.env"}
-    text = cli.app_instructions(target, result, environ)
+    text = cli_app_manifest.app_instructions(target, result, environ)
     assert f"add to {config / 'my-instance.env'}:" in text and "(or append app-7.env:" in text
     assert text.endswith(
         f"for All repositories: https://github.com/apps/otterdog-e2e-x/installations/new/permissions"
@@ -1129,7 +1140,7 @@ def test_sut_commands(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     )
     monkeypatch.setattr(
         "otterdog_e2e.sut.image.build_webapp_image",
-        lambda sut, **kw: cli.dataclasses.make_dataclass("Image", ["tag"])(tag=f"otterdog-e2e/otterdog:{sut.label}"),
+        lambda sut, **kw: make_dataclass("Image", ["tag"])(tag=f"otterdog-e2e/otterdog:{sut.label}"),
     )
     result = CliRunner().invoke(cli.main, ["sut", "resolve", "release:latest"])
     assert result.exit_code == 0 and json.loads(result.output) == {"label": "v1.6.1", "trusted": True}

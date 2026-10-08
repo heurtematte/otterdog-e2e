@@ -10,7 +10,8 @@ from pathlib import Path
 import pytest
 import yaml
 
-from otterdog_e2e import cli, safety
+from otterdog_e2e import safety
+from otterdog_e2e.cli import doctor as cli_doctor
 from otterdog_e2e.onboard import tokens
 from otterdog_e2e.onboard.tokens import (
     ACCESS_LABELS,
@@ -176,7 +177,7 @@ def test_classic_scopes_are_allowed_by_the_isolation_rules() -> None:
         allowed = safety.ALLOWED_SCOPES["admin" if role in safety.OWNER_ROLES else "other"]
         assert set(spec.classic_scopes) <= allowed, role
         assert "read:org" in spec.classic_scopes or "admin:org" in spec.classic_scopes or not spec.classic_scopes
-    assert set(ROLE_TOKENS["admin"].classic_scopes) == set(cli.REQUIRED_ADMIN_SCOPES)
+    assert set(ROLE_TOKENS["admin"].classic_scopes) == set(cli_doctor.REQUIRED_ADMIN_SCOPES)
 
 
 def test_permission_names_and_levels_are_valid() -> None:

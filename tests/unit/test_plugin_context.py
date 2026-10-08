@@ -1,4 +1,5 @@
-"""E2EContext (context.py): options, lazy live session, lease, SUT roles, webapp wiring and isolation, reporting."""
+"""E2EContext (the otterdog_e2e.context package): options, lazy live session, lease, SUT roles, webapp wiring and
+isolation, reporting."""
 
 from __future__ import annotations
 
@@ -29,6 +30,9 @@ from otterdog_e2e.context import (
     target_env_name,
     text_or_none,
 )
+from otterdog_e2e.context import core as context_core
+from otterdog_e2e.context import helpers as context_helpers
+from otterdog_e2e.context import sut as context_sut
 from otterdog_e2e.naming import new_run_context
 from otterdog_e2e.otterdog import runtime as runtime_module
 from otterdog_e2e.redact import REDACTOR
@@ -243,8 +247,8 @@ def test_start_session_writes_run_json_and_sets_home(tmp_path: Path, monkeypatch
 def test_session_close_is_registered_at_exit(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """start_session registers close() with atexit (sessions dying before teardown); close() unregisters it."""
     registered: list[Any] = []
-    monkeypatch.setattr(context_module.atexit, "register", registered.append)
-    monkeypatch.setattr(context_module.atexit, "unregister", registered.remove)
+    monkeypatch.setattr(context_core.atexit, "register", registered.append)
+    monkeypatch.setattr(context_core.atexit, "unregister", registered.remove)
     monkeypatch.setattr("otterdog_e2e.redact.install_logging_filter", lambda *a: None)
     monkeypatch.setattr("otterdog_e2e.report.scrub_artifacts", lambda root, redactor: [])
     context = new_context(tmp_path)
@@ -582,7 +586,7 @@ def test_trust_code_goes_through_grant_host_trust(
     """--e2e-trust-code <exact sha>: cli_install.grant_host_trust installs the untrusted SUT on the host from an
     interactive terminal only; CI and non-interactive sessions are refused; a code naming another sha changes nothing."""
     spec = "pr:792@" + fake_sha("pr")
-    monkeypatch.setattr(context_module, "interactive_terminal", lambda: True)
+    monkeypatch.setattr(context_sut, "interactive_terminal", lambda: True)
     context = new_context(tmp_path, sut=spec, trust_code=fake_sha("pr").upper())
     assert context.installed("head").runtime == "host" and suts["installs"][0].trusted
     assert not context.resolve(spec).trusted  # the resolved SUT stays untrusted (webapp token, source cleanup)
@@ -594,7 +598,7 @@ def test_trust_code_goes_through_grant_host_trust(
         )
         with pytest.raises(SafetyError, match="refused when CI is set"):
             ci.installed("head")
-    monkeypatch.setattr(context_module, "interactive_terminal", lambda: False)
+    monkeypatch.setattr(context_sut, "interactive_terminal", lambda: False)
     with pytest.raises(SafetyError, match="interactive terminal"):
         new_context(tmp_path, sut=spec, trust_code=fake_sha("pr")).installed("head")
     assert len(suts["installs"]) == 1
@@ -617,8 +621,8 @@ def test_interactive_terminal_reads_the_original_stdin(monkeypatch: pytest.Monke
             return self.tty
 
     for stream, expected in ((Stream(True), True), (Stream(False), False), (Stream(None), False), (None, False)):
-        monkeypatch.setattr(context_module.sys, "__stdin__", stream)
-        assert context_module.interactive_terminal() is expected
+        monkeypatch.setattr(context_helpers.sys, "__stdin__", stream)
+        assert context_helpers.interactive_terminal() is expected
 
 
 def test_close_deletes_untrusted_sources(tmp_path: Path, suts: dict[str, Any]) -> None:

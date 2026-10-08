@@ -18,6 +18,7 @@ from click.testing import CliRunner
 
 from otterdog_e2e import appmanifest, cli
 from otterdog_e2e.appmanifest import DEFAULT_EVENTS, DEFAULT_PERMISSIONS
+from otterdog_e2e.cli import onboarding as cli_onboarding
 from otterdog_e2e.onboard.wizard import SetupError, SetupOptions, SetupWizard, WizardIO
 from otterdog_e2e.safety import SafetyError
 from otterdog_e2e.settings import HarnessSettings, Target, parse_env_text
@@ -1145,7 +1146,7 @@ def test_cli_rotation_choices_match_the_wizard() -> None:
     """The --rotate choices of the CLI are the wizard's."""
     from otterdog_e2e.onboard.wizard import ROTATABLE
 
-    assert tuple(cli.SETUP_ROTATABLE) == ROTATABLE
+    assert tuple(cli_onboarding.SETUP_ROTATABLE) == ROTATABLE
 
 
 def test_cli_setup_wait_timeout_takes_durations(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1203,14 +1204,14 @@ def test_setup_bootstrap_and_doctor_run_on_fresh_copies_of_the_pristine_environm
             created[-1] = (*created[-1][:2], context)
             return context
 
-    monkeypatch.setattr(cli, "E2EContext", Contexts)
-    monkeypatch.setattr(cli, "Bootstrap", lambda context, **kwargs: types.SimpleNamespace(run=lambda: None))
-    monkeypatch.setattr(cli, "Doctor", lambda context: types.SimpleNamespace(run=list))
-    monkeypatch.setattr(cli, "render_rows", lambda rows: "doctor table")
+    monkeypatch.setattr(cli_onboarding, "E2EContext", Contexts)
+    monkeypatch.setattr(cli_onboarding, "Bootstrap", lambda context, **kwargs: types.SimpleNamespace(run=lambda: None))
+    monkeypatch.setattr(cli_onboarding, "Doctor", lambda context: types.SimpleNamespace(run=list))
+    monkeypatch.setattr(cli_onboarding, "render_rows", lambda rows: "doctor table")
     pristine = {"HOME": "/nowhere", "E2E_ORG": "exported"}
-    cli._setup_bootstrap("org2", pristine=pristine, wait_timeout=5.0)
-    cli._setup_bootstrap("org2", pristine=pristine, wait_timeout=5.0)
-    cli._setup_doctor("org2", pristine=pristine)
+    cli_onboarding._setup_bootstrap("org2", pristine=pristine, wait_timeout=5.0)
+    cli_onboarding._setup_bootstrap("org2", pristine=pristine, wait_timeout=5.0)
+    cli_onboarding._setup_doctor("org2", pristine=pristine)
     assert [(target, environ) for target, environ, _ in created] == [("org2", pristine)] * 3
     assert pristine == {"HOME": "/nowhere", "E2E_ORG": "exported"} and "E2E_APP_ID" not in os.environ
     assert [context.closed for _, _, context in created] == [True, True, False]

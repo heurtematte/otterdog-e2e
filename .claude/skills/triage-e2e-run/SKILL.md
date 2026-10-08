@@ -115,7 +115,7 @@ Run tmfidc6a (release:latest, target free, suites offline,cli): 3 failed, 1 erro
 | cli.repo.webhook (state)                  | infrastructure (confirmed)  | delivery wait timeout after 300 s, GitHub 502 in cli/0412-plan/stderr.txt | rerun: make one SCENARIO=cli.repo.webhook TARGET=free |
 | O-VAL-ORGVAR / control (validate)         | sut, corrected to scenario  | expected errors 0, otterdog 1.6.1 warns only; message in .../0311-validate/stdout.txt | fixed the step's expectation |
 | cli.ruleset.bypass / converge             | known-bug KB-052 (new: FAIL) | step lacks known_bug {phases: [converge]} | added the step-level bug |
-| tests/webapp/test_pr_flow.py::test_x      | harness (error)             | ContextError in src/otterdog_e2e/context.py at setup | harness fix proposed below (not applied) |
+| tests/webapp/test_pr_flow.py::test_x      | harness (error)             | ContextError in src/otterdog_e2e/context/live.py at setup | harness fix proposed below (not applied) |
 Drafts: scenarios/offline/validation/val-org-variables.yaml; gates: assist check clean, make unit green
 Not verified: the webhook rerun (live)
 ```

@@ -219,8 +219,8 @@ def build_pr_context(
 
 
 def _risky_patterns() -> tuple[str, ...]:
-    """cli.RISKY_PATHS: the files ``sut classify`` flags (build-time code and templates)."""
-    from otterdog_e2e.cli import RISKY_PATHS
+    """cli.sut.RISKY_PATHS: the files ``sut classify`` flags (build-time code and templates)."""
+    from otterdog_e2e.cli.sut import RISKY_PATHS
 
     return tuple(RISKY_PATHS)
 

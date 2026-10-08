@@ -1,5 +1,5 @@
-"""doctor's web-UI checks (cli.Doctor.check_web): credentials, SAML SSO, Playwright browser, login gate, bot 2FA; the
-doctor never logs in and never fails a target without web credentials."""
+"""doctor's web-UI checks (cli.doctor.Doctor.check_web): credentials, SAML SSO, Playwright browser, login gate, bot
+2FA; the doctor never logs in and never fails a target without web credentials."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ import pytest
 from click.testing import CliRunner
 
 from otterdog_e2e import cli
+from otterdog_e2e.cli import doctor as cli_doctor
 from otterdog_e2e.settings import AppCredentials, Target
 from otterdog_e2e.testing.fakes import (
     FAKE_LOGINS,
@@ -52,7 +53,9 @@ class World:
 
     def http(self, token: str | None, **kwargs: Any) -> FakeGitHubHttp:
         """The admin client: GET /user (with two_factor_authentication) and public memberships."""
-        client = FakeGitHubHttp(identity=kwargs["identity"], scopes=set(cli.REQUIRED_ADMIN_SCOPES), read_only=True)
+        client = FakeGitHubHttp(
+            identity=kwargs["identity"], scopes=set(cli_doctor.REQUIRED_ADMIN_SCOPES), read_only=True
+        )
         user: dict[str, Any] = {"login": FAKE_LOGINS["admin"]}
         if self.two_factor is not None:
             user["two_factor_authentication"] = self.two_factor

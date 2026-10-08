@@ -345,6 +345,29 @@ PUBLIC_NAMES: dict[str, list[str]] = {
     "otterdog_e2e.onboard.wizard": ["SetupWizard", "SetupOptions", "WizardIO", "SetupError", "COPYABLE_KEYS"],
     "otterdog_e2e.onboard.cisync": ["CiSync", "CiSyncError", "Operation", "workflow_names", "environment_kinds"],
     "otterdog_e2e.context": ["E2EContext", "E2EOptions", "get_context", "E2E_CONTEXT_KEY"],
+    # the facets E2EContext is assembled from (each over ContextState) and the small helpers
+    "otterdog_e2e.context.helpers": [
+        "split_csv",
+        "text_or_none",
+        "env_flag",
+        "in_ci",
+        "lock_held",
+        "parse_duration",
+        "parse_time",
+        "describe_error",
+        "interactive_terminal",
+        "lease_holder",
+        "installation_problems",
+        "printed_version",
+        "workspace_literals",
+    ],
+    "otterdog_e2e.context.state": ["ContextError", "ContextState", "E2EOptions", "OPTION_ENV", "AUTO_BASE"],
+    "otterdog_e2e.context.live": ["LiveFacet"],
+    "otterdog_e2e.context.sut": ["SutFacet", "SutPair"],
+    "otterdog_e2e.context.webui": ["WebUiFacet"],
+    "otterdog_e2e.context.webapp": ["WebappFacet", "WebappCase", "check_organization_overrides"],
+    "otterdog_e2e.context.rundata": ["RunDataFacet"],
+    "otterdog_e2e.context.core": ["E2EContext"],
     "otterdog_e2e.pytest_plugin": [
         "pytest_addoption",
         "pytest_configure",
@@ -356,6 +379,18 @@ PUBLIC_NAMES: dict[str, list[str]] = {
         "OPTIONS",
     ],
     "otterdog_e2e.cli": ["main"],
+    # the click group and shared helpers, then one module per command family
+    "otterdog_e2e.cli.common": ["main", "check_passthrough", "target_names", "TerminationGuard"],
+    "otterdog_e2e.cli.doctor": ["Doctor", "CheckRow", "render_rows", "doctor"],
+    "otterdog_e2e.cli.bootstrap": ["Bootstrap", "bootstrap"],
+    "otterdog_e2e.cli.sut": ["RISKY_PATHS", "sut"],
+    "otterdog_e2e.cli.run": ["RunRequest", "run_pytest", "run_targets", "plan_pr", "run", "pr"],
+    "otterdog_e2e.cli.ops": ["relay_loop", "janitor_filter", "relay", "janitor"],
+    "otterdog_e2e.cli.maintenance": ["register_environment_secrets", "prune_cache_dirs", "report", "cache"],
+    "otterdog_e2e.cli.app_manifest": ["ManifestFlow", "app_manifest"],
+    "otterdog_e2e.cli.inject": ["inject_request", "inject_command"],
+    "otterdog_e2e.cli.onboarding": ["setup_command", "ci_sync"],
+    "otterdog_e2e.cli.assist": ["assist"],
     # AI-assisted test writing: context bundles and checks of ``otterdog-e2e assist`` (docs/ai-assistance.md)
     "otterdog_e2e.assist": [],
     "otterdog_e2e.assist.bundle": [
@@ -1588,7 +1623,7 @@ def test_subprocesses_only_through_procs() -> None:
 
 
 def test_no_print_in_library_code() -> None:
-    """SPEC 4: no print() (cli.py uses click.echo)."""
+    """SPEC 4: no print() (the cli package uses click.echo)."""
     offenders = []
     for path in sorted(SRC.rglob("*.py")):
         for node in ast.walk(ast.parse(path.read_text())):
