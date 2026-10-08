@@ -35,7 +35,7 @@ steps:
   - name: validate
     fragments:
       repositories:
-        - file: ../fragments/repo.jsonnet
+        - file: ../../fragments/repo.jsonnet
     validate: {{ok: true}}
 """
 LIVE = """\
@@ -81,9 +81,8 @@ def project(tmp_path: Path) -> Path:
     test (the offline scenario and the Python test reference #790)."""
     root = tmp_path / "project"
     for directory in (
-        "scenarios/offline",
-        "scenarios/cli",
-        "scenarios/regressions",
+        "scenarios/offline/repo",
+        "scenarios/cli/repo",
         "scenarios/fragments",
         "tests/webapp",
         "tests/offline",
@@ -91,8 +90,8 @@ def project(tmp_path: Path) -> Path:
     ):
         (root / directory).mkdir(parents=True)
     (root / "pyproject.toml").write_text('[project]\nname = "otterdog-e2e"\n')
-    (root / "scenarios" / "offline" / "val.yaml").write_text(OFFLINE)
-    (root / "scenarios" / "cli" / "repo.yaml").write_text(LIVE)
+    (root / "scenarios" / "offline" / "repo" / "val.yaml").write_text(OFFLINE)
+    (root / "scenarios" / "cli" / "repo" / "repo.yaml").write_text(LIVE)
     (root / "scenarios" / "fragments" / "repo.jsonnet").write_text("orgs.newRepo('{{ p }}-r') { description: 'r' }\n")
     (root / "scenarios" / "fragments" / "unused.jsonnet").write_text("{}\n")
     (root / "scenarios" / "known_bugs.yaml").write_text(KNOWN_BUGS)
@@ -127,19 +126,19 @@ def test_the_fixture_checkout_is_clean(project: Path) -> None:
         [
             project / path
             for path in (
-                "scenarios/offline/val.yaml",
-                "scenarios/cli/repo.yaml",
+                "scenarios/offline/repo/val.yaml",
+                "scenarios/cli/repo/repo.yaml",
                 "scenarios/known_bugs.yaml",
                 "tests/webapp/test_py.py",
             )
         ],
     )
     assert result.problems == [] and result.ok
-    assert result.live == {"cli.repo.x": "scenarios/cli/repo.yaml"}
+    assert result.live == {"cli.repo.x": "scenarios/cli/repo/repo.yaml"}
     kinds = {item["path"]: item["kind"] for item in result.files}
     assert kinds == {
-        "scenarios/offline/val.yaml": "scenario",
-        "scenarios/cli/repo.yaml": "scenario",
+        "scenarios/offline/repo/val.yaml": "scenario",
+        "scenarios/cli/repo/repo.yaml": "scenario",
         "scenarios/known_bugs.yaml": "known-bugs",
         "tests/webapp/test_py.py": "python",
     }
@@ -150,11 +149,8 @@ def test_the_repository_files_are_clean() -> None:
     repository have no problem."""
     paths = sorted(
         [
-            *REPO.glob("scenarios/regressions/*.yaml"),
+            *(path for tier in ("offline", "cli", "enterprise") for path in REPO.glob(f"scenarios/{tier}/*/*.yaml")),
             REPO / "scenarios" / "known_bugs.yaml",
-            REPO / "scenarios" / "offline" / "validation" / "val-ruleset-strict.yaml",
-            REPO / "scenarios" / "offline" / "validation" / "val-org-ruleset-strict.yaml",
-            REPO / "scenarios" / "enterprise" / "org-ruleset-missing-strict.yaml",
             REPO / "tests" / "webapp" / "test_stale_status.py",
             REPO / "tests" / "webapp" / "test_check_merge.py",
         ]
@@ -192,16 +188,16 @@ def test_reference_problems(project: Path, text: str, expected: tuple[str, str])
     """The references of a scenario: the model's rules (with their key path), the consistency of a change across
     the repository, an id naming the behaviour (never a PR number)."""
     other = OFFLINE.replace("id: O-VAL", "id: O-VAL-OTHER")
-    write(project, "scenarios/offline/other.yaml", other)  # the same change, base sha:b5f7bb1...
-    write(project, "scenarios/offline/val.yaml", text)
-    found = messages(project, "scenarios/offline/val.yaml")
+    write(project, "scenarios/offline/repo/other.yaml", other)  # the same change, base sha:b5f7bb1...
+    write(project, "scenarios/offline/repo/val.yaml", text)
+    found = messages(project, "scenarios/offline/repo/val.yaml")
     assert len(found) == 1 and found[0][0] == expected[0] and expected[1] in found[0][1], found
 
 
 def test_a_file_name_carrying_a_referenced_pr(project: Path) -> None:
     """A scenario file named after a PR it references is a problem (the file names the behaviour)."""
-    (project / "scenarios/offline/val.yaml").rename(project / "scenarios/offline/val-790.yaml")
-    assert messages(project, "scenarios/offline/val-790.yaml") == [
+    (project / "scenarios/offline/repo/val.yaml").rename(project / "scenarios/offline/repo/val-790.yaml")
+    assert messages(project, "scenarios/offline/repo/val-790.yaml") == [
         ("file name", f"'val-790' carries the number of a PR it references (#790): {AFTER_BEHAVIOUR}")
     ]
 
@@ -231,65 +227,89 @@ def test_python_reference_problems(project: Path, text: str, expected: tuple[str
     ("relative", "text", "expected"),
     [
         (
-            "scenarios/offline/val.yaml",
+            "scenarios/offline/repo/val.yaml",
             OFFLINE.replace("observe: true", "observe: true\nsetps: []"),
             ("scenario", "unknown key(s) ['setps']"),
         ),
         (
-            "scenarios/offline/val.yaml",
+            "scenarios/offline/repo/val.yaml",
             OFFLINE.replace("validate: {ok: true}", "plan: {expect: changes}"),
             ("steps[0].plan", "offline plan expectations are checked by local-plan"),
         ),
         (
-            "scenarios/offline/val.yaml",
-            OFFLINE.replace("../fragments/repo.jsonnet", "../fragments/missing.jsonnet"),
-            ("steps[0].fragments.repositories[0].file", "'../fragments/missing.jsonnet' not found"),
+            "scenarios/offline/repo/val.yaml",
+            OFFLINE.replace("../../fragments/repo.jsonnet", "../../fragments/missing.jsonnet"),
+            ("steps[0].fragments.repositories[0].file", "'../../fragments/missing.jsonnet' not found"),
         ),
         (
-            "scenarios/offline/dup.yaml",
+            "scenarios/offline/repo/dup.yaml",
             OFFLINE,
-            ("id", "duplicate scenario id 'O-VAL' (also in scenarios/offline/val.yaml)"),
+            ("id", "duplicate scenario id 'O-VAL' (also in scenarios/offline/repo/val.yaml)"),
         ),
         (
-            "scenarios/offline/val.yaml",
+            "scenarios/offline/repo/val.yaml",
             OFFLINE.replace("observe: true", "observe: true\nknown_bug: KB-404"),
             ("known_bug", "scenario 'O-VAL' declares unknown known bug 'KB-404'"),
         ),
         (
-            "scenarios/offline/val.yaml",
+            "scenarios/offline/repo/val.yaml",
             OFFLINE.replace("observe: true", "observe: true\nknown_bug: KB-002"),
             ("known_bug", "KB-002 does not list 'O-VAL' in its scenarios"),
         ),
         (
-            "scenarios/offline/val.yaml",
+            "scenarios/offline/repo/val.yaml",
             OFFLINE.replace(f"description: {DESCRIPTION}", "description: too short"),
             ("description", "describe why the scenario exists (20 words)"),
         ),
         (
-            "scenarios/offline/val.yaml",
+            "scenarios/offline/repo/val.yaml",
             OFFLINE.replace("tags: [offline, repo]", "tags: [repo, offline]"),
             ("tags", "the tags of an offline scenario start with 'offline'"),
         ),
         (
-            "scenarios/offline/val.yaml",
-            OFFLINE.replace("tags: [offline, repo]", "tags: [offline, repos]"),
+            "scenarios/offline/repo/val.yaml",
+            OFFLINE.replace("tags: [offline, repo]", "tags: [offline, repo, repos]"),
             ("tags", "unknown tag(s) ['repos']"),
         ),
         (
-            "scenarios/offline/val.yaml",
+            "scenarios/offline/repo/val.yaml",
             OFFLINE.replace("observe: true", "observe: false"),
             ("observe", "offline scenarios set observe: true"),
         ),
         (
-            "scenarios/cli/repo.yaml",
+            "scenarios/cli/repo/repo.yaml",
             LIVE.replace("id: cli.repo.x", "id: repo.x"),
             ("id", "ids of scenarios/cli/ start with 'cli.'"),
         ),
-        ("scenarios/cli/repo.yaml", LIVE.replace("tags: [repo]", "tags: [cli]"), ("tags", "no model area tag")),
         (
-            "scenarios/cli/repo.yaml",
+            "scenarios/cli/cli/repo.yaml",
+            LIVE.replace("id: cli.repo.x", "id: cli.repo.y").replace("tags: [repo]", "tags: [cli]"),
+            ("tags", "no model area tag"),
+        ),
+        (
+            "scenarios/cli/repo/repo.yaml",
             LIVE.replace("tags: [repo]", "tags: [repo]\nmin_plan: enterprise"),
             ("min_plan", "scenarios/enterprise need min_plan enterprise"),
+        ),
+        (
+            "scenarios/cli/repo.yaml",
+            LIVE.replace("id: cli.repo.x", "id: cli.repo.y"),
+            ("file", "file it in a domain directory scenarios/<tier>/<domain>/"),
+        ),
+        (
+            "scenarios/cli/teams/repo.yaml",
+            LIVE.replace("id: cli.repo.x", "id: cli.repo.y"),
+            ("file", "a scenario of the 'teams' domain carries the 'teams' tag"),
+        ),
+        (
+            "scenarios/cli/repo/sub/repo.yaml",
+            LIVE.replace("id: cli.repo.x", "id: cli.repo.y"),
+            ("file", "no subdirectory below the domain directory 'repo'"),
+        ),
+        (
+            "scenarios/offline/validation/val.yaml",
+            OFFLINE.replace("id: O-VAL", "id: O-VAL-OTHER"),
+            ("file", "'validation' is not a domain directory"),
         ),
     ],
 )
@@ -303,8 +323,8 @@ def test_scenario_problems(project: Path, relative: str, text: str, expected: tu
 def test_live_known_bug_conventions_and_step_bugs(project: Path) -> None:
     """A live scenario linked to a bug: listed by it, tagged known-bug, not P0; a step-level bug must not list it."""
     text = LIVE.replace("tags: [repo]", "tags: [repo]\nknown_bug: KB-001\npriority: P0")
-    write(project, "scenarios/cli/repo.yaml", text)
-    assert messages(project, "scenarios/cli/repo.yaml") == [
+    write(project, "scenarios/cli/repo/repo.yaml", text)
+    assert messages(project, "scenarios/cli/repo/repo.yaml") == [
         ("known_bug", "KB-001 does not list 'cli.repo.x' in its scenarios"),
         ("known_bug", "a scenario linked to a known bug has the 'known-bug' tag and is not P0"),
     ]
@@ -312,18 +332,19 @@ def test_live_known_bug_conventions_and_step_bugs(project: Path) -> None:
         project, "scenarios/known_bugs.yaml", KNOWN_BUGS.replace("scenarios: [W-PY]", "scenarios: [W-PY, cli.repo.x]")
     )
     step_bug = LIVE.replace("  - name: update\n", "  - name: update\n    known_bug: KB-001\n")
-    write(project, "scenarios/cli/repo.yaml", step_bug)
-    (found,) = messages(project, "scenarios/cli/repo.yaml")
+    write(project, "scenarios/cli/repo/repo.yaml", step_bug)
+    (found,) = messages(project, "scenarios/cli/repo/repo.yaml")
     assert found[0] == "known_bug" and "whose step 'update' declares it: the whole item would xfail" in found[1]
 
 
 def test_regression_conventions(project: Path) -> None:
-    """A regression references the PR(s) of its fix and links them, has the regression tag, an id and a file name
-    naming the behaviour (never the PR number), and the known-bad version."""
+    """A regression (in the domain of the feature it guards) references the PR(s) of its fix and links them, has the
+    regression tag, an id starting with 'regression.' and a file name naming the behaviour (never the PR number), and
+    the known-bad version."""
     references = "tags: [repo]\nreferences: [{pr: 41}]"
     text = LIVE.replace("id: cli.repo.x", "id: regression.41-x").replace("tags: [repo]", references)
-    write(project, "scenarios/regressions/41-x.yaml", text)
-    assert messages(project, "scenarios/regressions/41-x.yaml") == [
+    write(project, "scenarios/cli/repo/41-x.yaml", text)
+    assert messages(project, "scenarios/cli/repo/41-x.yaml") == [
         ("description", "link the upstream otterdog/pull/41 (or issues/41)"),
         ("description", "state the known-bad version ('Known-bad: ...')"),
         ("file name", f"'41-x' carries the number of a PR it references (#41): {AFTER_BEHAVIOUR}"),
@@ -337,11 +358,15 @@ def test_regression_conventions(project: Path) -> None:
         "title: A repository",
         "title: A repository\ndescription: 'https://github.com/eclipse-csi/otterdog/pull/41 Known-bad: v1.0.0'",
     )
-    write(project, "scenarios/regressions/renamed-x.yaml", good)
-    assert messages(project, "scenarios/regressions/renamed-x.yaml") == []
-    write(project, "scenarios/regressions/renamed-x.yaml", LIVE.replace("id: cli.repo.x", "id: regression.renamed-x"))
-    assert messages(project, "scenarios/regressions/renamed-x.yaml") == [
+    write(project, "scenarios/cli/repo/renamed-x.yaml", good)
+    assert messages(project, "scenarios/cli/repo/renamed-x.yaml") == []
+    write(project, "scenarios/cli/repo/renamed-x.yaml", LIVE.replace("id: cli.repo.x", "id: regression.renamed-x"))
+    assert messages(project, "scenarios/cli/repo/renamed-x.yaml") == [
         ("references", "a regression references the PR(s) of its fix: references: [{pr: <n>}]")
+    ]
+    write(project, "scenarios/cli/repo/renamed-x.yaml", good.replace("id: regression.renamed-x", "id: cli.renamed-x"))
+    assert messages(project, "scenarios/cli/repo/renamed-x.yaml") == [
+        ("id", "ids of regressions start with 'regression.'")
     ]
 
 
@@ -434,7 +459,7 @@ def test_known_bugs_problems(project: Path, text: str, doc: str, expected: tuple
 def test_a_broken_known_bugs_file_is_reported_once_for_scenarios(project: Path) -> None:
     """A scenario check cannot verify its bugs with an unreadable registry: one problem on the registry."""
     write(project, "scenarios/known_bugs.yaml", "- id: nope\n")
-    assert [problem.file for problem in problems_of(project, "scenarios/offline/val.yaml")] == [
+    assert [problem.file for problem in problems_of(project, "scenarios/offline/repo/val.yaml")] == [
         "scenarios/known_bugs.yaml"
     ]
 
@@ -447,12 +472,12 @@ def test_jsonnet_files_check_the_scenarios_using_them(project: Path) -> None:
     assert {item["path"]: item["kind"] for item in result.files} == {
         "scenarios/fragments/repo.jsonnet": "jsonnet",
         "scenarios/fragments/unused.jsonnet": "jsonnet",
-        "scenarios/offline/val.yaml": "scenario",
+        "scenarios/offline/repo/val.yaml": "scenario",
     }
     assert result.problems == [] and "scenarios/fragments/unused.jsonnet: referenced by no scenario" in result.notes[0]
     write(project, "scenarios/fragments/repo.jsonnet", "orgs.newRepo('{{ p }}-r') { value: 'x' } // comment")
     (problem,) = check_files(project, [project / "scenarios/fragments/repo.jsonnet"]).problems
-    assert problem.file == "scenarios/offline/val.yaml" and "line comment" in problem.message
+    assert problem.file == "scenarios/offline/repo/val.yaml" and "line comment" in problem.message
 
 
 def test_python_files(project: Path) -> None:
@@ -535,14 +560,14 @@ def test_changed_files_of_git_status(project: Path) -> None:
     git(project, "init", "-q")
     git(project, "add", "-A")
     git(project, "commit", "-q", "-m", "init")
-    write(project, "scenarios/cli/repo.yaml", LIVE + "# changed\n")
+    write(project, "scenarios/cli/repo/repo.yaml", LIVE + "# changed\n")
     write(project, "scenarios/offline/sub/new.yaml", OFFLINE)
     write(project, "docs/new.md", "# not checked\n")
     (project / "scenarios/offline/gone.yaml").unlink()
     git(project, "mv", "scenarios/offline/old-name.yaml", "scenarios/offline/new-name.yaml")
     existing, deleted = check.changed_files(project)
     assert [path.relative_to(project).as_posix() for path in existing] == [
-        "scenarios/cli/repo.yaml",
+        "scenarios/cli/repo/repo.yaml",
         "scenarios/offline/new-name.yaml",
         "scenarios/offline/sub/new.yaml",
     ]
@@ -633,7 +658,7 @@ def test_command_lints_live_scenarios(command: dict[str, Any], monkeypatch: pyte
     """The live scenario is linted with the offline suite, -k restricted to its id, the SUT given; pytest output goes
     to stderr; exit 0 when clean (paths are relative to the working directory)."""
     monkeypatch.chdir(command["settings"].project_root)
-    result = CliRunner().invoke(cli.main, ["assist", "check", "scenarios/cli/repo.yaml", "--json"])
+    result = CliRunner().invoke(cli.main, ["assist", "check", "scenarios/cli/repo/repo.yaml", "--json"])
     assert result.exit_code == 0, result.output
     (call,) = command["calls"]
     root = command["settings"].project_root
@@ -655,30 +680,31 @@ def test_command_lint_failures_exit_1(command: dict[str, Any], monkeypatch: pyte
     command["rows"] = [lint_line("cli.repo.x", "create", "failed", failure="no validation error reported")]
     command["code"] = 1
     sut = f"pr:790@{'0' * 40}"
-    result = CliRunner().invoke(cli.main, ["assist", "check", "scenarios/cli/repo.yaml", "--sut", sut])
+    result = CliRunner().invoke(cli.main, ["assist", "check", "scenarios/cli/repo/repo.yaml", "--sut", sut])
     assert result.exit_code == 1, result.output
     assert f"--e2e-sut={sut}" in command["calls"][0]["args"]
     assert (
-        "PROBLEM scenarios/cli/repo.yaml [step create]: offline lint failed: no validation error reported"
+        "PROBLEM scenarios/cli/repo/repo.yaml [step create]: offline lint failed: no validation error reported"
         in result.stdout
     )
-    assert "PROBLEM scenarios/cli/repo.yaml [step update]" not in result.stdout
+    assert "PROBLEM scenarios/cli/repo/repo.yaml [step update]" not in result.stdout
     assert "FAILED: 1 problem(s)" in result.stdout
 
 
 def test_command_skips_the_lint(command: dict[str, Any]) -> None:
     """--no-lint, no live scenario, or problems (an invalid scenario breaks the collection): no lint run."""
     root = command["settings"].project_root
-    result = CliRunner().invoke(cli.main, ["assist", "check", str(root / "scenarios/cli/repo.yaml"), "--no-lint"])
+    result = CliRunner().invoke(cli.main, ["assist", "check", str(root / "scenarios/cli/repo/repo.yaml"), "--no-lint"])
     assert result.exit_code == 0 and "lint: skipped (--no-lint)" in result.stdout
-    result = CliRunner().invoke(cli.main, ["assist", "check", str(root / "scenarios/offline/val.yaml")])
+    result = CliRunner().invoke(cli.main, ["assist", "check", str(root / "scenarios/offline/repo/val.yaml")])
     assert result.exit_code == 0 and "lint: skipped (no live scenario" in result.stdout
-    write(root, "scenarios/cli/broken.yaml", "id: cli.broken\n")
+    write(root, "scenarios/cli/repo/broken.yaml", "id: cli.broken\n")
     result = CliRunner().invoke(
-        cli.main, ["assist", "check", str(root / "scenarios/cli/repo.yaml"), str(root / "scenarios/cli/broken.yaml")]
+        cli.main,
+        ["assist", "check", str(root / "scenarios/cli/repo/repo.yaml"), str(root / "scenarios/cli/repo/broken.yaml")],
     )
     assert result.exit_code == 1 and "lint: skipped (fix the problems first" in result.stdout
-    assert "PROBLEM scenarios/cli/broken.yaml [scenario]: missing required key 'title'" in result.stdout
+    assert "PROBLEM scenarios/cli/repo/broken.yaml [scenario]: missing required key 'title'" in result.stdout
     assert command["calls"] == []
 
 
@@ -686,13 +712,13 @@ def test_command_defaults_to_the_changed_files(command: dict[str, Any], monkeypa
     """Without paths: the files of git status (deleted ones listed); nothing changed is a clean result."""
     root = command["settings"].project_root
     monkeypatch.setattr(
-        check, "changed_files", lambda project_root: ([root / "scenarios/offline/val.yaml"], ["scenarios/x.yaml"])
+        check, "changed_files", lambda project_root: ([root / "scenarios/offline/repo/val.yaml"], ["scenarios/x.yaml"])
     )
     result = CliRunner().invoke(cli.main, ["assist", "check", "--json"])
     assert result.exit_code == 0, result.output
     data = json.loads(result.stdout)
     assert data["files"] == [
-        {"path": "scenarios/offline/val.yaml", "kind": "scenario"},
+        {"path": "scenarios/offline/repo/val.yaml", "kind": "scenario"},
         {"path": "scenarios/x.yaml", "kind": "deleted"},
     ]
     monkeypatch.setattr(check, "changed_files", lambda project_root: ([], []))
@@ -712,5 +738,5 @@ def test_command_errors(command: dict[str, Any], monkeypatch: pytest.MonkeyPatch
     assert result.exit_code == 1 and "give the paths to check" in result.output
     monkeypatch.setenv("PYTEST_ADDOPTS", "-p evil")
     root = command["settings"].project_root
-    result = CliRunner().invoke(cli.main, ["assist", "check", str(root / "scenarios/cli/repo.yaml")])
+    result = CliRunner().invoke(cli.main, ["assist", "check", str(root / "scenarios/cli/repo/repo.yaml")])
     assert result.exit_code == 2 and "is not allowed" in result.output and command["calls"] == []

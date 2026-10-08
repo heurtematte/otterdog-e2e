@@ -1,6 +1,5 @@
 # Offline tier (battery, regressions): otterdog v1.1.0 #440 "Properly escape string values when passing them to a rich
-# Console" (scenarios/offline/regressions/<group>: the tier is that of offline/, the directory right below
-# scenarios/).
+# Console" (domain cli: how command output prints values).
 id: O-LPLAN-ESCAPING
 tier: offline
 title: Values containing rich markup are printed literally by local-plan and show

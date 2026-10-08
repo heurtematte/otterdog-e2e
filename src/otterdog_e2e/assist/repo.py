@@ -2,7 +2,7 @@
 ``references`` to otterdog PRs and named changes are read with changes.collect_references).
 
 Scenario ids come from two places: the YAML files of the scenario tier directories (scenarios/offline, cli,
-regressions, enterprise; read with yaml.safe_load only, so one broken file never hides the others: ``assist check``
+enterprise; read with yaml.safe_load only, so one broken file never hides the others: ``assist check``
 validates files with the real model) and the ``pytest.mark.scenario("<id>")`` markers of the Python tests of the e2e
 tiers (read from the AST, never imported). A covered_by item of the coverage matrix is such a scenario id or a pytest
 node id (``tests/<tier>/<file>.py::test_x``); files_of resolves both to repository files.

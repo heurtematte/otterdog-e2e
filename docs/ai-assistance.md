@@ -68,7 +68,7 @@ functionality it changes and reference the PR there: never a PR-named scenario o
 ### `assist check`
 
 ```bash
-.venv/bin/otterdog-e2e assist check scenarios/offline/validation/val-ruleset-strict.yaml tests/webapp/test_stale_status.py
+.venv/bin/otterdog-e2e assist check scenarios/offline/rulesets/val-ruleset-strict.yaml tests/webapp/test_stale_status.py
 ```
 
 `otterdog-e2e assist check [PATHS...] [--sut SPEC] [--no-lint] [--json]`

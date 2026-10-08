@@ -3,7 +3,7 @@
 scenarios/coverage.yaml is the machine-readable inventory of what otterdog (main @9bdeb75) can do: CLI commands and
 flags, every property of the configuration model grouped into features, validation rules, diff semantics, the webapp
 (webhook events, comment commands, tasks, auto-merge, apply, blueprints, policies, /api and /internal) and notable
-CHANGELOG fixes. Each feature says which existing scenario ids (scenarios/{offline,cli,regressions,enterprise}) or
+CHANGELOG fixes. Each feature says which existing scenario ids (scenarios/{offline,cli,enterprise}) or
 pytest node ids (tests/<tier>/...::test_x) cover it, and gaps carry an outline precise enough to write the missing test.
 
 These tests keep the file honest (the checks live in otterdog_e2e.coverage_matrix, shared with ``otterdog-e2e assist

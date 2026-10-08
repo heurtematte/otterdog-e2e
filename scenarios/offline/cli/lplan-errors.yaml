@@ -1,5 +1,4 @@
-# Offline tier (battery, cli): the error paths of local-plan (scenarios/offline/cli/<group>: the tier is that of
-# offline/, the directory right below scenarios/).
+# Offline tier (battery, cli): the error paths of local-plan.
 id: O-LPLAN-ERRORS
 tier: offline
 title: local-plan error paths exit 1 with the reason and no Plan line

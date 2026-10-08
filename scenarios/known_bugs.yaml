@@ -63,7 +63,7 @@
     - docs/userguide/renaming.md:29-50
     - docs/reference/organization/webhook.md:7
     - "e2e: scenarios/offline/plan/lplan-rename.yaml (step webhook-alias-url declares the bug)"
-    - "e2e: scenarios/cli/kb-webhook-url-alias.yaml (step rename-url declares the bug)"
+    - "e2e: scenarios/cli/webhooks/kb-webhook-url-alias.yaml (step rename-url declares the bug)"
   upstream: null
   fixed_in: null
   scenarios: [H-ORG-HOOK-ALIAS]
@@ -75,7 +75,7 @@
     - otterdog/utils.py:105-124
     - otterdog/models/__init__.py:437-475
     - "e2e: scenarios/offline/plan/lplan-dict-one-way.yaml (steps team-permission-removed and custom-property-removed declare the bug)"
-    - "e2e: scenarios/cli/kb-team-permissions-removal.yaml (step remove-permission declares the bug)"
+    - "e2e: scenarios/cli/teams/kb-team-permissions-removal.yaml (step remove-permission declares the bug)"
   upstream: null
   fixed_in: null
   scenarios: []
@@ -117,9 +117,9 @@
     - otterdog/models/github_organization.py:84-85
     - otterdog/models/github_organization.py:226-227
     - otterdog/models/__init__.py:566
-    - "e2e: scenarios/offline/validation/val-org-ruleset-strict.yaml (O-VAL-ORG-RULESET-STRICT, tests/offline: exit 2 on 9bdeb75 and d0d3b08)"
+    - "e2e: scenarios/offline/rulesets/val-org-ruleset-strict.yaml (O-VAL-ORG-RULESET-STRICT, tests/offline: exit 2 on 9bdeb75 and d0d3b08)"
     - otterdog/models/ruleset.py:436-447
-    - "e2e: scenarios/offline/validation/val-org-rulesets.yaml (steps review-count-range and deployment-rule declare the bug)"
+    - "e2e: scenarios/offline/rulesets/val-org-rulesets.yaml (steps review-count-range and deployment-rule declare the bug)"
   upstream: https://github.com/eclipse-csi/otterdog/pull/790
   fixed_in: null
   scenarios: [enterprise.org-ruleset.missing-strict]
@@ -129,7 +129,7 @@
   status: confirmed
   evidence:
     - otterdog/models/github_organization.py:219-227
-    - "e2e: scenarios/offline/validation/val-plan-gates-team.yaml (step org-rulesets-on-team declares the bug)"
+    - "e2e: scenarios/offline/org-settings/val-plan-gates-team.yaml (step org-rulesets-on-team declares the bug)"
   upstream: https://github.com/eclipse-csi/otterdog/issues/776
   fixed_in: null
   scenarios: []
@@ -140,7 +140,7 @@
   evidence:
     - otterdog/operations/canonical_diff.py:73-74
     - otterdog/operations/canonical_diff.py:86-100
-    - "e2e: scenarios/offline/canonical-diff.yaml (step labels declares the bug)"
+    - "e2e: scenarios/offline/template/canonical-diff.yaml (step labels declares the bug)"
   upstream: null
   fixed_in: null
   scenarios: []
@@ -205,7 +205,7 @@
   evidence:
     - otterdog/resources/schemas/types.json:32-41
     - otterdog/resources/schemas/repository.json:58
-    - "e2e: scenarios/offline/validation/val-schema.yaml (step multi-select-property-with-underscore declares the bug)"
+    - "e2e: scenarios/offline/template/val-schema.yaml (step multi-select-property-with-underscore declares the bug)"
   upstream: null
   fixed_in: null
   scenarios: [cli.kb.custom-property-underscore]
@@ -273,7 +273,7 @@
     - otterdog/models/organization_variable.py:91-93
     - otterdog/providers/github/__init__.py:477-482
     - otterdog/operations/apply.py:135-151
-    - "e2e: scenarios/cli/org/kb-org-secret-same-apply.yaml (step same-apply declares the bug)"
+    - "e2e: scenarios/cli/secrets/kb-org-secret-same-apply.yaml (step same-apply declares the bug)"
   upstream: null
   fixed_in: null
   scenarios: [cli.kb.org-variable-same-apply]
@@ -283,7 +283,7 @@
   status: confirmed
   evidence:
     - otterdog/models/organization_ruleset.py:45-69
-    - "e2e: scenarios/offline/validation/val-org-rulesets.yaml (step second-pattern declares the bug)"
+    - "e2e: scenarios/offline/rulesets/val-org-rulesets.yaml (step second-pattern declares the bug)"
   upstream: null
   fixed_in: null
   scenarios: [enterprise.kb.org-ruleset-repo-patterns]
@@ -304,7 +304,7 @@
   evidence:
     - otterdog/models/secret.py:50-53
     - otterdog/config.py:234-236
-    - "e2e: scenarios/offline/validation/val-secrets.yaml (step two-colons declares the bug)"
+    - "e2e: scenarios/offline/secrets/val-secrets.yaml (step two-colons declares the bug)"
   upstream: null
   fixed_in: null
   scenarios: [O-KB-SECRET-WITH-COLONS]
@@ -317,8 +317,8 @@
     - otterdog/models/webhook.py:85-95
     - otterdog/webapp/tasks/validate_pull_request.py:157-181
     - otterdog/webapp/tasks/validate_pull_request.py:207-211
-    - "e2e: scenarios/offline/validation/val-secrets.yaml (step plain-value-not-echoed declares the bug)"
-    - "e2e: scenarios/offline/validation/val-webhooks.yaml (step plain-secret-not-echoed declares the bug)"
+    - "e2e: scenarios/offline/secrets/val-secrets.yaml (step plain-value-not-echoed declares the bug)"
+    - "e2e: scenarios/offline/webhooks/val-webhooks.yaml (step plain-secret-not-echoed declares the bug)"
   upstream: null
   fixed_in: null
   scenarios: []
@@ -343,7 +343,7 @@
     - otterdog/models/github_organization.py:196-234
     - otterdog/models/organization_variable.py:40-63
     - otterdog/models/variable.py:29-42
-    - "e2e: scenarios/offline/validation/val-org-variables.yaml (step invalid-variables declares the bug)"
+    - "e2e: scenarios/offline/variables/val-org-variables.yaml (step invalid-variables declares the bug)"
   upstream: null
   fixed_in: null
   scenarios: []
@@ -357,8 +357,8 @@
     - otterdog/models/repo_workflow_settings.py:99-105
     - otterdog/models/workflow_settings.py:115-123
     - otterdog/cli.py:999-1001
-    - "e2e: scenarios/offline/validation/val-org-workflows.yaml (step allowed-actions-with-repository declares the bug)"
-    - "e2e: scenarios/offline/validation/val-repo-workflows.yaml (step unknown-allowed-actions declares the bug)"
+    - "e2e: scenarios/offline/workflows/val-org-workflows.yaml (step allowed-actions-with-repository declares the bug)"
+    - "e2e: scenarios/offline/workflows/val-repo-workflows.yaml (step unknown-allowed-actions declares the bug)"
   upstream: null
   fixed_in: null
   scenarios: []
@@ -370,8 +370,8 @@
     - otterdog/models/repository.py:296-303
     - otterdog/models/github_organization.py:349-351
     - otterdog/models/custom_property.py:83-90
-    - "e2e: scenarios/offline/validation/val-custom-properties.yaml (step required-without-default-with-repository declares the bug)"
-    - "e2e: scenarios/offline/plan/lplan-custom-property-defaults.yaml (step required-without-default declares the bug)"
+    - "e2e: scenarios/offline/custom-properties/val-custom-properties.yaml (step required-without-default-with-repository declares the bug)"
+    - "e2e: scenarios/offline/custom-properties/lplan-custom-property-defaults.yaml (step required-without-default declares the bug)"
   upstream: null
   fixed_in: null
   scenarios: []
@@ -390,7 +390,7 @@
     - otterdog/providers/github/rest/requester.py:123-125
     - otterdog/operations/apply.py:146-153
     - "openapi: repository-rule-pull-request parameters require required_approving_review_count; repository-rule-merge-queue requires all seven parameters"
-    - "e2e: scenarios/offline/validation/val-ruleset-nested.yaml (steps pull-request-missing-keys and merge-queue-missing-keys declare the bug)"
+    - "e2e: scenarios/offline/rulesets/val-ruleset-nested.yaml (steps pull-request-missing-keys and merge-queue-missing-keys declare the bug)"
   upstream: null
   fixed_in: null
   scenarios: []
@@ -404,7 +404,7 @@
     - otterdog/models/github_organization.py:285-296
     - otterdog/models/repository.py:194-205
     - otterdog/models/repository.py:491-499
-    - "e2e: scenarios/offline/validation/val-schema.yaml (steps team-permission-value and team-permission-uppercase-alias declare the bug)"
+    - "e2e: scenarios/offline/template/val-schema.yaml (steps team-permission-value and team-permission-uppercase-alias declare the bug)"
   upstream: null
   fixed_in: null
   scenarios: []
@@ -417,7 +417,7 @@
     - otterdog/models/repository.py:284-316
     - otterdog/models/repository.py:436-465
     - otterdog/models/repository.py:583-600
-    - "e2e: scenarios/offline/validation/val-coerced.yaml (four steps declare the bug)"
+    - "e2e: scenarios/offline/repo/val-coerced.yaml (four steps declare the bug)"
   upstream: null
   fixed_in: null
   scenarios: []
@@ -430,7 +430,7 @@
     - otterdog/operations/plan.py:121-139
     - otterdog/cli.py:993-997
     - otterdog/cli.py:999-1001
-    - "e2e: scenarios/offline/validation/val-merge-settings.yaml (step exit-status-of-two-errors declares the bug)"
+    - "e2e: scenarios/offline/repo/val-merge-settings.yaml (step exit-status-of-two-errors declares the bug)"
   upstream: null
   fixed_in: null
   scenarios: [O-KB-EXIT-STATUS-ERROR-COUNT]
@@ -462,7 +462,7 @@
   evidence:
     - otterdog/models/team.py:77-83
     - docs/reference/organization/team.md:7
-    - "e2e: scenarios/cli/org/kb-team-privacy-message.yaml (step privacy-message declares the bug)"
+    - "e2e: scenarios/cli/teams/kb-team-privacy-message.yaml (step privacy-message declares the bug)"
   upstream: null
   fixed_in: null
   scenarios: []
@@ -475,7 +475,7 @@
     - otterdog/models/workflow_settings.py:143-150
     - otterdog/models/repository.py:611-618
     - otterdog/models/repository.py:731-732
-    - "e2e: scenarios/offline/validation/val-org-workflows.yaml (fork_pr_approval_policy message asserted without the value order)"
+    - "e2e: scenarios/offline/workflows/val-org-workflows.yaml (fork_pr_approval_policy message asserted without the value order)"
   upstream: null
   fixed_in: null
   scenarios: []
@@ -488,8 +488,8 @@
     - otterdog/models/ruleset.py:648-654
     - otterdog/models/repo_ruleset.py:48-53
     - otterdog/operations/apply.py:146-153
-    - "e2e: scenarios/offline/validation/val-rulesets.yaml (step unknown-bypass-role declares the bug)"
-    - "e2e: scenarios/cli/protection/ruleset-bypass.yaml (step unknown-role declares the bug)"
+    - "e2e: scenarios/offline/rulesets/val-rulesets.yaml (step unknown-bypass-role declares the bug)"
+    - "e2e: scenarios/cli/rulesets/ruleset-bypass.yaml (step unknown-role declares the bug)"
   upstream: null
   fixed_in: null
   scenarios: []
@@ -617,7 +617,7 @@
     - otterdog/models/github_organization.py:394-395
     - otterdog/operations/canonical_diff.py:68
     - otterdog/operations/import_configuration.py:122
-    - "e2e: scenarios/offline/canonical-diff.yaml (step bracketed-description declares the bug)"
+    - "e2e: scenarios/offline/template/canonical-diff.yaml (step bracketed-description declares the bug)"
   upstream: null
   fixed_in: null
   scenarios: [cli.kb.list-advisories-markup, O-KB-SHOW-MARKDOWN-LINKS, O-KB-VALIDATION-MARKUP]
@@ -641,7 +641,7 @@
     - otterdog/models/ruleset.py:565-567
     - otterdog/models/ruleset.py:636-645
     - docs/reference/organization/repository/bypass-actor.md:20-30
-    - "e2e: scenarios/cli/protection/ruleset-bypass.yaml (step explicit-always declares the bug)"
+    - "e2e: scenarios/cli/rulesets/ruleset-bypass.yaml (step explicit-always declares the bug)"
   upstream: null
   fixed_in: null
   scenarios: []
@@ -666,8 +666,8 @@
     - otterdog/models/ruleset.py:145-151
     - otterdog/models/ruleset.py:177-211
     - docs/reference/organization/repository/status-check.md:7
-    - "e2e: scenarios/cli/protection/ruleset-status-checks.yaml (step actions-slug declares the bug)"
-    - "e2e: scenarios/cli/protection/app-checks.yaml (step app-id declares the bug)"
+    - "e2e: scenarios/cli/rulesets/ruleset-status-checks.yaml (step actions-slug declares the bug)"
+    - "e2e: scenarios/cli/bpr/app-checks.yaml (step app-id declares the bug)"
   upstream: null
   fixed_in: null
   scenarios: []
@@ -680,7 +680,7 @@
     - otterdog/models/ruleset.py:128-136
     - otterdog/models/ruleset.py:240-272
     - otterdog/models/ruleset.py:451-458
-    - "e2e: scenarios/offline/validation/val-ruleset-nested.yaml (asserts the messages after the header)"
+    - "e2e: scenarios/offline/rulesets/val-ruleset-nested.yaml (asserts the messages after the header)"
   upstream: null
   fixed_in: null
   scenarios: []
@@ -696,7 +696,7 @@
     - otterdog/models/webhook.py:80-81
     - otterdog/models/webhook.py:155-157
     - otterdog/webapp/tasks/validate_pull_request.py:159
-    - "e2e: scenarios/offline/plan/lplan-forced-secrets.yaml (step dummy-skipped declares the bug)"
+    - "e2e: scenarios/offline/secrets/lplan-forced-secrets.yaml (step dummy-skipped declares the bug)"
   upstream: null
   fixed_in: null
   scenarios: [O-KB-LPLAN-DUMMY-SECRETS]

@@ -1,7 +1,7 @@
 """The live-tier scenario files, the known-bug registry and their links (SPEC 12.1, 12.5, 19).
 
-Checks the real files of the project (no network): every YAML of scenarios/cli, scenarios/regressions and
-scenarios/enterprise loads with the strict model; scenario ids are unique across every scenario directory; the
+Checks the real files of the project (no network): every YAML of scenarios/cli (regressions included) and
+scenarios/enterprise loads with the strict model and lies in its domain directory; scenario ids are unique across every scenario directory; the
 SPEC 19 catalogue is implemented with its priorities; every object a fragment creates carries the run prefix and
 every webhook URL lies under naming.HOOK_BASE (cleanup and the janitor only ever remove such objects); tags use the
 selection vocabulary; known_bugs.yaml loads, its evidence is well formed, every bug referenced by a scenario or a
@@ -32,7 +32,7 @@ from otterdog_e2e.naming import is_e2e_name, new_run_context
 from otterdog_e2e.otterdog.render import OrgConfigRenderer, build_baseline, org_profile
 from otterdog_e2e.scenarios.collect import ORG_LEVEL_EXTRA_TIMEOUT, TIER_TIMEOUTS, collect_scenarios, scenario_timeout
 from otterdog_e2e.scenarios.engine import fixed_in_skip_reason
-from otterdog_e2e.scenarios.model import Scenario, load_scenarios, render_step, scenario_files
+from otterdog_e2e.scenarios.model import Scenario, domain_problem, load_scenarios, render_step, scenario_files
 from otterdog_e2e.selection import SCENARIO_TAGS
 from otterdog_e2e.settings import IDENTITY_ROLES
 from otterdog_e2e.sut.template import offline_template
@@ -40,7 +40,7 @@ from otterdog_e2e.testing.fakes import FAKE_MARKER, FAKE_ORG, default_org_json, 
 
 ROOT = Path(__file__).resolve().parents[2]
 SCENARIOS = ROOT / "scenarios"
-LIVE_DIRS = ("cli", "regressions", "enterprise")
+LIVE_DIRS = ("cli", "enterprise")
 KNOWN_BUGS = SCENARIOS / "known_bugs.yaml"
 KNOWN_ISSUES_DOC = ROOT / "docs" / "known-issues.md"
 # Python test tiers (offline included): their scenario(id) / known_bug(id) markers are link targets of
@@ -247,16 +247,32 @@ def test_scenario_ids_are_unique_across_every_scenario_directory() -> None:
 
 
 def tier_dir(scenario: Scenario) -> str:
-    """The directory right below scenarios/ holding the scenario file (subdirectories group files by topic)."""
+    """The directory right below scenarios/ holding the scenario file (its tier; the next one is its domain)."""
     return scenario.source.relative_to(SCENARIOS).parts[0]
 
 
+def is_regression(scenario: Scenario) -> bool:
+    """A regression guard of an upstream fix (tagged ``regression`` or with a ``regression.`` id: both are required),
+    filed in the domain of the feature it guards."""
+    return "regression" in scenario.tags or scenario.id.startswith("regression.")
+
+
 def test_scenario_ids_follow_the_directory_convention() -> None:
-    """cli/ -> 'cli.', regressions/ -> 'regression.', enterprise/ -> 'enterprise.' (subdirectories included); the rest
-    of the id names the behaviour (a referenced PR goes into ``references``, never into the id)."""
-    prefixes = {"cli": "cli.", "regressions": "regression.", "enterprise": "enterprise."}
+    """cli/ -> 'cli.' ('regression.' for the regressions), enterprise/ -> 'enterprise.'; the rest of the id names the
+    behaviour (a referenced PR goes into ``references``, never into the id)."""
+    prefixes = {"cli": "cli.", "enterprise": "enterprise."}
     for scenario in live_scenarios():
-        assert scenario.id.startswith(prefixes[tier_dir(scenario)]), (scenario.id, scenario.source)
+        prefix = "regression." if is_regression(scenario) else prefixes[tier_dir(scenario)]
+        assert scenario.id.startswith(prefix), (scenario.id, scenario.source)
+
+
+def test_scenarios_are_filed_by_domain() -> None:
+    """scenarios/<tier>/<domain>/<file>.yaml: a domain directory (model.DOMAINS), no deeper subdirectory, the tag of a
+    model domain among the scenario's tags; regressions and known-bug reproductions included."""
+    problems = [
+        (str(scenario.source.relative_to(SCENARIOS)), domain_problem(scenario)) for scenario in live_scenarios()
+    ]
+    assert not [problem for problem in problems if problem[1] is not None]
 
 
 def test_spec_catalogue_is_implemented() -> None:
@@ -284,7 +300,7 @@ def test_regressions_document_the_pr_and_the_known_bad_version() -> None:
     description), names the behaviour in its id and file name (never the PR number) and states the known-bad
     version; ``pr-<n>`` tags are gone (the references carry the PR)."""
     for scenario in live_scenarios():
-        if tier_dir(scenario) != "regressions":
+        if not is_regression(scenario):
             continue
         numbers = [reference.change.pr for reference in scenario.references if reference.change.pr is not None]
         assert numbers, f"{scenario.id}: no references: [{{pr: <n>}}]"

@@ -15,7 +15,7 @@ every field. `tests/unit/test_coverage_matrix.py` validates it and generates `do
 | `operations` | what must be exercised (`add`, `modify`, `remove`, `rename`, `converge`, `validate`, `plan`, `coerce`, `forced-update`, `filter`, `run`, `exit-code`, `error`, `config`, `event`, `comment`, `status`, `permission`, `api`, ...) |
 | `min_plan`, `tier`, `ui_only`, `priority` | lowest plan, tier where it is (or must be) tested, web-UI only, `P0`/`P1`/`P2` |
 | `status` | `covered`, `partial` or `gap` |
-| `covered_by` | scenario ids (`scenarios/{offline,cli,regressions,enterprise}`) or pytest node ids `tests/<tier>/<file>.py::<test>`; never `tests/unit` |
+| `covered_by` | scenario ids (`scenarios/{offline,cli,enterprise}`) or pytest node ids `tests/<tier>/<file>.py::<test>`; never `tests/unit` |
 | `known_bugs`, `findings` | `KB-nnn` of `scenarios/known_bugs.yaml`, `F-nn` of `findings` |
 | `notes` | verified behaviour and exact messages |
 | `gap_outline` | `partial`/`gap` only: `scenario` (suggested id), `file` (below `scenarios/`, `tests/` or `src/`), `steps`, `assertions`, `needs` (non-empty lists of strings) |

@@ -366,7 +366,7 @@ $ otterdog validate -c otterdog.json --local e2e-test-org         # exit code 2
 │ Error:   'GitHubOrganization' object has no attribute 'get_model_header'
 ```
 
-Offline evidence in this project: `O-VAL-ORG-RULESET-STRICT` (`scenarios/offline/validation/val-org-ruleset-strict.yaml`, checked by
+Offline evidence in this project: `O-VAL-ORG-RULESET-STRICT` (`scenarios/offline/rulesets/val-org-ruleset-strict.yaml`, checked by
 `tests/offline/test_scenarios.py`) renders exactly this case on the e2e offline organization. On SUTs containing #790
 (9bdeb75, d0d3b08) `validate --local` exits 2 with the AttributeError and the test reports it as an xfail. On SUTs
 without #790 (v1.6.1, b5f7bb1) the org ruleset validates and the test passes. The scenario is deliberately not
@@ -382,7 +382,7 @@ parent_object).environments` (`otterdog/models/ruleset.py:436-447`). For an orga
 `'GitHubOrganization' object has no attribute 'environments'` (exit 2) on every version that has the check (v1.6.1
 included), where the repository variant reports an undefined environment. GitHub's `org-rules` include the
 `required_deployments` rule, so the configuration itself is valid. Both crashes are steps of `O-VAL-ORG-RULESETS`
-(`scenarios/offline/validation/val-org-rulesets.yaml`: `review-count-range` and `deployment-rule`, step-level known
+(`scenarios/offline/rulesets/val-org-rulesets.yaml`: `review-count-range` and `deployment-rule`, step-level known
 bugs); KB-055 is the same root cause for repository rulesets (their messages name the repository twice).
 
 ```jsonnet
@@ -431,12 +431,12 @@ $ otterdog validate -c otterdog.json --local e2e-test-org         # exit code 1
 ```
 
 Reproduced offline by the step `org-rulesets-on-team` of `O-VAL-PLAN-GATES-TEAM`
-(`scenarios/offline/validation/val-plan-gates-team.yaml`, a step-level known bug: a Team plan configuration with an
+(`scenarios/offline/org-settings/val-plan-gates-team.yaml`, a step-level known bug: a Team plan configuration with an
 organization ruleset is expected to validate).
 
 ### KB-010 — canonical-diff labels are inverted
 
-Status: **confirmed** · Upstream: none · Scenarios: step `labels` of `O-CANON` (scenarios/offline/canonical-diff.yaml)
+Status: **confirmed** · Upstream: none · Scenarios: step `labels` of `O-CANON` (scenarios/offline/template/canonical-diff.yaml)
 
 Evidence: `otterdog/operations/canonical_diff.py:73-74`, `otterdog/operations/canonical_diff.py:86-100`.
 
@@ -832,7 +832,7 @@ $ otterdog validate -c otterdog.json --local e2e-test-org         # exit code 2
 │ Error:   too many values to unpack (expected 2)
 ```
 
-The step `two-colons` of `O-VAL-SECRETS` (`scenarios/offline/validation/val-secrets.yaml`) asserts the same offline as a
+The step `two-colons` of `O-VAL-SECRETS` (`scenarios/offline/secrets/val-secrets.yaml`) asserts the same offline as a
 step-level known bug. Webhook secrets with several `:` are not split at validation: they crash at apply time instead
 (KB-057).
 
@@ -1764,7 +1764,7 @@ cli.cli.main(["fetch-config", "-c", "otterdog.json", "--local", "-f", "-r", "e2e
 
 Status: **confirmed** · Upstream: none · Scenarios: `cli.kb.list-advisories-markup` (tests/cli/test_commands_read.py),
 `O-KB-SHOW-MARKDOWN-LINKS` (tests/offline/test_cli_basics.py), `O-KB-VALIDATION-MARKUP` (tests/offline/test_cli_markup.py),
-step `bracketed-description` of `O-CANON` (scenarios/offline/canonical-diff.yaml)
+step `bracketed-description` of `O-CANON` (scenarios/offline/template/canonical-diff.yaml)
 
 Evidence: `otterdog/operations/list_advisories.py:140-146`, `otterdog/operations/show.py:177-182`,
 `otterdog/operations/show.py:207`, `otterdog/utils.py:301-315`, `otterdog/logging.py:174-198`,
@@ -1824,7 +1824,7 @@ printer.println('"x","[draft] summary","y"', soft_wrap=True)  # prints "x"," sum
 printer.println('"x","a [/] b","y"', soft_wrap=True)  # rich.errors.MarkupError: closing tag '[/]' ... nothing to close
 ```
 
-Canonical form (`scenarios/offline/files/canonical-form.jsonnet` with `repo_description: "[e2e] canonical form"`, the
+Canonical form (`scenarios/offline/template/files/canonical-form.jsonnet` with `repo_description: "[e2e] canonical form"`, the
 labels of the diff are swapped, KB-010):
 
 ```console

@@ -38,7 +38,7 @@ DOCS = (ROOT / "docs" / "writing-scenarios.md", ROOT / "docs" / "local-developme
 TEMPLATE_DIR = ROOT / "tests" / "unit" / "data" / "template"
 JSONNET = shutil.which("jsonnet")
 SAMPLE_RUN = new_run_context("t3c7z8a5")
-LIVE_DIRS = ("cli", "regressions", "enterprise")
+LIVE_DIRS = ("cli", "enterprise")
 # scenarios converted to the shared files (documented examples of docs/writing-scenarios.md)
 EXAMPLES = {"cli.environment": "environment-repo.jsonnet", "cli.neg.private-bpr": None}
 # documented inject recipes (docs/local-development.md) -> request

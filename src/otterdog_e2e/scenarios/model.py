@@ -4,7 +4,15 @@ Semantics: steps are DECLARATIVE (config(step k) = baseline + fragments(step k))
 validate (if given) -> plan -> apply (if plan.expect == changes and apply is not null) -> state -> converge; the first
 failing phase aborts the remaining steps, cleanup always runs. Jinja2 (StrictUndefined) is applied ONCE, by
 render_step, with the vars run, p, P, hook_base, org, plan, logins.<name>, app_slug, app_id,
-teams.<admin|approval|contributors> plus the scenario's ``variables``.
+teams.<admin|approval|contributors> plus the scenario's ``variables``. Live steps act on one organization, so a live
+scenario is a journey (create -> change -> remove) whose steps depend on the state the previous ones left; offline
+steps share no state at all (each one writes its whole configuration), so the offline tier runs every step as an
+independent case (Scenario.cases: the scenario narrowed to one step, one pytest item and one result each).
+
+Files: ``scenarios/<tier>/<domain>/<file>.yaml`` (domain_problem): the tier directory (DIRECTORY_TIERS) decides the
+tier, the domain directory (DOMAINS) the feature: one per model area (its tag is one of the scenario's tags) plus the
+cross-cutting ``template``, ``cli`` and ``plan`` (CROSS_DOMAINS). Regressions and known-bug reproductions live in the
+domain of the feature they guard (tags ``regression`` / ``known-bug``).
 
 Loading is strict (ScenarioError): unknown keys (YAML duplicate keys included), bad values, duplicate ids or step
 names, settings fragments setting plan/description/billing_email (offline: plan only, nothing is applied), secret
@@ -89,6 +97,7 @@ from otterdog_e2e.otterdog.workspace import (
     dir_name_problem,
 )
 from otterdog_e2e.scenarios.checks import validate_check
+from otterdog_e2e.selection import MODEL_TAGS
 from otterdog_e2e.settings import IDENTITY_ROLES
 from otterdog_e2e.sut.template import offline_template
 
@@ -120,9 +129,15 @@ OFFLINE_EXTRA_COMMANDS = ("show", "show-default", "canonical-diff", "list-projec
 DIRECTORY_TIERS: Mapping[str, tuple[str, ...]] = {
     "offline": ("offline",),
     "cli": ("cli",),
-    "regressions": ("cli",),
     "enterprise": ("enterprise",),
 }
+# domain directories right below a tier directory: the model areas (the scenario carries the area's tag) and the
+# cross-cutting domains: template (the configuration as written: jsonnet, schema, canonical form, template defaults),
+# cli (command behaviour and output: flags, verbosity, errors, printing) and plan (diff semantics across object types:
+# additions, changes, removals, renames, filters, read-only and dict fields)
+CROSS_DOMAINS = ("template", "cli", "plan")
+DOMAINS = (*MODEL_TAGS, *CROSS_DOMAINS)
+SUPPORT_DIR = "files"  # jsonnet files of a domain's scenarios (scenarios/<tier>/<domain>/files/), never scenarios
 # Jinja variables provided by the engines (``plan`` may be overridden by the scenario's ``variables``); offline
 # config/base_config files also get CONFIG_VARIABLES (import_path, project)
 TEMPLATE_VARIABLES = ("run", "p", "P", "hook_base", "org", "plan", "logins", "app_slug", "app_id", "teams")
@@ -341,11 +356,22 @@ class Scenario:
     timeout: int | None = None  # pytest timeout (s) of the scenario's item, instead of collect.scenario_timeout()
     libraries: dict[str, str] = field(default_factory=dict)  # name -> SourceText, attached to every step's fragments
     references: list[Reference] = field(default_factory=list)  # changes (PRs) behind the behaviour (changes.py)
+    case: str | None = None  # the step a case runs (cases()); None for the whole scenario
 
     @property
     def is_live(self) -> bool:
         """True for scenarios that need a real org (tier cli or enterprise)."""
         return self.tier in ("cli", "enterprise")
+
+    @property
+    def case_id(self) -> str:
+        """``<id>/<step>`` for a case, else the scenario id."""
+        return f"{self.id}/{self.case}" if self.case is not None else self.id
+
+    def cases(self) -> list[Scenario]:
+        """One case per step: the scenario narrowed to that step (same id, metadata and references), for steps that
+        depend on no other step (offline ones: they share no state)."""
+        return [replace(self, steps=[step], case=step.name) for step in self.steps]
 
     @property
     def plan_override(self) -> str | None:
@@ -560,8 +586,8 @@ def tier_directory(path: Path) -> str | None:
     """Name of the tier directory a scenario file belongs to (a DIRECTORY_TIERS key), or None.
 
     It is the outermost ancestor named like a tier directory below the nearest ``scenarios`` directory, so a file of a
-    subdirectory belongs to the directory right below ``scenarios/``: ``scenarios/cli/org/x.yaml`` to ``cli`` and
-    ``scenarios/offline/cli/output/show.yaml`` to ``offline`` (not to the inner ``cli``).
+    subdirectory belongs to the directory right below ``scenarios/``: ``scenarios/cli/repo/x.yaml`` to ``cli`` and
+    ``scenarios/offline/cli/show.yaml`` to ``offline`` (not to the inner ``cli``).
     """
     found = None
     for parent in path.parents:
@@ -570,6 +596,38 @@ def tier_directory(path: Path) -> str | None:
         if parent.name in DIRECTORY_TIERS:
             found = parent.name
     return found
+
+
+def scenario_domain(path: Path) -> str | None:
+    """Name of the directory right below the tier directory (tier_directory) holding a scenario file: its domain, or
+    None for a file directly in its tier directory or outside one."""
+    parents = list(path.parents)
+    tier_index = None
+    for index, parent in enumerate(parents):
+        if parent.name == "scenarios":
+            break
+        if parent.name in DIRECTORY_TIERS:
+            tier_index = index
+    return parents[tier_index - 1].name if tier_index else None
+
+
+def domain_problem(scenario: Scenario) -> str | None:
+    """Why a scenario file is not filed as ``scenarios/<tier>/<domain>/<file>.yaml`` (a DOMAINS directory, no deeper
+    subdirectory, a model domain's tag among the scenario's tags); None when it is or lies outside a tier directory
+    (ad-hoc scenarios)."""
+    path = scenario.source
+    if tier_directory(path) is None:
+        return None
+    domain = scenario_domain(path)
+    if domain is None:
+        return f"file it in a domain directory scenarios/<tier>/<domain>/, one of {', '.join(DOMAINS)}"
+    if domain not in DOMAINS:
+        return f"{domain!r} is not a domain directory, one of {', '.join(DOMAINS)}"
+    if path.parent.name != domain:
+        return f"no subdirectory below the domain directory {domain!r}"
+    if domain in MODEL_TAGS and domain not in scenario.tags:
+        return f"a scenario of the {domain!r} domain carries the {domain!r} tag"
+    return None
 
 
 def _tier(value: Any, path: Path) -> str:

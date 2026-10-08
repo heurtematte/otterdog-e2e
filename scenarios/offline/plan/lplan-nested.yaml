@@ -1,5 +1,5 @@
-# Offline tier (battery, regressions): otterdog v1.3.0 "Fix printing of changes for nested dicts"
-# (scenarios/offline/regressions/<group>: the tier is that of offline/, the directory right below scenarios/).
+# Offline tier (battery, regressions): otterdog v1.3.0 "Fix printing of changes for nested dicts" (domain plan: the
+# diff of nested settings and dicts across object types).
 id: O-LPLAN-NESTED
 tier: offline
 title: Changes inside nested settings and dicts print as nested blocks with old and new values

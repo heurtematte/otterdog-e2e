@@ -62,7 +62,7 @@ The text after the skill name (`$ARGUMENTS` in Claude Code): a feature id (`conf
 5. **Validate** until clean:
 
    ```bash
-   .venv/bin/otterdog-e2e assist check scenarios/offline/validation/val-org-variables.yaml
+   .venv/bin/otterdog-e2e assist check scenarios/offline/variables/val-org-variables.yaml
    .venv/bin/otterdog-e2e run --suite offline --sut release:latest --scenario O-VAL-ORGVAR   # offline items
    make lint-scenarios                                                                       # live YAML steps
    ```
@@ -118,7 +118,7 @@ The text after the skill name (`$ARGUMENTS` in Claude Code): a feature id (`conf
 
 ```text
 Feature validation.<rule> (P1, offline): gap -> covered
-Test: scenarios/offline/validation/val-<topic>.yaml, O-VAL-<NAME>
+Test: scenarios/offline/<domain>/val-<topic>.yaml, O-VAL-<NAME>
   step invalid: validate errors 1, contains "<exact message>" (every operation of the feature: validate)
   step control: the valid neighbour validates and plans 1 addition (strict)
 Gates: assist check clean; offline run on release:latest: 1 passed; matrix regenerated; make unit green

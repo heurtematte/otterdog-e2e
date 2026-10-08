@@ -193,7 +193,7 @@ The battery is organized by tier (one directory below `tests/` each) and by kind
 
 | Kind | Where | Run by | For |
 |---|---|---|---|
-| YAML scenarios | `scenarios/offline/`, `scenarios/cli/`, `scenarios/regressions/`, `scenarios/enterprise/` | `tests/<tier>/test_scenarios.py` (the scenario engines), `tests/offline/test_scenario_lint.py` (every live step validated offline), `tests/differential/` (`observe: true`) | declarative configuration changes: validate, plan, apply, oracle state, convergence ([writing-scenarios.md](writing-scenarios.md)) |
+| YAML scenarios | `scenarios/{offline,cli,enterprise}/<domain>/` | `tests/<tier>/test_scenarios.py` (the scenario engines), `tests/offline/test_scenario_lint.py` (every live step validated offline), `tests/differential/` (`observe: true`) | declarative configuration changes: validate, plan, apply, oracle state, convergence ([writing-scenarios.md](writing-scenarios.md)) |
 | Python tests | `tests/<tier>/test_*.py` | pytest with the plugin's fixtures | flows YAML cannot express: CLI commands, the webapp PR workflow, App deliveries, the web UI |
 | ad-hoc injection | `tests/adhoc/` | `otterdog-e2e inject` | trying jsonnet files without writing a scenario |
 | shared jsonnet | `scenarios/fragments/`, `scenarios/lib/` | the scenarios and inject recipes | fragments and helper libraries inlined into the rendered configuration |
@@ -340,8 +340,9 @@ The details are in [security.md](security.md). In short:
 ```
 src/otterdog_e2e/        the harness package (resources/: org.jsonnet.j2, compose.e2e.yaml, hypercorn.toml.j2)
 targets/                 one YAML profile per kind of test organization (free, team, enterprise)
-scenarios/offline/       offline scenarios          scenarios/cli/, scenarios/regressions/   live CLI scenarios
-scenarios/enterprise/    enterprise scenarios       (no PR directory: PRs are scenario references)
+scenarios/offline/       offline scenarios          scenarios/cli/                           live CLI scenarios
+scenarios/enterprise/    enterprise scenarios       (each tier: one directory per domain, regressions included;
+                                                    no PR directory: PRs are scenario references)
 scenarios/fragments/     shared jsonnet fragments   scenarios/lib/                           jsonnet helper libraries
 scenarios/known_bugs.yaml                           known otterdog defects (non-strict xfail)
 scenarios/coverage.yaml                             the coverage matrix (docs/coverage-matrix.md is generated from it)

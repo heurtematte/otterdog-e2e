@@ -2,9 +2,9 @@
 
 scenarios/coverage.yaml is the machine-readable inventory of what otterdog (main @9bdeb75) can do: CLI commands and
 flags, every property of the configuration model grouped into features, validation rules, diff semantics, the webapp
-and notable CHANGELOG fixes. Each feature says which existing scenario ids (scenarios/{offline,cli,regressions,
-enterprise}) or pytest node ids (tests/<tier>/...::test_x) cover it, and gaps carry an outline precise enough to write
-the missing test.
+and notable CHANGELOG fixes. Each feature says which existing scenario ids (scenarios/{offline,cli,enterprise}) or
+pytest node ids (tests/<tier>/...::test_x) cover it, and gaps carry an outline precise enough to write the missing
+test.
 
 MatrixProject binds the checks to one otterdog-e2e checkout (its scenarios, test modules, known bugs, the vendored
 example template and the generated documentation):
@@ -41,7 +41,7 @@ MATRIX_FILE = Path("scenarios") / "coverage.yaml"  # below the otterdog-e2e proj
 DOC_FILE = Path("docs") / "coverage-matrix.md"
 TEMPLATE_FILE = Path("tests") / "unit" / "data" / "template" / "otterdog-defaults.libsonnet"
 KNOWN_BUGS_FILE = Path("scenarios") / "known_bugs.yaml"
-SCENARIO_DIRS = ("offline", "cli", "regressions", "enterprise")
+SCENARIO_DIRS = ("offline", "cli", "enterprise")
 REGENERATE = ".venv/bin/python tests/unit/test_coverage_matrix.py --write"
 
 TOP_KEYS = (

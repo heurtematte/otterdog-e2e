@@ -80,7 +80,7 @@ and several runs exist (`ls -1t artifacts/`).
 6. **Validate the drafts** you wrote to the work tree:
 
    ```bash
-   .venv/bin/otterdog-e2e assist check scenarios/known_bugs.yaml scenarios/offline/validation/val-org-variables.yaml
+   .venv/bin/otterdog-e2e assist check scenarios/known_bugs.yaml scenarios/offline/variables/val-org-variables.yaml
    make unit                                    # known-issues mirror, known-bug links, scenario rules
    ```
 
@@ -116,6 +116,6 @@ Run tmfidc6a (release:latest, target free, suites offline,cli): 3 failed, 1 erro
 | O-VAL-ORGVAR / control (validate)         | sut, corrected to scenario  | expected errors 0, otterdog 1.6.1 warns only; message in .../0311-validate/stdout.txt | fixed the step's expectation |
 | cli.ruleset.bypass / converge             | known-bug KB-052 (new: FAIL) | step lacks known_bug {phases: [converge]} | added the step-level bug |
 | tests/webapp/test_pr_flow.py::test_x      | harness (error)             | ContextError in src/otterdog_e2e/context/live.py at setup | harness fix proposed below (not applied) |
-Drafts: scenarios/offline/validation/val-org-variables.yaml; gates: assist check clean, make unit green
+Drafts: scenarios/offline/variables/val-org-variables.yaml; gates: assist check clean, make unit green
 Not verified: the webhook rerun (live)
 ```

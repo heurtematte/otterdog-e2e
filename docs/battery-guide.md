@@ -47,19 +47,20 @@ skill follows these steps with an AI agent, under the same gates and your review
 
 | Kind | Id | File |
 |---|---|---|
-| offline YAML scenario | `O-<AREA>-<NAME>` (`O-VAL-ORGVAR`, `O-LPLAN-RENAME`) | `scenarios/offline/<area>-<name>.yaml` (`val-org-variables.yaml`) |
-| live CLI scenario | `cli.<area>.<name>` (`cli.org.workflow-permissions`) | `scenarios/cli/<area>-<name>.yaml` |
-| known-bug reproduction (live) | `cli.kb.<name>` (`cli.kb.webhook-url-alias`) | `scenarios/cli/kb-<name>.yaml` |
-| negative test of a missing capability | `cli.neg.<name>` | `scenarios/cli/neg-<name>.yaml` |
-| regression of an otterdog PR or issue | `regression.<number>-<slug>` | `scenarios/regressions/<number>-<slug>.yaml` |
-| enterprise-only scenario | `enterprise.<name>` (`enterprise.org-role`, `enterprise.kb.<name>`) | `scenarios/enterprise/<name>.yaml` |
+| offline YAML scenario | `O-<AREA>-<NAME>` (`O-VAL-ORGVAR`, `O-LPLAN-RENAME`) | `scenarios/offline/<domain>/<command>-<name>.yaml` (`variables/val-org-variables.yaml`) |
+| live CLI scenario | `cli.<area>.<name>` (`cli.org.workflow-permissions`) | `scenarios/cli/<domain>/<name>.yaml` (`workflows/org-workflow-permissions.yaml`) |
+| known-bug reproduction (live) | `cli.kb.<name>` (`cli.kb.webhook-url-alias`) | `scenarios/cli/<domain>/kb-<name>.yaml` |
+| negative test of a missing capability | `cli.neg.<name>` | `scenarios/cli/<domain>/neg-<name>.yaml` |
+| regression of an otterdog PR or issue | `regression.<behaviour>` | `scenarios/cli/<domain>/<behaviour>.yaml` |
+| enterprise-only scenario | `enterprise.<name>` (`enterprise.org-role`, `enterprise.kb.<name>`) | `scenarios/enterprise/<domain>/<name>.yaml` |
 | offline Python test | `scenario("O-<NAME>")` marker | `tests/offline/test_<topic>.py` |
 | live CLI Python test | `scenario("cli.<name>")` marker | `tests/cli/test_<topic>.py` |
 | webapp / webhooks Python test | `scenario("W-<NAME>", priority="P1")` / `scenario("H-<NAME>", priority=...)` | `tests/webapp/test_<topic>.py`, `tests/webhooks/test_<topic>.py` |
 | web-UI Python test | `scenario("webui.<area>.<name>")` | `tests/web_ui/test_web_<topic>.py` |
 
-Use the id and file of the gap outline unless a better grouping emerges. One YAML scenario per file; ids are unique
-across every directory. The `priority` is the feature's priority (P0 items count for the lane budgets). A scenario
+Use the id and file of the gap outline unless a better grouping emerges. One YAML scenario per file, in the domain
+directory of the feature it pins (`<domain>`: a model-area tag of the scenario, or `template`, `cli`, `plan`;
+[writing-scenarios.md](writing-scenarios.md#where-scenarios-live)); ids are unique across every directory. The `priority` is the feature's priority (P0 items count for the lane budgets). A scenario
 linked to a known bug as a whole is never P0 and carries the `known-bug` tag.
 
 ### Tags
@@ -145,13 +146,14 @@ fixtures, no blind sleeps).
 | `blueprints`, `policies` | `tests/webapp` with the `blueprints` fixture | 3.10 |
 | `webapp-runtime` (boot, environment, API, pages) | `tests/webapp` with `webapp_stack`, `webapp_env`, `webapp_api` | 3.11 |
 | web-only settings and UI commands | `tests/web_ui` | 3.12 |
-| `regressions`, `pending` (fixes and unmerged changes) | `scenarios/regressions`, scenario `references`, differential | 3.13 |
+| `regressions`, `pending` (fixes and unmerged changes) | scenarios tagged `regression` in their domain, scenario `references`, differential | 3.13 |
 
 ### 3.1 Offline validation rules
 
-Validation rules need no GitHub: write an offline YAML scenario (`scenarios/offline/`). Each step renders the minimal
-organization `e2e-offline` plus the step's fragments and runs `validate --local` (always; checked when `validate` is
-given). Useful keys:
+Validation rules need no GitHub: write an offline YAML scenario (`scenarios/offline/<domain>/`). Each step renders the
+minimal organization `e2e-offline` plus the step's fragments and runs `validate --local` (always; checked when
+`validate` is given). Each step is an independent case with its own pytest item and result: one rule per negative
+step, named after the case, and a control step at the limits. Useful keys:
 
 - `validate: {ok, errors, warnings_min, contains, not_contains, exit_code}`; otterdog exits with the number of errors
   (two errors exit 2, like a crash: KB-034), so assert messages, not only exit codes;
@@ -165,7 +167,7 @@ given). Useful keys:
 - a rule otterdog does not enforce yet (a registered bug): give the step `known_bug: KB-nnn`.
 
 ```yaml
-# scenarios/offline/val-org-variables.yaml
+# scenarios/offline/variables/val-org-variables.yaml
 id: O-VAL-ORGVAR
 title: Organization variables are validated like organization secrets
 description: >-
@@ -208,7 +210,8 @@ steps:
 - dummy secrets (`********`) are never compared nor updated (`<DUMMY>` in local-plan); values are never compared at
   all: `update_secrets: true` forces them (`!`);
 - coercions (repository values ignored because of org settings): put the org setting in `fragments.settings`;
-- one complete configuration of your own: `config: {file: ../fragments/<x>.jsonnet}` (full control over ordering).
+- one complete configuration of your own: `config: {file: files/<x>.jsonnet}` (the domain's `files/` directory; full
+  control over ordering).
 
 ```yaml
 - name: force-one-secret
@@ -305,7 +308,7 @@ def test_open_pr_requires_an_author(offline_cli: OtterdogCli) -> None:
 
 ### 3.5 Live objects: create, change, converge, remove
 
-The live CLI tier runs YAML scenarios of `scenarios/cli` (and `scenarios/regressions`) with the SUT: each step plans
+The live CLI tier runs YAML scenarios of `scenarios/cli` (regressions included) with the SUT: each step plans
 (`plan -n -r e2e-<run>-*`), applies (`apply -f -n`), checks the GitHub state with the independent oracle and plans
 again until the run's objects converge; the cleanup is a guarded `apply -d` (or a baseline reset for `org_level`).
 
@@ -346,7 +349,7 @@ again until the run's objects converge; the cleanup is a guarded `apply -d` (or 
   (the probe does not run): place known-bug steps after the probe.
 
 ```yaml
-# scenarios/cli/org-workflow-permissions.yaml
+# scenarios/cli/workflows/org-workflow-permissions.yaml
 id: cli.org.workflow-permissions
 title: Organization and repository default workflow permissions
 description: >-
@@ -539,8 +542,9 @@ settings (no login) belongs to `tests/webapp/test_web_ui_flags.py`. Details: [we
 
 ### 3.13 Regressions, unmerged changes and differential runs
 
-- A regression of an otterdog fix is a live scenario of `scenarios/regressions` named after the behaviour
-  (`regression.<behaviour>`, never the PR number), with the tag `regression`, `references: [{pr: <n>}]` for the
+- A regression of an otterdog fix is a live scenario of `scenarios/cli/<domain>/`, next to the scenarios of the
+  feature it guards, named after the behaviour (`regression.<behaviour>`, never the PR number), with the tag
+  `regression`, `references: [{pr: <n>}]` for the
   fixing PR(s), the PR or issue link and the known-bad version in the description and `fixed_in` for fixes not
   released yet; or, offline, an offline scenario with `observe: true`.
 - A pending change (an otterdog PR, a maintainer branch) is a `references` entry (`pr: <n>` or `change: <slug>`, with
@@ -594,7 +598,7 @@ settings (no login) belongs to `tests/webapp/test_web_ui_flags.py`. Details: [we
 ## 5. The offline scenario lint
 
 `tests/offline/test_scenario_lint.py` validates every step of every live scenario (`scenarios/cli`,
-`scenarios/regressions`, `scenarios/enterprise`) offline with the SUT: the step is rendered for the offline
+`scenarios/enterprise`) offline with the SUT: the step is rendered for the offline
 organization (marker description; plan `variables.plan`, else `min_plan`) and checked with `validate --local`. A step
 whose `validate.ok` is false or whose `plan.expect` is `validation_error` must produce errors, every other step must
 validate (warnings are fine, "ignoring unknown properties" is not). Steps using teams or

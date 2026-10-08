@@ -7,6 +7,9 @@
 *.key
 *.webhook-secret
 secrets/
+# ... except the secrets domain of the scenarios: scenario files hold dummy values only (scenarios/model.py refuses
+# any other value), tests/unit/test_workflows_static.py checks that no scenario file is ignored
+!scenarios/*/secrets/
 
 # --- harness outputs ---
 # run artifacts (redacted text only, but still per-run data) and any local harness cache

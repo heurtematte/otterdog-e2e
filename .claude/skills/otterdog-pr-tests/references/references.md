@@ -29,7 +29,7 @@ test, duplicate changes or deltas; two references of one change with different `
 error at collection. Declare `base`/`template` once per change (the other references may leave them out).
 
 ```yaml
-# scenarios/offline/validation/val-ruleset-strict.yaml (abridged)
+# scenarios/offline/rulesets/val-ruleset-strict.yaml (abridged)
 id: O-VAL-RULESET-STRICT
 references:
   - pr: 790

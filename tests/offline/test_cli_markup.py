@@ -2,7 +2,7 @@
 
 otterdog prints through rich, which interprets ``[bold]``, ``[/]`` and ``[link=...]`` as markup. #440 (v1.1.0)
 escapes the string values of plan and show output (otterdog/operations/__init__.py:233, the object headers in
-otterdog/models/__init__.py:566-588), which scenarios/offline/regressions/changelog/lplan-escaping.yaml guards. The
+otterdog/models/__init__.py:566-588), which scenarios/offline/cli/lplan-escaping.yaml guards. The
 messages of validate are printed as rich table cells without escaping (otterdog/logging.py:174-198 _print_message), so
 a validation message quoting such a value loses its markup: '[bold]NOPE[/bold]' is quoted as 'NOPE' (KB-050,
 like the repository links of ``show --markdown``, tests/offline/test_cli_basics.py). Verified on v1.6.1 and main

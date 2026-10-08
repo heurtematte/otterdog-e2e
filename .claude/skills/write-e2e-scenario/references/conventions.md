@@ -7,16 +7,24 @@ Source: `docs/battery-guide.md` section 2. The unit tests named here run in `mak
 
 | Kind | Id | File |
 |---|---|---|
-| offline YAML scenario | `O-<AREA>-<NAME>` (`O-VAL-ORGVAR`, `O-LPLAN-RENAME`) | `scenarios/offline/<topic>/<area>-<name>.yaml` (topics: `validation/`, `plan/`, `cli/`, `models/`, `regressions/`) |
-| live CLI scenario | `cli.<area>.<name>` | `scenarios/cli/<area>-<name>.yaml` (or a topic directory below it) |
-| known-bug reproduction (live) | `cli.kb.<name>` | `scenarios/cli/kb-<name>.yaml` |
-| negative test of a missing capability | `cli.neg.<name>` | `scenarios/cli/neg-<name>.yaml` |
-| regression of an otterdog PR or issue | `regression.<behaviour>` + `references: [{pr: <n>}]` | `scenarios/regressions/<behaviour>.yaml` |
-| enterprise-only scenario | `enterprise.<name>` | `scenarios/enterprise/<name>.yaml` |
+| offline YAML scenario | `O-<AREA>-<NAME>` (`O-VAL-ORGVAR`, `O-LPLAN-RENAME`) | `scenarios/offline/<domain>/<command>-<name>.yaml` (`variables/val-org-variables.yaml`) |
+| live CLI scenario | `cli.<area>.<name>` | `scenarios/cli/<domain>/<name>.yaml` |
+| known-bug reproduction (live) | `cli.kb.<name>` | `scenarios/cli/<domain>/kb-<name>.yaml` |
+| negative test of a missing capability | `cli.neg.<name>` | `scenarios/cli/<domain>/neg-<name>.yaml` |
+| regression of an otterdog PR or issue | `regression.<behaviour>` + tag `regression` + `references: [{pr: <n>}]` | `scenarios/cli/<domain>/<behaviour>.yaml` |
+| enterprise-only scenario | `enterprise.<name>` | `scenarios/enterprise/<domain>/<name>.yaml` |
 | offline Python test | marker `scenario("O-<NAME>")` | `tests/offline/test_<topic>.py` |
 | live CLI Python test | marker `scenario("cli.<name>")` | `tests/cli/test_<topic>.py` |
 | webapp, webhooks Python test | `scenario("W-<NAME>", priority="P1")`, `scenario("H-<NAME>", priority=...)` | `tests/webapp/`, `tests/webhooks/` |
 | web-UI Python test | `scenario("webui.<area>.<name>")` | `tests/web_ui/test_web_<topic>.py` |
+
+`<domain>` is the directory of the feature the scenario pins, the same names in every tier: a model area (`repo`,
+`workflows`, `org-settings`, `org-roles`, `teams`, `custom-properties`, `secrets`, `variables`, `webhooks`, `bpr`,
+`rulesets`, `environments`; the scenario carries that tag) or the cross-cutting `template` (the configuration as
+written), `cli` (command output and flags across areas) and `plan` (diff semantics across object types). No deeper
+subdirectory; jsonnet files of one domain go into its `files/`. Regressions and known-bug reproductions sit in the
+domain of their feature (`model.domain_problem`, enforced by `tests/unit/test_yaml_cli.py`,
+`tests/unit/test_yaml_offline.py` and `assist check`).
 
 Use the id and file of a coverage gap outline when there is one. Ids are unique across every directory. The priority
 is the coverage feature's (P0 items count for the lane budgets). Ids, file names and directories name the BEHAVIOUR,

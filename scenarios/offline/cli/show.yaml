@@ -1,5 +1,4 @@
-# Offline tier (battery, cli): what `show --local` prints (scenarios/offline/cli/output: the tier is that of offline/,
-# the directory right below scenarios/).
+# Offline tier (battery, cli): what `show --local` prints.
 id: O-SHOW
 tier: offline
 title: show prints the organization settings and every model object as key = value blocks

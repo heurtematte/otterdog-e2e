@@ -104,24 +104,41 @@ class FakeMetafunc:
 
 def test_generate_scenario_tests(tmp_path: Path) -> None:
     """One parameter per scenario of the directories, id = scenario id, marks attached."""
-    write(tmp_path, "cli/team.yaml", LIVE)
-    write(tmp_path, "regressions/r.yaml", "id: reg.one\ntitle: r\nsteps: [{fragments: {}}]\n")
+    write(tmp_path, "cli/teams/team.yaml", LIVE)
+    write(tmp_path, "other/r.yaml", "id: regression.one\ntier: cli\ntitle: r\nsteps: [{fragments: {}}]\n")
     metafunc = FakeMetafunc(["scenario", "tmp_path"])
-    generate_scenario_tests(metafunc, [tmp_path / "cli", tmp_path / "regressions"], tier="cli")  # type: ignore[arg-type]
+    generate_scenario_tests(metafunc, [tmp_path / "cli", tmp_path / "other"], tier="cli")  # type: ignore[arg-type]
     ((argnames, params),) = metafunc.calls
-    assert argnames == "scenario" and [p.id for p in params] == ["cli.team.basic", "reg.one"]
+    assert argnames == "scenario" and [p.id for p in params] == ["cli.team.basic", "regression.one"]
     assert isinstance(params[0].values[0], Scenario) and "live" in [m.name for m in params[0].marks]
     untouched = FakeMetafunc(["tmp_path"])
     generate_scenario_tests(untouched, [tmp_path / "cli"])  # type: ignore[arg-type]
     assert untouched.calls == []
 
 
+def test_generate_scenario_tests_per_step(tmp_path: Path) -> None:
+    """per_step: one parameter per step, the scenario narrowed to it (a case: same id, metadata and marks, ``case``
+    = the step), id = <scenario id>/<step>."""
+    write(tmp_path, "offline/repo/val.yaml", OFFLINE.replace("[{fragments: {}}]", "[{name: a}, {name: b}]"))
+    metafunc = FakeMetafunc(["scenario"])
+    generate_scenario_tests(metafunc, [tmp_path / "offline"], tier="offline", per_step=True)  # type: ignore[arg-type]
+    ((_, params),) = metafunc.calls
+    assert [p.id for p in params] == ["O-VAL-OK/a", "O-VAL-OK/b"]
+    cases = [p.values[0] for p in params]
+    assert [(case.id, case.case, [step.name for step in case.steps]) for case in cases] == [
+        ("O-VAL-OK", "a", ["a"]),
+        ("O-VAL-OK", "b", ["b"]),
+    ]
+    assert marks_by_name(list(params[1].marks))["scenario"] == ("O-VAL-OK",)
+    assert scenario_params(cases[:1])[0].id == "O-VAL-OK/a"
+
+
 def test_collect_scenarios_refuses_duplicates_across_directories(tmp_path: Path) -> None:
     """Ids are unique across all the directories of a test module."""
     write(tmp_path, "cli/a.yaml", LIVE)
-    write(tmp_path, "regressions/b.yaml", LIVE)
+    write(tmp_path, "other/b.yaml", "tier: cli\n" + textwrap.dedent(LIVE).lstrip("\n"))
     with pytest.raises(ScenarioError, match="duplicate scenario id"):
-        collect_scenarios([tmp_path / "cli", tmp_path / "regressions"])
+        collect_scenarios([tmp_path / "cli", tmp_path / "other"])
     assert collect_scenarios([tmp_path / "missing"]) == []
 
 
@@ -179,6 +196,15 @@ def test_scenario_selected(tmp_path: Path, globs: tuple[str, ...], tags: tuple[s
     assert scenario_selected(scenario, globs=globs, tags=tags) is selected
 
 
+def test_scenario_selected_by_case(tmp_path: Path) -> None:
+    """A case is selected by a glob on its scenario id (every case) or on <scenario id>/<step> (that case only)."""
+    scenario = load_scenario(write(tmp_path, "offline/repo/val.yaml", OFFLINE.replace("[{fragments: {}}]", "[{}, {}]")))
+    first, second = scenario.cases()
+    assert scenario_selected(first, globs=("O-VAL-OK",)) and scenario_selected(second, globs=("O-VAL-*",))
+    assert scenario_selected(first, globs=("O-VAL-OK/step-1",)) and not scenario_selected(second, globs=("*/step-1",))
+    assert not scenario_selected(scenario, globs=("O-VAL-OK/step-1",)), "the whole scenario is not that case"
+
+
 def test_scenario_selected_exemption_and_change_scenarios(tmp_path: Path) -> None:
     """tags_exempt (tests/unit, tests/offline) ignores --e2e-tags, never --e2e-scenario; the scenarios referencing the
     change under test pass the tags filter like tagged items."""
@@ -206,6 +232,9 @@ def test_scenario_selected_exemption_and_change_scenarios(tmp_path: Path) -> Non
         ("cli.repo.basic", (), {"tags": ["webapp"], "extra_scenarios": ["cli.repo.*"]}, True),
         (None, (), {"tags": ["webapp"], "extra_scenarios": ["*"]}, False),  # extra scenarios need a scenario id
         ("cli.repo.basic", ("repo",), {"globs": [" ", ""], "tags": ["", " "]}, True),  # blank values are ignored
+        ("O-VAL", (), {"globs": ["O-VAL/limits"], "case_id": "O-VAL/limits"}, True),  # a glob on the case id
+        ("O-VAL", (), {"globs": ["O-VAL/limits"], "case_id": "O-VAL/topics"}, False),
+        ("O-VAL", (), {"globs": ["O-VAL"], "case_id": "O-VAL/topics"}, True),  # every case of the scenario
     ],
 )
 def test_item_selected(scenario_id: str | None, tags: tuple[str, ...], kwargs: dict[str, Any], selected: bool) -> None:

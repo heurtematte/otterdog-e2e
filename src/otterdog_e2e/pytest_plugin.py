@@ -19,7 +19,8 @@ selected item using ``dtrack_mock`` starts the stack with the Dependency-Track m
 blueprints.BlueprintHelper whose definitions, remediation PRs and workflow runs are cleaned up after the test;
 ``webapp_otterdog_json`` publishes otterdog.json with per-org team overrides and restores it after the test.
 
-Selection (scenarios.collect.item_selected): values inside --e2e-scenario (globs on scenario ids) or inside --e2e-tags
+Selection (scenarios.collect.item_selected): values inside --e2e-scenario (globs on scenario ids, or on the
+``<scenario id>/<step>`` of the offline cases) or inside --e2e-tags
 are ORed, the two options are ANDed. tests/unit and tests/offline items (and items outside the tier directories that
 carry no e2e marker) are exempt from --e2e-tags, never from --e2e-scenario; the scenarios referencing the change under
 test (--e2e-change, E2E_CHANGE, default: N of a ``pr:N@<sha>`` --e2e-sut; changes.py) pass the tags filter like tagged
@@ -353,6 +354,12 @@ def item_scenario_id(item: pytest.Item) -> str | None:
     return str(scenario.id) if scenario is not None and getattr(scenario, "id", None) else None
 
 
+def item_case_id(item: pytest.Item) -> str | None:
+    """``<scenario id>/<step>`` of an item running one case of a scenario (Scenario.cases), else None."""
+    scenario = scenario_param(item)
+    return str(scenario.case_id) if scenario is not None and getattr(scenario, "case", None) is not None else None
+
+
 def item_priority(item: pytest.Item) -> str | None:
     """Priority of an item: its Scenario parameter's, else the ``priority`` keyword of its scenario(id) marker (Python
     tests), None when neither gives one (report budgets then count the item as P0)."""
@@ -486,12 +493,12 @@ def _selected(item: pytest.Item, tags: Sequence[str], globs: Sequence[str], extr
     scenarios passing the tags filter like tagged items, read only when the item fails the filter otherwise."""
     from otterdog_e2e.scenarios.collect import item_selected
 
-    scenario_id, exempt = item_scenario_id(item), tags_exempt(item)
-    if item_selected(scenario_id, item_tags(item), globs=globs, tags=tags, tags_exempt=exempt):
+    scenario_id, exempt, case_id = item_scenario_id(item), tags_exempt(item), item_case_id(item)
+    if item_selected(scenario_id, item_tags(item), globs=globs, tags=tags, tags_exempt=exempt, case_id=case_id):
         return True
-    if not tags or scenario_id is None or not item_selected(scenario_id, (), globs=globs):
+    if not tags or scenario_id is None or not item_selected(scenario_id, (), globs=globs, case_id=case_id):
         return False
-    return item_selected(scenario_id, (), globs=globs, tags=tags, extra_scenarios=extra())
+    return item_selected(scenario_id, (), globs=globs, tags=tags, extra_scenarios=extra(), case_id=case_id)
 
 
 def known_bug_xfail(item: pytest.Item, reason: str) -> pytest.MarkDecorator:

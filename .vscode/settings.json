@@ -19,7 +19,6 @@
         "./.vscode/scenario.schema.json": [
             "scenarios/offline/**/*.yaml",
             "scenarios/cli/**/*.yaml",
-            "scenarios/regressions/**/*.yaml",
             "scenarios/enterprise/**/*.yaml"
         ],
         "./.vscode/any.schema.json": [

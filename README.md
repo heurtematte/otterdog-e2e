@@ -86,7 +86,7 @@ make cli TARGET=free,acme-a                                # one after the other
 |---|---|---|---|
 | unit | `tests/unit` | nothing (no network, no docker) | harness self-tests |
 | offline | `tests/offline`, `scenarios/offline` | the SUT (network once to fetch it), docker for the webapp part | configuration loading, credential providers, template hooks, `validate`, `local-plan`, `local-apply` (declined), `show`, `show-default`, `canonical-diff`, `list-projects`, `--help`, `--version` and exit codes with a vendored template; the offline lint of every live scenario step; webapp boot, runtime and webhook receiver contract with dummy credentials |
-| cli | `tests/cli`, `scenarios/cli`, `scenarios/regressions` | target + admin identity | live CLI lifecycle (`plan -n`/`apply -f -n`), run-prefixed resources |
+| cli | `tests/cli`, `scenarios/cli` (regressions included) | target + admin identity | live CLI lifecycle (`plan -n`/`apply -f -n`), run-prefixed resources |
 | webhooks | `tests/webhooks` | target (+ GitHub App) | otterdog-managed repository/org webhooks, real App deliveries through the relay |
 | webapp | `tests/webapp` | target + GitHub App + docker | the webapp under test in docker compose, config-repo PR workflow |
 | web_ui | `tests/web_ui` | target + the admin bot's web credentials (password, TOTP seed) + `--allow-web-ui`, a trusted SUT, no SAML SSO | otterdog's web-UI login: the round trip of the 12 web-only org settings, `import` of web settings, `review-permissions`, `list-advisories -w`, `install-app`/`uninstall-app`, `web-login` (local) ([web-ui-testing.md](docs/web-ui-testing.md)) |
@@ -112,10 +112,11 @@ when the two diverge. After editing the YAML, regenerate the page:
 
 At otterdog main 9bdeb75 the matrix lists 337 features: 300 covered, 32 partial and 5 gaps (89% covered, 94% when a
 partial feature counts half); 139 are covered by offline items, the only tier run against real SUTs so far. The battery
-behind it has 137 YAML scenarios (59 offline, 64 cli, 7 regressions, 7 enterprise) and 218 Python test functions (75
-offline, 58 cli, 5 webhooks, 64 webapp, 11 web-UI, 1 enterprise, 4 differential); the offline tier runs 356 items in
-about 6 minutes. [scenarios/known_bugs.yaml](scenarios/known_bugs.yaml) registers 77 otterdog defects (57 confirmed, 20
-suspected): the items that reproduce one assert the correct behaviour and run as expected failures while it is open.
+behind it has 137 YAML scenarios (59 offline, 71 cli of which 7 regressions, 7 enterprise) and 218 Python test
+functions (75 offline, 58 cli, 5 webhooks, 64 webapp, 11 web-UI, 1 enterprise, 4 differential); the offline tier runs
+582 items (one per offline scenario step) in about 10 minutes. [scenarios/known_bugs.yaml](scenarios/known_bugs.yaml)
+registers 77 otterdog defects (57 confirmed, 20 suspected): the items that reproduce one assert the correct behaviour
+and run as expected failures while it is open.
 
 Every run's `summary.md` has a "Coverage matrix" section: the covered, partial and gap shares per tier, and the
 features whose covering items ran in that run. [docs/battery-guide.md](docs/battery-guide.md) explains how to close a

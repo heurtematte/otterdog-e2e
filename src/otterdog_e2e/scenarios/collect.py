@@ -4,14 +4,19 @@ Test modules (tests/offline/test_scenarios.py, tests/cli/test_scenarios.py, test
 tests/differential/test_offline_diff.py) call generate_scenario_tests from ``pytest_generate_tests``; the plugin applies
 scenario_marks in ``pytest_collection_modifyitems`` via ``item.callspec.params["scenario"]``.
 
+A live scenario is one item (a journey: its steps depend on the state the previous ones left, the first failure stops
+it). The offline tier asks for one item per step (``per_step``: Scenario.cases), since offline steps share no state:
+each case passes or fails on its own, and a failing case never hides the result of the next ones.
+
 generate_scenario_tests already attaches the marks to each parameter (``pytest.param(..., marks=...)``) so selection by
 ``-m`` works without the plugin; apply_scenario_marks is idempotent (it skips items that carry the ``scenario`` mark),
 so the plugin may call it for every item. Node ids are ``<test>[<scenario id>]``, e.g.
-``tests/cli/test_scenarios.py::test_cli_scenario[cli.repo.lifecycle]``.
+``tests/cli/test_scenarios.py::test_cli_scenario[cli.repo.lifecycle]``, and ``<test>[<scenario id>/<step>]`` for a case,
+e.g. ``tests/offline/test_scenarios.py::test_offline_scenario[O-VAL-REPO/too-many-topics]``.
 
 Selection (item_selected, used by the plugin and by scenario_selected): ``--e2e-scenario`` and ``--e2e-tags`` are two
-filters; inside one filter the comma separated values are ORed (any glob matches the scenario id, case-sensitive
-fnmatch; the item carries any of the tags), between the two filters it is AND; an empty filter keeps everything.
+filters; inside one filter the comma separated values are ORed (any glob matches the scenario id or, for a case, its
+``<scenario id>/<step>``, case-sensitive fnmatch; the item carries any of the tags), between the two filters it is AND; an empty filter keeps everything.
 Items of tests/unit and tests/offline (TAGS_EXEMPT_TIERS) are exempt from ``--e2e-tags`` (the offline regression tier
 always runs in full) but not from ``--e2e-scenario``: once globs are given, items without a matching scenario id
 (unit tests included) are deselected. The scenarios referencing the change under test (``--e2e-change``, changes.py)
@@ -110,16 +115,21 @@ def collect_scenarios(directories: Sequence[Path], *, tier: str | None = None) -
     return scenarios
 
 
-def scenario_params(scenarios: Iterable[Scenario]) -> list[ParameterSet]:
-    """One ``pytest.param`` per scenario: id = scenario id, marks = scenario_marks."""
-    return [pytest.param(scenario, marks=scenario_marks(scenario), id=scenario.id) for scenario in scenarios]
+def scenario_params(scenarios: Iterable[Scenario], *, per_step: bool = False) -> list[ParameterSet]:
+    """One ``pytest.param`` per scenario (id = scenario id), or per case with ``per_step`` (Scenario.cases, id =
+    ``<scenario id>/<step>``); marks = scenario_marks."""
+    items = [case for scenario in scenarios for case in scenario.cases()] if per_step else list(scenarios)
+    return [pytest.param(item, marks=scenario_marks(item), id=item.case_id) for item in items]
 
 
-def generate_scenario_tests(metafunc: pytest.Metafunc, directories: Sequence[Path], *, tier: str | None = None) -> None:
-    """``metafunc.parametrize("scenario", <scenarios of directories>, ids=<scenario id>)`` when the test takes it."""
+def generate_scenario_tests(
+    metafunc: pytest.Metafunc, directories: Sequence[Path], *, tier: str | None = None, per_step: bool = False
+) -> None:
+    """``metafunc.parametrize("scenario", <scenarios of directories>)`` when the test takes it (scenario_params)."""
     if SCENARIO_PARAM not in metafunc.fixturenames:
         return
-    metafunc.parametrize(SCENARIO_PARAM, scenario_params(collect_scenarios(directories, tier=tier)))
+    scenarios = collect_scenarios(directories, tier=tier)
+    metafunc.parametrize(SCENARIO_PARAM, scenario_params(scenarios, per_step=per_step))
 
 
 def item_scenario(item: pytest.Item) -> Scenario | None:
@@ -145,9 +155,10 @@ def _clean(values: Iterable[str]) -> list[str]:
     return [value.strip() for value in values if value and value.strip()]
 
 
-def _matches(scenario_id: str | None, patterns: Sequence[str]) -> bool:
-    """True when the scenario id matches one of the fnmatch patterns (case-sensitive)."""
-    return scenario_id is not None and any(fnmatch.fnmatchcase(scenario_id, pattern) for pattern in patterns)
+def _matches(scenario_id: str | None, patterns: Sequence[str], case_id: str | None = None) -> bool:
+    """True when the scenario id (or the case id) matches one of the fnmatch patterns (case-sensitive)."""
+    ids = [name for name in (scenario_id, case_id) if name is not None]
+    return any(fnmatch.fnmatchcase(name, pattern) for name in ids for pattern in patterns)
 
 
 def item_selected(
@@ -158,11 +169,13 @@ def item_selected(
     tags: Iterable[str] = (),
     tags_exempt: bool = False,
     extra_scenarios: Iterable[str] = (),
+    case_id: str | None = None,
 ) -> bool:
-    """The selection rule of the module docstring: (no globs or the id matches one) AND (no tags, ``tags_exempt``
-    (tests/unit, tests/offline), the item carries one of them, or the id matches an ``extra_scenarios`` glob)."""
+    """The selection rule of the module docstring: (no globs or the id or ``case_id`` matches one) AND (no tags,
+    ``tags_exempt`` (tests/unit, tests/offline), the item carries one of them, or the id matches an
+    ``extra_scenarios`` glob)."""
     patterns = _clean(globs)
-    if patterns and not _matches(scenario_id, patterns):
+    if patterns and not _matches(scenario_id, patterns, case_id):
         return False
     wanted = set(_clean(tags))
     if not wanted or tags_exempt or wanted & set(item_tags):
@@ -188,6 +201,7 @@ def scenario_selected(
         tags=tags,
         tags_exempt=tags_exempt,
         extra_scenarios=extra_scenarios,
+        case_id=scenario.case_id if scenario.case is not None else None,
     )
 
 

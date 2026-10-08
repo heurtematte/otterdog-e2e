@@ -947,6 +947,26 @@ def test_gitignore_keeps_secrets_and_outputs_out_of_git() -> None:
     assert "!.env.example" in lines or not any(line in (".env*", ".env.*") for line in lines)
 
 
+def test_gitignore_hides_no_scenario_file() -> None:
+    """The secrets/ rule never hides a scenario file: the secrets domain (scenarios/<tier>/secrets/, dummy values only)
+    is excepted, so every file below scenarios/ can be committed."""
+    git = shutil.which("git")
+    if git is None or not (ROOT / ".git").exists():
+        pytest.skip("not a git checkout")
+    paths = [path.relative_to(ROOT).as_posix() for path in sorted((ROOT / "scenarios").rglob("*")) if path.is_file()]
+    found = subprocess.run(
+        [git, "check-ignore", "--no-index", "--stdin"],
+        cwd=ROOT,
+        input="\n".join(paths),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert found.returncode in (0, 1), found.stderr
+    assert found.stdout.split() == [], f"ignored scenario files: {found.stdout.split()}"
+    assert "secrets/" in (ROOT / ".gitignore").read_text(encoding="utf-8").splitlines(), "secrets/ stays ignored"
+
+
 def test_env_example_lists_every_target_variable_without_values() -> None:
     """.env.example documents every variable of targets/*.yaml and assigns no value."""
     text = (ROOT / ".env.example").read_text(encoding="utf-8")

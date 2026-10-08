@@ -20,7 +20,7 @@ tags: [bpr, repo, discovery, private]
 expect_failure_without: [private_repo_branch_protection]
 observe: true
 libraries:
-  e2e: ../lib/e2e.libsonnet
+  e2e: ../../lib/e2e.libsonnet
 steps:
   - name: public
     fragments:

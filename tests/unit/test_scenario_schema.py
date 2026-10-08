@@ -90,7 +90,7 @@ def test_schema_covers_the_loader_keys() -> None:
 
 @pytest.mark.parametrize(
     "path",
-    [path for name in ("offline", "cli", "regressions", "enterprise") for path in scenario_files(SCENARIOS / name)],
+    [path for name in ("offline", "cli", "enterprise") for path in scenario_files(SCENARIOS / name)],
     ids=lambda path: str(path.relative_to(SCENARIOS)),
 )
 def test_every_scenario_validates_against_the_schema(path: Path) -> None:
@@ -131,8 +131,8 @@ def test_vscode_maps_scenario_files_to_the_schemas() -> None:
     settings = json.loads((ROOT / ".vscode" / "settings.json").read_text(encoding="utf-8"))
     mapping = settings["yaml.schemas"]
     assert set(mapping[f"./{SCHEMA_FILE}"]) == {
-        f"scenarios/{name}/**/*.yaml" for name in ("offline", "cli", "regressions", "enterprise")
-    }  # '**' also matches files directly in the directory (subdirectories group scenarios by topic)
+        f"scenarios/{name}/**/*.yaml" for name in ("offline", "cli", "enterprise")
+    }  # '**' spans the domain subdirectories (scenarios/<tier>/<domain>/<file>.yaml)
     assert set(mapping["./.vscode/any.schema.json"]) == {
         "scenarios/known_bugs.yaml",
         "scenarios/coverage.yaml",

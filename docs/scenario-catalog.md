@@ -46,7 +46,7 @@ items with `--scenario` / `--e2e-scenario`.
 | O-WEB-BOOT | webapp boots with dummy credentials: health, deployed version | P0 | verified | `tests/offline/test_webapp_contract.py` (`O-WEB-BOOT`) | APP-HEALTH-01, DEP-BOOT-01 |
 | O-WEB-SIG | receiver contract: missing/invalid/sha256-only signature 400, `application/json; charset=utf-8` 415, valid ping 204, unknown event 204, unknown installation 204 + log line | P0 | verified | `tests/offline/test_webapp_contract.py` (`O-WEB-SIG`) | WH-SIG-01, WH-SIG-001, APP-WH-01, DEP-WH-01, REG-WEBHOOK-ROBUST, WH-NEG-01 |
 
-### CLI (`scenarios/cli`, `scenarios/regressions`, `tests/cli`)
+### CLI (`scenarios/cli`, `tests/cli`)
 
 | Id | Scenario | Priority | Status | Implemented by | Sources |
 |---|---|---|---|---|---|
@@ -68,8 +68,8 @@ items with `--scenario` / `--e2e-scenario`.
 | C-NEG-PRIVATE-RULESET | ruleset on a private repository without `private_repo_rulesets` (discovery) | P2 | implemented | `cli.neg.private-ruleset` (also observed by D-LIVE-PLAN) | MOD-FREE-PRIV-RS-01, RULESET-FREE-PRIVATE-001 |
 | C-PLAN-MISMATCH | `variables.plan` differs from the live plan: read-only note only | P1 | implemented | `cli.plan-mismatch` | PLAN-CONFIG-001, MOD-GATE-SPOOF-01 |
 
-Regressions (`scenarios/regressions`) and known-bug scenarios (each runs as a non-strict xfail while its bug is
-open, see [known-issues.md](known-issues.md)):
+Regressions (tag `regression`, in the domain of the feature they guard) and known-bug scenarios (each runs as a
+non-strict xfail while its bug is open, see [known-issues.md](known-issues.md)):
 
 | Id | Scenario | Priority | Status | Gating |
 |---|---|---|---|---|
@@ -188,95 +188,95 @@ yet. Known-bug items assert the correct behaviour and run as non-strict expected
 
 | Id | Scenario | Priority | Status | Implemented by | Features (coverage.yaml) |
 |---|---|---|---|---|---|
-| `O-LPLAN-ERRORS` | local-plan error paths exit 1 with the reason and no Plan line | P1 | verified | `offline/cli/local-plan/lplan-errors.yaml` | `cli.plan.errors` |
-| `O-LPLAN-ONLY-SECRETS` | --only-secrets plans secret patches only, organization, repository and environment ones | P2 | verified | `offline/cli/local-plan/lplan-only-secrets.yaml` | `cli.plan.only-secrets` |
-| `O-LPLAN-SECRET-REFS` | local-plan shows dummy secrets as &lt;DUMMY&gt; and diffs secret references | P1 | verified | `offline/cli/local-plan/lplan-secrets.yaml` | `cli.local-plan.dummy-secrets` |
-| `O-LPLAN-WEBHOOK-SECRET-REMOVED` | Removing a webhook secret is planned as a change with a warning | P2 | verified | `offline/cli/local-plan/lplan-webhook-secret.yaml` | `cli.plan.webhook-secret-removal` |
-| `O-SHOW` | show prints the organization settings and every model object as key = value blocks | P2 | verified | `offline/cli/output/show.yaml` | `cli.show` |
-| `O-EXTEND-REPO` | extendRepo merges into the repository of the same name (later entries win) | P2 | verified | `offline/models/extend-repo.yaml` | `repositories.extend` |
-| `O-SHOW-ROLE-FIELDS` | Organization role visibility and selected_repositories cannot be configured | P2 | verified | `offline/models/show-role-fields.yaml` | `org-roles.unused-model-fields` |
-| `O-LPLAN-ARCHIVED` | Archived repositories ignore read-only fields and their rules; archiving plans the other changes too | P0 | verified | `offline/plan/lplan-archived.yaml` | `plan-semantics.ignored-archived` |
-| `O-LPLAN-BPR-DEPENDENTS` | Branch protection settings behind a disabled toggle are not diffed | P1 | verified | `offline/plan/lplan-bpr-dependents.yaml` | `plan-semantics.bpr-dependents-ignored` |
-| `O-LPLAN-COERCE-SIGNOFF` | Organization settings make repository fields unmanaged or forced (signoff, projects, Pages, discussions) | P0 | verified | `offline/plan/lplan-coerce.yaml` | `plan-semantics.coerce.org-signoff`, `plan-semantics.coerce.org-projects-pages`, `plan-semantics.coerce.discussion-source`, `plan-semantics.code-security-disable-only`, `repositories.features` |
-| `O-LPLAN-CUSTOM-PROPERTY-DEFAULTS` | Required custom property defaults fill repositories; a value_type change aborts planning | P2 | verified | `offline/plan/lplan-custom-property-defaults.yaml` | `plan-semantics.coerce.required-custom-properties`, `custom-properties.value-type-immutable` |
+| `O-LPLAN-ERRORS` | local-plan error paths exit 1 with the reason and no Plan line | P1 | verified | `offline/cli/lplan-errors.yaml` | `cli.plan.errors` |
+| `O-LPLAN-ONLY-SECRETS` | --only-secrets plans secret patches only, organization, repository and environment ones | P2 | verified | `offline/secrets/lplan-only-secrets.yaml` | `cli.plan.only-secrets` |
+| `O-LPLAN-SECRET-REFS` | local-plan shows dummy secrets as &lt;DUMMY&gt; and diffs secret references | P1 | verified | `offline/secrets/lplan-secrets.yaml` | `cli.local-plan.dummy-secrets` |
+| `O-LPLAN-WEBHOOK-SECRET-REMOVED` | Removing a webhook secret is planned as a change with a warning | P2 | verified | `offline/webhooks/lplan-webhook-secret.yaml` | `cli.plan.webhook-secret-removal` |
+| `O-SHOW` | show prints the organization settings and every model object as key = value blocks | P2 | verified | `offline/cli/show.yaml` | `cli.show` |
+| `O-EXTEND-REPO` | extendRepo merges into the repository of the same name (later entries win) | P2 | verified | `offline/template/extend-repo.yaml` | `repositories.extend` |
+| `O-SHOW-ROLE-FIELDS` | Organization role visibility and selected_repositories cannot be configured | P2 | verified | `offline/org-roles/show-role-fields.yaml` | `org-roles.unused-model-fields` |
+| `O-LPLAN-ARCHIVED` | Archived repositories ignore read-only fields and their rules; archiving plans the other changes too | P0 | verified | `offline/repo/lplan-archived.yaml` | `plan-semantics.ignored-archived` |
+| `O-LPLAN-BPR-DEPENDENTS` | Branch protection settings behind a disabled toggle are not diffed | P1 | verified | `offline/bpr/lplan-bpr-dependents.yaml` | `plan-semantics.bpr-dependents-ignored` |
+| `O-LPLAN-COERCE-SIGNOFF` | Organization settings make repository fields unmanaged or forced (signoff, projects, Pages, discussions) | P0 | verified | `offline/repo/lplan-coerce.yaml` | `plan-semantics.coerce.org-signoff`, `plan-semantics.coerce.org-projects-pages`, `plan-semantics.coerce.discussion-source`, `plan-semantics.code-security-disable-only`, `repositories.features` |
+| `O-LPLAN-CUSTOM-PROPERTY-DEFAULTS` | Required custom property defaults fill repositories; a value_type change aborts planning | P2 | verified | `offline/custom-properties/lplan-custom-property-defaults.yaml` | `plan-semantics.coerce.required-custom-properties`, `custom-properties.value-type-immutable` |
 | `O-LPLAN-DICT-ONE-WAY` | Removing a team_permissions or custom_properties entry is only planned with another change | P1 | verified | `offline/plan/lplan-dict-one-way.yaml` | `plan-semantics.dict-one-way` |
-| `O-LPLAN-ENV-POLICIES` | Environment branch policies are only diffed with the 'selected' deployment branch policy | P1 | verified | `offline/plan/lplan-env-policies.yaml` | `plan-semantics.env-branch-policies-ignored` |
-| `O-LPLAN-FORCED-SECRETS` | Secret values, dummy secrets and --update-secrets / --update-filter / --only-secrets in local-plan | P1 | verified | `offline/plan/lplan-forced-secrets.yaml` | `cli.plan.update-secrets`, `cli.plan.only-secrets`, `cli.local-plan.dummy-secrets` |
-| `O-LPLAN-FORCED-WEBHOOKS` | Webhook secrets and --update-webhooks / --update-filter in local-plan | P1 | verified | `offline/plan/lplan-forced-webhooks.yaml` | `cli.plan.update-webhooks`, `cli.plan.webhook-secret-removal`, `cli.local-plan.dummy-secrets`, `webhooks.org.secret`, `webhooks.repo.secret` |
-| `O-LPLAN-IGNORED-FIELDS` | Fields made irrelevant by other settings are not diffed (security, Pages, code scanning, Actions) | P1 | verified | `offline/plan/lplan-ignored-fields.yaml` | `plan-semantics.ignored-fields`, `plan-semantics.ignored-org-actions` |
+| `O-LPLAN-ENV-POLICIES` | Environment branch policies are only diffed with the 'selected' deployment branch policy | P1 | verified | `offline/environments/lplan-env-policies.yaml` | `plan-semantics.env-branch-policies-ignored` |
+| `O-LPLAN-FORCED-SECRETS` | Secret values, dummy secrets and --update-secrets / --update-filter / --only-secrets in local-plan | P1 | verified | `offline/secrets/lplan-forced-secrets.yaml` | `cli.plan.update-secrets`, `cli.plan.only-secrets`, `cli.local-plan.dummy-secrets` |
+| `O-LPLAN-FORCED-WEBHOOKS` | Webhook secrets and --update-webhooks / --update-filter in local-plan | P1 | verified | `offline/webhooks/lplan-forced-webhooks.yaml` | `cli.plan.update-webhooks`, `cli.plan.webhook-secret-removal`, `cli.local-plan.dummy-secrets`, `webhooks.org.secret`, `webhooks.repo.secret` |
+| `O-LPLAN-IGNORED-FIELDS` | Fields made irrelevant by other settings are not diffed (security, Pages, code scanning, Actions) | P1 | verified | `offline/repo/lplan-ignored-fields.yaml` | `plan-semantics.ignored-fields`, `plan-semantics.ignored-org-actions` |
 | `O-LPLAN-READ-ONLY-KEYS` | Read-only keys are shown with a note and never counted (plan, two_factor_requirement, template_repository) | P1 | verified | `offline/plan/lplan-read-only.yaml` | `cli.plan.read-only-note`, `org-settings.web-ui.two-factor` |
 | `O-LPLAN-RENAME` | Aliases turn a renamed repository or webhook into a change instead of remove + add | P1 | verified | `offline/plan/lplan-rename.yaml` | `plan-semantics.rename-aliases` |
 | `O-LPLAN-FILTER` | The repository filter keeps other repositories out of the plan, organization objects stay planned | P0 | verified | `offline/plan/lplan-repo-filter.yaml` | `cli.plan.repo-filter` |
 | `O-LPLAN-RESOURCE-TYPES` | local-plan adds, changes and removes every resource type (enterprise plan) | P1 | verified | `offline/plan/lplan-resource-types.yaml` | `plan-semantics.add-block`, `plan-semantics.change-block`, `plan-semantics.remove-block` |
-| `O-LPLAN-WILDCARD` | A webhook url ending with '*' matches the existing hook whose url starts with the prefix | P1 | verified | `offline/plan/lplan-wildcard.yaml` | `plan-semantics.wildcard-keys` |
-| `O-LPLAN-ESCAPING` | Values containing rich markup are printed literally by local-plan and show | P2 | verified | `offline/regressions/changelog/lplan-escaping.yaml` | `regression.440-rich-escaping` |
-| `O-LPLAN-NESTED` | Changes inside nested settings and dicts print as nested blocks with old and new values | P2 | verified | `offline/regressions/changelog/lplan-nested.yaml` | `regression.nested-dict-printing` |
-| `O-VAL-BPR` | Branch protection rule dependencies are validated (errors, warnings, infos) | P1 | verified | `offline/validation/val-bpr.yaml` | `validation.bpr` |
-| `O-VAL-COERCED` | Repository rules that depend on organization settings never fire (coercion at load) | P2 | verified | `offline/validation/val-coerced.yaml` | `validation.repo.pages`, `validation.repo.coerced-rules`, `plan-semantics.coerce.org-projects-pages` |
-| `O-VAL-CUSTOM-PROPERTIES` | Custom property definitions are validated rule by rule | P1 | verified | `offline/validation/val-custom-properties.yaml` | `validation.custom-properties` |
-| `O-VAL-ENVIRONMENTS` | Environment wait timer, branch policy and reviewer settings are validated | P1 | verified | `offline/validation/val-environments.yaml` | `validation.environments` |
-| `O-VAL-INFOS` | Info messages are hidden without -v and printed with -v (archived repositories, ignored review count) | P2 | verified | `offline/validation/val-infos.yaml` | `cli.global.verbosity`, `validation.repo.archived-bpr` |
-| `O-VAL-MERGE-SETTINGS` | Squash and merge commit titles and messages are validated as values and as pairs | P1 | verified | `offline/validation/val-merge-settings.yaml` | `validation.repo.merge-commit-settings` |
-| `O-VAL-ORG-ROLES` | Organization role base roles and permissions are validated | P2 | verified | `offline/validation/val-org-roles.yaml` | `validation.org-roles` |
-| `O-VAL-ORG-RULESETS` | Organization ruleset repository patterns and nested rules are validated | P2 | verified | `offline/validation/val-org-rulesets.yaml` | `validation.org-rulesets` |
-| `O-VAL-ORG-SECRETS` | Organization secret visibility and selected repositories are validated | P2 | verified | `offline/validation/val-org-secrets.yaml` | `validation.org-secrets` |
-| `O-VAL-ORG-SETTINGS` | Organization settings rules (description, discussions source, default permission) | P1 | verified | `offline/validation/val-org-settings.yaml` | `validation.org-settings` |
-| `O-VAL-ORGVAR` | Organization variables should be validated like secrets and repository variables | P1 | verified | `offline/validation/val-org-variables.yaml` | `validation.plan-gate.org-variable-private` |
-| `O-VAL-ORG-WORKFLOWS` | Organization Actions settings are validated (enums and ignored settings) | P1 | verified | `offline/validation/val-org-workflows.yaml` | `validation.org-workflows` |
-| `O-VAL-PAGES-ENTERPRISE` | GitHub Pages visibility is validated on the enterprise plan | P1 | verified | `offline/validation/val-pages-enterprise.yaml` | `validation.repo.pages`, `plan-semantics.coerce.org-projects-pages` |
-| `O-VAL-PAGES` | GitHub Pages build type, legacy source path and the organization site are validated | P1 | verified | `offline/validation/val-pages.yaml` | `validation.repo.pages` |
-| `O-VAL-PLAN-GATES-ENTERPRISE` | The enterprise plan accepts every plan-gated feature | P1 | verified | `offline/validation/val-plan-gates-enterprise.yaml` | `validation.plan-gate.org-rulesets`, `validation.plan-gate.org-secret-private`, `validation.plan-gate.org-roles`, `validation.plan-gate.ruleset-evaluate`, `validation.plan-gate.private-pages`, `validation.plan-gate.private-repo-wiki` |
-| `O-VAL-PLAN-GATES-TEAM` | The team plan lifts the team gates and keeps the enterprise gates | P1 | verified | `offline/validation/val-plan-gates-team.yaml` | `validation.plan-gate.org-rulesets`, `validation.plan-gate.org-secret-private`, `validation.plan-gate.org-roles`, `validation.plan-gate.ruleset-evaluate`, `validation.plan-gate.private-pages`, `validation.plan-gate.private-repo-wiki` |
-| `O-VAL-PLAN-GATES` | Plan-gated features are refused or flagged on the free plan | P0 | verified | `offline/validation/val-plan-gates.yaml` | `validation.plan-gate.org-rulesets`, `validation.plan-gate.org-secret-private`, `validation.plan-gate.org-roles`, `validation.plan-gate.ruleset-evaluate`, `validation.plan-gate.private-pages`, `validation.plan-gate.private-repo-wiki` |
-| `O-VAL-REPO-WORKFLOWS` | Repository Actions settings are validated against the organization Actions settings | P2 | verified | `offline/validation/val-repo-workflows.yaml` | `validation.repo-workflows` |
-| `O-VAL-REPO` | Repository rules (description, topics, forking, secret scanning, template, fork, properties, code scanning) | P1 | verified | `offline/validation/val-repository.yaml` | `validation.repo.description-topics`, `validation.repo.forking`, `validation.repo.secret-scanning`, `validation.repo.template-fork`, `validation.repo.custom-properties`, `validation.repo.code-scanning` |
-| `O-VAL-RULESET-NESTED` | Ruleset pull request and merge queue settings are validated | P1 | verified | `offline/validation/val-ruleset-nested.yaml` | `validation.ruleset-nested` |
-| `O-VAL-RULESETS` | Repository ruleset target, enforcement, ref patterns and deployment rules are validated | P1 | verified | `offline/validation/val-rulesets.yaml` | `validation.rulesets` |
-| `O-VAL-SCHEMA` | Unknown properties and schema violations of the configuration | P1 | verified | `offline/validation/val-schema.yaml` | `validation.repo.team-permissions`, `validation.schema.unknown-properties`, `validation.schema.type-errors`, `regression.718-unknown-properties` |
-| `O-VAL-SECRETS` | Secret names and values are validated at every level | P1 | verified | `offline/validation/val-secrets.yaml` | `config.secret-references`, `validation.secrets` |
-| `O-VAL-VARIABLES` | Repository and environment variable names are validated | P1 | verified | `offline/validation/val-variables.yaml` | `validation.variables` |
-| `O-VAL-WEBHOOKS` | Webhook content type, SSL flag and secret notices are validated | P1 | verified | `offline/validation/val-webhooks.yaml` | `validation.webhooks` |
+| `O-LPLAN-WILDCARD` | A webhook url ending with '*' matches the existing hook whose url starts with the prefix | P1 | verified | `offline/webhooks/lplan-wildcard.yaml` | `plan-semantics.wildcard-keys` |
+| `O-LPLAN-ESCAPING` | Values containing rich markup are printed literally by local-plan and show | P2 | verified | `offline/cli/lplan-escaping.yaml` | `regression.440-rich-escaping` |
+| `O-LPLAN-NESTED` | Changes inside nested settings and dicts print as nested blocks with old and new values | P2 | verified | `offline/plan/lplan-nested.yaml` | `regression.nested-dict-printing` |
+| `O-VAL-BPR` | Branch protection rule dependencies are validated (errors, warnings, infos) | P1 | verified | `offline/bpr/val-bpr.yaml` | `validation.bpr` |
+| `O-VAL-COERCED` | Repository rules that depend on organization settings never fire (coercion at load) | P2 | verified | `offline/repo/val-coerced.yaml` | `validation.repo.pages`, `validation.repo.coerced-rules`, `plan-semantics.coerce.org-projects-pages` |
+| `O-VAL-CUSTOM-PROPERTIES` | Custom property definitions are validated rule by rule | P1 | verified | `offline/custom-properties/val-custom-properties.yaml` | `validation.custom-properties` |
+| `O-VAL-ENVIRONMENTS` | Environment wait timer, branch policy and reviewer settings are validated | P1 | verified | `offline/environments/val-environments.yaml` | `validation.environments` |
+| `O-VAL-INFOS` | Info messages are hidden without -v and printed with -v (archived repositories, ignored review count) | P2 | verified | `offline/cli/val-infos.yaml` | `cli.global.verbosity`, `validation.repo.archived-bpr` |
+| `O-VAL-MERGE-SETTINGS` | Squash and merge commit titles and messages are validated as values and as pairs | P1 | verified | `offline/repo/val-merge-settings.yaml` | `validation.repo.merge-commit-settings` |
+| `O-VAL-ORG-ROLES` | Organization role base roles and permissions are validated | P2 | verified | `offline/org-roles/val-org-roles.yaml` | `validation.org-roles` |
+| `O-VAL-ORG-RULESETS` | Organization ruleset repository patterns and nested rules are validated | P2 | verified | `offline/rulesets/val-org-rulesets.yaml` | `validation.org-rulesets` |
+| `O-VAL-ORG-SECRETS` | Organization secret visibility and selected repositories are validated | P2 | verified | `offline/secrets/val-org-secrets.yaml` | `validation.org-secrets` |
+| `O-VAL-ORG-SETTINGS` | Organization settings rules (description, discussions source, default permission) | P1 | verified | `offline/org-settings/val-org-settings.yaml` | `validation.org-settings` |
+| `O-VAL-ORGVAR` | Organization variables should be validated like secrets and repository variables | P1 | verified | `offline/variables/val-org-variables.yaml` | `validation.plan-gate.org-variable-private` |
+| `O-VAL-ORG-WORKFLOWS` | Organization Actions settings are validated (enums and ignored settings) | P1 | verified | `offline/workflows/val-org-workflows.yaml` | `validation.org-workflows` |
+| `O-VAL-PAGES-ENTERPRISE` | GitHub Pages visibility is validated on the enterprise plan | P1 | verified | `offline/repo/val-pages-enterprise.yaml` | `validation.repo.pages`, `plan-semantics.coerce.org-projects-pages` |
+| `O-VAL-PAGES` | GitHub Pages build type, legacy source path and the organization site are validated | P1 | verified | `offline/repo/val-pages.yaml` | `validation.repo.pages` |
+| `O-VAL-PLAN-GATES-ENTERPRISE` | The enterprise plan accepts every plan-gated feature | P1 | verified | `offline/org-settings/val-plan-gates-enterprise.yaml` | `validation.plan-gate.org-rulesets`, `validation.plan-gate.org-secret-private`, `validation.plan-gate.org-roles`, `validation.plan-gate.ruleset-evaluate`, `validation.plan-gate.private-pages`, `validation.plan-gate.private-repo-wiki` |
+| `O-VAL-PLAN-GATES-TEAM` | The team plan lifts the team gates and keeps the enterprise gates | P1 | verified | `offline/org-settings/val-plan-gates-team.yaml` | `validation.plan-gate.org-rulesets`, `validation.plan-gate.org-secret-private`, `validation.plan-gate.org-roles`, `validation.plan-gate.ruleset-evaluate`, `validation.plan-gate.private-pages`, `validation.plan-gate.private-repo-wiki` |
+| `O-VAL-PLAN-GATES` | Plan-gated features are refused or flagged on the free plan | P0 | verified | `offline/org-settings/val-plan-gates.yaml` | `validation.plan-gate.org-rulesets`, `validation.plan-gate.org-secret-private`, `validation.plan-gate.org-roles`, `validation.plan-gate.ruleset-evaluate`, `validation.plan-gate.private-pages`, `validation.plan-gate.private-repo-wiki` |
+| `O-VAL-REPO-WORKFLOWS` | Repository Actions settings are validated against the organization Actions settings | P2 | verified | `offline/workflows/val-repo-workflows.yaml` | `validation.repo-workflows` |
+| `O-VAL-REPO` | Repository rules (description, topics, forking, secret scanning, template, fork, properties, code scanning) | P1 | verified | `offline/repo/val-repository.yaml` | `validation.repo.description-topics`, `validation.repo.forking`, `validation.repo.secret-scanning`, `validation.repo.template-fork`, `validation.repo.custom-properties`, `validation.repo.code-scanning` |
+| `O-VAL-RULESET-NESTED` | Ruleset pull request and merge queue settings are validated | P1 | verified | `offline/rulesets/val-ruleset-nested.yaml` | `validation.ruleset-nested` |
+| `O-VAL-RULESETS` | Repository ruleset target, enforcement, ref patterns and deployment rules are validated | P1 | verified | `offline/rulesets/val-rulesets.yaml` | `validation.rulesets` |
+| `O-VAL-SCHEMA` | Unknown properties and schema violations of the configuration | P1 | verified | `offline/template/val-schema.yaml` | `validation.repo.team-permissions`, `validation.schema.unknown-properties`, `validation.schema.type-errors`, `regression.718-unknown-properties` |
+| `O-VAL-SECRETS` | Secret names and values are validated at every level | P1 | verified | `offline/secrets/val-secrets.yaml` | `config.secret-references`, `validation.secrets` |
+| `O-VAL-VARIABLES` | Repository and environment variable names are validated | P1 | verified | `offline/variables/val-variables.yaml` | `validation.variables` |
+| `O-VAL-WEBHOOKS` | Webhook content type, SSL flag and secret notices are validated | P1 | verified | `offline/webhooks/val-webhooks.yaml` | `validation.webhooks` |
 
 ### Live CLI scenarios (`scenarios/cli`)
 
 | Id | Scenario | Priority | Status | Implemented by | Features (coverage.yaml) |
 |---|---|---|---|---|---|
-| `cli.org.actions-allowed` | Organization allowed actions and fork pull request approval policy | P1 | implemented | `cli/org/actions-allowed.yaml` | `org-workflows.allowed-actions`, `org-workflows.fork-pr-approval`, `repo-workflows.allowed-actions` |
-| `cli.org.actions-enabled-repositories` | Organization Actions availability for all or selected repositories | P1 | implemented | `cli/org/actions-enabled.yaml` | `org-workflows.enabled-repositories`, `repo-workflows.enabled` |
-| `cli.org.cache-size` | Organization Actions cache storage limit | P2 | implemented | `cli/org/cache-size.yaml` | `org-workflows.cache-size` |
-| `cli.custom-property.flag` | true_false custom property and removing a property definition | P2 | implemented | `cli/org/custom-property-flag.yaml` | `custom-properties.true-false`, `custom-properties.remove`, `regression.653-string-property` |
-| `cli.custom-property.required` | Required custom property with a default value | P2 | implemented | `cli/org/custom-property-required.yaml` | `plan-semantics.coerce.required-custom-properties`, `custom-properties.required-default` |
-| `cli.environment.secrets` | Environment and repository secrets and variables (add, change, forced update, remove) | P1 | implemented | `cli/org/environment-secrets.yaml` | `cli.plan.update-secrets`, `secrets-variables.env-secret.lifecycle`, `secrets-variables.env-variable.lifecycle`, `secrets-variables.remove` |
-| `cli.kb.org-secret-same-apply` | Org secret selecting a repository created in the same apply (known bug KB-022, secret variant) | P2 | implemented | `cli/org/kb-org-secret-same-apply.yaml` | `plan-semantics.patch-order`, `secrets-variables.org-secret.selected-repositories` |
-| `cli.kb.team-privacy-message` | Team privacy validation message names the accepted values (known bug KB-037) | P2 | implemented | `cli/org/kb-team-privacy-message.yaml` | `validation.teams` |
-| `cli.org.member-privileges` | Organization member privileges, repository creation, forking and Pages creation | P1 | implemented | `cli/org/member-privileges.yaml` | `org-settings.member-privileges`, `org-settings.pages-creation` |
-| `cli.org.profile` | Organization profile (name, blog, location, company, email, twitter_username) | P0 | implemented | `cli/org/profile.yaml` | `org-settings.profile` |
-| `cli.org.secret-private` | Organization secret visible to private repositories (Team and Enterprise plans) | P2 | implemented | `cli/org/secret-private.yaml` | `secrets-variables.org-secret.lifecycle` |
-| `cli.org.secret` | Organization secrets (values, visibility, selected repositories, forced update, removal) | P0 | implemented | `cli/org/secret.yaml` | `cli.plan.update-secrets`, `config.secret-references`, `secrets-variables.org-secret.lifecycle`, `secrets-variables.org-secret.selected-repositories`, `secrets-variables.remove` |
-| `cli.org.security-managers` | Security manager teams (assigned and removed to match) | P2 | implemented | `cli/org/security-managers.yaml` | `plan-semantics.patch-order`, `org-settings.security-managers` |
-| `cli.org.signoff` | Organization web commit signoff and the repositories that inherit it | P0 | implemented | `cli/org/signoff.yaml` | `plan-semantics.coerce.org-signoff`, `org-settings.web-commit-signoff`, `repositories.signoff` |
-| `cli.team.members` | Team members (added, removed, then unmanaged with skip_members) | P1 | implemented | `cli/org/team-members.yaml` | `teams.members` |
-| `cli.team.settings` | Team privacy (visible, secret) and notifications | P1 | implemented | `cli/org/team-settings.yaml` | `teams.privacy`, `teams.notifications` |
-| `cli.validate.team-non-member` | Team validation with skip_non_organization_members and a user outside the organization | P1 | implemented | `cli/org/validate-team-non-member.yaml` | `validation.teams`, `teams.members` |
-| `cli.validate.teams` | Team validation rules (privacy values, skip_members with members) | P1 | implemented | `cli/org/validate-teams.yaml` | `validation.teams` |
-| `cli.org.workflow-permissions` | Organization default workflow permissions and pull request approvals by GitHub Actions | P0 | implemented | `cli/org/workflow-permissions.yaml` | `org-workflows.default-permissions`, `repo-workflows.default-permissions` |
-| `cli.protection.app-checks` | Status checks, allowances and a bypass actor bound to an installed GitHub App | P1 | implemented | `cli/protection/app-checks.yaml` | `branch-protection.review-dismissal`, `branch-protection.bypass-allowances`, `branch-protection.status-checks`, `branch-protection.push-restrictions`, `rulesets.bypass-actors`, `rulesets.status-checks`, `regression.695-700-491-status-check-mapping` |
-| `cli.bpr.allowances` | Branch protection allowances for users and teams | P1 | implemented | `cli/protection/bpr-allowances.yaml` | `branch-protection.review-dismissal`, `branch-protection.bypass-allowances`, `branch-protection.push-restrictions` |
-| `cli.bpr.deployments` | Branch protection rule requiring successful deployments | P2 | implemented | `cli/protection/bpr-deployments.yaml` | `branch-protection.deployments` |
-| `cli.bpr.lock` | Lock branches matching a branch protection rule | P2 | implemented | `cli/protection/bpr-lock.yaml` | `branch-protection.lock-branch` |
-| `cli.bpr.settings` | Branch protection review, history, force push and status check settings | P0 | implemented | `cli/protection/bpr-settings.yaml` | `branch-protection.pull-request-reviews`, `branch-protection.status-checks`, `branch-protection.history-and-signatures`, `branch-protection.force-push-deletion-admin` |
-| `cli.environment.policies` | Environment branch and tag policies, protected branches, environment removal | P0 | implemented | `cli/protection/environment-policies.yaml` | `environments.lifecycle`, `environments.branch-policies` |
-| `cli.environment.private` | Environment with branch and tag policies on a private repository (Team and Enterprise) | P2 | implemented | `cli/protection/environment-private.yaml` | `environments.lifecycle`, `environments.branch-policies` |
-| `cli.environment.reviewers` | Environment required reviewers (team and user) on a public repository | P1 | implemented | `cli/protection/environment-reviewers.yaml` | `environments.reviewers` |
-| `cli.ruleset.bypass` | Ruleset bypass actors (roles and teams) and their bypass modes | P1 | implemented | `cli/protection/ruleset-bypass.yaml` | `rulesets.bypass-actors` |
-| `cli.ruleset.deployments` | Ruleset requiring successful deployments | P2 | implemented | `cli/protection/ruleset-deployments.yaml` | `rulesets.deployments` |
-| `cli.ruleset.merge-queue` | Ruleset requiring a merge queue | P2 | implemented | `cli/protection/ruleset-merge-queue.yaml` | `rulesets.merge-queue` |
-| `cli.ruleset.pull-request` | Ruleset pull request parameters and removal of the rule | P1 | implemented | `cli/protection/ruleset-pull-request.yaml` | `rulesets.pull-request` |
-| `cli.ruleset.rules` | Ruleset simple rules on a branch ruleset and a tag ruleset | P1 | implemented | `cli/protection/ruleset-rules.yaml` | `rulesets.targets`, `rulesets.rules` |
-| `cli.ruleset.status-checks` | Ruleset status checks with do_not_enforce_on_create and an integration id | P1 | implemented | `cli/protection/ruleset-status-checks.yaml` | `rulesets.status-checks`, `regression.695-700-491-status-check-mapping` |
-| `cli.repo.actions` | Repository Actions enablement, allowed actions and fork pull request approval | P1 | implemented | `cli/repo/repo-actions.yaml` | `repo-workflows.enabled`, `repo-workflows.allowed-actions`, `repo-workflows.default-permissions`, `repo-workflows.fork-pr-approval` |
+| `cli.org.actions-allowed` | Organization allowed actions and fork pull request approval policy | P1 | implemented | `cli/workflows/org-actions-allowed.yaml` | `org-workflows.allowed-actions`, `org-workflows.fork-pr-approval`, `repo-workflows.allowed-actions` |
+| `cli.org.actions-enabled-repositories` | Organization Actions availability for all or selected repositories | P1 | implemented | `cli/workflows/org-actions-enabled.yaml` | `org-workflows.enabled-repositories`, `repo-workflows.enabled` |
+| `cli.org.cache-size` | Organization Actions cache storage limit | P2 | implemented | `cli/workflows/org-cache-size.yaml` | `org-workflows.cache-size` |
+| `cli.custom-property.flag` | true_false custom property and removing a property definition | P2 | implemented | `cli/custom-properties/custom-property-flag.yaml` | `custom-properties.true-false`, `custom-properties.remove`, `regression.653-string-property` |
+| `cli.custom-property.required` | Required custom property with a default value | P2 | implemented | `cli/custom-properties/custom-property-required.yaml` | `plan-semantics.coerce.required-custom-properties`, `custom-properties.required-default` |
+| `cli.environment.secrets` | Environment and repository secrets and variables (add, change, forced update, remove) | P1 | implemented | `cli/environments/environment-secrets.yaml` | `cli.plan.update-secrets`, `secrets-variables.env-secret.lifecycle`, `secrets-variables.env-variable.lifecycle`, `secrets-variables.remove` |
+| `cli.kb.org-secret-same-apply` | Org secret selecting a repository created in the same apply (known bug KB-022, secret variant) | P2 | implemented | `cli/secrets/kb-org-secret-same-apply.yaml` | `plan-semantics.patch-order`, `secrets-variables.org-secret.selected-repositories` |
+| `cli.kb.team-privacy-message` | Team privacy validation message names the accepted values (known bug KB-037) | P2 | implemented | `cli/teams/kb-team-privacy-message.yaml` | `validation.teams` |
+| `cli.org.member-privileges` | Organization member privileges, repository creation, forking and Pages creation | P1 | implemented | `cli/org-settings/member-privileges.yaml` | `org-settings.member-privileges`, `org-settings.pages-creation` |
+| `cli.org.profile` | Organization profile (name, blog, location, company, email, twitter_username) | P0 | implemented | `cli/org-settings/profile.yaml` | `org-settings.profile` |
+| `cli.org.secret-private` | Organization secret visible to private repositories (Team and Enterprise plans) | P2 | implemented | `cli/secrets/org-secret-private.yaml` | `secrets-variables.org-secret.lifecycle` |
+| `cli.org.secret` | Organization secrets (values, visibility, selected repositories, forced update, removal) | P0 | implemented | `cli/secrets/org-secret.yaml` | `cli.plan.update-secrets`, `config.secret-references`, `secrets-variables.org-secret.lifecycle`, `secrets-variables.org-secret.selected-repositories`, `secrets-variables.remove` |
+| `cli.org.security-managers` | Security manager teams (assigned and removed to match) | P2 | implemented | `cli/org-settings/security-managers.yaml` | `plan-semantics.patch-order`, `org-settings.security-managers` |
+| `cli.org.signoff` | Organization web commit signoff and the repositories that inherit it | P0 | implemented | `cli/org-settings/signoff.yaml` | `plan-semantics.coerce.org-signoff`, `org-settings.web-commit-signoff`, `repositories.signoff` |
+| `cli.team.members` | Team members (added, removed, then unmanaged with skip_members) | P1 | implemented | `cli/teams/team-members.yaml` | `teams.members` |
+| `cli.team.settings` | Team privacy (visible, secret) and notifications | P1 | implemented | `cli/teams/team-settings.yaml` | `teams.privacy`, `teams.notifications` |
+| `cli.validate.team-non-member` | Team validation with skip_non_organization_members and a user outside the organization | P1 | implemented | `cli/teams/validate-team-non-member.yaml` | `validation.teams`, `teams.members` |
+| `cli.validate.teams` | Team validation rules (privacy values, skip_members with members) | P1 | implemented | `cli/teams/validate-teams.yaml` | `validation.teams` |
+| `cli.org.workflow-permissions` | Organization default workflow permissions and pull request approvals by GitHub Actions | P0 | implemented | `cli/workflows/org-workflow-permissions.yaml` | `org-workflows.default-permissions`, `repo-workflows.default-permissions` |
+| `cli.protection.app-checks` | Status checks, allowances and a bypass actor bound to an installed GitHub App | P1 | implemented | `cli/bpr/app-checks.yaml` | `branch-protection.review-dismissal`, `branch-protection.bypass-allowances`, `branch-protection.status-checks`, `branch-protection.push-restrictions`, `rulesets.bypass-actors`, `rulesets.status-checks`, `regression.695-700-491-status-check-mapping` |
+| `cli.bpr.allowances` | Branch protection allowances for users and teams | P1 | implemented | `cli/bpr/bpr-allowances.yaml` | `branch-protection.review-dismissal`, `branch-protection.bypass-allowances`, `branch-protection.push-restrictions` |
+| `cli.bpr.deployments` | Branch protection rule requiring successful deployments | P2 | implemented | `cli/bpr/bpr-deployments.yaml` | `branch-protection.deployments` |
+| `cli.bpr.lock` | Lock branches matching a branch protection rule | P2 | implemented | `cli/bpr/bpr-lock.yaml` | `branch-protection.lock-branch` |
+| `cli.bpr.settings` | Branch protection review, history, force push and status check settings | P0 | implemented | `cli/bpr/bpr-settings.yaml` | `branch-protection.pull-request-reviews`, `branch-protection.status-checks`, `branch-protection.history-and-signatures`, `branch-protection.force-push-deletion-admin` |
+| `cli.environment.policies` | Environment branch and tag policies, protected branches, environment removal | P0 | implemented | `cli/environments/environment-policies.yaml` | `environments.lifecycle`, `environments.branch-policies` |
+| `cli.environment.private` | Environment with branch and tag policies on a private repository (Team and Enterprise) | P2 | implemented | `cli/environments/environment-private.yaml` | `environments.lifecycle`, `environments.branch-policies` |
+| `cli.environment.reviewers` | Environment required reviewers (team and user) on a public repository | P1 | implemented | `cli/environments/environment-reviewers.yaml` | `environments.reviewers` |
+| `cli.ruleset.bypass` | Ruleset bypass actors (roles and teams) and their bypass modes | P1 | implemented | `cli/rulesets/ruleset-bypass.yaml` | `rulesets.bypass-actors` |
+| `cli.ruleset.deployments` | Ruleset requiring successful deployments | P2 | implemented | `cli/rulesets/ruleset-deployments.yaml` | `rulesets.deployments` |
+| `cli.ruleset.merge-queue` | Ruleset requiring a merge queue | P2 | implemented | `cli/rulesets/ruleset-merge-queue.yaml` | `rulesets.merge-queue` |
+| `cli.ruleset.pull-request` | Ruleset pull request parameters and removal of the rule | P1 | implemented | `cli/rulesets/ruleset-pull-request.yaml` | `rulesets.pull-request` |
+| `cli.ruleset.rules` | Ruleset simple rules on a branch ruleset and a tag ruleset | P1 | implemented | `cli/rulesets/ruleset-rules.yaml` | `rulesets.targets`, `rulesets.rules` |
+| `cli.ruleset.status-checks` | Ruleset status checks with do_not_enforce_on_create and an integration id | P1 | implemented | `cli/rulesets/ruleset-status-checks.yaml` | `rulesets.status-checks`, `regression.695-700-491-status-check-mapping` |
+| `cli.repo.actions` | Repository Actions enablement, allowed actions and fork pull request approval | P1 | implemented | `cli/workflows/repo-actions.yaml` | `repo-workflows.enabled`, `repo-workflows.allowed-actions`, `repo-workflows.default-permissions`, `repo-workflows.fork-pr-approval` |
 | `cli.repo.archive` | Archive a repository, ignore changes while archived, unarchive it | P0 | implemented | `cli/repo/repo-archive.yaml` | `repositories.archive` |
-| `cli.repo.cache-limit` | Repository Actions cache storage limit | P2 | implemented | `cli/repo/repo-cache-limit.yaml` | `repo-workflows.cache-size` |
+| `cli.repo.cache-limit` | Repository Actions cache storage limit | P2 | implemented | `cli/workflows/repo-cache-limit.yaml` | `repo-workflows.cache-size` |
 | `cli.repo.features` | Repository features and merge settings round trip | P0 | implemented | `cli/repo/repo-features.yaml` | `repositories.features`, `repositories.merge-methods` |
 | `cli.repo.fork` | Create a repository as a fork of a public repository | P2 | implemented | `cli/repo/repo-fork.yaml` | `repositories.fork` |
 | `cli.repo.merge-messages` | Squash and merge commit title and message defaults | P1 | implemented | `cli/repo/repo-merge-messages.yaml` | `repositories.merge-commit-messages` |
@@ -287,17 +287,17 @@ yet. Known-bug items assert the correct behaviour and run as non-strict expected
 | `cli.repo.webhook-secret` | Repository webhook secrets (plain value, dummy, --update-webhooks, removal) | P1 | implemented | `cli/webhooks/repo-webhook-secret.yaml` | `cli.plan.update-webhooks`, `webhooks.repo.secret` |
 | `cli.repo.webhook-settings` | Repository webhook settings (events, content_type, active, insecure_ssl) | P1 | implemented | `cli/webhooks/repo-webhook-settings.yaml` | `webhooks.repo.settings` |
 
-### Regressions (`scenarios/regressions`)
+### Regressions (tag `regression`, in `scenarios/cli/<domain>/`)
 
 | Id | Scenario | Priority | Status | Implemented by | Features (coverage.yaml) |
 |---|---|---|---|---|---|
-| `regression.user-bypass-actors` | an individual user ('@login') as a ruleset bypass actor | P2 | implemented | `regressions/user-bypass-actors.yaml` (fixed_in 1.7.0.dev7) | `rulesets.bypass-actors`, `regression.779-user-bypass-actors` |
+| `regression.user-bypass-actors` | an individual user ('@login') as a ruleset bypass actor | P2 | implemented | `cli/rulesets/user-bypass-actors.yaml` (fixed_in 1.7.0.dev7) | `rulesets.bypass-actors`, `regression.779-user-bypass-actors` |
 
 ### Enterprise scenarios (`scenarios/enterprise`)
 
 | Id | Scenario | Priority | Status | Implemented by | Features (coverage.yaml) |
 |---|---|---|---|---|---|
-| `enterprise.ruleset-merge-queue-private` | Ruleset requiring a merge queue on a private repository (Enterprise) | P2 | implemented | `enterprise/ruleset-merge-queue-private.yaml` | `rulesets.merge-queue` |
+| `enterprise.ruleset-merge-queue-private` | Ruleset requiring a merge queue on a private repository (Enterprise) | P2 | implemented | `enterprise/rulesets/ruleset-merge-queue-private.yaml` | `rulesets.merge-queue` |
 
 ### Offline Python tests (`tests/offline`)
 

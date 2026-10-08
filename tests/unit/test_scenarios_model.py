@@ -16,10 +16,12 @@ from otterdog_e2e.scenarios.model import (
     ScenarioError,
     StepSpec,
     ValidateSpec,
+    domain_problem,
     fragment_problems,
     load_scenario,
     load_scenarios,
     render_step,
+    scenario_domain,
     scenario_files,
     tier_directory,
 )
@@ -164,10 +166,11 @@ def test_validate_ok_contradicting_errors(tmp_path: Path) -> None:
 def test_tier_must_match_directory(tmp_path: Path) -> None:
     """A tier that does not belong in its directory is refused; outside known dirs the tier is required."""
     assert_error(tmp_path, "does not belong", header="tier: cli", tier_dir="offline")
-    assert_error(tmp_path, "does not belong", header="tier: offline", tier_dir="regressions")
+    assert_error(tmp_path, "does not belong", header="tier: offline", tier_dir="enterprise")
     assert_error(tmp_path, "missing 'tier'", tier_dir="elsewhere")
+    assert_error(tmp_path, "missing 'tier'", tier_dir="regressions")  # regressions live in the domains of scenarios/cli
     assert load_text(tmp_path, header="tier: enterprise", tier_dir="elsewhere").tier == "enterprise"
-    assert load_text(tmp_path, tier_dir="regressions").tier == "cli"
+    assert load_text(tmp_path, tier_dir="cli").tier == "cli"
 
 
 def test_tier_comes_from_the_directory_below_scenarios(tmp_path: Path) -> None:
@@ -177,13 +180,49 @@ def test_tier_comes_from_the_directory_below_scenarios(tmp_path: Path) -> None:
     _, text = scenario_yaml()
     assert load_scenario(write(root, "offline/cli/output/case.yaml", text)).tier == "offline"
     assert load_scenario(write(root, "cli/org/case.yaml", text)).tier == "cli"
-    assert load_scenario(write(root, "regressions/changelog/case.yaml", text)).tier == "cli"
     assert load_scenario(write(root, "enterprise/org/case.yaml", text)).tier == "enterprise"
     with pytest.raises(ScenarioError, match=r"does not belong in scenarios/offline/"):
         load_scenario(write(root, "offline/cli/bad.yaml", "tier: cli\n" + text))
     assert tier_directory(root / "cli" / "org" / "case.yaml") == "cli"
-    assert tier_directory(root / "offline" / "regressions" / "changelog" / "case.yaml") == "offline"
+    assert tier_directory(root / "offline" / "cli" / "case.yaml") == "offline"
     assert tier_directory(tmp_path / "elsewhere" / "case.yaml") is None
+
+
+def test_domain_directories(tmp_path: Path) -> None:
+    """scenarios/<tier>/<domain>/<file>.yaml: the domain is the directory right below the tier directory (an inner
+    tier name included); domain_problem refuses files outside a domain directory, unknown or nested directories and a
+    model domain without its tag, and ignores files outside the tier directories."""
+    root = tmp_path / "scenarios"
+    assert scenario_domain(root / "offline" / "cli" / "case.yaml") == "cli"
+    assert scenario_domain(root / "cli" / "repo" / "sub" / "case.yaml") == "repo"
+    assert scenario_domain(root / "cli" / "case.yaml") is None
+    assert scenario_domain(tmp_path / "elsewhere" / "case.yaml") is None
+    _, text = scenario_yaml(header="tags: [repo]")
+
+    def problem(relative: str, body: str = text) -> str | None:
+        return domain_problem(load_scenario(write(root, relative, body)))
+
+    assert problem("cli/repo/case.yaml") is None
+    assert problem("cli/plan/case.yaml") is None  # cross-cutting domains need no tag
+    assert "domain directory scenarios/<tier>/<domain>/" in str(problem("cli/case.yaml"))
+    assert "'org' is not a domain directory" in str(problem("cli/org/case.yaml"))
+    assert "no subdirectory below the domain directory 'repo'" in str(problem("cli/repo/sub/case.yaml"))
+    assert "carries the 'teams' tag" in str(problem("cli/teams/case.yaml"))
+    assert domain_problem(load_scenario(write(tmp_path, "elsewhere/case.yaml", "tier: cli\n" + text))) is None
+
+
+def test_cases_narrow_the_scenario_to_one_step(tmp_path: Path) -> None:
+    """Scenario.cases: one copy per step (same id and metadata), ``case`` names the step, ``case_id`` <id>/<step>."""
+    scenario = load_scenario(
+        write(tmp_path, "cli/repo/case.yaml", "id: cli.x\ntitle: x\ntags: [repo]\nsteps: [{name: a}, {name: b}]\n")
+    )
+    assert (scenario.case, scenario.case_id) == (None, "cli.x")
+    cases = scenario.cases()
+    assert [(case.id, case.case, case.case_id, [s.name for s in case.steps]) for case in cases] == [
+        ("cli.x", "a", "cli.x/a", ["a"]),
+        ("cli.x", "b", "cli.x/b", ["b"]),
+    ]
+    assert cases[0].tags == scenario.tags and len(scenario.steps) == 2
 
 
 @pytest.mark.parametrize(
@@ -303,7 +342,7 @@ def test_load_scenarios_ignores_known_bugs_and_dotfiles(tmp_path: Path) -> None:
 def test_duplicate_ids_across_files(tmp_path: Path) -> None:
     """Scenario ids are unique within a directory tree."""
     write(tmp_path, "cli/a.yaml", MINIMAL)
-    write(tmp_path, "regressions/b.yaml", MINIMAL)
+    write(tmp_path, "cli/repo/b.yaml", MINIMAL)
     with pytest.raises(ScenarioError, match=r"duplicate scenario id 'cli\.repo\.basic'"):
         load_scenarios(tmp_path)
 

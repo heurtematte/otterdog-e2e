@@ -1,8 +1,8 @@
 """Scenario lint: every step of every live scenario validated offline with the SUT CLI (no GitHub, no target).
 
-Each step of scenarios/cli, scenarios/regressions and scenarios/enterprise is rendered for the offline organization
-``e2e-offline`` (its description carries the safety marker; plan = ``variables.plan``, else the scenario's
-``min_plan``) with the SUT's own examples/template vendored, then checked with ``validate --local`` through the same
+Each step of scenarios/cli and scenarios/enterprise is rendered for the offline organization ``e2e-offline`` (its
+description carries the safety marker; plan = ``variables.plan``, else the scenario's ``min_plan``) with the SUT's
+own examples/template vendored, then checked with ``validate --local`` through the same
 machinery as the offline tier (OfflineEngine variables and renderer, offline OtterdogCli: dummy token, no network).
 Broken jsonnet, misplaced or misspelled fields (otterdog's "ignoring unknown properties" warning), bad library or
 fragment files and wrong expectations show up here, before any live run.
@@ -48,7 +48,7 @@ from otterdog_e2e.scenarios.model import Scenario, StepSpec, ValidateSpec, offli
 from otterdog_e2e.scenarios.offline import OfflineEngine, offline_run_context
 from otterdog_e2e.sut.cli_install import InstalledCli
 
-LIVE_DIRS = ("cli", "regressions", "enterprise")
+LIVE_DIRS = ("cli", "enterprise")
 TAIL_LINES = 25
 CRASH_MARKERS = ("Traceback (most recent call last)", "object has no attribute")
 CRASH_PROBLEM_PREFIX = "otterdog crashed"

@@ -8,8 +8,9 @@ Without paths, the files of the work tree under scenarios/ and tests/ that ``git
   or sha spec, expected delta steps of the scenario, no duplicates), an id unique across the scenario directories, the
   references of each change consistent across the repository (one ``base`` and one ``template``: changes.conflicts),
   ``known_bug`` ids that exist and link back (known_bugs.check_references, step-level rules included), and the
-  conventions the unit tests enforce (an id and a file name naming the behaviour, never a PR number; live: id prefix
-  of the directory, a model area tag, known-bug tag and priority, the regression documentation, the plan of
+  conventions the unit tests enforce (an id and a file name naming the behaviour, never a PR number; the file in a
+  domain directory ``scenarios/<tier>/<domain>/``; live: id prefix of the tier, ``regression.`` for the scenarios
+  tagged ``regression``, a model area tag, known-bug tag and priority, the regression documentation, the plan of
   enterprise scenarios; offline: a title, a description of at least 20 words, tags of the vocabulary starting with
   ``offline``, ``observe: true``);
 * scenarios/coverage.yaml: every check of the coverage matrix tests (coverage_matrix.MatrixProject.all_problems,
@@ -45,8 +46,12 @@ COVERAGE_NAME = "coverage.yaml"
 KNOWN_BUGS_NAME = "known_bugs.yaml"
 JSONNET_SUFFIXES = (".jsonnet", ".libsonnet")
 YAML_SUFFIXES = (".yaml", ".yml")
-LIVE_DIRS = ("cli", "regressions", "enterprise")
-ID_PREFIXES = {"cli": "cli.", "regressions": "regression.", "enterprise": "enterprise."}
+LIVE_DIRS = ("cli", "enterprise")
+ID_PREFIXES = {"cli": "cli.", "enterprise": "enterprise."}
+# a live regression (tag REGRESSION_TAG) lives in the domain of the feature it guards; its id starts with
+# REGRESSION_PREFIX instead of the tier's prefix
+REGRESSION_TAG = "regression"
+REGRESSION_PREFIX = "regression."
 OFFLINE_MIN_DESCRIPTION_WORDS = 20
 # a run of 3+ digits in a scenario id or file name reads as a PR or issue number: name the behaviour instead
 NUMBER_RE = re.compile(r"(?<![0-9])[0-9]{3,}(?![0-9])")
@@ -310,14 +315,21 @@ class Checker:
 
     def _conventions(self, path: Path, scenario: Scenario) -> None:
         """The conventions of tests/unit/test_yaml_cli.py (live) and tests/unit/test_yaml_offline.py (offline)."""
+        from otterdog_e2e.scenarios.model import domain_problem
         from otterdog_e2e.selection import MODEL_TAGS, SCENARIO_TAGS
 
         numbers = {reference.change.pr for reference in scenario.references if reference.change.pr is not None}
         self._named_after_behaviour(path, scenario.id, numbers)
+        problem = domain_problem(scenario)
+        if problem is not None:
+            self.problem(path, "file", problem)
         top = _top_dir(path, self.root)
         if top in LIVE_DIRS:
-            if not scenario.id.startswith(ID_PREFIXES[top]):
-                self.problem(path, "id", f"ids of scenarios/{top}/ start with {ID_PREFIXES[top]!r}")
+            regression = REGRESSION_TAG in scenario.tags or scenario.id.startswith(REGRESSION_PREFIX)
+            prefix = REGRESSION_PREFIX if regression and top == "cli" else ID_PREFIXES[top]
+            if not scenario.id.startswith(prefix):
+                what = "regressions" if prefix == REGRESSION_PREFIX else f"scenarios/{top}/"
+                self.problem(path, "id", f"ids of {what} start with {prefix!r}")
             if not set(MODEL_TAGS) & set(scenario.tags):
                 self.problem(
                     path, "tags", f"no model area tag ({', '.join(MODEL_TAGS)}): path-based selection misses it"
@@ -328,7 +340,7 @@ class Checker:
                 )
             if (scenario.tier == "enterprise") != (scenario.min_plan == "enterprise"):
                 self.problem(path, "min_plan", "scenarios/enterprise need min_plan enterprise, the others never do")
-            if top == "regressions":
+            if regression:
                 self._regression(path, scenario)
         elif top == "offline":
             if len(scenario.description.split()) < OFFLINE_MIN_DESCRIPTION_WORDS:

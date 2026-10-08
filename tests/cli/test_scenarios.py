@@ -1,4 +1,4 @@
-"""Live CLI tier: every YAML scenario of scenarios/cli and scenarios/regressions (SPEC 12.4, 19).
+"""Live CLI tier: every YAML scenario of scenarios/cli, regressions included (SPEC 12.4, 19).
 
 One item per scenario, parametrized at collection (``test_cli_scenario[<scenario id>]``); the plugin adds the
 scenario marks (live, requires, plan, identities, tags, known_bug, org_level, scenario, timeout) and skips every item
@@ -21,11 +21,11 @@ from otterdog_e2e.scenarios.collect import generate_scenario_tests
 if TYPE_CHECKING:
     from otterdog_e2e.scenarios.model import Scenario
 
-SCENARIO_DIRS = ("cli", "regressions")
+SCENARIO_DIRS = ("cli",)
 
 
 def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
-    """Parametrize ``scenario`` with the scenarios of scenarios/cli and scenarios/regressions."""
+    """Parametrize ``scenario`` with the scenarios of scenarios/cli."""
     root = get_context(metafunc.config).settings.scenarios_dir
     generate_scenario_tests(metafunc, [root / name for name in SCENARIO_DIRS])
 

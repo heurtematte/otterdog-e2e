@@ -20,7 +20,14 @@ from otterdog_e2e.changes import ChangeId, ChangeSpec, ReferencingScenario, chan
 from otterdog_e2e.differential import compare
 from otterdog_e2e.observe import Observation
 from otterdog_e2e.scenarios.collect import scenario_marks
-from otterdog_e2e.scenarios.model import Scenario, load_scenario, load_scenarios, render_step, scenario_files
+from otterdog_e2e.scenarios.model import (
+    Scenario,
+    domain_problem,
+    load_scenario,
+    load_scenarios,
+    render_step,
+    scenario_files,
+)
 from otterdog_e2e.scenarios.offline import OFFLINE_ORG, OfflineEngine, offline_run_context
 from otterdog_e2e.selection import SCENARIO_TAGS
 from otterdog_e2e.sut.template import offline_template
@@ -83,11 +90,13 @@ def offline_engine() -> OfflineEngine:
 
 
 # --- scenarios/offline ----------------------------------------------------------------------------------------------
-@pytest.mark.parametrize("path", scenario_files(OFFLINE_DIR), ids=lambda path: path.name)
+@pytest.mark.parametrize("path", scenario_files(OFFLINE_DIR), ids=lambda path: str(path.relative_to(OFFLINE_DIR)))
 def test_offline_scenario_file_loads(path: Path) -> None:
-    """Each file loads alone with the strict model (tier offline inferred from the directory, never live)."""
+    """Each file loads alone with the strict model (tier offline inferred from the directory, never live) and lies
+    in a domain directory (scenarios/offline/<domain>/, the tag of a model domain among its tags)."""
     scenario = load_scenario(path)
     assert scenario.tier == "offline" and not scenario.is_live
+    assert domain_problem(scenario) is None, domain_problem(scenario)
 
 
 def test_the_catalogue_is_complete() -> None:
@@ -208,7 +217,7 @@ def test_scenarios_are_named_after_the_behaviour() -> None:
         assert not NUMBER_RE.search(scenario_id), f"{scenario_id}: name the behaviour, reference the PR"
         if entry.kind == "yaml":
             assert not set(NUMBER_RE.findall(entry.source.stem)) & numbers, entry.source
-    for directory in ("offline", "cli", "regressions", "enterprise"):
+    for directory in ("offline", "cli", "enterprise"):
         for path in scenario_files(PROJECT / "scenarios" / directory):
             assert not NUMBER_RE.search(path.stem), f"{path}: name the file after the behaviour"
             assert not NUMBER_RE.search(load_scenario(path).id), f"{path}: name the scenario after the behaviour"

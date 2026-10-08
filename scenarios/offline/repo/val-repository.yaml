@@ -9,8 +9,8 @@ description: >-
   archived repositories), template_repository together with forked_repository, a forked_repository that is not
   '<owner>/<repo>' (the message says 'the the'), an undefined custom property, an unknown code scanning query
   suite and an unknown code scanning language (validated offline when the default setup is disabled: the language
-  detection only reads GitHub for an enabled setup). One rule per step, then a control step at every limit (every
-  supported language included).
+  detection only reads GitHub for an enabled setup). Every step is an independent case checking one rule, then a
+  control case at every limit (every supported language included) shows that none of the rules fires there.
 priority: P1
 tags: [offline, repo, custom-properties]
 observe: true
@@ -47,18 +47,24 @@ steps:
           Error: repository[name="{{ p }}-topics"] has defined an invalid topic 'under_score'. Only lower-case,
           numbers and '-' are allowed characters.
       not_contains: ["invalid topic 'ok-1'"]
-  - name: forking
+  - name: public-forking-disabled
     fragments:
-      repositories:
-        - "orgs.newRepo('{{ p }}-pub') { allow_forking: false }"
-        - "orgs.newRepo('{{ p }}-priv') { private: true, has_wiki: false }"
+      repositories: ["orgs.newRepo('{{ p }}-pub') { allow_forking: false }"]
+    validate:
+      ok: true
+      errors: 0
+      warnings_min: 1
+      exit_code: 0
+      contains:
+        - "Warning: public repository[name=\"{{ p }}-pub\"] has 'allow_forking' disabled which is not permitted."
+  - name: private-forking-forbidden
+    fragments:
+      repositories: ["orgs.newRepo('{{ p }}-priv') { private: true, has_wiki: false }"]
     validate:
       ok: false
       errors: 1
-      warnings_min: 1
       exit_code: 1
       contains:
-        - "Warning: public repository[name=\"{{ p }}-pub\"] has 'allow_forking' disabled which is not permitted."
         - >-
           Error: private repository[name="{{ p }}-priv"] has 'allow_forking' enabled, while the organization disables
           'members_can_fork_private_repositories'.
@@ -81,12 +87,20 @@ steps:
     fragments:
       repositories:
         - "orgs.newRepo('{{ p }}-both') { template_repository: '{{ org }}/{{ p }}-tpl', forked_repository: 'octocat/Hello-World' }"
-        - "orgs.newRepo('{{ p }}-fork') { forked_repository: 'foo' }"
     validate:
       ok: false
-      errors: 2
+      errors: 1
+      exit_code: 1
       contains:
         - "Error: repository[name=\"{{ p }}-both\"] has 'template_repository' and 'forked_repository' set at the same time."
+  - name: fork-format
+    fragments:
+      repositories: ["orgs.newRepo('{{ p }}-fork') { forked_repository: 'foo' }"]
+    validate:
+      ok: false
+      errors: 1
+      exit_code: 1
+      contains:
         - >-
           Error: repository[name="{{ p }}-fork"] has 'forked_repository' with value 'foo', which does not match the
           the required format '<owner>/<repo>'.

@@ -163,7 +163,7 @@ def test_every_scenario_and_step_link_is_valid() -> None:
 
     scenarios = [
         scenario
-        for name in ("offline", "cli", "regressions", "enterprise")
+        for name in ("offline", "cli", "enterprise")
         for scenario in collect_scenarios([ROOT / "scenarios" / name])
     ]
     pairs = [(scenario.id, scenario.known_bug) for scenario in scenarios]

@@ -3,7 +3,7 @@
 # docs/coverage-matrix.md is generated from this file: after editing it run
 #   .venv/bin/python tests/unit/test_coverage_matrix.py --write
 # tests/unit/test_coverage_matrix.py validates the schema, checks that every covered_by item exists (scenario ids of
-# scenarios/{offline,cli,regressions,enterprise}, pytest node ids of tests/<tier>/), that every property of the
+# scenarios/{offline,cli,enterprise}, pytest node ids of tests/<tier>/), that every property of the
 # example template (tests/unit/data/template, = otterdog examples/template @9bdeb75) and every inventory key (CLI
 # commands, webhook events, comment commands, tasks, endpoints, pages, blueprint/policy types, markers, statuses,
 # receiver checks) belongs to a feature, and that the generated documentation is up to date.
@@ -79,7 +79,7 @@ areas:
 
 tiers:
   offline: "no GitHub: validate, local-plan, show --local with the vendored template (tests/offline, scenarios/offline); the webapp container with dummy credentials"
-  cli: "live CLI against the test organization: plan -n, apply -f -n, oracle checks, converge (tests/cli, scenarios/cli, scenarios/regressions)"
+  cli: "live CLI against the test organization: plan -n, apply -f -n, oracle checks, converge (tests/cli, scenarios/cli, regressions included)"
   webhooks: "otterdog-managed hooks and real App deliveries through the relay (tests/webhooks)"
   webapp: "the webapp under test in docker compose, GitHub App, config-repository pull requests (tests/webapp)"
   web_ui: "otterdog's own web-UI login (bot username, password, TOTP, Playwright Firefox): tests/web_ui, gated by --e2e-allow-web-ui and the admin web credentials (trusted SUTs only)"
@@ -332,7 +332,7 @@ features:
     priority: P2
     status: covered
     covered_by: [O-VAL-OK, O-LPLAN-ADD, O-SHOW, tests/offline/test_cli_basics.py::test_show_needs_no_credentials]
-    notes: "show prints settings, org webhook, repository, repo variable, BPR and environment blocks with values, no diff lines; it resolves no credentials (works with a provider-less entry where validate exits 1). File scenarios/offline/cli/output/show.yaml"
+    notes: "show prints settings, org webhook, repository, repo variable, BPR and environment blocks with values, no diff lines; it resolves no credentials (works with a provider-less entry where validate exits 1). File scenarios/offline/cli/show.yaml"
 
   - id: cli.show.markdown
     area: cli
@@ -725,7 +725,7 @@ features:
     priority: P2
     status: covered
     covered_by: [O-LPLAN-FORCED-SECRETS, O-LPLAN-ONLY-SECRETS]
-    notes: "verified offline: local-plan --only-secrets --update-secrets shows the forced org secret and hides a repository description change. only-secrets-forced and only-secrets-changes steps; O-LPLAN-ONLY-SECRETS covers it too. scenarios/offline/cli/local-plan/lplan-only-secrets.yaml: with --update-secrets org, repo and env secrets forced (8 changed keys) and the repository change hidden; without --update-secrets a noop; control without the flag shows only the repository change"
+    notes: "verified offline: local-plan --only-secrets --update-secrets shows the forced org secret and hides a repository description change. only-secrets-forced and only-secrets-changes steps; O-LPLAN-ONLY-SECRETS covers it too. scenarios/offline/secrets/lplan-only-secrets.yaml: with --update-secrets org, repo and env secrets forced (8 changed keys) and the repository change hidden; without --update-secrets a noop; control without the flag shows only the repository change"
 
   - id: cli.plan.read-only-note
     area: cli
@@ -751,7 +751,7 @@ features:
     priority: P2
     status: covered
     covered_by: [O-LPLAN-FORCED-WEBHOOKS, O-LPLAN-WEBHOOK-SECRET-REMOVED]
-    notes: "verified offline with local-plan. org and repo hook secret removal warnings; also O-LPLAN-WEBHOOK-SECRET-REMOVED. scenarios/offline/cli/local-plan/lplan-webhook-secret.yaml: org and repo webhooks ('- secret = ...' + the Warning), a changed reference without warning, an unchanged one noop"
+    notes: "verified offline with local-plan. org and repo hook secret removal warnings; also O-LPLAN-WEBHOOK-SECRET-REMOVED. scenarios/offline/webhooks/lplan-webhook-secret.yaml: org and repo webhooks ('- secret = ...' + the Warning), a changed reference without warning, an unchanged one noop"
 
   - id: cli.plan.validation-abort
     area: cli
@@ -1967,7 +1967,7 @@ features:
     notes: "verified offline: team_permissions {a: 'push', b: 'pull'} -> {a: 'push'}: 'Plan: 0 to add, 0 to change, 0 to delete.'; -> {a: 'maintain'}: '~ team_permissions = {', '~ a = \"push\" -> \"maintain\"', '- b = \"pull\"', 1 to change; custom_properties {p1: 'x', p2: 'y'} -> {p1: 'x'}: no change. offline complete: removal-only (KB-005 step-level, team_permissions and custom_properties), removal with change, addition."
     gap_outline:
       scenario: cli.kb.custom-property-value-removal
-      file: scenarios/cli/kb-custom-property-value-removal.yaml
+      file: scenarios/cli/custom-properties/kb-custom-property-value-removal.yaml
       steps:
         - "org_level: a string custom property {{ p }}-p and a run repository with custom_properties {'{{ p }}-p': 'x'}; apply"
         - "the same configuration without the repository value (the definition stays)"
@@ -2217,7 +2217,7 @@ features:
     notes: "members_can_create_public_pages false then back to the template's true (oracle, converge)."
     gap_outline:
       scenario: enterprise.org.private-pages
-      file: scenarios/enterprise/org-private-pages.yaml
+      file: scenarios/enterprise/org-settings/org-private-pages.yaml
       steps:
         - "org_level on an Enterprise Cloud target: settings members_can_create_private_pages true, then false"
       assertions:
@@ -2458,7 +2458,7 @@ features:
     notes: "requires actions_cache_limit: 10 -> 5 -> 10 with the oracle on both the documented /organizations path and otterdog's /orgs path, converge. Skipped where otterdog cannot manage the limit (KB-006 suspected)."
     gap_outline:
       scenario: cli.org.cache-size.documented-path
-      file: scenarios/cli/org/cache-size-documented-path.yaml
+      file: scenarios/cli/workflows/org-cache-size-documented-path.yaml
       steps:
         - "on a target where only the documented /organizations/{org}/actions/cache/storage-limit path answers (probe org_cache_storage_limit_documented == 200): set requires actions_cache_limit 5"
       assertions:
@@ -3150,7 +3150,7 @@ features:
     notes: "309 repos set gh_pages_build_type (legacy 223, workflow 79); 336 of the 408 environments are github-pages, which otterdog never removes while pages are enabled. Covers legacy pages from main /, a change of the source path alone (regression #450), workflow pages with the github-pages environment, then disabled with apply -d removing the environment."
     gap_outline:
       scenario: enterprise.repo.pages-visibility
-      file: scenarios/enterprise/repo-pages-visibility.yaml
+      file: scenarios/enterprise/repo/repo-pages-visibility.yaml
       steps:
         - "org_level on Enterprise Cloud: members_can_create_private_pages true, a private run repository with legacy pages and gh_pages_visibility 'private', then 'public'"
       assertions:
@@ -3314,7 +3314,7 @@ features:
     notes: "Requires actions_cache_limit (5 then 8 GB, oracle repo_cache_storage_limit). Because of KB-006 the capability is usually absent, so the scenario skips."
     gap_outline:
       scenario: cli.repo.actions
-      file: scenarios/cli/repo-actions.yaml
+      file: scenarios/cli/workflows/repo-actions.yaml
       steps: ["step 6: workflows+ {max_cache_size_gb: 5}"]
       assertions: ["oracle GET /repos/{o}/{r}/actions/cache/storage-limit (or the documented endpoint) reports 5; converge; KB-007 evidence when the GET reports it unavailable"]
       needs: [target, "available: kind `repo_cache_storage_limit`"]
@@ -3507,7 +3507,7 @@ features:
     notes: "A tag ruleset with include_refs ['~ALL'] and creation/update/deletion rules, plus an exclude pattern, is applied and converged."
     gap_outline:
       scenario: cli.ruleset.push-target
-      file: scenarios/cli/protection/ruleset-push-target.yaml
+      file: scenarios/cli/rulesets/ruleset-push-target.yaml
       steps:
         - "private run repository on a Team/Enterprise target: a ruleset with target 'push' and a file path rule"
       assertions:
@@ -5188,7 +5188,7 @@ features:
     priority: P2
     status: covered
     covered_by: [O-LPLAN-NESTED]
-    notes: "verified offline: repository workflows+ {allowed_actions: 'local_only'} prints '~ workflows = {', '~ allowed_actions = \"all\" -> \"local_only\"', '~ }'. scenarios/offline/regressions/changelog/lplan-nested.yaml: repo workflows, org workflows, team_permissions value change and added entry"
+    notes: "verified offline: repository workflows+ {allowed_actions: 'local_only'} prints '~ workflows = {', '~ allowed_actions = \"all\" -> \"local_only\"', '~ }'. scenarios/offline/plan/lplan-nested.yaml: repo workflows, org workflows, team_permissions value change and added entry"
 
   - id: regression.in-sync-not-required
     area: regressions
@@ -5254,7 +5254,7 @@ features:
     status: covered
     covered_by: [O-LPLAN-ESCAPING, tests/offline/test_cli_markup.py::test_validation_messages_quote_values_literally]
     known_bugs: [KB-050]
-    notes: "scenarios/offline/regressions/changelog/lplan-escaping.yaml: additions, changes and show print markup literally; validation messages do not"
+    notes: "scenarios/offline/cli/lplan-escaping.yaml: additions, changes and show print markup literally; validation messages do not"
 
   - id: regression.458-411-435-code-scanning-live
     area: regressions

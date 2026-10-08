@@ -7,7 +7,7 @@ the file and the place in the message: `otterdog-e2e assist check` shows those m
 ## Offline skeleton
 
 ```yaml
-# scenarios/offline/validation/val-<topic>.yaml
+# scenarios/offline/<domain>/val-<topic>.yaml
 id: O-VAL-<NAME>
 title: <one line: what otterdog does>
 description: >-
@@ -112,20 +112,20 @@ fragment must not end with a `//` or `#` comment (the renderer appends a comma).
 
 ```yaml
 libraries:
-  e2e: ../lib/e2e.libsonnet                       # relative to the scenario file, inside the project
+  e2e: ../../lib/e2e.libsonnet                    # relative to the scenario file, inside the project
 steps:
   - name: create
     fragments:
       repositories:
-        - file: ../fragments/environment-repo.jsonnet
+        - file: ../../fragments/environment-repo.jsonnet
           vars: {wait_timer: 5, branch_policies: [main]}
-    overlay: {file: ../fragments/overlay-run-topics.jsonnet}
+    overlay: {file: ../../fragments/overlay-run-topics.jsonnet}
 ```
 
 Files are Jinja-rendered like inline strings (`raw: true` inserts them as they are); insert numbers as they are and
 everything else with `tojson`. Overlays merge settings (`settings+:`), never set `plan`, `description` or
-`billing_email`, and a live overlay touching settings needs `org_level: true`. Paths of `../lib/...` depend on the
-depth of the scenario file below `scenarios/`.
+`billing_email`, and a live overlay touching settings needs `org_level: true`. From a scenario of
+`scenarios/<tier>/<domain>/`, shared files are `../../lib/...` and `../../fragments/...`, the domain's own `files/...`.
 
 ## Trying jsonnet before it becomes a scenario
 

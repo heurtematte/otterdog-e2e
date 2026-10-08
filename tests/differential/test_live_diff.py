@@ -1,6 +1,6 @@
 """Differential tier, live part (SPEC 12.3 F6, 19: D-LIVE-PLAN): base vs head plans of selected live scenarios.
 
-Every live scenario (scenarios/cli, scenarios/regressions, scenarios/enterprise) with ``observe: true`` runs through
+Every live scenario (scenarios/cli, scenarios/enterprise) with ``observe: true`` runs through
 DifferentialRunner.observe_live: per step, the configuration is rendered with each side's own template, then
 ``validate`` and ``plan -n`` run with the base SUT, then with the head SUT. Nothing is ever applied and nothing needs
 a cleanup: step k plans against an organization without the objects of the earlier steps. The observations go to
@@ -29,7 +29,7 @@ if TYPE_CHECKING:
     from otterdog_e2e.context import E2EContext
     from otterdog_e2e.scenarios.model import Scenario
 
-LIVE_SCENARIO_DIRS = ("cli", "regressions", "enterprise")
+LIVE_SCENARIO_DIRS = ("cli", "enterprise")
 
 
 def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:

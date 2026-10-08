@@ -1,7 +1,7 @@
 ---
 name: write-e2e-scenario
 description: >-
-  Writes, extends or fixes an otterdog-e2e test in this repository: a YAML scenario (offline, cli, regressions,
+  Writes, extends or fixes an otterdog-e2e test in this repository: a YAML scenario (offline, cli (regressions included),
   enterprise) or a Python test of a tier, following the harness model and its id, tag, naming, secret, capability and
   known-bug rules, then validates it with otterdog-e2e assist check, the offline tier or the offline lint. Use when
   asked to write, add, extend, fix or review an e2e scenario or test for otterdog here, to reproduce an otterdog
@@ -46,15 +46,24 @@ missing or ambiguous (which behaviour, which otterdog version, offline or live).
 
    | Behaviour | Tool | Where |
    |---|---|---|
-   | validation errors, warnings, infos, plan gates | offline YAML | `scenarios/offline/validation/` |
-   | `local-plan` diff semantics, forced updates, filters | offline YAML with `base_fragments` | `scenarios/offline/plan/` |
-   | `show`, `show-default`, `canonical-diff`, `list-projects` output | offline YAML `commands` | `scenarios/offline/cli/` |
-   | otterdog.json variants, defaults override | offline YAML `workspace`, else Python | `scenarios/offline/`, `tests/offline/` |
+   | validation errors, warnings, infos, plan gates of an area | offline YAML | `scenarios/offline/<domain>/val-<name>.yaml` |
+   | `local-plan` of an area: forced updates, defaults, dependents | offline YAML with `base_fragments` | `scenarios/offline/<domain>/lplan-<name>.yaml` |
+   | diff semantics across object types: add/change/remove, renames, filters | offline YAML with `base_fragments` | `scenarios/offline/plan/` |
+   | command output and flags: `show`, verbosity, error paths, escaping | offline YAML `commands` | `scenarios/offline/cli/` |
+   | the configuration as written: jsonnet, schema, `show-default`, `canonical-diff` | offline YAML | `scenarios/offline/template/` |
+   | otterdog.json variants, defaults override | offline YAML `workspace`, else Python | `scenarios/offline/template/`, `tests/offline/` |
    | CLI flags, usage errors, exit codes, stdin | Python offline test | `tests/offline/` |
-   | live objects: create, change, converge, remove | live YAML with `state` checks | `scenarios/cli/` |
-   | regression of an upstream fix | live YAML | `scenarios/regressions/` |
-   | enterprise-only features | live YAML, `min_plan: enterprise` | `scenarios/enterprise/` |
+   | live objects: create, change, converge, remove | live YAML with `state` checks | `scenarios/cli/<domain>/` |
+   | regression of an upstream fix | live YAML, tag `regression` | `scenarios/cli/<domain>/` of the feature it guards |
+   | enterprise-only features | live YAML, `min_plan: enterprise` | `scenarios/enterprise/<domain>/` |
    | webapp, webhooks, web UI | Python tests | `tests/webapp/`, `tests/webhooks/`, `tests/web_ui/` |
+
+   `<domain>` is the model area the scenario pins (`repo`, `workflows`, `org-settings`, `org-roles`, `teams`,
+   `custom-properties`, `secrets`, `variables`, `webhooks`, `bpr`, `rulesets`, `environments`: the scenario carries
+   that tag) or the cross-cutting `template`, `cli`, `plan`; no deeper subdirectory. A live scenario is one journey
+   (its steps share the organization's state, the first failure stops it); an offline scenario is a set of
+   independent cases, one pytest item per step (`test_offline_scenario[<id>/<step>]`): one rule per negative step,
+   named after the case, plus a control step.
 
 3. **Write the file** with the conventions of [references/conventions.md](references/conventions.md) and the format
    of [references/yaml-essentials.md](references/yaml-essentials.md). The rules that most often fail:
@@ -91,11 +100,11 @@ missing or ambiguous (which behaviour, which otterdog version, offline or live).
 5. **Behaviour that differs between otterdog versions.** A live regression of a fix merged after the latest release
    declares `fixed_in` (`X.(Y+1).0.dev<n>`) and is listed in `UNRELEASED_FIXES` of `tests/unit/test_yaml_cli.py`.
    An offline step whose outcome depends on the SUT records only (no expectation on what varies) and the outcome is
-   asserted in `SUT_EXPECTATIONS` of `tests/offline/test_scenarios.py` (pattern: `scenarios/offline/validation/val-ruleset-strict.yaml`).
+   asserted in `SUT_EXPECTATIONS` of `tests/offline/test_scenarios.py` (pattern: `scenarios/offline/rulesets/val-ruleset-strict.yaml`).
 6. **Validate** (the gates, in this order; fix and repeat until each one is clean):
 
    ```bash
-   .venv/bin/otterdog-e2e assist check scenarios/offline/validation/val-org-variables.yaml   # your files
+   .venv/bin/otterdog-e2e assist check scenarios/offline/variables/val-org-variables.yaml   # your files
    .venv/bin/otterdog-e2e run --suite offline --sut release:latest --scenario O-VAL-ORGVAR   # offline scenario or test
    make lint-scenarios                                                    # live scenarios: every step, validate --local
    make unit                                                              # registries, metadata and naming rules
@@ -105,7 +114,7 @@ missing or ambiguous (which behaviour, which otterdog version, offline or live).
    `--sut branch:main` (or the PR's SUT) when the behaviour only exists there, `--no-lint` for a fast schema pass.
    The offline run prints its artifacts directory at the end: read `summary.md`
    (`.venv/bin/otterdog-e2e report artifacts/<run_id>`) and, for a failing step, the command outputs in
-   `artifacts/<run_id>/offline/<nnn>-test_offline_scenario_<id>_/cli/<nnnn>-<command>/stdout.txt` and the rendered
+   `artifacts/<run_id>/offline/<nnn>-test_offline_scenario_<id>_<step>_/cli/<nnnn>-<command>/stdout.txt` and the rendered
    configuration in `.../workspace/`. Decide each time: the scenario is wrong (fix it) or otterdog is (known bug or
    a new defect, step 4). Tighten loose expectations (`ok: false`) into exact messages and counts from these outputs.
 7. **Registries.** Closing a coverage gap: `scenarios/coverage.yaml` and the regenerated `docs/coverage-matrix.md`
@@ -141,7 +150,7 @@ missing or ambiguous (which behaviour, which otterdog version, offline or live).
 ## Report example
 
 ```text
-Wrote scenarios/offline/validation/val-org-variables.yaml: O-VAL-ORGVAR (P1, tags offline, variables)
+Wrote scenarios/offline/variables/val-org-variables.yaml: O-VAL-ORGVAR (P1, tags offline, variables)
   steps: invalid-variables (known_bug KB-028: expected failure), control (strict)
 Gates: assist check clean; otterdog-e2e run --suite offline --sut release:latest --scenario O-VAL-ORGVAR -> 1 xfailed
        (KB-028); make unit green

@@ -12,24 +12,60 @@ with `otterdog-e2e assist check` and the offline tier before you review it ([ai-
 
 | Directory | Tier | Collected by | Runs |
 |---|---|---|---|
-| `scenarios/offline/` | `offline` | `tests/offline/` | without GitHub: `validate --local`, `local-plan --local`, `show --local`, extra commands |
-| `scenarios/cli/` | `cli` | `tests/cli/` | live, on the target org: `validate`, `plan -n`, `apply -f -n`, oracle checks |
-| `scenarios/regressions/` | `cli` | `tests/cli/` | live regressions of specific otterdog issues |
-| `scenarios/enterprise/` | `enterprise` | `tests/enterprise/` | live, enterprise-only features |
+| `scenarios/offline/<domain>/` | `offline` | `tests/offline/` | without GitHub: `validate --local`, `local-plan --local`, `show --local`, extra commands; one pytest item per step |
+| `scenarios/cli/<domain>/` | `cli` | `tests/cli/` | live, on the target org: `validate`, `plan -n`, `apply -f -n`, oracle checks; one item per scenario |
+| `scenarios/enterprise/<domain>/` | `enterprise` | `tests/enterprise/` | live, enterprise-only features; one item per scenario |
 
-One scenario per `*.yaml` file. The `tier` may be omitted: it is inferred from the directory right below
-`scenarios/`, whose subdirectories only group files by topic (`scenarios/offline/cli/output/show.yaml` belongs to
-`offline`, not to the inner `cli/`), and a declared tier must match that directory. `scenarios/known_bugs.yaml` and
-`scenarios/coverage.yaml` are not scenarios. Directories and files group scenarios by functionality, never by pull
-request: the otterdog PRs behind a behaviour go into the scenario's `references` (see [References](#references)). Keep scenario ids unique everywhere (the loader refuses
-duplicates among the directories a tier collects, e.g. `cli/` and `regressions/`). Each scenario becomes one pytest
-item, for example `tests/cli/test_scenarios.py::<test>[cli.repo.lifecycle]`. The differential tier records the
-offline scenarios marked `observe: true` on the base and on the head SUT.
+One scenario per `*.yaml` file, at `scenarios/<tier>/<domain>/<file>.yaml`. The directory right below `scenarios/`
+gives the tier: `tier` may be omitted, and a declared tier must match it. The directory below the tier names the
+feature under test, with the same names in every tier:
+
+| Domain | Holds | Tag |
+|---|---|---|
+| `repo`, `workflows`, `org-settings`, `org-roles`, `teams`, `custom-properties`, `secrets`, `variables`, `webhooks`, `bpr`, `rulesets`, `environments` | the model area of the [selection vocabulary](#markers-and-selection) | the scenario carries it |
+| `template` | the configuration as written: jsonnet, schema, canonical form, template defaults, `extendRepo` | |
+| `cli` | command behaviour and output across areas: flags, verbosity, error paths, printing | |
+| `plan` | diff semantics across object types: additions, changes, removals, renames, filters, read-only and dict fields | |
+
+A scenario goes into the domain of the feature it pins, whatever the command (the validation and the `local-plan`
+scenarios of webhooks both live in `offline/webhooks/`) and whatever its kind: a regression of an upstream fix (tag
+`regression`, id `regression.<behaviour>`) and a known-bug reproduction (`kb-<behaviour>.yaml`, tag `known-bug`) sit
+next to the other scenarios of their feature. A scenario touching several areas goes into the domain whose behaviour
+it asserts, the other areas are extra tags. There is no deeper subdirectory: the jsonnet files of a domain's scenarios
+go into its `files/` directory, shared ones into `scenarios/fragments/` and `scenarios/lib/`.
+`tests/unit/test_yaml_cli.py`, `tests/unit/test_yaml_offline.py` and `otterdog-e2e assist check` enforce the layout
+(`otterdog_e2e.scenarios.model.domain_problem`). `scenarios/known_bugs.yaml` and `scenarios/coverage.yaml` are not
+scenarios.
+
+Directories and files group scenarios by functionality, never by pull request: the otterdog PRs behind a behaviour go
+into the scenario's `references` (see [References](#references)). Keep scenario ids unique everywhere (the loader
+refuses duplicates among the directories a tier collects). A live scenario becomes one pytest item, for example
+`tests/cli/test_scenarios.py::<test>[cli.repo.lifecycle]`; an offline scenario one item per step, for example
+`tests/offline/test_scenarios.py::test_offline_scenario[O-VAL-REPO/too-many-topics]` (see
+[Journeys, cases and interactions](#journeys-cases-and-interactions)). The differential tier records the offline
+scenarios marked `observe: true` on the base and on the head SUT (one item per scenario).
+
+## Journeys, cases and interactions
+
+What the steps of a scenario mean depends on its tier:
+
+| Test | Shape | How it runs |
+|---|---|---|
+| a journey with state: create, change, remove | one live scenario with several steps | one item: each step starts from the state the previous one left, the first failure stops the scenario (the next steps would assert on a wrong state) |
+| independent variants of one rule: validation messages, plan output of several inputs | one offline scenario, one step per variant | one item per step (`<id>/<step>`): every case passes or fails on its own, a failing case never hides the next ones |
+| the interaction of several resources: a rule depending on another object, the order of patches | one scenario targeted at that interaction | a live journey, or an offline case whose fragments hold just the objects that interact |
+
+Offline steps share no state (each one writes its whole configuration), so an offline scenario is a set of cases of
+one feature, like a parametrized test: name each step after its case (`too-many-topics`, `invalid-topics`), keep one
+rule per negative case, and check the absence of false positives in a control case (`limits`: every value at its
+limit validates). `--scenario 'O-VAL-REPO/limits'` selects one case, a glob on the scenario id all of them. A live
+scenario that would only line up unrelated checks is split instead: one scenario per behaviour, or offline cases when
+the checks need no GitHub.
 
 ## A first scenario
 
 ```yaml
-# scenarios/cli/example-repo-lifecycle.yaml
+# scenarios/cli/repo/example-repo-lifecycle.yaml
 id: cli.example.repo-lifecycle
 title: Repository create, update and delete
 priority: P0
@@ -151,7 +187,8 @@ steps:
 A removal is planned but only applied by a step with `apply: {delete: true}`; otherwise converge reports it as
 pending. Phases per step: render and write, `validate` (if given), `plan`, `apply`, `state`, `converge`. The first
 failing phase stops the scenario, the cleanup always runs, and every failure is reported with the tail of the
-command output.
+command output. Offline steps are not chained: each one is a case of its own (one pytest item), see
+[Journeys, cases and interactions](#journeys-cases-and-interactions).
 
 ## Fragments
 
@@ -232,21 +269,21 @@ one file), so file content is inlined, never imported.
 
 ```yaml
 libraries:
-  e2e: ../lib/e2e.libsonnet                     # a path: the short form of {file: ...}
+  e2e: ../../lib/e2e.libsonnet                  # a path: the short form of {file: ...}
 steps:
   - name: create
     fragments:
       repositories:
         - "orgs.newRepo('{{ p }}-inline')"       # inline and file entries mix
-        - file: ../fragments/environment-repo.jsonnet
+        - file: ../../fragments/environment-repo.jsonnet
           vars: {wait_timer: 5, branch_policies: [main, "release/*"]}
-      variables: {file: ../fragments/org-variable.jsonnet}
-    overlay: {file: ../fragments/overlay-run-topics.jsonnet}
+      variables: {file: ../../fragments/org-variable.jsonnet}
+    overlay: {file: ../../fragments/overlay-run-topics.jsonnet}
 ```
 
 **Paths** are relative to the directory of the scenario file and must resolve, symlinks followed, inside the project
 (the directory holding otterdog-e2e's `pyproject.toml`; for a scenario outside any project, its own directory):
-`../lib/e2e.libsonnet` from `scenarios/cli/` is fine, absolute paths and paths leaving the project are refused. Files are read once, when the scenario loads: UTF-8, not
+`../../lib/e2e.libsonnet` from `scenarios/cli/<domain>/` is fine, absolute paths and paths leaving the project are refused. Files are read once, when the scenario loads: UTF-8, not
 empty, at most 512 KiB.
 
 **Rendering.** A file is Jinja-rendered at run time like an inline string (StrictUndefined, every
@@ -309,11 +346,11 @@ every live step and refuses objects without this run's prefix.
 as the file's unless a Jinja block adds or removes lines):
 
 ```text
-scenarios/cli/x.yaml: steps[0].fragments.repositories[1].file: '../fragment/repo.jsonnet' not found (relative to .../scenarios/cli)
-scenarios/cli/x.yaml: step 'create': unknown template variable(s) ['slug'] in fragments.repositories[1] (scenarios/fragments/repo.jsonnet:3)
-scenarios/cli/x.yaml: step 'create': fragments.repositories[1] (scenarios/fragments/repo.jsonnet:7): value is not a dummy value: use '********' or 'e2e-dummy-<8 chars [0-9a-z]>' (otterdog prints it)
-scenarios/cli/x.yaml: step 'create': libraries.e2e (scenarios/lib/e2e.libsonnet:4): importstr is not allowed: the webapp evaluates one file, an import could read the workspace (use libraries)
-scenarios/cli/x.yaml: step 'create': overlay[0] changes the organization settings: set org_level: true
+scenarios/cli/repo/x.yaml: steps[0].fragments.repositories[1].file: '../../fragment/repo.jsonnet' not found (relative to .../scenarios/cli/repo)
+scenarios/cli/repo/x.yaml: step 'create': unknown template variable(s) ['slug'] in fragments.repositories[1] (scenarios/fragments/repo.jsonnet:3)
+scenarios/cli/repo/x.yaml: step 'create': fragments.repositories[1] (scenarios/fragments/repo.jsonnet:7): value is not a dummy value: use '********' or 'e2e-dummy-<8 chars [0-9a-z]>' (otterdog prints it)
+scenarios/cli/repo/x.yaml: step 'create': libraries.e2e (scenarios/lib/e2e.libsonnet:4): importstr is not allowed: the webapp evaluates one file, an import could read the workspace (use libraries)
+scenarios/cli/repo/x.yaml: step 'create': overlay[0] changes the organization settings: set org_level: true
 ```
 
 **Shared files** of the repository:
@@ -712,7 +749,10 @@ fragments:
 
 Offline scenarios run against the minimal organization `e2e-offline` (plan from `variables.plan`, default `free`), no
 baseline repositories, with the SUT's template vendored and the network blocked (`unshare -rn`, or `--network none`
-for untrusted SUTs). Per step: the step's [workspace variant](#workspace-variants-offline), `validate --local`
+for untrusted SUTs). Every step is a case of its own, one pytest item `test_offline_scenario[<id>/<step>]` with a
+fresh workspace ([Journeys, cases and interactions](#journeys-cases-and-interactions)); a scenario-level `known_bug`
+is judged per case, a step's `known_bug` only touches its case. Per step: the step's
+[workspace variant](#workspace-variants-offline), `validate --local`
 (always; `-v` with `validate.verbose`), `local-plan --local` against the `-BASE` file when `base_fragments` or
 `base_config` is given (with the [plan flags](#plan-and-apply-options)), `show --local` (must exit 0 unless the step
 expects validation to fail, i.e. `validate.ok` false or `plan.expect` validation_error; `commands.show` gives its own
@@ -839,8 +879,7 @@ plus `document` (a complete configuration of their own) and the raw `invoke` API
 ## Linting live scenarios offline
 
 The offline tier also lints the live scenarios (`tests/offline/test_scenario_lint.py`, one item
-`test_live_scenario_lint[<scenario id>/<step>]` per step of `scenarios/cli`, `scenarios/regressions` and
-`scenarios/enterprise`): each step is rendered for the offline organization (marker description; plan
+`test_live_scenario_lint[<scenario id>/<step>]` per step of `scenarios/cli` and `scenarios/enterprise`): each step is rendered for the offline organization (marker description; plan
 `variables.plan`, else `min_plan`), with the SUT's template, and validated with `validate --local`. A step whose
 `validate.ok` is false or whose `plan.expect` is `validation_error` must produce errors, every other step must
 validate (warnings are fine, the misplaced-field warning is not). Broken jsonnet, misspelled fields, bad files and
@@ -962,7 +1001,7 @@ instead (`SUT_EXPECTATIONS` in `tests/offline/test_scenarios.py`).
 
 ## Editor support
 
-`.vscode/settings.json` maps `scenarios/{offline,cli,regressions,enterprise}/*.yaml` to
+`.vscode/settings.json` maps `scenarios/{offline,cli,enterprise}/**/*.yaml` to
 `.vscode/scenario.schema.json` (VS Code YAML extension: completion and key checks). It also maps
 `scenarios/known_bugs.yaml` and `scenarios/coverage.yaml` to a permissive schema, because SchemaStore would
 otherwise apply its unrelated CrowdSec "scenario" schema to them. The schema is generated from the loader's constants and
@@ -978,7 +1017,7 @@ with:
 Load a file quickly with:
 
 ```bash
-.venv/bin/python -c 'import sys; from pathlib import Path; from otterdog_e2e.scenarios.model import load_scenario; print(load_scenario(Path(sys.argv[1])))' scenarios/cli/repo-lifecycle.yaml
+.venv/bin/python -c 'import sys; from pathlib import Path; from otterdog_e2e.scenarios.model import load_scenario; print(load_scenario(Path(sys.argv[1])))' scenarios/cli/repo/repo-lifecycle.yaml
 ```
 
 ## Markers and selection
@@ -991,6 +1030,7 @@ ignored. Select with:
 
 ```bash
 otterdog-e2e run --scenario 'cli.repo.*,cli.team.*' ...     # fnmatch globs on ids (every tier, unit included)
+otterdog-e2e run --suite offline --scenario 'O-VAL-REPO/limits'  # one offline case: <scenario id>/<step>
 otterdog-e2e run --tags repo,secrets ...                    # any of the tags; tests/unit and tests/offline are exempt
 ```
 
@@ -1121,6 +1161,9 @@ restore rules.
 
 ## Checklist
 
+- the file lies in its domain directory (`scenarios/<tier>/<domain>/`), regressions and known-bug reproductions
+  included; a model domain's tag is among the tags;
+- a live scenario is one journey; offline steps are independent cases named after what they check, one rule each;
 - every object name uses `{{ p }}`, `{{ P }}` or `{{ hook_base }}`; a live `repo_filter` starts with `{{ p }}-`;
 - steps repeat the objects they keep; removals use `apply: {delete: true}`;
 - secret values are dummies or references; no `plan`/`description`/`billing_email` in live settings; `org_level`

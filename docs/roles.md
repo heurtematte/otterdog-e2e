@@ -118,7 +118,7 @@ The only required role: an owner of the test organization and the member of the 
   web login: the web-UI tier logs it in ([web-ui-testing.md](web-ui-testing.md)).
 
 Tests: every live test. `logins.admin` is available to every live scenario without declaring it, for example the
-member counterpart of `scenarios/cli/org/validate-team-non-member.yaml`.
+member counterpart of `scenarios/cli/teams/validate-team-non-member.yaml`.
 
 Missing: the target does not load (`E2E_ADMIN_TOKEN (admin token) is not set`), so every live item fails with the
 reason.
@@ -163,7 +163,7 @@ Tests:
   then `/otterdog check-merge` re-reads the membership (SUTs with the command only);
 - `tests/webapp/test_update_branch.py`: W-CMD-UPDATE-BRANCH, the PR author may update its branch (SUTs with the
   command only);
-- `scenarios/cli/org/team-members.yaml` (`cli.team.members`): member of a run team, then replaced by the approver.
+- `scenarios/cli/teams/team-members.yaml` (`cli.team.members`): member of a run team, then replaced by the approver.
 
 Notes:
 
@@ -193,7 +193,7 @@ Tests:
     - W-AUTOMERGE-DISMISS: requested changes, then an approval the admin dismisses;
 - `tests/webapp/test_update_branch.py`: W-CMD-UPDATE-BRANCH, neither the author nor an admin, its
   `/otterdog update-branch` is refused and the branch does not change;
-- `scenarios/cli/org/team-members.yaml` (`cli.team.members`): replaces the author as the team member, then stays a
+- `scenarios/cli/teams/team-members.yaml` (`cli.team.members`): replaces the author as the team member, then stays a
   live member while `skip_members` leaves the list unmanaged.
 
 Missing: the tests above are skipped.
@@ -209,7 +209,7 @@ Tests:
 - `tests/webapp/test_merge_apply.py`: W-AUTOMERGE-THIRD-PARTY, its `/otterdog merge` on an approved contributor PR
   gets the auto-merge problems comment ("Only the author of the pull request, a member of ... is allowed to
   auto-merge.") and the PR stays open;
-- `scenarios/cli/org/validate-team-non-member.yaml` (`cli.validate.team-non-member`): a team with
+- `scenarios/cli/teams/validate-team-non-member.yaml` (`cli.validate.team-non-member`): a team with
   `skip_non_organization_members: true` and the outsider as member fails validation ("... who is not an organization
   member."); the same team with the admin validates. Validate only: nothing is applied, so GitHub never sends an
   invitation.
@@ -244,7 +244,7 @@ Missing: `cli.token-scopes` and the webapp tier of untrusted SUTs are skipped.
 
 ## A CLI scenario
 
-A live YAML scenario of `scenarios/cli/` or `scenarios/regressions/`, run by `tests/cli/test_scenarios.py`
+A live YAML scenario of `scenarios/cli/<domain>/`, run by `tests/cli/test_scenarios.py`
 ([writing-scenarios.md](writing-scenarios.md)). otterdog always runs with the admin token; only the oracle reads the
 result.
 

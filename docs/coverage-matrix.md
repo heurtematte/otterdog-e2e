@@ -65,7 +65,7 @@ Inventory of otterdog main @9bdeb75 (after v1.6.1; release:latest is v1.6.1): ev
 Tiers:
 
 - `offline`: no GitHub: validate, local-plan, show --local with the vendored template (tests/offline, scenarios/offline); the webapp container with dummy credentials
-- `cli`: live CLI against the test organization: plan -n, apply -f -n, oracle checks, converge (tests/cli, scenarios/cli, scenarios/regressions)
+- `cli`: live CLI against the test organization: plan -n, apply -f -n, oracle checks, converge (tests/cli, scenarios/cli, regressions included)
 - `webhooks`: otterdog-managed hooks and real App deliveries through the relay (tests/webhooks)
 - `webapp`: the webapp under test in docker compose, GitHub App, config-repository pull requests (tests/webapp)
 - `web_ui`: otterdog's own web-UI login (bot username, password, TOTP, Playwright Firefox): tests/web_ui, gated by --e2e-allow-web-ui and the admin web credentials (trusted SUTs only)
@@ -220,7 +220,7 @@ Details:
 - **`cli.show`** (covered, P2, `offline`): show: prints every model object as key = value blocks (no credentials)
     - Source: `otterdog/cli.py:189-209`, `otterdog/operations/show.py:47-96`
     - Operations: run
-    - Notes: show prints settings, org webhook, repository, repo variable, BPR and environment blocks with values, no diff lines; it resolves no credentials (works with a provider-less entry where validate exits 1). File scenarios/offline/cli/output/show.yaml
+    - Notes: show prints settings, org webhook, repository, repo variable, BPR and environment blocks with values, no diff lines; it resolves no credentials (works with a provider-less entry where validate exits 1). File scenarios/offline/cli/show.yaml
 - **`cli.show.markdown`** (covered, P2, `offline`): show --markdown [--output-dir DIR]: writes configuration.md and repo-&lt;name&gt;.md (mkdocs tabs) instead of printing
     - Source: `otterdog/cli.py:189-209`, `otterdog/operations/show.py:96-288`
     - Operations: run
@@ -334,7 +334,7 @@ Details:
 - **`cli.plan.only-secrets`** (covered, P2, `offline`): --only-secrets: only secret patches (org, repo, environment) are planned/applied
     - Source: `otterdog/cli.py:456-462`, `otterdog/operations/diff_operation.py:184-185`
     - Operations: filter, forced-update
-    - Notes: verified offline: local-plan --only-secrets --update-secrets shows the forced org secret and hides a repository description change. only-secrets-forced and only-secrets-changes steps; O-LPLAN-ONLY-SECRETS covers it too. scenarios/offline/cli/local-plan/lplan-only-secrets.yaml: with --update-secrets org, repo and env secrets forced (8 changed keys) and the repository change hidden; without --update-secrets a noop; control without the flag shows only the repository change
+    - Notes: verified offline: local-plan --only-secrets --update-secrets shows the forced org secret and hides a repository description change. only-secrets-forced and only-secrets-changes steps; O-LPLAN-ONLY-SECRETS covers it too. scenarios/offline/secrets/lplan-only-secrets.yaml: with --update-secrets org, repo and env secrets forced (8 changed keys) and the repository change hidden; without --update-secrets a noop; control without the flag shows only the repository change
 - **`cli.plan.read-only-note`** (covered, P1, `cli`): read-only keys (plan, two_factor_requirement, template_repository): "Note: setting '&lt;k&gt;' is read-only, will be skipped." and not counted
     - Source: `otterdog/operations/plan.py:112-117`, `otterdog/models/organization_settings.py:55-68`, `otterdog/models/repository.py:73`
     - Operations: plan, coerce
@@ -342,7 +342,7 @@ Details:
 - **`cli.plan.webhook-secret-removal`** (covered, P2, `offline`): removing a webhook secret prints "Warning: removing secret for webhook with url '&lt;url&gt;'"
     - Source: `otterdog/operations/plan.py:103-110`, `otterdog/models/webhook.py:201-223`
     - Operations: plan, security
-    - Notes: verified offline with local-plan. org and repo hook secret removal warnings; also O-LPLAN-WEBHOOK-SECRET-REMOVED. scenarios/offline/cli/local-plan/lplan-webhook-secret.yaml: org and repo webhooks ('- secret = ...' + the Warning), a changed reference without warning, an unchanged one noop
+    - Notes: verified offline with local-plan. org and repo hook secret removal warnings; also O-LPLAN-WEBHOOK-SECRET-REMOVED. scenarios/offline/webhooks/lplan-webhook-secret.yaml: org and repo webhooks ('- secret = ...' + the Warning), a changed reference without warning, an unchanged one noop
 - **`cli.plan.errors`** (covered, P1, `offline`): plan error paths: 'planning aborted: &lt;e&gt;' (exit 1, e.g. value_type change), 'failed to load configuration' (1), network/GitHub errors (2)
     - Source: `otterdog/operations/diff_operation.py:115-176`, `otterdog/operations/plan.py:128-139`
     - Operations: error, exit-code
@@ -883,7 +883,7 @@ Details:
     - Operations: remove, modify, plan
     - Known bugs: KB-005
     - Notes: verified offline: team_permissions {a: 'push', b: 'pull'} -&gt; {a: 'push'}: 'Plan: 0 to add, 0 to change, 0 to delete.'; -&gt; {a: 'maintain'}: '\~ team_permissions = {', '\~ a = "push" -&gt; "maintain"', '- b = "pull"', 1 to change; custom_properties {p1: 'x', p2: 'y'} -&gt; {p1: 'x'}: no change. offline complete: removal-only (KB-005 step-level, team_permissions and custom_properties), removal with change, addition.
-    - Suggested: `cli.kb.custom-property-value-removal` in `scenarios/cli/kb-custom-property-value-removal.yaml`
+    - Suggested: `cli.kb.custom-property-value-removal` in `scenarios/cli/custom-properties/kb-custom-property-value-removal.yaml`
     - Steps:
         - org_level: a string custom property {{ p }}-p and a run repository with custom_properties {'{{ p }}-p': 'x'}; apply
         - the same configuration without the repository value (the definition stays)
@@ -1004,7 +1004,7 @@ Details:
     - Operations: modify, validate, converge
     - Known bugs: KB-024
     - Notes: members_can_create_public_pages false then back to the template's true (oracle, converge).
-    - Suggested: `enterprise.org.private-pages` in `scenarios/enterprise/org-private-pages.yaml`
+    - Suggested: `enterprise.org.private-pages` in `scenarios/enterprise/org-settings/org-private-pages.yaml`
     - Steps:
         - org_level on an Enterprise Cloud target: settings members_can_create_private_pages true, then false
     - Assert:
@@ -1108,7 +1108,7 @@ Details:
     - Operations: modify, converge
     - Known bugs: KB-006, KB-007
     - Notes: requires actions_cache_limit: 10 -&gt; 5 -&gt; 10 with the oracle on both the documented /organizations path and otterdog's /orgs path, converge. Skipped where otterdog cannot manage the limit (KB-006 suspected).
-    - Suggested: `cli.org.cache-size.documented-path` in `scenarios/cli/org/cache-size-documented-path.yaml`
+    - Suggested: `cli.org.cache-size.documented-path` in `scenarios/cli/workflows/org-cache-size-documented-path.yaml`
     - Steps:
         - on a target where only the documented /organizations/{org}/actions/cache/storage-limit path answers (probe org_cache_storage_limit_documented == 200): set requires actions_cache_limit 5
     - Assert:
@@ -1469,7 +1469,7 @@ Details:
     - Properties (`repository`): `gh_pages_build_type`, `gh_pages_source_branch`, `gh_pages_source_path`, `gh_pages_visibility`
     - Operations: add, modify, remove, converge
     - Notes: 309 repos set gh_pages_build_type (legacy 223, workflow 79); 336 of the 408 environments are github-pages, which otterdog never removes while pages are enabled. Covers legacy pages from main /, a change of the source path alone (regression #450), workflow pages with the github-pages environment, then disabled with apply -d removing the environment.
-    - Suggested: `enterprise.repo.pages-visibility` in `scenarios/enterprise/repo-pages-visibility.yaml`
+    - Suggested: `enterprise.repo.pages-visibility` in `scenarios/enterprise/repo/repo-pages-visibility.yaml`
     - Steps:
         - org_level on Enterprise Cloud: members_can_create_private_pages true, a private run repository with legacy pages and gh_pages_visibility 'private', then 'public'
     - Assert:
@@ -1547,7 +1547,7 @@ Details:
     - Operations: modify, converge
     - Known bugs: KB-007
     - Notes: Requires actions_cache_limit (5 then 8 GB, oracle repo_cache_storage_limit). Because of KB-006 the capability is usually absent, so the scenario skips.
-    - Suggested: `cli.repo.actions` in `scenarios/cli/repo-actions.yaml`
+    - Suggested: `cli.repo.actions` in `scenarios/cli/workflows/repo-actions.yaml`
     - Steps:
         - step 6: workflows+ {max_cache_size_gb: 5}
     - Assert:
@@ -1649,7 +1649,7 @@ Details:
     - Properties (`repo-ruleset`): `target`
     - Operations: add, converge, validate
     - Notes: A tag ruleset with include_refs ['\~ALL'] and creation/update/deletion rules, plus an exclude pattern, is applied and converged.
-    - Suggested: `cli.ruleset.push-target` in `scenarios/cli/protection/ruleset-push-target.yaml`
+    - Suggested: `cli.ruleset.push-target` in `scenarios/cli/rulesets/ruleset-push-target.yaml`
     - Steps:
         - private run repository on a Team/Enterprise target: a ruleset with target 'push' and a file path rule
     - Assert:
@@ -2404,7 +2404,7 @@ Details:
 - **`regression.nested-dict-printing`** (covered, P2, `offline`): v1.3.0: changes of nested dicts (workflows, team_permissions) print as nested '\~ key = {' blocks
     - Source: `CHANGELOG.md:161`, `otterdog/operations/plan.py:90-101`
     - Operations: plan
-    - Notes: verified offline: repository workflows+ {allowed_actions: 'local_only'} prints '\~ workflows = {', '\~ allowed_actions = "all" -&gt; "local_only"', '\~ }'. scenarios/offline/regressions/changelog/lplan-nested.yaml: repo workflows, org workflows, team_permissions value change and added entry
+    - Notes: verified offline: repository workflows+ {allowed_actions: 'local_only'} prints '\~ workflows = {', '\~ allowed_actions = "all" -&gt; "local_only"', '\~ }'. scenarios/offline/plan/lplan-nested.yaml: repo workflows, org workflows, team_permissions value change and added entry
 - **`regression.in-sync-not-required`** (covered, P1, `webapp`): v1.2.0 / v1.1.0: an out-of-sync organization neither blocks auto-merge nor fails the sync status
     - Source: `CHANGELOG.md:171`, `CHANGELOG.md:203`, `otterdog/webapp/db/models.py:117-200`
     - Operations: permission, status
@@ -2422,7 +2422,7 @@ Details:
     - Source: `CHANGELOG.md:209`, `otterdog/models/__init__.py:566-588`
     - Operations: plan
     - Known bugs: KB-050
-    - Notes: scenarios/offline/regressions/changelog/lplan-escaping.yaml: additions, changes and show print markup literally; validation messages do not
+    - Notes: scenarios/offline/cli/lplan-escaping.yaml: additions, changes and show print markup literally; validation messages do not
 - **`regression.458-411-435-code-scanning-live`** (covered, P2, `cli`): #411, #435, #458: 'actions' is a valid code scanning language, invalid CodeQL languages from the API are filtered, live code scanning settings compare with the expected default setup
     - Source: `CHANGELOG.md:235`, `CHANGELOG.md:214`, `CHANGELOG.md:210`, `otterdog/providers/github/rest/repo_client.py:568-590`
     - Operations: converge, validate

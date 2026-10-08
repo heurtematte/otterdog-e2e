@@ -15,12 +15,12 @@ priority: P1
 min_plan: free
 tags: [environments, repo]
 libraries:
-  e2e: ../lib/e2e.libsonnet
+  e2e: ../../lib/e2e.libsonnet
 steps:
   - name: create
     fragments:
       repositories:
-        - file: ../fragments/environment-repo.jsonnet
+        - file: ../../fragments/environment-repo.jsonnet
           vars: {wait_timer: 5, branch_policies: [main, "release/*"]}
     plan:
       expect: changes
@@ -43,7 +43,7 @@ steps:
   - name: update
     fragments:
       repositories:
-        - file: ../fragments/environment-repo.jsonnet
+        - file: ../../fragments/environment-repo.jsonnet
           vars: {wait_timer: 10, branch_policies: [main]}
     plan:
       expect: changes

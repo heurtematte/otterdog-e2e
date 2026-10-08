@@ -148,7 +148,7 @@ is the referencing one; a key also matches without its `#n` repetition suffix). 
 Abridged from the repository:
 
 ```yaml
-# scenarios/offline/validation/val-ruleset-strict.yaml
+# scenarios/offline/rulesets/val-ruleset-strict.yaml
 id: O-VAL-RULESET-STRICT
 references:
   - pr: 790
@@ -165,7 +165,7 @@ references:
         key: local-plan
         note: head aborts local-plan on the validation error; base planned the ruleset
 
-# scenarios/offline/validation/val-org-ruleset-strict.yaml: referenced WITHOUT expected delta (head crashes, KB-008)
+# scenarios/offline/rulesets/val-org-ruleset-strict.yaml: referenced WITHOUT expected delta (head crashes, KB-008)
 id: O-VAL-ORG-RULESET-STRICT
 references:
   - pr: 790

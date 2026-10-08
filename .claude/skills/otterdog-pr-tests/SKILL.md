@@ -64,8 +64,8 @@ that commit only (a later push changes nothing).
      changes **records only**: no expectation on what varies (no `validate` mapping, `plan: {expect: any}` with
      `base_fragments`), because CI runs the offline tier on `release:latest` and `branch:main`, which do not contain
      the PR; the change itself is asserted by the expected delta of the reference. Control steps stay strict. Pattern:
-     `scenarios/offline/validation/val-ruleset-strict.yaml` (step `no-strict` records, step `with-strict` is strict);
-   - live (`scenarios/cli/`, `scenarios/regressions/`) only when the behaviour needs GitHub: you can lint them, not
+     `scenarios/offline/rulesets/val-ruleset-strict.yaml` (step `no-strict` records, step `with-strict` is strict);
+   - live (`scenarios/cli/<domain>/`, regressions included) only when the behaviour needs GitHub: you can lint them, not
      run them; once the PR is merged, a regression scenario gets `fixed_in` (the version of the merge commit);
    - webapp or webhooks behaviour: a Python test of `tests/webapp/` or `tests/webhooks/` whose
      `pytest.mark.scenario(<id>, references=[...])` marker carries the reference (pattern:
@@ -79,8 +79,8 @@ that commit only (a later push changes nothing).
 7. **Check** until clean (exit 0):
 
    ```bash
-   .venv/bin/otterdog-e2e assist check scenarios/offline/validation/val-ruleset-strict.yaml
-   .venv/bin/otterdog-e2e assist check --sut pr:790@0cee9e302282fefa092b4e0767248a997a9272ea scenarios/cli/ruleset-public.yaml
+   .venv/bin/otterdog-e2e assist check scenarios/offline/rulesets/val-ruleset-strict.yaml
+   .venv/bin/otterdog-e2e assist check --sut pr:790@0cee9e302282fefa092b4e0767248a997a9272ea scenarios/cli/rulesets/ruleset-public.yaml
    ```
 
    The second form lints live scenarios with the PR's own CLI (in docker). Then confirm the new offline scenarios
@@ -143,8 +143,8 @@ that commit only (a later push changes nothing).
 
 ```text
 PR #790 "fix: validate required status checks of rulesets" pinned at 0cee9e3 (head; base: merge base)
-Files: scenarios/offline/validation/val-ruleset-strict.yaml (step no-strict, references: #790 with 2 expected deltas),
-       scenarios/offline/validation/val-org-ruleset-strict.yaml (new, references #790 without expected delta)
+Files: scenarios/offline/rulesets/val-ruleset-strict.yaml (step no-strict, references: #790 with 2 expected deltas),
+       scenarios/offline/rulesets/val-org-ruleset-strict.yaml (new, references #790 without expected delta)
 Gates: assist check clean; offline on release:latest green; make unit green
 Run: otterdog-e2e run --sut pr:790@0cee9e3... --suite offline,differential   (base from the references)
      363 passed, 29 skipped, 27 xfailed; differential: 2 expected, 1 unexpected
