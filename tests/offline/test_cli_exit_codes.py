@@ -7,7 +7,9 @@ organization returned, and any exception that escapes an operation is printed by
 number of validation errors (otterdog/operations/validate.py:102) and 1 for a configuration it cannot load (jsonnet
 evaluation errors are caught RuntimeErrors: ``Validation failed`` + ``failed to load configuration``), while schema
 errors (jsonschema ValidationError) and unknown organizations escape as exceptions (exit 2). Verified offline on v1.6.1
-and main 9bdeb75 (identical cli.py, validate.py and logging.py).
+and main 9bdeb75 (identical cli.py, validate.py and logging.py). Since eclipse-csi/otterdog#777 (FIX_777) a schema error
+is a load error too: ``Validation failed`` + ``failed to load configuration: invalid value at '<path>': <message>``,
+exit 1, no traceback even with ``-vv``; the tests accept the behaviour of the SUT under test (conftest.SutHistory).
 
 ``-v`` (otterdog/logging.py init_logging) prints the Info messages (otherwise counted in a hint), ``-vv`` adds DEBUG
 logger lines and tracebacks on stderr, ``-vvv`` TRACE lines.
@@ -19,6 +21,9 @@ stay strict.
 """
 
 from __future__ import annotations
+
+import warnings
+from typing import Protocol
 
 import pytest
 
@@ -42,6 +47,9 @@ DESCRIPTION_ERROR = "setting 'description' exceeds maximum allowed length of 160
 SQUASH_ERROR = f"repository[name=\"{REPO}\"] has 'squash_merge_commit_title' of value 'NOPE'"
 SCHEMA_ERROR = "123 is not of type 'boolean'"
 TRACEBACK = "Traceback (most recent call last)"
+# eclipse-csi/otterdog#777 (squash commit on main): schema errors become load errors (exit 1) instead of crashes (exit 2)
+FIX_777 = "7ffc5e5d8bf8a7db7d2757a3fa40af89dc98e6e3"
+SCHEMA_LOAD_ERROR = "failed to load configuration: invalid value at 'repositories[name="
 FAILED_SUMMARY = "Validation failed: "
 # one fragment set per validation outcome (the error counts are otterdog's, verified offline)
 ONE_ERROR = ConfigFragments(settings=["description: std.repeat('d', 161)"])
@@ -84,6 +92,25 @@ def render_org(workspace: ConfigWorkspace, fragments: ConfigFragments) -> str:
     return renderer.render(fragments)
 
 
+class SutHistory(Protocol):
+    """conftest.SutHistory: whether the SUT under test contains an upstream commit."""
+
+    label: str
+
+    def contains(self, commit: str) -> bool | None:
+        """True/False from the upstream mirror, None when it cannot tell."""
+
+
+def schema_errors_are_load_errors(history: SutHistory, result: CliResult) -> bool:
+    """Whether the SUT contains #777 (schema errors are load errors); when the mirror cannot tell, the observed exit
+    status decides (with a warning), so the other assertions still check one of the two consistent behaviours."""
+    found = history.contains(FIX_777)
+    if found is None:
+        warnings.warn(f"cannot tell whether {history.label} contains #777 ({FIX_777[:7]})", stacklevel=2)
+        return result.exit_code == 1
+    return found
+
+
 def validate(cli: OtterdogCli, fragments: ConfigFragments, *args: str) -> CliResult:
     """Write the configuration and run ``validate --local [args]``."""
     cli.workspace.write_org_config(render_org(cli.workspace, fragments))
@@ -116,10 +143,11 @@ def test_validation_outcomes_set_the_exit_status(vendored_cli: OtterdogCli) -> N
 
 
 @pytest.mark.scenario("O-EXIT-CODES")
-def test_load_errors_and_crashes(vendored_cli: OtterdogCli) -> None:
+def test_load_errors_and_crashes(vendored_cli: OtterdogCli, sut_history: SutHistory) -> None:
     """A jsonnet evaluation error is a configuration otterdog cannot load: 'Validation failed' / 'failed to load
-    configuration' and exit 1. A schema type error and an unknown organization escape the operation: a boxed
-    'Error: <message>' on stdout, no validation summary, nothing on stderr, exit 2."""
+    configuration' and exit 1. A schema type error escapes the operation before #777 (a boxed 'Error: <message>' on
+    stdout, no validation summary, nothing on stderr, exit 2) and is a load error naming the invalid value since #777
+    (exit 1). An unknown organization escapes the operation: exit 2."""
     evaluation = validate(vendored_cli, EVALUATION_ERROR)
     text = text_of(evaluation)
     assert evaluation.exit_code == 1, f"an evaluation error exited {evaluation.exit_code}\n{tail(evaluation)}"
@@ -129,10 +157,16 @@ def test_load_errors_and_crashes(vendored_cli: OtterdogCli) -> None:
 
     schema = validate(vendored_cli, SCHEMA_TYPE_ERROR)
     text = text_of(schema)
-    assert schema.exit_code == 2, f"a schema error exited {schema.exit_code}\n{tail(schema)}"
-    assert f"Error: {SCHEMA_ERROR}" in text and "Failed validating 'type' in schema" in text, tail(schema)
-    assert FAILED_SUMMARY not in text and "Validation succeeded" not in text, tail(schema)
+    assert SCHEMA_ERROR in text and "Validation succeeded" not in text, tail(schema)
     assert TRACEBACK not in schema.output, tail(schema)
+    if schema_errors_are_load_errors(sut_history, schema):
+        assert schema.exit_code == 1, f"since #777 a schema error is a load error, exited {schema.exit_code}"
+        assert "Error: Validation failed" in text and SCHEMA_LOAD_ERROR in text, tail(schema)
+        assert schema.validation().load_error, tail(schema)
+    else:
+        assert schema.exit_code == 2, f"a schema error exited {schema.exit_code}\n{tail(schema)}"
+        assert f"Error: {SCHEMA_ERROR}" in text and "Failed validating 'type' in schema" in text, tail(schema)
+        assert FAILED_SUMMARY not in text, tail(schema)
 
     vendored_cli.workspace.write_org_config(render_org(vendored_cli.workspace, ConfigFragments()))
     unknown = vendored_cli.run("validate", "--local", "e2e-offline-nope", org=False)
@@ -143,17 +177,22 @@ def test_load_errors_and_crashes(vendored_cli: OtterdogCli) -> None:
 
 
 @pytest.mark.scenario("O-EXIT-CODES")
-def test_debug_verbosity_prints_the_traceback(vendored_cli: OtterdogCli) -> None:
-    """With -vv the escaped exception is a rich traceback on stderr ending with '<type>: <message>' instead of the
-    boxed error on stdout, and DEBUG lines are printed; the exit status stays 2."""
+def test_debug_verbosity_prints_the_traceback(vendored_cli: OtterdogCli, sut_history: SutHistory) -> None:
+    """With -vv an escaped exception is a rich traceback on stderr ending with '<type>: <message>' instead of the
+    boxed error on stdout, and DEBUG lines are printed; the exit status stays 2. The schema error used here escapes
+    before #777 only: since #777 it is a load error (exit 1, boxed on stdout, no traceback)."""
     result = validate(vendored_cli, SCHEMA_TYPE_ERROR, "-vv")
     stderr, stdout = strip_ansi(result.stderr), normalize_text(result.stdout)
+    assert "DEBUG " in stdout and "loading configuration for organization 'e2e-offline'" in stdout, stdout[-1500:]
+    if schema_errors_are_load_errors(sut_history, result):
+        assert result.exit_code == 1, f"exit {result.exit_code}\n{tail(result)}"
+        assert TRACEBACK not in stderr and SCHEMA_LOAD_ERROR in stdout, f"{stdout[-1500:]}\n{stderr[-1500:]}"
+        return
     assert result.exit_code == 2, f"exit {result.exit_code}\n{tail(result)}"
     assert TRACEBACK in stderr, f"no traceback on stderr with -vv\n{stderr[-1500:]}"
     assert f"ValidationError: {SCHEMA_ERROR}" in stderr, stderr[-1500:]
     assert "_execute_operation" in stderr, "the traceback does not reach otterdog/cli.py _execute_operation"
     assert f"Error: {SCHEMA_ERROR}" not in stdout, f"the error box is printed despite -vv\n{stdout[-1500:]}"
-    assert "DEBUG " in stdout and "loading configuration for organization 'e2e-offline'" in stdout, stdout[-1500:]
 
 
 @pytest.mark.scenario("O-EXIT-CODES")

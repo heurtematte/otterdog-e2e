@@ -231,7 +231,7 @@ scratch directory below `E2E_CACHE_DIR`, which is deleted at session end (unless
 
 | Workflow | Trigger | What |
 |---|---|---|
-| `ci.yml` | push to main, pull requests | ruff, mypy (non-blocking), unit tier, offline tier of `release:latest` and `branch:main` (no secrets) |
+| `ci.yml` | push to main, pull requests | ruff, mypy, unit tier, offline tier of `release:latest` and `branch:main`, all blocking (no secrets) |
 | `e2e.yml` | dispatch, reusable | one live session per instance (`target`: one instance or a comma list, allowlist `E2E_INSTANCES`): `classify` (no secrets) then one `e2e` job per instance in the `e2e-<instance>` or `e2e-<instance>-untrusted` environment |
 | `e2e-otterdog-pr.yml` | dispatch only | validates `pr` and the 40-hex `sha`, then calls `e2e.yml` with `pr:<n>@<sha>` and base `auto` |
 | `e2e-webui.yml` | dispatch, reusable | the web-UI tier of a trusted SUT on one or several instances (one at a time), in the `e2e-<instance>-webui` environment (the only one holding the bot's password and TOTP seed) |

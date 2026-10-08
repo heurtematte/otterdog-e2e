@@ -11,6 +11,15 @@ priority: P1
 tags: [offline, org-roles, rulesets, org-settings, repo, secrets]
 observe: true
 variables: {plan: enterprise}
+references:
+  - pr: 777
+    note: >-
+      "fix: model allowed_merge_methods in the pull_request ruleset rule": the pull_request rule of rulesets gains
+      allowed_merge_methods (template default merge, squash, rebase), so show, show-default and local-plan print
+      it for every ruleset with a pull_request rule.
+    expected_deltas:
+      - {step: enterprise-features, kind: cli, key: local-plan}
+      - {step: enterprise-features, kind: cli, key: show}
 steps:
   - name: enterprise-features
     base_fragments: {}

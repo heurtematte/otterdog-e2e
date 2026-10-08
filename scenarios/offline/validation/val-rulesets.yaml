@@ -13,6 +13,20 @@ priority: P1
 tags: [offline, rulesets, environments]
 observe: true
 variables: {plan: free}
+references:
+  - pr: 777
+    note: >-
+      "fix: model allowed_merge_methods in the pull_request ruleset rule": the pull_request rule of rulesets gains
+      allowed_merge_methods (template default merge, squash, rebase), so show, show-default and local-plan print
+      it for every ruleset with a pull_request rule.
+    expected_deltas:
+      - {step: branch-and-push-patterns, kind: cli, key: show}
+      - {step: deployment-environments, kind: cli, key: show}
+      - {step: tag-patterns, kind: cli, key: show}
+      - {step: target-and-enforcement, kind: cli, key: show}
+      - {step: unknown-bypass-role, kind: cli, key: show}
+      - {step: valid-rulesets, kind: cli, key: show}
+      - {step: valid-rulesets, kind: cli, key: local-plan}
 steps:
   - name: target-and-enforcement
     fragments:

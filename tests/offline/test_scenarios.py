@@ -35,6 +35,62 @@ MISSING_STRICT = "has not set required parameter 'required_status_checks.strict'
 PLANNING_ABORTED = "Planning aborted due to validation errors"
 # #790 validates org rulesets with the organization as parent object, which has no get_model_header (upstream defect)
 ORG_RULESET_CRASH = "object has no attribute 'get_model_header'"
+# eclipse-csi/otterdog#777 (squash commit on main): a jsonschema error of the configuration becomes a load error
+# ("Validation failed" + "failed to load configuration: invalid value at '<path>': <message>", exit 1) instead of an
+# escaped exception ("Error: <message>" with the schema path, exit 2)
+FIX_777 = "7ffc5e5d8bf8a7db7d2757a3fa40af89dc98e6e3"
+SCHEMA_LOAD_ERROR = "failed to load configuration: invalid value at '"
+# scenario -> step -> (schema message, schema path printed before #777); the YAML keeps the SUT-neutral part
+SCHEMA_ERROR_STEPS: dict[str, dict[str, tuple[str, str]]] = {
+    "O-EXTEND-REPO": {
+        "extension-without-definition": (
+            "'private' is a required property",
+            "schema['properties']['repositories']['items']",
+        ),
+    },
+    "O-SHOW-ROLE-FIELDS": {
+        "visibility-refused": (
+            "Unevaluated properties are not allowed ('visibility' was unexpected)",
+            "schema['properties']['roles']['items']",
+        ),
+        "selected-repositories-refused": (
+            "Unevaluated properties are not allowed ('selected_repositories' was unexpected)",
+            "schema['properties']['roles']['items']",
+        ),
+    },
+    "O-VAL-SCHEMA": {
+        "unknown-repository-secret-key": (
+            "Unevaluated properties are not allowed ('foo' was unexpected)",
+            "['repositories']['items']['properties']['secrets']['items']",
+        ),
+        "unknown-org-variable-key": (
+            "Unevaluated properties are not allowed ('foo' was unexpected)",
+            "schema['properties']['variables']['items']",
+        ),
+        "unknown-ruleset-key": (
+            "Unevaluated properties are not allowed ('foo' was unexpected)",
+            "['repositories']['items']['properties']['rulesets']['items']",
+        ),
+        "unknown-role-key": (
+            "Unevaluated properties are not allowed ('foo' was unexpected)",
+            "schema['properties']['roles']['items']",
+        ),
+        "unknown-org-workflows-key": (
+            "Unevaluated properties are not allowed ('foo' was unexpected)",
+            "schema['properties']['settings']['properties']['workflows']",
+        ),
+        "unknown-repository-workflows-key": (
+            "Unevaluated properties are not allowed ('foo' was unexpected)",
+            "['repositories']['items']['properties']['workflows']",
+        ),
+        "wrong-type": ("123 is not of type 'boolean'", "['repositories']['items']['properties']['has_wiki']"),
+        "secret-without-value": ("None is not of type 'string'", "['secrets']['items']['properties']['value']"),
+        "values-editable-by": (
+            "'anyone' is not ",  # anyOf message before #777, enum message ("is not one of [...]") since
+            "['custom_properties']['items']['properties']['values_editable_by']",
+        ),
+    },
+}
 
 
 class History(Protocol):
@@ -151,7 +207,27 @@ def expect_org_ruleset_strict(outcome: ScenarioOutcome, history: History) -> Non
         )
 
 
+def expect_schema_errors(outcome: ScenarioOutcome, history: History) -> None:
+    """Steps of SCHEMA_ERROR_STEPS: since #777 the schema error is a load error naming the invalid value (exit 1);
+    before, the exception escapes with its schema path (exit 2, no validation summary). When the mirror cannot tell,
+    the step must show one of the two behaviours consistently."""
+    has_fix = has_commit(history, FIX_777, "#777")
+    for name, (message, schema_path) in SCHEMA_ERROR_STEPS[outcome.scenario].items():
+        validate = result_of(step_outcome(outcome, name), "validate")
+        text = normalize_text(validate.output)
+        assert message in text, f"step {name!r}: {message!r} missing\n{tail(validate)}"
+        load_error = has_fix if has_fix is not None else validate.exit_code == 1
+        if load_error:
+            assert validate.exit_code == 1, f"step {name!r}: since #777 exit 1, got {validate.exit_code}"
+            assert "Validation failed" in text and SCHEMA_LOAD_ERROR in text, f"step {name!r}\n{tail(validate)}"
+        else:
+            assert validate.exit_code == 2, f"step {name!r}: before #777 exit 2, got {validate.exit_code}"
+            assert f"Error: {message}" in text and schema_path in text, f"step {name!r}\n{tail(validate)}"
+            assert "Validation failed" not in text, f"step {name!r}: no validation summary\n{tail(validate)}"
+
+
 SUT_EXPECTATIONS: dict[str, tuple[Callable[[ScenarioOutcome, History], None], ...]] = {
     "O-VAL-RULESET-STRICT": (expect_ruleset_strict,),
     "O-VAL-ORG-RULESET-STRICT": (expect_org_ruleset_strict,),
+    **dict.fromkeys(SCHEMA_ERROR_STEPS, (expect_schema_errors,)),
 }

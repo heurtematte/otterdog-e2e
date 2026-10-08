@@ -509,7 +509,18 @@ def test_split_location() -> None:
 def git(root: Path, *args: str) -> None:
     """Run git in the checkout (test setup only)."""
     subprocess.run(
-        ["git", "-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "core.hooksPath=/dev/null", *args],
+        [
+            "git",
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@example.invalid",
+            "-c",
+            "core.hooksPath=/dev/null",
+            "-c",
+            "commit.gpgsign=false",
+            *args,
+        ],
         cwd=root,
         check=True,
         capture_output=True,

@@ -557,7 +557,9 @@ def test_ci_workflow_has_no_secrets() -> None:
     assert {"lint", "unit", "offline"} <= set(ci_jobs)
     assert all("environment" not in job for job in ci_jobs.values())
     mypy = [step for step in steps(ci_jobs["lint"]) if "mypy" in str(step.get("run"))]
-    assert mypy and mypy[0].get("continue-on-error") is True, "mypy is non-blocking"
+    assert mypy and "continue-on-error" not in mypy[0], "mypy is blocking"
+    # a red job must make the workflow red: no step or job of ci.yml may continue on error
+    assert "continue-on-error" not in workflow_text("ci"), "every ci.yml job and step is blocking"
     assert ci_jobs["offline"]["strategy"]["matrix"]["sut"] == ["release:latest", "branch:main"]
 
 

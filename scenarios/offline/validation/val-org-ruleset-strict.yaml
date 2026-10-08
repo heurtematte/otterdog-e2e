@@ -23,6 +23,13 @@ references:
       crashes with "'GitHubOrganization' object has no attribute 'get_model_header'" (exit 2) instead of reporting the
       missing parameter, a defect introduced by #790 (KB-008) that the differential report must keep flagging as an
       UNEXPECTED delta until it is fixed (live counterpart: E-ORG-RULESET, enterprise.org-ruleset.missing-strict).
+  - pr: 777
+    note: >-
+      "fix: model allowed_merge_methods in the pull_request ruleset rule": the pull_request rule of rulesets gains
+      allowed_merge_methods (template default merge, squash, rebase), so show, show-default and local-plan print
+      it for every ruleset with a pull_request rule.
+    expected_deltas:
+      - {step: org-no-strict, kind: cli, key: show}
 steps:
   - name: org-no-strict
     fragments:

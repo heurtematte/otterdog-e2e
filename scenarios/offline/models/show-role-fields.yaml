@@ -11,6 +11,17 @@ priority: P2
 tags: [offline, org-roles]
 observe: true
 variables: {plan: enterprise}
+references:
+  - pr: 777
+    note: >-
+      "fix: model allowed_merge_methods in the pull_request ruleset rule" also turns jsonschema errors of the
+      configuration into load errors: 'Validation failed' + "failed to load configuration: invalid value at
+      '<path>': <message>", exit 1, instead of an escaped exception ('Error: <message>' with the schema path,
+      exit 2). The YAML keeps the SUT-neutral message; tests/offline/test_scenarios.py SCHEMA_ERROR_STEPS checks
+      the behaviour of the SUT under test; validate, show and local-plan of these steps all go from exit 2 to 1.
+    expected_deltas:
+      - {step: visibility-refused, kind: cli}
+      - {step: selected-repositories-refused, kind: cli}
 steps:
   - name: role-fields
     base_fragments: {}
@@ -36,16 +47,12 @@ steps:
       roles: ["orgs.newOrgRole('{{ p }}-role') { base_role: 'read', visibility: 'all' }"]
     validate:
       ok: false
-      exit_code: 2
       contains:
-        - "Error: Unevaluated properties are not allowed ('visibility' was unexpected)"
-        - "schema['properties']['roles']['items']"
+        - "Unevaluated properties are not allowed ('visibility' was unexpected)"
   - name: selected-repositories-refused
     fragments:
       roles: ["orgs.newOrgRole('{{ p }}-role') { base_role: 'read', selected_repositories: ['{{ p }}-repo'] }"]
     validate:
       ok: false
-      exit_code: 2
       contains:
-        - "Error: Unevaluated properties are not allowed ('selected_repositories' was unexpected)"
-        - "schema['properties']['roles']['items']"
+        - "Unevaluated properties are not allowed ('selected_repositories' was unexpected)"

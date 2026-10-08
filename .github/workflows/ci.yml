@@ -45,8 +45,7 @@ jobs:
         run: .venv/bin/ruff check src tests docs_hooks.py
       - name: ruff format
         run: .venv/bin/ruff format --check src tests docs_hooks.py
-      - name: mypy (non-blocking)
-        continue-on-error: true
+      - name: mypy
         run: .venv/bin/mypy src docs_hooks.py
 
   unit:
@@ -90,8 +89,8 @@ jobs:
     timeout-minutes: 45
     permissions:
       contents: read
-    # upstream main may be broken by an otterdog change: report it without blocking harness changes
-    continue-on-error: ${{ matrix.sut == 'branch:main' }}
+    # every SUT is blocking: an otterdog change on main that breaks an expectation fails the workflow, so the
+    # scenarios are adapted (references and SUT-dependent expectations) instead of the failure going unnoticed
     strategy:
       fail-fast: false
       matrix:

@@ -14,6 +14,27 @@ priority: P1
 tags: [offline, repo, secrets, variables, rulesets, org-roles, workflows, custom-properties, webhooks, template]
 observe: true
 variables: {plan: free}
+references:
+  - pr: 777
+    note: >-
+      "fix: model allowed_merge_methods in the pull_request ruleset rule" also turns jsonschema errors of the
+      configuration into load errors: 'Validation failed' + "failed to load configuration: invalid value at
+      '<path>': <message>", exit 1, instead of an escaped exception ('Error: <message>' with the schema path,
+      exit 2). The YAML keeps the SUT-neutral message; tests/offline/test_scenarios.py SCHEMA_ERROR_STEPS checks
+      the behaviour of the SUT under test; validate, show and local-plan of these steps all go from exit 2 to 1.
+    expected_deltas:
+      - {step: multi-select-property-with-underscore, kind: cli}
+      - {step: team-permission-uppercase-alias, kind: cli}
+      - {step: team-permission-value, kind: cli}
+      - {step: unknown-repository-secret-key, kind: cli}
+      - {step: unknown-org-variable-key, kind: cli}
+      - {step: unknown-ruleset-key, kind: cli}
+      - {step: unknown-role-key, kind: cli}
+      - {step: unknown-org-workflows-key, kind: cli}
+      - {step: unknown-repository-workflows-key, kind: cli}
+      - {step: wrong-type, kind: cli}
+      - {step: secret-without-value, kind: cli}
+      - {step: values-editable-by, kind: cli}
 steps:
   - name: unknown-properties-ignored
     base_fragments: {}
@@ -53,76 +74,61 @@ steps:
         - "orgs.newRepo('{{ p }}-unknown') { secrets: [orgs.newRepoSecret('{{ P }}_X') { value: '********', foo: 1 }] }"
     validate:
       ok: false
-      exit_code: 2
       contains:
-        - "Error: Unevaluated properties are not allowed ('foo' was unexpected)"
-        - "['repositories']['items']['properties']['secrets']['items']"
-      not_contains: ["Validation failed", "Validation succeeded"]
+        - "Unevaluated properties are not allowed ('foo' was unexpected)"
+      not_contains: ["Validation succeeded"]
   - name: unknown-org-variable-key
     fragments:
       variables: ["orgs.newOrgVariable('{{ P }}_V') { value: 'x', foo: 1 }"]
     validate:
       ok: false
-      exit_code: 2
       contains:
-        - "Error: Unevaluated properties are not allowed ('foo' was unexpected)"
-        - "schema['properties']['variables']['items']"
-      not_contains: ["Validation failed", "Validation succeeded"]
+        - "Unevaluated properties are not allowed ('foo' was unexpected)"
+      not_contains: ["Validation succeeded"]
   - name: unknown-ruleset-key
     fragments:
       repositories:
         - "orgs.newRepo('{{ p }}-unknown') { rulesets: [orgs.newRepoRuleset('{{ p }}-rs') { foo: 1 }] }"
     validate:
       ok: false
-      exit_code: 2
       contains:
-        - "Error: Unevaluated properties are not allowed ('foo' was unexpected)"
-        - "['repositories']['items']['properties']['rulesets']['items']"
-      not_contains: ["Validation failed", "Validation succeeded"]
+        - "Unevaluated properties are not allowed ('foo' was unexpected)"
+      not_contains: ["Validation succeeded"]
   - name: unknown-role-key
     fragments:
       roles: ["orgs.newOrgRole('{{ p }}-role') { foo: 1 }"]
     validate:
       ok: false
-      exit_code: 2
       contains:
-        - "Error: Unevaluated properties are not allowed ('foo' was unexpected)"
-        - "schema['properties']['roles']['items']"
-      not_contains: ["Validation failed", "use of organization roles requires"]
+        - "Unevaluated properties are not allowed ('foo' was unexpected)"
+      not_contains: ["use of organization roles requires"]
   - name: unknown-org-workflows-key
     fragments:
       settings: ["workflows+: { foo: 1 }"]
     validate:
       ok: false
-      exit_code: 2
       contains:
-        - "Error: Unevaluated properties are not allowed ('foo' was unexpected)"
-        - "schema['properties']['settings']['properties']['workflows']"
-      not_contains: ["Validation failed", "Validation succeeded"]
+        - "Unevaluated properties are not allowed ('foo' was unexpected)"
+      not_contains: ["Validation succeeded"]
   - name: unknown-repository-workflows-key
     fragments:
       repositories: ["orgs.newRepo('{{ p }}-unknown') { workflows+: { foo: 1 } }"]
     validate:
       ok: false
-      exit_code: 2
       contains:
-        - "Error: Unevaluated properties are not allowed ('foo' was unexpected)"
-        - "['repositories']['items']['properties']['workflows']"
-      not_contains: ["Validation failed", "Validation succeeded"]
+        - "Unevaluated properties are not allowed ('foo' was unexpected)"
+      not_contains: ["Validation succeeded"]
   - name: wrong-type
     base_fragments: {}
     fragments:
       repositories: ["orgs.newRepo('{{ p }}-types') { has_wiki: 123 }"]
     validate:
       ok: false
-      exit_code: 2
       contains:
-        - "Error: 123 is not of type 'boolean'"
-        - "['repositories']['items']['properties']['has_wiki']"
-      not_contains: ["Validation failed", "Validation succeeded"]
+        - "123 is not of type 'boolean'"
+      not_contains: ["Validation succeeded"]
     plan:
       expect: validation_error
-      exit_code: 2
       contains: ["123 is not of type 'boolean'"]
       not_contains: ["Plan: "]
   - name: secret-without-value
@@ -130,19 +136,16 @@ steps:
       repositories: ["orgs.newRepo('{{ p }}-types') { secrets: [orgs.newRepoSecret('{{ P }}_NO_VALUE')] }"]
     validate:
       ok: false
-      exit_code: 2
       contains:
-        - "Error: None is not of type 'string'"
-        - "['secrets']['items']['properties']['value']"
+        - "None is not of type 'string'"
   - name: values-editable-by
     fragments:
       custom_properties: ["orgs.newCustomProperty('{{ p }}-editable') { values_editable_by: 'anyone' }"]
     validate:
       ok: false
-      exit_code: 2
       contains:
-        - "Error: 'anyone' is not valid under any of the given schemas"
-        - "['custom_properties']['items']['properties']['values_editable_by']"
+        # before #777: "is not valid under any of the given schemas"; since: "is not one of ['org_actors', ...]"
+        - "'anyone' is not "
   - name: team-permission-value
     known_bug: KB-032
     fragments:

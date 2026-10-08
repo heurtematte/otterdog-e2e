@@ -12,6 +12,16 @@ priority: P2
 tags: [offline, repo, template]
 observe: true
 variables: {plan: free}
+references:
+  - pr: 777
+    note: >-
+      "fix: model allowed_merge_methods in the pull_request ruleset rule" also turns jsonschema errors of the
+      configuration into load errors: 'Validation failed' + "failed to load configuration: invalid value at
+      '<path>': <message>", exit 1, instead of an escaped exception ('Error: <message>' with the schema path,
+      exit 2). The YAML keeps the SUT-neutral message; tests/offline/test_scenarios.py SCHEMA_ERROR_STEPS checks
+      the behaviour of the SUT under test; validate, show and local-plan of these steps all go from exit 2 to 1.
+    expected_deltas:
+      - {step: extension-without-definition, kind: cli}
 steps:
   - name: extension-after-definition
     base_fragments: {}
@@ -59,7 +69,5 @@ steps:
       repositories: ["orgs.extendRepo('{{ p }}-only') { description: 'b' }"]
     validate:
       ok: false
-      exit_code: 2
       contains:
-        - "Error: 'private' is a required property"
-        - "schema['properties']['repositories']['items']"
+        - "'private' is a required property"
