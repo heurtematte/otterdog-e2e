@@ -253,6 +253,74 @@ The web-UI tier ([web-ui-testing.md](web-ui-testing.md)) lets otterdog log in to
   stops further attempts (no lockout through retries);
 - the original web settings are recorded before the tier changes them and restored with the trusted reset SUT.
 
+### Secrets in an external vault (T1, T3)
+
+The value of a secret variable (a name ending with `_TOKEN`, `_SECRET`, `_PASSWORD`, `_TOTP_SEED` or `_PRIVATE_KEY`)
+may be a **reference** to an external vault instead of the secret, in an instance env file or in the environment
+(`vaults.py`). The syntax is the one of otterdog's own secret references:
+
+| Reference | Vault | Reads |
+|---|---|---|
+| `vault:<path>/<field>` | HashiCorp Vault, KV v2 | the field `<field>` of the secret `<path>` of the mount `E2E_VAULT_MOUNT` (default `secret`); without `/`, the field `value` of `<path>` |
+| `pass:<path>` | pass, or gopass with `E2E_PASS_BIN=gopass` | the whole entry of `pass show <path>` (a PEM keeps its lines) |
+| `bitwarden:<item id>@<field>` | Bitwarden (`bw`, `E2E_BITWARDEN_BIN`) | a custom field of the item, or `login.username`, `login.password`, `login.totp` (the TOTP seed), `notes` |
+
+```bash
+# ~/.config/otterdog-e2e/acme-a.env
+E2E_ADMIN_TOKEN=vault:otterdog-e2e/acme-a/admin/token
+E2E_APP_PRIVATE_KEY=vault:otterdog-e2e/acme-a/app/private_key
+E2E_ADMIN_TOTP_SEED=bitwarden:4f6d0c1e-8a2b-4c1d-9e7f-0a1b2c3d4e5f@login.totp
+E2E_VAULT_ADDR=https://vault.example.org
+```
+
+- **When**: the harness resolves a reference when it reads the variable (`settings`), so a command reaches only the
+  vaults of the secrets it uses (an offline run reaches none). Each reference is read once per process; its value
+  and every Vault token involved are registered with the redactor at once. A reference is not a secret: it stays
+  readable in messages and is never masked. An unreadable reference is an error naming the variable and the
+  reference, never a value. The CI scrub step resolves the references of its environment too, and fails when it
+  cannot: it needs the values to find them in the artifacts.
+- **Vault login**: `E2E_VAULT_ADDR` (else `VAULT_ADDR`; `https://` only, except a loopback address),
+  `E2E_VAULT_NAMESPACE` (else `VAULT_NAMESPACE`), `VAULT_CACERT`. On a workstation: `VAULT_TOKEN`, else
+  `~/.vault-token` (`vault login`). In a GitHub Actions job with `E2E_VAULT_ROLE`: the job's OIDC token on the JWT
+  auth method `E2E_VAULT_AUTH_MOUNT` (default `jwt`), with the audience `E2E_VAULT_AUDIENCE` (default: GitHub's, the
+  URL of the repository owner). No Vault token is stored in GitHub.
+- **pass and Bitwarden** run their CLI (`procs.run`, never a shell) with your HOME and their own variables
+  (`PASSWORD_STORE_*`, `GNUPGHOME`; `BW_*`), which every other child process loses. They run without a terminal:
+  unlock them first (a gpg-agent holding the passphrase, or a graphical pinentry;
+  `export BW_SESSION="$(bw unlock --raw)"`).
+- **setup** accepts a reference at every secret prompt (tokens, web password, TOTP setup key): it resolves the
+  reference with your own vault access, checks the value like a typed one and writes the reference. The App step
+  still writes the key file and the webhook secret: move them to the vault afterwards (`E2E_APP_PRIVATE_KEY=vault:...`,
+  `E2E_APP_WEBHOOK_SECRET=vault:...`) and delete the files.
+- **CI** reads HashiCorp Vault only. `ci-sync` stores a `vault:` reference as it is when the env file sets
+  `E2E_VAULT_ROLE` and `E2E_VAULT_ADDR`: the GitHub secret then holds a path, and the job reads the value with its
+  OIDC token. Without a role, and for `pass:` and `bitwarden:` references (a runner has no such vault), ci-sync
+  resolves the reference with your own access and stores the value, as for a plain secret.
+  `E2E_VAULT_ROLE_UNTRUSTED` and `E2E_VAULT_ROLE_WEBUI` give the untrusted and the web-UI environments their own
+  role.
+- **id-token**: the jobs holding secrets (`e2e.yml` e2e, `e2e-webui.yml` webui, `janitor.yml` janitor) and the jobs
+  calling their workflows (a caller caps the permissions of the called workflow) hold `id-token: write`, no other job
+  does (`tests/unit/test_workflows_static.py`). Any step of those jobs can mint an OIDC token, so every action stays
+  pinned to a commit; the request token is an `ACTIONS_*` variable, which procs strips from otterdog, git and every
+  container.
+- **On the Vault side**, bind each role to the repository and to one environment (the `repository` and
+  `environment` claims), give each environment its own read-only policy on the paths of its instance, and keep the
+  web-UI credentials out of the untrusted environment's policy:
+
+```bash
+vault write auth/jwt/config oidc_discovery_url=https://token.actions.githubusercontent.com \
+  bound_issuer=https://token.actions.githubusercontent.com
+vault policy write otterdog-e2e-acme-a-untrusted - <<'POLICY'
+path "secret/data/otterdog-e2e/acme-a/*" { capabilities = ["read"] }
+path "secret/data/otterdog-e2e/acme-a/web" { capabilities = ["deny"] }
+POLICY
+vault write auth/jwt/role/otterdog-e2e-acme-a-untrusted - <<'ROLE'
+{"role_type": "jwt", "user_claim": "repository", "bound_audiences": ["https://github.com/<owner>"],
+ "bound_claims": {"repository": "<owner>/otterdog-e2e", "environment": "e2e-acme-a-untrusted"},
+ "token_policies": ["otterdog-e2e-acme-a-untrusted"], "token_ttl": "15m"}
+ROLE
+```
+
 ### Processes and environment (T3)
 
 Every subprocess runs through `procs.run()` with a sanitized environment: variables matching `E2E_*`, `OTTER*`,

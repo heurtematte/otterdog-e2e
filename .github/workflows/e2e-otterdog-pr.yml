@@ -123,6 +123,8 @@ jobs:
     needs: resolve
     permissions:
       contents: read
+      # the called workflow logs in to HashiCorp Vault with its OIDC token (a caller caps its permissions)
+      id-token: write
     cache-mode: none
     uses: ./.github/workflows/e2e.yml
     with:

@@ -41,7 +41,10 @@ written (the other instances' files first, then this one) once the token passed 
 owner, the invited login); a refused token changes no file. Other cases: set E2E_ALLOWED_ORG_IDS by hand.
 
 Refused in CI (context.in_ci). Secrets are read with hidden prompts only, registered with REDACTOR at once and never
-echoed; every echoed text is redacted.
+echoed; every echoed text is redacted. Every secret prompt (tokens, web password, TOTP setup key) also accepts a vault
+reference (``vault:<path>/<field>``, ``pass:<path>``, ``bitwarden:<item>@<field>``, vaults.py): it is resolved with
+the operator's own vault access, the value checked like a typed one, and the REFERENCE written; a stored reference is
+resolved before its checks (secret).
 """
 
 from __future__ import annotations
@@ -83,6 +86,7 @@ from otterdog_e2e.settings import (
     WebCredentialsError,
     normalize_totp_seed,
 )
+from otterdog_e2e.vaults import VaultError, is_reference, resolve
 from otterdog_e2e.waiting import WaitTimeoutError, wait_until
 
 if TYPE_CHECKING:
@@ -361,7 +365,9 @@ class SetupWizard:
                 "setup is interactive and refused when CI is set: run it on your machine, then `otterdog-e2e ci-sync`"
             )
         self.values = read_env_file(self.env_path)
-        REDACTOR.add(*(value for key, value in self.values.items() if SECRET_KEY_RE.search(key)))
+        REDACTOR.add(
+            *(value for key, value in self.values.items() if SECRET_KEY_RE.search(key) and not is_reference(value))
+        )
         self.echo(f"otterdog-e2e setup of instance {self.instance}: {self.env_path}")
         self.copy_from()
         org = self.org_step()
@@ -478,19 +484,40 @@ class SetupWizard:
         if stored and self.io.confirm(f"Remove the unusable {spec.token_env} from {self.env_path}?", True):
             self.write({spec.token_env: None, spec.login_env: None, spec.type_env: None})
 
-    def keep_stored(self, role: str, token: str, org: OrgInfo) -> bool:
-        """Validate the stored token; True (and its login/type refreshed) when it passes."""
+    def keep_stored(self, role: str, stored: str, org: OrgInfo) -> bool:
+        """Validate the stored token (a vault reference resolved first); True (and its login/type refreshed) when it
+        passes."""
         spec = ROLE_TOKENS[role]
         try:
+            token = self.secret(spec.token_env) or ""
             checked = self.check_token(role, token, org)
-        except TokenRejectedError as exc:
+        except (TokenRejectedError, SetupError) as exc:
             self.echo(f"{role}: the stored {spec.token_env} is not usable: {exc}")
             return False
         self.echo(
             f"{role}: keeping the token of {checked.login} ({TOKEN_KIND_LABELS[checked.kind]}, {_expiry(checked)})"
         )
-        self.record(role, token, checked, org)
+        self.record(role, token, checked, org, written=stored)
         return True
+
+    def secret(self, name: str) -> str | None:
+        """The stored value of a secret variable, a vault reference resolved (SetupError when it cannot be read)."""
+        value = self.values.get(name)
+        if not value or not is_reference(value):
+            return value
+        try:
+            return resolve(value, {**self.environ, **self.values}).strip()
+        except VaultError as exc:
+            raise SetupError(f"{name}: {exc}") from None
+
+    def typed_secret(self, label: str, answer: str) -> tuple[str, str | None]:
+        """(value, reference) of a typed secret: a vault reference resolved (SetupError when it cannot be read)."""
+        if not is_reference(answer):
+            return answer, None
+        try:
+            return resolve(answer, {**self.environ, **self.values}).strip(), answer
+        except VaultError as exc:
+            raise SetupError(f"{label}: {exc}") from None
 
     def url_kind(self, role: str) -> str:
         """Kind of the prefilled URL: the only kind of the role, else --token-type, the stored type, classic."""
@@ -575,7 +602,7 @@ class SetupWizard:
         bootstrap's): the only writing client of setup (invitations and their cancellation)."""
         from otterdog_e2e import safety
 
-        admin_token = self.values.get(ROLE_TOKENS["admin"].token_env)
+        admin_token = self.secret(ROLE_TOKENS["admin"].token_env)
         if not admin_token:
             raise SetupError("the admin token is needed for the invitations")
         verified = safety.verify_target(
@@ -652,7 +679,7 @@ class SetupWizard:
         empty = "keep the stored one" if stored else ("try again" if spec.required else "skip")
         other_account = False  # a token of another account than the invited one was refused
         for _ in range(MAX_ATTEMPTS):
-            token = self.io.secret_prompt(f"{role} token (input hidden; empty: {empty})").strip()
+            token = self.io.secret_prompt(f"{role} token or vault reference (input hidden; empty: {empty})").strip()
             if not token:
                 if spec.required and not stored:
                     self.echo(f"{role}: the token is required")
@@ -661,38 +688,39 @@ class SetupWizard:
                 if invited and other_account:
                     self.withdraw_invitation(role, invited, org)
                 return False
-            REDACTOR.add(token)
             try:
+                token, reference = self.typed_secret(f"{role} token", token)
+                REDACTOR.add(token)
                 checked = self.check_token(role, token, org)
                 if invited and checked.login.lower() != invited.lower():
                     other_account = True
                     raise TokenRejectedError(f"token of {checked.login}, but {invited} is the invited {role} account")
-            except TokenRejectedError as exc:
+            except (TokenRejectedError, SetupError) as exc:
                 self.echo(f"{role}: token refused, nothing written: {exc}")
                 continue
-            self.record(role, token, checked, org)
+            self.record(role, token, checked, org, written=reference)
             return True
         if invited and other_account:
             self.withdraw_invitation(role, invited, org)
         raise SetupError(f"{role}: no valid token after {MAX_ATTEMPTS} attempts (nothing written for this role)")
 
-    def record(self, role: str, token: str, checked: CheckedToken, org: OrgInfo) -> None:
-        """Write login, token and kind of a checked token (the admin's token as oracle is the fallback: not stored),
-        after the shared org ids its checks allowed (write_shared)."""
+    def record(self, role: str, token: str, checked: CheckedToken, org: OrgInfo, *, written: str | None = None) -> None:
+        """Write login, token (``written``: the vault reference it came from) and kind of a checked token (the admin's
+        token as oracle is the fallback: not stored), after the shared org ids its checks allowed (write_shared)."""
         spec = ROLE_TOKENS[role]
         self.write_shared(checked, org)
-        if role == "oracle" and token == self.values.get(ROLE_TOKENS["admin"].token_env):
+        if role == "oracle" and token == self.secret(ROLE_TOKENS["admin"].token_env):
             self.echo("oracle: same token as the admin, which is the oracle's fallback anyway: nothing stored")
             self.write({spec.token_env: None, spec.login_env: None, spec.type_env: None})
             return
         previous = self.values.get(spec.login_env)
         if previous and previous.lower() != checked.login.lower():
             self.echo(f"{role}: the login changes from {previous} to {checked.login}")
-        if token != self.values.get(spec.token_env):
+        if (written or token) != self.values.get(spec.token_env):
             self.echo(
                 f"{role}: token of {checked.login} accepted ({TOKEN_KIND_LABELS[checked.kind]}, {_expiry(checked)})"
             )
-        self.write({spec.login_env: checked.login, spec.token_env: token, spec.type_env: checked.kind})
+        self.write({spec.login_env: checked.login, spec.token_env: written or token, spec.type_env: checked.kind})
 
     def check_token(self, role: str, token: str, org: OrgInfo) -> CheckedToken:
         """Every check of a role's token (TokenRejectedError with the reason): shape, not another role's token, GET /user,
@@ -753,8 +781,13 @@ class SetupWizard:
         """TokenRejectedError when another role with a stored token already holds this ``token`` or ``account`` (login,
         case-insensitive); the oracle may share the admin's."""
         for other, spec in ROLE_TOKENS.items():
-            token = self.values.get(spec.token_env)
-            if other == role or {role, other} == {"admin", "oracle"} or not token:
+            if other == role or {role, other} == {"admin", "oracle"}:
+                continue
+            try:
+                token = self.secret(spec.token_env)
+            except SetupError:
+                continue  # an unreadable reference is reported at the step of its own role
+            if not token:
                 continue
             stored = token if what == "token" else (self.values.get(spec.login_env) or "").lower()
             if stored and stored == (value if what == "token" else value.lower()):
@@ -927,8 +960,9 @@ class SetupWizard:
         stored_seed = self.values.get(seed_env)
         if self.values.get(password_env) and stored_seed and WEB_ROTATION not in self.options.rotate:
             try:
-                normalize_totp_seed(stored_seed, where=seed_env)
-            except WebCredentialsError as exc:
+                self.secret(password_env)
+                normalize_totp_seed(self.secret(seed_env) or "", where=seed_env)
+            except (WebCredentialsError, SetupError) as exc:
                 self.echo(f"web-UI login: {exc}")
             else:
                 self.echo(f"web-UI login: keeping {password_env} and {seed_env}")
@@ -945,11 +979,26 @@ class SetupWizard:
             f"web-UI login of {admin}: two-factor authentication with an authenticator app (TOTP) only; its setup key "
             "is shown once while enrolling it (https://github.com/settings/security) and cannot be read back"
         )
-        password = self.io.secret_prompt(f"password of {admin} on github.com (input hidden; empty: skip)")
+        password = ""
+        for _ in range(MAX_ATTEMPTS):
+            answer = self.io.secret_prompt(
+                f"password of {admin} on github.com, or its vault reference (input hidden; empty: skip)"
+            )
+            if not answer:
+                break
+            try:
+                value, reference = self.typed_secret(password_env, answer)
+            except SetupError as exc:
+                self.echo(str(exc))
+                continue
+            REDACTOR.add(value)
+            password = reference or value
+            break
+        else:
+            raise SetupError(f"{password_env}: no readable password after {MAX_ATTEMPTS} attempts (nothing written)")
         if not password:
             self.echo("web-UI login: skipped")
             return
-        REDACTOR.add(password)
         seed = self.read_seed(seed_env)
         if seed is None:
             self.echo("web-UI login: skipped")
@@ -957,19 +1006,23 @@ class SetupWizard:
         self.write({password_env: password, seed_env: seed})
 
     def read_seed(self, seed_env: str) -> str | None:
-        """A TOTP setup key normalized by settings.normalize_totp_seed (None: skipped)."""
+        """A TOTP setup key normalized by settings.normalize_totp_seed, or the vault reference of a valid one (None:
+        skipped)."""
         for _ in range(MAX_ATTEMPTS):
-            raw = self.io.secret_prompt("TOTP setup key: base32 or otpauth:// URI (input hidden; empty: skip)").strip()
+            raw = self.io.secret_prompt(
+                "TOTP setup key: base32, otpauth:// URI or a vault reference (input hidden; empty: skip)"
+            ).strip()
             if not raw:
                 return None
-            REDACTOR.add(raw)
             try:
+                raw, reference = self.typed_secret(seed_env, raw)
+                REDACTOR.add(raw)
                 seed = normalize_totp_seed(raw, where=seed_env)
-            except WebCredentialsError as exc:
+            except (WebCredentialsError, SetupError) as exc:
                 self.echo(str(exc))
                 continue
             REDACTOR.add(seed, seed.lower())
-            return seed
+            return reference or seed
         raise SetupError(f"{seed_env}: no valid TOTP setup key after {MAX_ATTEMPTS} attempts (nothing written)")
 
     # --- GitHub App ---------------------------------------------------------------------------------------------

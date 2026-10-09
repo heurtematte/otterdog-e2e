@@ -156,6 +156,8 @@ jobs:
     timeout-minutes: 120
     permissions:
       contents: read
+      # the OIDC token logs in to HashiCorp Vault when E2E_VAULT_ROLE is set (secrets kept as vault: references)
+      id-token: write
     strategy:
       # one job per instance, one at a time: each session logs in to github.com as a bot from the shared runner IP
       # ranges (unusual-activity challenges); a failing instance never cancels the others
@@ -235,6 +237,13 @@ jobs:
           E2E_CAPABILITIES_ADD: ${{ vars.E2E_CAPABILITIES_ADD }}
           E2E_CAPABILITIES_REMOVE: ${{ vars.E2E_CAPABILITIES_REMOVE }}
           E2E_WEB_PROBE_APP_SLUG: ${{ vars.E2E_WEB_PROBE_APP_SLUG }}
+          # the HashiCorp Vault of the vault: references (docs/security.md#secrets-in-an-external-vault-t1-t3)
+          E2E_VAULT_ADDR: ${{ vars.E2E_VAULT_ADDR }}
+          E2E_VAULT_NAMESPACE: ${{ vars.E2E_VAULT_NAMESPACE }}
+          E2E_VAULT_MOUNT: ${{ vars.E2E_VAULT_MOUNT }}
+          E2E_VAULT_ROLE: ${{ vars.E2E_VAULT_ROLE }}
+          E2E_VAULT_AUTH_MOUNT: ${{ vars.E2E_VAULT_AUTH_MOUNT }}
+          E2E_VAULT_AUDIENCE: ${{ vars.E2E_VAULT_AUDIENCE }}
         run: |
           set -euo pipefail
           # environment-level variables -> GITHUB_ENV, so the harness and the janitor steps see the same target

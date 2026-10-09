@@ -78,8 +78,10 @@ def test_top_level_rules() -> None:
         target = trigger["inputs"]["target"]
         assert target["type"] == "string" and target["required"] is True and "options" not in target
     assert on["workflow_dispatch"]["inputs"]["target"]["default"] == "free"
-    for job in jobs("e2e-webui").values():
-        assert job["permissions"] == {"contents": "read"} and isinstance(job["timeout-minutes"], int)
+    for job_id, job in jobs("e2e-webui").items():
+        # the web job holds secrets: its OIDC token logs in to HashiCorp Vault (vault references, vaults.py)
+        expected = {"contents": "read", "id-token": "write"} if job_id == "webui" else {"contents": "read"}
+        assert job["permissions"] == expected and isinstance(job["timeout-minutes"], int)
 
 
 def test_actions_pinned_and_checkouts_without_credentials() -> None:
@@ -228,7 +230,9 @@ def test_nightly_web_job_is_optional_and_last() -> None:
     assert "E2E_WEB_UI_TARGETS" in job["strategy"]["matrix"]["target"]
     # one instance at a time (like the lists of e2e-webui.yml): the web logins of the bot accounts never overlap
     assert job["strategy"]["max-parallel"] == 1 and job["strategy"]["fail-fast"] is False
-    assert job["permissions"] == {"contents": "read"} and not secret_names(job) and "environment" not in job
+    # a caller caps the permissions of e2e-webui.yml: id-token for the Vault login of its web job
+    assert job["permissions"] == {"contents": "read", "id-token": "write"}
+    assert not secret_names(job) and "environment" not in job
 
 
 @pytest.mark.parametrize("name", ["e2e", "e2e-otterdog-pr", "janitor", "ci", "docs"])

@@ -94,6 +94,11 @@ The scopes and permissions are those of [setup-free-org.md](setup-free-org.md#3-
 [Permissions per role](setup-free-org.md#permissions-per-role) (a unit test keeps the page and the URLs equal). The
 config_reader's fine-grained token has its own account as resource owner and no permission.
 
+A token kept in an external vault is entered as its reference (`vault:<path>/<field>`, `pass:<path>`,
+`bitwarden:<item id>@<field>`), at this prompt as at the web password and TOTP prompts: setup reads it with your own
+vault access, checks the value like a typed token and writes the reference, never the value
+([Secrets in an external vault](security.md#secrets-in-an-external-vault-t1-t3)).
+
 Each token is checked before anything is written: its shape, `GET /user` (the login is taken from the token), its kind,
 the classic scopes of the role, the isolation of the account (`safety.check_identity_isolation`, as in every session)
 and, for the admin, an active owner membership. A token or an account already stored for another role is refused (only
@@ -249,6 +254,11 @@ secrets from its env file.
   `E2E_APP_PRIVATE_KEY_FILE`; `E2E_PROFILE` of an instance named after a profile is that name. A name without a value
   is skipped and listed. A variable whose name looks like a secret, or whose value holds a secret or a line break, is
   refused.
+- **Vault references**: a `vault:` reference is stored as it is when the env file sets `E2E_VAULT_ROLE` (overridden
+  per environment by `E2E_VAULT_ROLE_UNTRUSTED` and `E2E_VAULT_ROLE_WEBUI`) and `E2E_VAULT_ADDR`: the jobs read the
+  value with their OIDC token. Any other reference (`pass:`, `bitwarden:`, or `vault:` without a role) is resolved
+  with your own vault access and its value stored. The dry run says which secret is stored as a reference
+  ([Secrets in an external vault](security.md#secrets-in-an-external-vault-t1-t3)).
 - **`main` only, verified**: ci-sync first lists the deployment branch policies of each existing environment. A
   policy other than the branch `main` (a `*` pattern keeps every branch deployable) is refused with its name, unless
   `--prune-branch-policies`, which deletes each of them (the dry run prints "would delete" for each). Before it pushes

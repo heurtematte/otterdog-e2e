@@ -81,10 +81,22 @@ def register_environment_secrets(environ: Mapping[str, str], redactor: Redactor 
     """Register with the redactor (default REDACTOR) the values of the variables whose name matches SECRET_KEY_RE
     (``*_TOKEN``, ``*_SECRET``, ``*_PASSWORD``, ``*_TOTP_SEED``, ``*_PRIVATE_KEY``); returns how many were long enough
     to register. A separate scrub process (the CI scrub step) knows no secret of the session: without this, a leaked
-    value that has no token shape (the web-UI password, a TOTP seed, a webhook secret) would pass the scan."""
+    value that has no token shape (the web-UI password, a TOTP seed, a webhook secret) would pass the scan. A vault
+    reference is resolved first (vaults.py): the scan needs the value, and fails closed when it cannot be read."""
     from otterdog_e2e.redact import MIN_SECRET_LENGTH, SECRET_KEY_RE
+    from otterdog_e2e.vaults import VaultError, is_reference, resolve
 
-    values = [value for key, value in environ.items() if SECRET_KEY_RE.search(key) and len(value) >= MIN_SECRET_LENGTH]
+    values = []
+    for key, value in environ.items():
+        if not SECRET_KEY_RE.search(key):
+            continue
+        if is_reference(value):
+            try:
+                value = resolve(value, environ)
+            except VaultError as exc:
+                raise click.ClickException(f"{key}: {exc} (the scan needs the value to find it)") from None
+        if len(value) >= MIN_SECRET_LENGTH:
+            values.append(value)
     (REDACTOR if redactor is None else redactor).add(*values)
     return len(values)
 

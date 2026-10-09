@@ -24,6 +24,7 @@ from otterdog_e2e.onboard.cisync import (
     workflow_names,
 )
 from otterdog_e2e.procs import CompletedProcess
+from otterdog_e2e.vaults import VaultError
 
 ROOT = Path(__file__).resolve().parents[2]
 REPO = "acme/otterdog-e2e"
@@ -720,3 +721,93 @@ def test_cli_ci_sync_errors(home: Path, project: Path, monkeypatch: pytest.Monke
     monkeypatch.setenv("CI", "true")
     result = CliRunner().invoke(cli.main, ["ci-sync", "--target", "org2", "--apply"])
     assert result.exit_code == 1 and "Error: ci-sync uses your own gh login" in result.output
+
+
+# --- vault references --------------------------------------------------------------------------------------------------
+REFERENCES = {
+    "vault:e2e/org2/admin/token": SECRETS["E2E_ADMIN_TOKEN"],
+    "pass:e2e/org2/author": SECRETS["E2E_AUTHOR_TOKEN"],
+}
+VAULT_ROLES = """\
+E2E_ADMIN_TOKEN="vault:e2e/org2/admin/token"
+E2E_AUTHOR_TOKEN="pass:e2e/org2/author"
+E2E_VAULT_ADDR=https://vault.example.org
+E2E_VAULT_ROLE=otterdog-e2e-org2
+E2E_VAULT_ROLE_UNTRUSTED=otterdog-e2e-org2-untrusted"""
+
+
+@pytest.fixture
+def vault(monkeypatch: pytest.MonkeyPatch) -> dict[str, str]:
+    """The operator's vaults: REFERENCES resolve, any other reference is unreadable (VaultError)."""
+
+    def resolve(value: str, environ: object) -> str:
+        """REFERENCES[value]."""
+        if value not in REFERENCES:
+            raise VaultError(f"{value}: not found")
+        return REFERENCES[value]
+
+    monkeypatch.setattr("otterdog_e2e.onboard.cisync.resolve", resolve)
+    return REFERENCES
+
+
+def env_writes(gh: Gh, command: str) -> dict[tuple[str, str], str | None]:
+    """(name, environment) -> stdin (secrets) or --body (variables) of the environment writes of ``command``."""
+    return {
+        (args[2], args[4]): stdin if command == "secret" else args[6]
+        for args, stdin in gh.writes()
+        if args[:2] == (command, "set") and "--env" in args
+    }
+
+
+def test_vault_references_stay_references_for_jobs_with_a_vault_role(
+    home: Path, project: Path, vault: dict[str, str]
+) -> None:
+    """With E2E_VAULT_ROLE and E2E_VAULT_ADDR a vault: reference is stored as it is (the jobs read Vault with their
+    OIDC token), a pass: reference is resolved here and its value stored; every environment gets the Vault
+    variables, the untrusted one its own role; the dry run says which secret is a reference."""
+    write_env(home, web=False, extra=VAULT_ROLES)
+    sync, echoed = make_sync(home, project, Gh(repo_variables={"E2E_TARGETS": '["free"]'}))
+    sync.run(apply=False)
+    assert "  secret E2E_ADMIN_TOKEN in e2e-org2 (vault reference on stdin, the jobs read the value)" in echoed
+    assert "  secret E2E_AUTHOR_TOKEN in e2e-org2 (value of its pass reference, on stdin)" in echoed
+    gh = Gh(repo_variables={"E2E_TARGETS": '["free"]'})
+    sync, _ = make_sync(home, project, gh)
+    sync.run(apply=True)
+    secrets, variables = env_writes(gh, "secret"), env_writes(gh, "variable")
+    for env in ("e2e-org2", "e2e-org2-untrusted"):
+        assert secrets[("E2E_ADMIN_TOKEN", env)] == "vault:e2e/org2/admin/token"
+        assert secrets[("E2E_AUTHOR_TOKEN", env)] == SECRETS["E2E_AUTHOR_TOKEN"]
+        assert variables[("E2E_VAULT_ADDR", env)] == "https://vault.example.org"
+    assert variables[("E2E_VAULT_ROLE", "e2e-org2")] == "otterdog-e2e-org2"
+    assert variables[("E2E_VAULT_ROLE", "e2e-org2-untrusted")] == "otterdog-e2e-org2-untrusted"
+    assert not [name for name, _ in variables if name.startswith("E2E_VAULT_ROLE_")]
+
+
+def test_vault_references_are_resolved_without_a_vault_role(home: Path, project: Path, vault: dict[str, str]) -> None:
+    """Without E2E_VAULT_ROLE the jobs cannot read Vault: the reference is resolved here and the value stored."""
+    write_env(home, web=False, extra='E2E_ADMIN_TOKEN="vault:e2e/org2/admin/token"')
+    gh = Gh(repo_variables={"E2E_TARGETS": '["free"]'})
+    sync, _ = make_sync(home, project, gh)
+    sync.run(apply=True)
+    assert env_writes(gh, "secret")[("E2E_ADMIN_TOKEN", "e2e-org2")] == SECRETS["E2E_ADMIN_TOKEN"]
+
+
+@pytest.mark.parametrize(
+    ("extra", "message"),
+    [
+        ('E2E_ADMIN_TOKEN="pass:e2e/org2/nope"', "E2E_ADMIN_TOKEN: pass:e2e/org2/nope: not found"),
+        (
+            'E2E_ADMIN_TOKEN="vault:e2e/org2/admin/token"\nE2E_VAULT_ROLE=otterdog-e2e-org2',
+            "E2E_ADMIN_TOKEN: a vault reference read by the jobs needs E2E_VAULT_ADDR in the env file",
+        ),
+    ],
+)
+def test_unusable_references_are_refused(
+    home: Path, project: Path, vault: dict[str, str], extra: str, message: str
+) -> None:
+    """An unreadable reference, or a vault reference for jobs that would not know the Vault, stops ci-sync."""
+    write_env(home, web=False, extra=extra)
+    sync, _ = make_sync(home, project, Gh(repo_variables={"E2E_TARGETS": '["free"]'}))
+    with pytest.raises(CiSyncError, match=None) as info:
+        sync.run(apply=True)
+    assert message in str(info.value)

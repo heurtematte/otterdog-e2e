@@ -23,6 +23,7 @@ from otterdog_e2e.onboard.wizard import SetupError, SetupOptions, SetupWizard, W
 from otterdog_e2e.safety import SafetyError
 from otterdog_e2e.settings import HarnessSettings, Target, parse_env_text
 from otterdog_e2e.testing.fakes import FakeGitHubHttp, make_settings
+from otterdog_e2e.vaults import VaultError
 
 ROOT = Path(__file__).resolve().parents[2]
 ORG, ORG_ID = "e2e-test-org", 424242
@@ -697,7 +698,7 @@ def test_stored_valid_tokens_are_kept(world: World) -> None:
     run_wizard(world, script)
     assert "admin: keeping the token of e2e-admin (classic PAT, no expiration)" in script.output
     assert "author: keeping the token of e2e-author" in script.output
-    assert not [text for text in script.asked if "token (input hidden" in text]
+    assert not [text for text in script.asked if "token or vault reference (input hidden" in text]
 
 
 def test_rotate_asks_again_and_empty_keeps_the_stored_token(world: World) -> None:
@@ -1124,7 +1125,7 @@ def test_cli_setup_end_to_end(world: World, monkeypatch: pytest.MonkeyPatch) -> 
     )
     assert result.exit_code == 0, result.output
     assert world.env()["E2E_ADMIN_TOKEN"] == TOKENS["admin"]
-    assert TOKENS["admin"] not in result.output and "admin token (input hidden" in result.output
+    assert TOKENS["admin"] not in result.output and "admin token or vault reference (input hidden" in result.output
 
 
 @pytest.mark.parametrize("target", ["a,b", "@all", "Org2", "org2-webui"])
@@ -1216,3 +1217,71 @@ def test_setup_bootstrap_and_doctor_run_on_fresh_copies_of_the_pristine_environm
     assert [(target, environ) for target, environ, _ in created] == [("org2", pristine)] * 3
     assert pristine == {"HOME": "/nowhere", "E2E_ORG": "exported"} and "E2E_APP_ID" not in os.environ
     assert [context.closed for _, _, context in created] == [True, True, False]
+
+
+# --- vault references --------------------------------------------------------------------------------------------------
+REFERENCES = {
+    "pass:e2e/org2/admin-token": TOKENS["admin"],
+    "vault:e2e/org2/web/password": PASSWORD,
+    "bitwarden:item-1@login.totp": SEED,
+}
+
+
+@pytest.fixture
+def vault(monkeypatch: pytest.MonkeyPatch) -> dict[str, str]:
+    """The operator's vaults: REFERENCES resolve, any other reference is unreadable (VaultError)."""
+
+    def resolve(value: str, environ: object) -> str:
+        """REFERENCES[value]."""
+        if value not in REFERENCES:
+            raise VaultError(f"{value}: not found")
+        return REFERENCES[value]
+
+    monkeypatch.setattr("otterdog_e2e.onboard.wizard.resolve", resolve)
+    return REFERENCES
+
+
+def test_a_typed_token_reference_is_checked_and_written(world: World, vault: dict[str, str]) -> None:
+    """A token prompt accepts a vault reference: an unreadable one is refused, the resolved token passes the checks and
+    the REFERENCE is written; a re-run resolves the stored reference and keeps it."""
+    script = Script(secrets=["pass:e2e/org2/missing", "pass:e2e/org2/admin-token"])
+    run_wizard(world, script)
+    assert "admin: token refused, nothing written: admin token: pass:e2e/org2/missing: not found" in script.output
+    env = world.env()
+    assert env["E2E_ADMIN_TOKEN"] == "pass:e2e/org2/admin-token" and env["E2E_ADMIN_LOGIN"] == "e2e-admin"
+    rerun = Script(secrets=[])
+    run_wizard(world, rerun)
+    assert "admin: keeping the token of e2e-admin (classic PAT, no expiration)" in rerun.output
+    assert world.env()["E2E_ADMIN_TOKEN"] == "pass:e2e/org2/admin-token"
+    assert_no_secret(script.output + rerun.output)
+
+
+def test_a_stored_unreadable_reference_is_not_usable(world: World, vault: dict[str, str]) -> None:
+    """A stored reference that no longer resolves is reported as unusable and a new token is asked."""
+    run_wizard(world, Script(secrets=["pass:e2e/org2/admin-token"]))
+    del vault["pass:e2e/org2/admin-token"]
+    script = Script(secrets=[TOKENS["admin"]])
+    run_wizard(world, script)
+    assert "admin: the stored E2E_ADMIN_TOKEN is not usable: E2E_ADMIN_TOKEN: pass:e2e/org2/admin-token" in (
+        script.output
+    )
+    assert world.env()["E2E_ADMIN_TOKEN"] == TOKENS["admin"]
+    vault["pass:e2e/org2/admin-token"] = TOKENS["admin"]
+
+
+def test_web_login_references(world: World, vault: dict[str, str]) -> None:
+    """The web password and TOTP setup key prompts accept references: the resolved seed is validated, the references
+    are written and kept on a re-run."""
+    run_wizard(
+        world,
+        Script(
+            secrets=[TOKENS["admin"], "vault:e2e/org2/web/password", "bitwarden:item-1@login.totp"],
+            confirms={"web-UI login": True},
+        ),
+    )
+    env = world.env()
+    assert env["E2E_ADMIN_PASSWORD"] == "vault:e2e/org2/web/password"
+    assert env["E2E_ADMIN_TOTP_SEED"] == "bitwarden:item-1@login.totp"
+    script = Script(secrets=[])
+    run_wizard(world, script)
+    assert "web-UI login: keeping E2E_ADMIN_PASSWORD and E2E_ADMIN_TOTP_SEED" in script.output

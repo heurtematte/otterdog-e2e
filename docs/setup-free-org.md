@@ -124,6 +124,9 @@ Notes:
 - in a custom target file, quote `${...}` values inside YAML flow mappings (`{login: "${E2E_X}"}`), and keep the
   `*_env` names ending with `_TOKEN`, `_SECRET`, `_PASSWORD`, `_TOTP_SEED` or `_PRIVATE_KEY` so their values are
   redacted.
+- a secret may stay in an external vault: write its reference instead of its value
+  (`E2E_ADMIN_TOKEN=vault:otterdog-e2e/free/admin/token`, `pass:<path>`, `bitwarden:<item id>@<field>`), see
+  [Secrets in an external vault](security.md#secrets-in-an-external-vault-t1-t3).
 
 ## 5. First doctor run
 

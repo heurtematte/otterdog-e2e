@@ -92,6 +92,18 @@ PUBLIC_NAMES: dict[str, list[str]] = {
     "otterdog_e2e.capabilities": ["Cap", "PLAN_MATRIX", "PLANS", "Capabilities", "from_plan", "probe_capabilities"],
     "otterdog_e2e.redact": ["Redactor", "REDACTOR", "install_logging_filter", "SECRET_KEY_RE", "RedactingFilter"],
     "otterdog_e2e.waiting": ["WaitTimeoutError", "Deadline", "intervals", "poll", "wait_until", "retry"],
+    # secrets kept in an external vault: references resolved when the harness reads a secret variable
+    "otterdog_e2e.vaults": [
+        "PROVIDERS",
+        "VaultError",
+        "Reference",
+        "is_reference",
+        "parse",
+        "VaultSettings",
+        "Resolver",
+        "RESOLVER",
+        "resolve",
+    ],
     "otterdog_e2e.procs": [
         "sanitized_env",
         "run",

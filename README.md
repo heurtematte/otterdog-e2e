@@ -252,7 +252,7 @@ The documentation is published at https://heurtematte.github.io/otterdog-e2e/ (M
 | Document | Content |
 |---|---|
 | [architecture.md](docs/architecture.md) | components, tiers, data flow, safety model, differential testing |
-| [security.md](docs/security.md) | threat model, controls, CI environments, incident runbook |
+| [security.md](docs/security.md) | threat model, controls, secrets in an external vault (HashiCorp Vault, pass, Bitwarden), CI environments, incident runbook |
 | [onboarding.md](docs/onboarding.md) | the fast path: `setup`, `ci-sync`, instances and profiles, runs on several organizations, what GitHub does not let a program do |
 | [roles.md](docs/roles.md) | the roles (machine accounts) admin, oracle, author, approver, outsider, config_reader: what each one does in the tests, what is skipped without it, diagrams of their interactions with otterdog and the test organization |
 | [setup-free-org.md](docs/setup-free-org.md) | machine accounts, organization, tokens (classic or fine-grained), bootstrap, GitHub App, first run, by hand |

@@ -12,7 +12,9 @@ with bash and jq (skipped when missing) on accepted and refused values.
 
 docs.yml (the documentation site on GitHub Pages) follows the same rules, with the two exceptions a Pages deployment
 needs: its deploy job, the only job of the repository writing anything, holds ``pages: write`` and ``id-token: write``
-and runs in the ``github-pages`` environment (without secrets); its build job may read the Pages settings.
+and runs in the ``github-pages`` environment (without secrets); its build job may read the Pages settings. The jobs
+holding secrets, and the jobs calling their workflows, also hold ``id-token: write``: their OIDC token logs in to
+HashiCorp Vault when the secrets are kept as vault references (vaults.py); no other job gets one.
 """
 
 from __future__ import annotations
@@ -108,9 +110,14 @@ TARGET_VALIDATIONS = (
 # (workflow, job, step id) of the environment-less steps refusing REPO_LEVEL_REFUSED, before any job of an instance
 REPO_LEVEL_CHECKS = (*TARGET_VALIDATIONS[:2], ("janitor", "check", "repository"))
 # jobs whose permissions are not exactly {contents: read}: the GitHub Pages build and deployment of the documentation
+# the jobs holding secrets (VAULT_JOBS) and the callers of their workflows (VAULT_CALLERS: a caller caps the
+# permissions of the called workflow) log in to HashiCorp Vault with their OIDC token (vaults.py)
+VAULT_JOBS = (("e2e", "e2e"), ("e2e-webui", "webui"), ("janitor", "janitor"))
+VAULT_CALLERS = (("nightly", "release"), ("nightly", "main"), ("nightly", "webui"), ("e2e-otterdog-pr", "e2e"))
 JOB_PERMISSIONS = {
     ("docs", "build"): {"contents": "read", "pages": "read"},
     ("docs", "deploy"): {"pages": "write", "id-token": "write"},
+    **{job: {"contents": "read", "id-token": "write"} for job in (*VAULT_JOBS, *VAULT_CALLERS)},
 }
 PAGES_ENVIRONMENT = {"name": "github-pages", "url": "${{ steps.deployment.outputs.page_url }}"}
 DEPLOY_CONDITION = "github.event_name != 'pull_request' && github.ref == 'refs/heads/main'"
@@ -357,7 +364,7 @@ def test_top_level_permissions_are_empty(name: str) -> None:
 @pytest.mark.parametrize("name", WORKFLOW_NAMES)
 def test_every_job_only_reads_contents(name: str) -> None:
     """Each job (reusable workflow calls included) grants exactly ``contents: read``, except the GitHub Pages jobs of
-    docs.yml (JOB_PERMISSIONS)."""
+    docs.yml and the Vault logins of the jobs holding secrets (JOB_PERMISSIONS)."""
     for job_id, job in jobs(name).items():
         expected = JOB_PERMISSIONS.get((name, job_id), {"contents": "read"})
         assert job.get("permissions") == expected, f"{name}.{job_id}"
@@ -892,8 +899,9 @@ def test_docs_workflow_contract() -> None:
     assert steps(deploy)[0]["id"] == "deployment"
 
 
-def test_only_the_pages_deployment_writes() -> None:
-    """``pages: write`` and ``id-token: write`` are granted to the deploy job of docs.yml and nowhere else."""
+def test_only_the_pages_deployment_and_the_vault_logins_write() -> None:
+    """``pages: write`` and ``id-token: write`` are granted to the deploy job of docs.yml, ``id-token: write`` alone to
+    VAULT_JOBS and VAULT_CALLERS, nothing anywhere else."""
     for name in (*WORKFLOW_NAMES, *OTHER_WORKFLOWS):
         data = workflow(name)
         for scope, permissions in [
@@ -904,8 +912,24 @@ def test_only_the_pages_deployment_writes() -> None:
                 writes = {permissions} if permissions == "write-all" else set()
             else:
                 writes = {key for key, value in (permissions or {}).items() if value == "write"}
-            expected = {"pages", "id-token"} if (name, scope) == ("docs", "deploy") else set()
+            if (name, scope) == ("docs", "deploy"):
+                expected = {"pages", "id-token"}
+            else:
+                expected = {"id-token"} if (name, scope) in (*VAULT_JOBS, *VAULT_CALLERS) else set()
             assert writes == expected, f"{name}.{scope}: {permissions}"
+
+
+def test_the_vault_logins_are_the_jobs_holding_secrets() -> None:
+    """VAULT_JOBS are exactly the jobs reading ``secrets.*`` (a secret kept as a vault reference must resolve there),
+    VAULT_CALLERS exactly the jobs calling e2e.yml or e2e-webui.yml."""
+    holding, calling = set(), set()
+    for name in (*WORKFLOW_NAMES, *OTHER_WORKFLOWS):
+        for job_id, job in jobs(name).items():
+            if "secrets." in json.dumps(job.get("steps") or []) + json.dumps(job.get("env") or {}):
+                holding.add((name, job_id))
+            if str(job.get("uses", "")).endswith(("/e2e.yml", "/e2e-webui.yml")):
+                calling.add((name, job_id))
+    assert holding == set(VAULT_JOBS) and calling == set(VAULT_CALLERS), (sorted(holding), sorted(calling))
 
 
 # --- Makefile and hygiene files ---------------------------------------------------------------------------------------

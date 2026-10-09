@@ -27,7 +27,10 @@ Names per environment: the ``${{ vars.X }}`` and ``${{ secrets.X }}`` the workfl
 environment read in their steps and env (.github/workflows/*.yml), always plus E2E_PROFILE; repository variables
 (E2E_INSTANCES, E2E_TARGETS, E2E_WEB_UI_*) and GITHUB_TOKEN never. Values come from the instance env file
 (E2E_APP_PRIVATE_KEY = the content of E2E_APP_PRIVATE_KEY_FILE when only the file is set); names without a value are
-skipped and listed. Repository variables last: E2E_INSTANCES (JSON list of the dispatchable instances) gains the
+skipped and listed. A secret kept as a vault reference (vaults.py) is stored as the reference when the jobs of the
+environment can read Vault themselves (a ``vault:`` reference, E2E_VAULT_ROLE for that environment: E2E_VAULT_ROLE,
+overridden by E2E_VAULT_ROLE_UNTRUSTED / E2E_VAULT_ROLE_WEBUI, and E2E_VAULT_ADDR), else resolved here with the
+operator's own vault access and stored as the value (``pass:`` and ``bitwarden:`` always: CI has no such vault). Repository variables last: E2E_INSTANCES (JSON list of the dispatchable instances) gains the
 instance, and with --nightly E2E_TARGETS too (created from the nightly/janitor default ``["free"]`` plus the instance
 when absent). The workflows' allowlist is E2E_INSTANCES, else E2E_TARGETS, else the default instances: while
 E2E_INSTANCES is absent it is created from that OLD allowlist plus the instance whenever the instance is not in it or
@@ -54,6 +57,7 @@ from otterdog_e2e.onboard.envfile import check_instance_name, instance_env_path,
 from otterdog_e2e.procs import CompletedProcess
 from otterdog_e2e.redact import REDACTOR, SECRET_KEY_RE
 from otterdog_e2e.settings import DEFAULT_WEB_ENV, LOGIN_RE, TARGET_FILE_SUFFIXES, UPSTREAM_REPO_RE
+from otterdog_e2e.vaults import VaultError, is_reference, parse, resolve
 
 TRUSTED, UNTRUSTED, WEBUI = "trusted", "untrusted", "webui"
 ENVIRONMENT_KINDS = (TRUSTED, UNTRUSTED, WEBUI)
@@ -67,6 +71,8 @@ ALWAYS_VARIABLES = frozenset({"E2E_PROFILE"})
 WEB_SECRETS = frozenset({DEFAULT_WEB_ENV["password_env"], DEFAULT_WEB_ENV["totp_seed_env"]})
 AUTOMATIC_SECRETS = frozenset({"GITHUB_TOKEN"})
 APP_KEY_SECRET, APP_KEY_FILE = "E2E_APP_PRIVATE_KEY", "E2E_APP_PRIVATE_KEY_FILE"
+VAULT_ADDR, VAULT_ROLE = "E2E_VAULT_ADDR", "E2E_VAULT_ROLE"  # the Vault the jobs log in to with their OIDC token
+VAULT_ROLE_OVERRIDES: Mapping[str, str] = {UNTRUSTED: "E2E_VAULT_ROLE_UNTRUSTED", WEBUI: "E2E_VAULT_ROLE_WEBUI"}
 DEPLOYMENT_BRANCH = "main"
 BRANCH_POLICY_PAGE = 100  # one page of GET .../deployment-branch-policies (more is refused: not verifiable)
 MAX_REVIEWERS = 6  # GitHub's limit of required reviewers per environment
@@ -291,7 +297,7 @@ class CiSync:
                 f"{self.env_path} does not exist: run `otterdog-e2e setup --target {self.instance}` first"
             )
         values = read_env_file(self.env_path)
-        REDACTOR.add(*(value for key, value in values.items() if SECRET_KEY_RE.search(key)))
+        REDACTOR.add(*(value for key, value in values.items() if SECRET_KEY_RE.search(key) and not is_reference(value)))
         missing = [key for key in ("E2E_ORG", "E2E_ORG_ID") if not values.get(key)]
         if missing:
             raise CiSyncError(
@@ -527,7 +533,7 @@ class CiSync:
         for name in variables:
             if SECRET_KEY_RE.search(name):
                 raise CiSyncError(f"the workflows read vars.{name}, a secret name: refusing to store it as a variable")
-            value = self.values.get(name, "")
+            value = self.vault_role(kind) if name == VAULT_ROLE else self.values.get(name, "")
             if not value:
                 skipped.append(name)
                 continue
@@ -546,9 +552,10 @@ class CiSync:
             if not value:
                 skipped.append(name)
                 continue
+            value, how = self.secret_value(name, value, kind)
             operations.append(
                 Operation(
-                    f"secret {name} in {env} (value on stdin)",
+                    f"secret {name} in {env} ({how})",
                     ("secret", "set", name, "--env", env, "--repo", repo),
                     stdin=value,
                 )
@@ -556,6 +563,27 @@ class CiSync:
         if skipped:
             self.skipped[env] = skipped
         return operations
+
+    def vault_role(self, kind: str) -> str:
+        """The Vault role of the jobs of an environment kind (VAULT_ROLE_OVERRIDES, else E2E_VAULT_ROLE; '': none)."""
+        override = VAULT_ROLE_OVERRIDES.get(kind)
+        return (self.values.get(override, "") if override else "") or self.values.get(VAULT_ROLE, "")
+
+    def secret_value(self, name: str, value: str, kind: str) -> tuple[str, str]:
+        """(what to store, how it was obtained) of a secret: the value; a ``vault:`` reference as it is when the
+        environment's jobs log in to Vault (vault_role, E2E_VAULT_ADDR); any other reference resolved here."""
+        if not is_reference(value):
+            return value, "value on stdin"
+        try:
+            reference = parse(value)
+            if reference.provider == "vault" and self.vault_role(kind):
+                if not self.values.get(VAULT_ADDR):
+                    raise CiSyncError(f"{name}: a vault reference read by the jobs needs {VAULT_ADDR} in the env file")
+                return value, "vault reference on stdin, the jobs read the value"
+            resolved = resolve(value, {**self.environ, **self.values})
+            return resolved, f"value of its {reference.provider} reference, on stdin"
+        except VaultError as exc:
+            raise CiSyncError(f"{name}: {exc}") from None
 
     def repository_operations(self, repo: str) -> list[Operation]:
         """E2E_INSTANCES gains the instance; --nightly: E2E_TARGETS gains it (created from DEFAULT_NIGHTLY, what

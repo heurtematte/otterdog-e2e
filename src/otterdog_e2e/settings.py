@@ -20,6 +20,11 @@ from the variables named by ``identities.admin.password_env`` / ``totp_seed_env`
 E2E_ADMIN_TOTP_SEED), the username from ``username_env`` (default E2E_ADMIN_USERNAME) or the declared admin login.
 They are resolved separately from the identity tokens (``WebCredentials``), so no code path hands them to otterdog
 unless it explicitly asks for the web mode.
+
+The value of a secret variable (SECRET_KEY_RE) may be a reference to an external vault (``vault:<path>/<field>``,
+``pass:<path>``, ``bitwarden:<item>@<field>``): _env_value resolves it when the variable is read (vaults.py), so only
+the secrets a command uses reach a vault; references are not secrets and are never registered with REDACTOR, their
+resolved values are.
 """
 
 from __future__ import annotations
@@ -42,6 +47,7 @@ from otterdog_e2e import naming
 from otterdog_e2e.capabilities import DERIVED_CAPS, PLANS, Cap
 from otterdog_e2e.redact import REDACTOR, SECRET_KEY_RE
 from otterdog_e2e.safety import SafetyError, check_org_allowed
+from otterdog_e2e.vaults import VaultError, is_reference, resolve
 
 if TYPE_CHECKING:
     from otterdog_e2e.naming import RunContext
@@ -344,7 +350,8 @@ def load_env_files(
     """Load ~/.config/otterdog-e2e/<target>.env, <root>/.env.e2e.<target>, <root>/.env.e2e without overriding.
 
     KEY=VALUE lines, '#' comments, optional quotes, no interpolation; only SECRET_KEY_RE keys are registered with
-    REDACTOR (values from the files and those already in the environment, e.g. CI secrets). Returns the files read.
+    REDACTOR (values from the files and those already in the environment, e.g. CI secrets; vault references are
+    resolved and registered when read, _env_value). Returns the files read.
     """
     env = os.environ if environ is None else environ
     loaded = []
@@ -354,13 +361,13 @@ def load_env_files(
         _warn_if_shared(path)
         values = parse_env_text(path.read_text(encoding="utf-8"), source=str(path))
         for key, value in values.items():
-            if SECRET_KEY_RE.search(key):
+            if SECRET_KEY_RE.search(key) and not is_reference(value):
                 REDACTOR.add(value)
             if key not in env:
                 env[key] = value
         loaded.append(path)
         _logger.debug("loaded %d variable(s) from %s", len(values), path)
-    REDACTOR.add(*(value for key, value in env.items() if SECRET_KEY_RE.search(key)))
+    REDACTOR.add(*(value for key, value in env.items() if SECRET_KEY_RE.search(key) and not is_reference(value)))
     return loaded
 
 
@@ -1134,10 +1141,17 @@ def load_target(name_or_path: str, settings: HarnessSettings, environ: Mapping[s
 
 # --- identities and App credentials ---------------------------------------------------------------------------------
 def _env_value(environ: Mapping[str, str], name: str | None) -> str | None:
-    """Stripped value of env var ``name`` (None when the name is None or the value empty)."""
+    """Stripped value of env var ``name`` (None when the name is None or the value empty); the value of a secret
+    variable (SECRET_KEY_RE) that is a vault reference is resolved (TargetError naming the variable otherwise)."""
     if not name:
         return None
-    return (environ.get(name) or "").strip() or None
+    value = (environ.get(name) or "").strip() or None
+    if value is None or not SECRET_KEY_RE.search(name) or not is_reference(value):
+        return value
+    try:
+        return resolve(value, environ).strip() or None
+    except VaultError as exc:
+        raise TargetError(f"{name}: {exc}") from None
 
 
 def _check_distinct_tokens(identities: Mapping[str, Identity]) -> None:
