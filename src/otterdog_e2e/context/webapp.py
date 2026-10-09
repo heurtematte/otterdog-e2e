@@ -60,7 +60,7 @@ class WebappFacet(SutFacet):
             return self.identities["config_reader"].token
         if self.resolve(self.options.sut).trusted:
             return self.require_identity("admin").token
-        raise ContextError("untrusted SUT: the webapp tier needs a config_reader identity (E2E_CONFIG_READ_TOKEN)")
+        raise ContextError("untrusted SUT: the webapp tier needs a config_reader identity (E2E_CONFIG_READER_TOKEN)")
 
     def webapp_deployment(self) -> Deployment:
         """WebappStack (transport relay) or ExternalWebapp (transport external) of the target, not started."""

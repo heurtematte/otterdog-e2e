@@ -95,7 +95,7 @@ def test_load_free_target_defaults(harness: HarnessSettings) -> None:
     assert list(target.identities) == ["admin", "oracle", "author", "approver", "outsider", "config_reader"]
     assert target.identities["admin"] == settings.IdentitySpec("admin", ADMIN, "E2E_ADMIN_TOKEN")
     assert target.identities["author"] == settings.IdentitySpec("author", None, "E2E_AUTHOR_TOKEN")
-    assert target.identities["config_reader"].token_env == "E2E_CONFIG_READ_TOKEN"
+    assert target.identities["config_reader"].token_env == "E2E_CONFIG_READER_TOKEN"
     assert target.app == settings.AppSpec(
         "E2E_APP_ID", "E2E_APP_PRIVATE_KEY", "E2E_APP_PRIVATE_KEY_FILE", "E2E_APP_WEBHOOK_SECRET", None
     )
@@ -362,7 +362,7 @@ def test_resolve_identities_all_roles(harness: HarnessSettings, redactor: Redact
         "E2E_AUTHOR_TOKEN": "wpa-author-tok-3",
         "E2E_APPROVER_TOKEN": "wpa-approver-tok-4",
         "E2E_OUTSIDER_TOKEN": "wpa-outsider-tok-5",
-        "E2E_CONFIG_READ_TOKEN": "wpa-reader-tok-6",
+        "E2E_CONFIG_READER_TOKEN": "wpa-reader-tok-6",
     }
     identities = resolve_identities(target, environ)
     assert list(identities) == ["admin", "oracle", "author", "approver", "outsider", "config_reader"]

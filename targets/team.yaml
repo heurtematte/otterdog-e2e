@@ -43,7 +43,7 @@ identities:                             # login = public, non-secret (F8); *_env
   author:        {login: "${E2E_AUTHOR_LOGIN:-}", token_env: E2E_AUTHOR_TOKEN, token_type: "${E2E_AUTHOR_TOKEN_TYPE:-auto}"}  # optional: member, contributors team only
   approver:      {login: "${E2E_APPROVER_LOGIN:-}", token_env: E2E_APPROVER_TOKEN, token_type: "${E2E_APPROVER_TOKEN_TYPE:-auto}"}  # optional: approval team member
   outsider:      {login: "${E2E_OUTSIDER_LOGIN:-}", token_env: E2E_OUTSIDER_TOKEN, token_type: "${E2E_OUTSIDER_TOKEN_TYPE:-auto}"}  # optional: not an org member
-  config_reader: {login: "${E2E_CONFIG_READER_LOGIN:-}", token_env: E2E_CONFIG_READ_TOKEN, token_type: "${E2E_CONFIG_READ_TOKEN_TYPE:-auto}"}  # optional: fine-grained public read-only (webapp OTTERDOG_CONFIG_TOKEN)
+  config_reader: {login: "${E2E_CONFIG_READER_LOGIN:-}", token_env: E2E_CONFIG_READER_TOKEN, token_type: "${E2E_CONFIG_READER_TOKEN_TYPE:-auto}"}  # optional: fine-grained public read-only (webapp OTTERDOG_CONFIG_TOKEN)
 app:
   id_env: E2E_APP_ID
   private_key_env: E2E_APP_PRIVATE_KEY

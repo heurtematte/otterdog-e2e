@@ -313,7 +313,7 @@ jobs:
           E2E_AUTHOR_TOKEN_TYPE: ${{ vars.E2E_AUTHOR_TOKEN_TYPE }}
           E2E_APPROVER_TOKEN_TYPE: ${{ vars.E2E_APPROVER_TOKEN_TYPE }}
           E2E_OUTSIDER_TOKEN_TYPE: ${{ vars.E2E_OUTSIDER_TOKEN_TYPE }}
-          E2E_CONFIG_READ_TOKEN_TYPE: ${{ vars.E2E_CONFIG_READ_TOKEN_TYPE }}
+          E2E_CONFIG_READER_TOKEN_TYPE: ${{ vars.E2E_CONFIG_READER_TOKEN_TYPE }}
           E2E_APP_ID: ${{ vars.E2E_APP_ID }}
           E2E_APP_SLUG: ${{ vars.E2E_APP_SLUG }}
           E2E_CONFIGS_REPO: ${{ vars.E2E_CONFIGS_REPO }}
@@ -385,7 +385,7 @@ jobs:
           E2E_AUTHOR_TOKEN: ${{ secrets.E2E_AUTHOR_TOKEN }}
           E2E_APPROVER_TOKEN: ${{ secrets.E2E_APPROVER_TOKEN }}
           E2E_OUTSIDER_TOKEN: ${{ secrets.E2E_OUTSIDER_TOKEN }}
-          E2E_CONFIG_READ_TOKEN: ${{ secrets.E2E_CONFIG_READ_TOKEN }}
+          E2E_CONFIG_READER_TOKEN: ${{ secrets.E2E_CONFIG_READER_TOKEN }}
           E2E_APP_PRIVATE_KEY: ${{ secrets.E2E_APP_PRIVATE_KEY }}
           E2E_APP_WEBHOOK_SECRET: ${{ secrets.E2E_APP_WEBHOOK_SECRET }}
         run: |
@@ -461,7 +461,7 @@ jobs:
           E2E_AUTHOR_TOKEN: ${{ secrets.E2E_AUTHOR_TOKEN }}
           E2E_APPROVER_TOKEN: ${{ secrets.E2E_APPROVER_TOKEN }}
           E2E_OUTSIDER_TOKEN: ${{ secrets.E2E_OUTSIDER_TOKEN }}
-          E2E_CONFIG_READ_TOKEN: ${{ secrets.E2E_CONFIG_READ_TOKEN }}
+          E2E_CONFIG_READER_TOKEN: ${{ secrets.E2E_CONFIG_READER_TOKEN }}
           E2E_APP_PRIVATE_KEY: ${{ secrets.E2E_APP_PRIVATE_KEY }}
           E2E_APP_WEBHOOK_SECRET: ${{ secrets.E2E_APP_WEBHOOK_SECRET }}
         run: |

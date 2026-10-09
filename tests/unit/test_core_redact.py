@@ -167,7 +167,7 @@ def test_no_add_mask_outside_actions(monkeypatch: pytest.MonkeyPatch, capsys: py
 
 def test_secret_key_re_variants() -> None:
     """Only credential suffixes are secret keys (not *_FILE, *_ID, *_LOGIN, *_ENV)."""
-    assert SECRET_KEY_RE.search("E2E_CONFIG_READ_TOKEN")
+    assert SECRET_KEY_RE.search("E2E_CONFIG_READER_TOKEN")
     assert SECRET_KEY_RE.search("E2E_OTTERDOG_TOTP_SEED")
     for key in ("E2E_APP_PRIVATE_KEY_FILE", "E2E_APP_ID", "E2E_OUTSIDER_LOGIN", "E2E_TOKEN_ENV", "TOKEN"):
         assert not SECRET_KEY_RE.search(key), key

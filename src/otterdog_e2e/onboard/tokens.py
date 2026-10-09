@@ -173,8 +173,10 @@ def _role(
     *,
     required: bool,
     purpose: str,
-    classic_scopes: tuple[str, ...],
+    classic_scopes: tuple[str, ...] = (),
     fine_grained: Mapping[str, str] | None = None,
+    own_owner: bool = False,
+    repository_access: str = ALL_REPOSITORIES,
 ) -> RoleTokens:
     """RoleTokens with the env names E2E_<PREFIX>_LOGIN, E2E_<PREFIX>_TOKEN and E2E_<PREFIX>_TOKEN_TYPE."""
     return RoleTokens(
@@ -186,6 +188,8 @@ def _role(
         purpose=purpose,
         classic_scopes=classic_scopes,
         fine_grained=fine_grained,
+        own_owner=own_owner,
+        repository_access=repository_access,
     )
 
 
@@ -230,13 +234,11 @@ ROLE_TOKENS: Mapping[str, RoleTokens] = {
         purpose="comments as a NON-member (negative tests); classic PAT only",
         classic_scopes=("public_repo", "read:org"),
     ),
-    "config_reader": RoleTokens(
+    "config_reader": _role(
         "config_reader",
-        login_env="E2E_CONFIG_READER_LOGIN",
-        token_env="E2E_CONFIG_READ_TOKEN",  # noqa: S106 - the NAME of the variable holding the token
-        type_env="E2E_CONFIG_READ_TOKEN_TYPE",
+        "CONFIG_READER",
         required=False,
-        purpose="read-only token of the webapp (OTTERDOG_CONFIG_TOKEN), needed for webapp tests of untrusted SUTs",
+        purpose="powerless token given to the webapp under test (OTTERDOG_CONFIG_TOKEN), needed for untrusted SUTs",
         fine_grained={},
         own_owner=True,
         repository_access=PUBLIC_REPOSITORIES,

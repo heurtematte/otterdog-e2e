@@ -427,7 +427,8 @@ def test_every_role_web_login_and_bootstrap(world: World) -> None:
         if kind:
             assert env[f"E2E_{role}_TOKEN_TYPE"] == kind
     assert (
-        env["E2E_CONFIG_READ_TOKEN"] == TOKENS["config_reader"] and env["E2E_CONFIG_READ_TOKEN_TYPE"] == "fine-grained"
+        env["E2E_CONFIG_READER_TOKEN"] == TOKENS["config_reader"]
+        and env["E2E_CONFIG_READER_TOKEN_TYPE"] == "fine-grained"
     )
     assert env["E2E_ORACLE_TOKEN_TYPE"] == "fine-grained" and env["E2E_ORACLE_TOKEN"] == TOKENS["oracle"]
     assert env["E2E_ADMIN_PASSWORD"] == PASSWORD and env["E2E_ADMIN_TOTP_SEED"] == "JBSWY3DPEHPK3PXP"

@@ -693,7 +693,7 @@ def _webapp_gate(item: pytest.Item, context: E2EContext) -> str | None:
     if "config_reader" not in context.identities and context.sut_trusted("head") is False:
         return (
             f"untrusted SUT {context.options.sut}: the webapp tier needs a config_reader identity"
-            " (E2E_CONFIG_READ_TOKEN) for OTTERDOG_CONFIG_TOKEN"
+            " (E2E_CONFIG_READER_TOKEN) for OTTERDOG_CONFIG_TOKEN"
         )
     return None
 

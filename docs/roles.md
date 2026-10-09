@@ -34,11 +34,11 @@ the login that acted.
 | Role | Required | Account and membership | Token | What it does in the tests | When it is missing |
 |---|---|---|---|---|---|
 | `admin` | yes | owner; admin team (`otterdog-admins`) | classic or fine-grained | runs otterdog (SUT and trusted reset CLI), every harness write, the org lease, bootstrap, the janitor; default author of config PRs, merges and comments | the target does not load: every live item fails; the unit and offline tiers still run |
-| `oracle` | no | owner (a separate account), or the admin itself | classic or fine-grained | independent read-only ground truth: scenario `state` checks, the waits of PR flows, lease and ledger reads, janitor scans | the admin token serves as oracle; nothing is skipped |
+| `oracle` | no | owner (a separate account), or the admin itself | classic or fine-grained | checks what really happened on GitHub, without otterdog code: scenario `state` checks, the waits of PR flows, lease and ledger reads, janitor scans | the admin token serves as oracle; nothing is skipped |
 | `author` | for webapp flows | active, public member; contributors team (`e2e-contributors`) only | classic, or fine-grained once a member | opens config PRs and comments as a plain contributor; team member in `cli.team.members` | its tests are skipped |
 | `approver` | for approval and auto-merge flows | active, public member; approval team (`project-leads`) | classic, or fine-grained once a member | approves config PRs, merges for an author, authors PRs as an approval-team member | its tests are skipped |
 | `outsider` | for negative tests | **not** a member, nor invited | classic only | comments as a non-member; the non-member of team validation | its tests are skipped |
-| `config_reader` | for webapp tests of untrusted SUTs | none needed | fine-grained, public repositories, no permission | the webapp's `OTTERDOG_CONFIG_TOKEN`; `check-token-permissions` with a scope-less token | webapp items of an untrusted SUT are skipped; a trusted SUT's webapp gets the admin token |
+| `config_reader` | for webapp tests of untrusted SUTs | none: **not** a member | fine-grained, public repositories, no permission | the token given to the webapp under test (`OTTERDOG_CONFIG_TOKEN`), worthless if an untrusted SUT leaks it; `check-token-permissions` with a scope-less token | webapp items of an untrusted SUT are skipped; a trusted SUT's webapp gets the admin token |
 
 - Tokens: the classic scopes are in [3. Tokens](setup-free-org.md#3-tokens), the fine-grained permissions in
   [Permissions per role](setup-free-org.md#permissions-per-role), the allowed scopes and the isolation proofs in
@@ -61,7 +61,7 @@ doctor reports a `WARN` `env:<role>` row.
 | `author` | `E2E_AUTHOR_LOGIN` | `E2E_AUTHOR_TOKEN` | `E2E_AUTHOR_TOKEN_TYPE` |
 | `approver` | `E2E_APPROVER_LOGIN` | `E2E_APPROVER_TOKEN` | `E2E_APPROVER_TOKEN_TYPE` |
 | `outsider` | `E2E_OUTSIDER_LOGIN` | `E2E_OUTSIDER_TOKEN` | `E2E_OUTSIDER_TOKEN_TYPE` |
-| `config_reader` | `E2E_CONFIG_READER_LOGIN` | `E2E_CONFIG_READ_TOKEN` | `E2E_CONFIG_READ_TOKEN_TYPE` |
+| `config_reader` | `E2E_CONFIG_READER_LOGIN` | `E2E_CONFIG_READER_TOKEN` | `E2E_CONFIG_READER_TOKEN_TYPE` |
 
 ## Overview
 
@@ -125,7 +125,10 @@ reason.
 
 ### `oracle`
 
-The independent, read-only ground truth: an `Oracle` on a read-only client, never otterdog code.
+In testing, an oracle is what decides whether a result is right. Here it is how the harness checks what otterdog
+really did: it never trusts otterdog's own output, it reads the state back from GitHub with its own read-only client
+(`Oracle`) and no otterdog code. For example, when a step expects the description `y`, the oracle reads
+`GET /repos/{org}/{repo}` after the apply and compares.
 
 - It answers the scenario `state` checks, the waits of the webapp flows (PRs, commit statuses, comments), the lease
   and ledger reads, the janitor's scans and doctor's checks.
@@ -222,18 +225,31 @@ Missing: the tests above are skipped.
 
 ### `config_reader`
 
-A read-only token with no membership: fine-grained, its own account as resource owner, repository access "Public
-repositories", no permission.
+The token the harness gives to the otterdog webapp under test, chosen to be worthless if it leaks.
 
-- It becomes the webapp's `OTTERDOG_CONFIG_TOKEN`: the webapp reads its `otterdog.json` from the public configs
-  repository with it. `E2EContext.config_token()` picks the config_reader token whenever it is configured; without
-  it, a trusted SUT's webapp gets the admin token.
-- The webapp tier of an **untrusted** SUT (`pr:N@sha`, a sha not reachable from upstream main or a `v*` tag)
-  requires it: without it the plugin skips every item marked `webapp` (`tests/webapp/` and
-  `tests/webhooks/test_app_delivery.py`), so the untrusted CI environment needs `E2E_CONFIG_READ_TOKEN`
-  ([security.md](security.md#untrusted-suts-t1-t3)). The offline tier's webapp stacks use a dummy token.
-- Its isolation check accepts any non-classic token and checks the memberships it can see. doctor's
-  `scopes:config_reader` row fails a classic PAT and the admin's token.
+**Why.** The webapp reads its `otterdog.json` from the configuration repository with the token of
+`OTTERDOG_CONFIG_TOKEN`. When the SUT is an untrusted otterdog pull request (`pr:N@sha`, a sha not reachable from
+upstream main or a `v*` tag), the webapp runs code nobody has reviewed yet, with that token in its environment, and
+that code could send the token anywhere. The admin token would give the author of the pull request owner rights on the
+test organization ([security.md](security.md#untrusted-suts-t1-t3)); the config_reader token only reads what is public
+anyway, so its leak costs nothing.
+
+**What it is.** A dedicated account that is not a member of the test organization, with a fine-grained token whose
+resource owner is that account, repository access "Public repositories" and no permission. Its isolation check
+accepts any non-classic token and checks the memberships it can see; doctor's `scopes:config_reader` row fails a
+classic PAT and the admin's token.
+
+**Which token the webapp gets** (`E2EContext.config_token()`):
+
+| SUT under test | config_reader configured | `OTTERDOG_CONFIG_TOKEN` |
+|---|---|---|
+| any | yes | the config_reader token |
+| trusted (a release, a tag, a sha of upstream main) | no | the admin token |
+| untrusted (a pull request, a sha unknown upstream) | no | none: every item marked `webapp` is skipped (`tests/webapp/` and `tests/webhooks/test_app_delivery.py`) |
+
+The role is therefore optional while you test releases and main, and required to run the webapp tier on otterdog pull
+requests: the untrusted CI environment needs `E2E_CONFIG_READER_TOKEN`. The offline tier's webapp stacks use a dummy
+token.
 
 Tests:
 

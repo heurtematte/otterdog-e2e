@@ -26,7 +26,7 @@ and refuses the session otherwise.
 | `author` | for webapp flows | opens config PRs as a plain member | member (public), contributors team |
 | `approver` | for approval / auto-merge flows | approves config PRs | member (public), approval team |
 | `outsider` | for negative tests | comments as a non-member | **not** a member |
-| `config_reader` | for webapp tests of untrusted SUTs | read-only token of the webapp (`OTTERDOG_CONFIG_TOKEN`) | none needed |
+| `config_reader` | for webapp tests of untrusted SUTs | powerless token given to the webapp under test (`OTTERDOG_CONFIG_TOKEN`), worthless if an untrusted SUT leaks it | none: not a member |
 | `oracle` | optional | separate read-only ground truth (falls back to admin) | owner |
 
 What each role does in the tests, what is skipped without it, and how the roles interact with otterdog and the
@@ -104,7 +104,7 @@ E2E_APPROVER_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 E2E_OUTSIDER_LOGIN=my-e2e-outsider
 E2E_OUTSIDER_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 E2E_CONFIG_READER_LOGIN=my-e2e-reader
-E2E_CONFIG_READ_TOKEN=github_pat_xxxxxxxxxxxxxxxxxxxxxx
+E2E_CONFIG_READER_TOKEN=github_pat_xxxxxxxxxxxxxxxxxxxxxx
 ```
 
 Notes:
@@ -299,7 +299,7 @@ By hand, the same steps for the instance `free`:
       gh secret set E2E_AUTHOR_TOKEN --env "$env" < ~/secrets/e2e-author.token
       gh secret set E2E_APPROVER_TOKEN --env "$env" < ~/secrets/e2e-approver.token
       gh secret set E2E_OUTSIDER_TOKEN --env "$env" < ~/secrets/e2e-outsider.token
-      gh secret set E2E_CONFIG_READ_TOKEN --env "$env" < ~/secrets/e2e-reader.token
+      gh secret set E2E_CONFIG_READER_TOKEN --env "$env" < ~/secrets/e2e-reader.token
       gh secret set E2E_APP_PRIVATE_KEY --env "$env" < ~/.config/otterdog-e2e/free/app-<id>.private-key.pem
       gh secret set E2E_APP_WEBHOOK_SECRET --env "$env" < ~/.config/otterdog-e2e/free/app-<id>.webhook-secret
     done

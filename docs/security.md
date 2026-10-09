@@ -375,14 +375,14 @@ therefore share a profile, for example the instances `acme-a` and `acme-b`, both
 | Environment | Used by | Protection | Contents |
 |---|---|---|---|
 | `e2e-<instance>` | `e2e.yml` for trusted SUTs (manual runs, nightly), `janitor.yml` | no required reviewers; deployment branches: `main` only | secrets and variables below |
-| `e2e-<instance>-untrusted` | `e2e.yml` for untrusted SUTs (`e2e-otterdog-pr.yml`, `pr:`/untrusted `sha:` specs) | required reviewers (maintainers), prevent self-review, deployment branches: `main` only | same secrets and variables; `E2E_CONFIG_READ_TOKEN` is required for the webapp tier; never add web-UI credentials |
+| `e2e-<instance>-untrusted` | `e2e.yml` for untrusted SUTs (`e2e-otterdog-pr.yml`, `pr:`/untrusted `sha:` specs) | required reviewers (maintainers), prevent self-review, deployment branches: `main` only | same secrets and variables; `E2E_CONFIG_READER_TOKEN` is required for the webapp tier; never add web-UI credentials |
 | `e2e-<instance>-webui` (optional) | `e2e-webui.yml` (dispatch, nightly `webui` job when `E2E_WEB_UI_ENABLED` is `true`), trusted SUTs only | deployment branches: `main` only (required reviewers block the nightly job) | `E2E_ADMIN_TOKEN`, optionally `E2E_ORACLE_TOKEN`, and the ONLY copy of `E2E_ADMIN_PASSWORD` and `E2E_ADMIN_TOTP_SEED`; the variables of `e2e-<instance>` plus optionally `E2E_ADMIN_USERNAME`, `E2E_WEB_LOGIN_SPACING` |
 
 `otterdog-e2e ci-sync --target <instance>` prints the environments, protections, variables and secrets it would
 create from the instance's env file, and `--apply` writes them with your own `gh` login (secret values only on stdin).
 
 Secrets (environment secrets): `E2E_ADMIN_TOKEN` (required), `E2E_ORACLE_TOKEN`, `E2E_AUTHOR_TOKEN`,
-`E2E_APPROVER_TOKEN`, `E2E_OUTSIDER_TOKEN`, `E2E_CONFIG_READ_TOKEN`, `E2E_APP_PRIVATE_KEY` (the PEM),
+`E2E_APPROVER_TOKEN`, `E2E_OUTSIDER_TOKEN`, `E2E_CONFIG_READER_TOKEN`, `E2E_APP_PRIVATE_KEY` (the PEM),
 `E2E_APP_WEBHOOK_SECRET`.
 
 Variables (environment variables, identical in the environments of an instance): `E2E_PROFILE` (required unless
@@ -394,7 +394,7 @@ the instance is named after its profile), `E2E_ORG`, `E2E_ORG_ID`, `E2E_ALLOWED_
 per-instance values of the profile `E2E_SAML_SSO` (`true` when the organization enforces SAML SSO),
 `E2E_CAPABILITIES_ADD`, `E2E_CAPABILITIES_REMOVE` (comma separated capability names) and `E2E_WEB_PROBE_APP_SLUG`,
 and the declared token kinds `E2E_ADMIN_TOKEN_TYPE`, `E2E_ORACLE_TOKEN_TYPE`, `E2E_AUTHOR_TOKEN_TYPE`,
-`E2E_APPROVER_TOKEN_TYPE`, `E2E_OUTSIDER_TOKEN_TYPE`, `E2E_CONFIG_READ_TOKEN_TYPE` (`auto`, `classic` or
+`E2E_APPROVER_TOKEN_TYPE`, `E2E_OUTSIDER_TOKEN_TYPE`, `E2E_CONFIG_READER_TOKEN_TYPE` (`auto`, `classic` or
 `fine-grained`). Keep every `E2E_*` secret and variable of an instance in its environments: never at repository or
 organization level, where every job of the repository sees them (the `classify` jobs and the janitor's `check` job
 refuse `E2E_ORG`, `E2E_ORG_ID` and `E2E_PROFILE` there, see below).

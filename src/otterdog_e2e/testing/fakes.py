@@ -2167,7 +2167,7 @@ FAKE_TOKEN_ENV: Mapping[str, str] = {
     "author": "E2E_AUTHOR_TOKEN",
     "approver": "E2E_APPROVER_TOKEN",
     "outsider": "E2E_OUTSIDER_TOKEN",
-    "config_reader": "E2E_CONFIG_READ_TOKEN",
+    "config_reader": "E2E_CONFIG_READER_TOKEN",
 }
 
 

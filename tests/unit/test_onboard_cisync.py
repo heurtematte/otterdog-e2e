@@ -30,7 +30,7 @@ REPO = "acme/otterdog-e2e"
 SECRETS = {
     "E2E_ADMIN_TOKEN": "tokadmin_1111111111111111",
     "E2E_AUTHOR_TOKEN": "tokauthor_3333333333333333",
-    "E2E_CONFIG_READ_TOKEN": "tokreader_6666666666666666",
+    "E2E_CONFIG_READER_TOKEN": "tokreader_6666666666666666",
     "E2E_APP_WEBHOOK_SECRET": "whsec-0123456789abcdef",
     "E2E_ADMIN_PASSWORD": "correct horse battery staple",
     "E2E_ADMIN_TOTP_SEED": "JBSWY3DPEHPK3PXP",
