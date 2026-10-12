@@ -59,8 +59,10 @@ Another instance name needs `E2E_PROFILE=enterprise` in its file (`~/.config/ott
 Enterprise Cloud organizations are several instances of the same profile; their per-instance differences live in
 their env files (below), never in `targets/enterprise.yaml`.
 
-- When the same machine accounts serve the Free and the Enterprise organizations, list the other organization's id
-  in `E2E_ALLOWED_ORG_IDS` of **both** env files; otherwise the isolation check fails. `setup` offers it for a classic
+- The accounts of both instances, their email aliases and names:
+  [setup-free-org.md](setup-free-org.md#email-aliases-names-and-the-list-of-accounts). When the same machine accounts
+  serve the Free and the Enterprise organizations, list the other organization's id in `E2E_ALLOWED_ORG_IDS` of
+  **both** env files; otherwise the isolation check fails. `setup` offers it for a classic
   token only when the other organization is already a set up and bootstrapped instance (its env file holds the admin
   login and token, its description the safety marker), and writes both files once the token passed every check
   ([onboarding.md](onboarding.md#tokens)); otherwise set it by hand. Fine-grained tokens are bound to one

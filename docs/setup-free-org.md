@@ -44,6 +44,74 @@ For every account:
   `admin`), and two roles never declare the same login (compared case-insensitively; only `admin` and `oracle` may
   be one account): a target declaring one login twice does not load.
 
+### Email aliases, names and the list of accounts
+
+GitHub needs one verified email address per account. Rather than one mailbox per machine account, give every account
+an **alias of one team mailbox** (a shared mailbox or a group, here `csi-bot@mydomain.com`, never a personal
+mailbox): the verification mails, invitations, security alerts and two-factor recovery mails of every account reach
+the team, and they keep reaching it when people leave.
+
+- **Plus addressing**: `csi-bot+otterdog-e2e-<instance>-<role>@mydomain.com`. Nothing to administer: Google
+  Workspace, Microsoft 365 (plus addressing on) and most providers deliver it to `csi-bot@`, and GitHub accepts `+`
+  and treats each address as a distinct one. One mail rule on `+otterdog-e2e-` files all of them in one folder.
+- **Real aliases**: `otterdog-e2e-<instance>-<role>@mydomain.com`, each an alias of `csi-bot@` created in the mail
+  admin console, when the provider has no plus addressing or the addresses must not show the team mailbox.
+- With **SAML single sign-on** (Enterprise Cloud), each account also needs its identity in your IdP: create the IdP
+  users with the same addresses ([setup-enterprise-org.md](setup-enterprise-org.md#saml-single-sign-on)).
+
+Name each account after its instance and role, the same way everywhere, so that a mail, a login, an env file line
+or a secret path names its account at once (`config_reader` is written `config-reader` where `_` is not allowed):
+
+| Where | Pattern | Example: instance `enterprise`, role `config_reader` |
+|---|---|---|
+| email | `csi-bot+otterdog-e2e-<instance>-<role>@mydomain.com` | `csi-bot+otterdog-e2e-enterprise-config-reader@mydomain.com` |
+| GitHub login | `csi-e2e-<instance>-<role>` | `csi-e2e-enterprise-config-reader` |
+| profile name and bio | `otterdog-e2e <instance> <role>`, `machine account of <team>, contact csi-bot@mydomain.com` | `otterdog-e2e enterprise config_reader` |
+| env file | `E2E_<ROLE>_LOGIN`, `E2E_<ROLE>_TOKEN` of `~/.config/otterdog-e2e/<instance>.env` | `E2E_CONFIG_READER_LOGIN=csi-e2e-enterprise-config-reader` |
+| secret store | `<prefix>/<instance>/<role>/token` ([reference layout](security.md#reference-layout)) | `otterdog-e2e/enterprise/config_reader/token` |
+
+A GitHub login has at most 39 characters (letters, digits, single hyphens): with the longest instance and role above
+the login has 32, so keep the team prefix (`csi`) short and the instance names short. Logins are global on GitHub:
+check that they are free before creating the accounts.
+
+**Every account of a Free and an Enterprise instance**, one set per instance (the strongest isolation: a token of
+one instance never reaches the other organization):
+
+| Instance | Role | GitHub login | Email | In the test org | Token | Needed for |
+|---|---|---|---|---|---|---|
+| `free` | `admin` | `csi-e2e-free-admin` | `csi-bot+otterdog-e2e-free-admin@mydomain.com` | owner, team `otterdog-admins` | classic or fine-grained | always |
+| `free` | `oracle` | `csi-e2e-free-oracle` | `csi-bot+otterdog-e2e-free-oracle@mydomain.com` | owner | classic or fine-grained | optional: the admin serves as oracle without it |
+| `free` | `author` | `csi-e2e-free-author` | `csi-bot+otterdog-e2e-free-author@mydomain.com` | public member, team `e2e-contributors` | classic, or fine-grained once a member | webapp flows |
+| `free` | `approver` | `csi-e2e-free-approver` | `csi-bot+otterdog-e2e-free-approver@mydomain.com` | public member, team `project-leads` | classic, or fine-grained once a member | approval and auto-merge flows |
+| `free` | `outsider` | `csi-e2e-free-outsider` | `csi-bot+otterdog-e2e-free-outsider@mydomain.com` | **not** a member, never invited | classic only | negative tests |
+| `free` | `config_reader` | `csi-e2e-free-config-reader` | `csi-bot+otterdog-e2e-free-config-reader@mydomain.com` | **not** a member | fine-grained, public repositories, no permission | webapp tests of untrusted SUTs |
+| `enterprise` | `admin` | `csi-e2e-enterprise-admin` | `csi-bot+otterdog-e2e-enterprise-admin@mydomain.com` | owner, team `otterdog-admins` | classic or fine-grained (fine-grained where the enterprise forbids classic PATs) | always |
+| `enterprise` | `oracle` | `csi-e2e-enterprise-oracle` | `csi-bot+otterdog-e2e-enterprise-oracle@mydomain.com` | owner | classic or fine-grained | optional: the admin serves as oracle without it |
+| `enterprise` | `author` | `csi-e2e-enterprise-author` | `csi-bot+otterdog-e2e-enterprise-author@mydomain.com` | public member, team `e2e-contributors` | classic, or fine-grained once a member | webapp flows |
+| `enterprise` | `approver` | `csi-e2e-enterprise-approver` | `csi-bot+otterdog-e2e-enterprise-approver@mydomain.com` | public member, team `project-leads` | classic, or fine-grained once a member | approval and auto-merge flows |
+| `enterprise` | `outsider` | `csi-e2e-enterprise-outsider` | `csi-bot+otterdog-e2e-enterprise-outsider@mydomain.com` | **not** a member, never invited | classic only: leave it unset where the enterprise forbids classic PATs | negative tests |
+| `enterprise` | `config_reader` | `csi-e2e-enterprise-config-reader` | `csi-bot+otterdog-e2e-enterprise-config-reader@mydomain.com` | **not** a member | fine-grained, public repositories, no permission | webapp tests of untrusted SUTs |
+
+- A Team instance (`targets/team.yaml`) adds the same six rows with `team`; another organization of a profile, the
+  same six rows with its instance name (`acme-a`: `csi-e2e-acme-a-admin`, `csi-bot+otterdog-e2e-acme-a-admin@...`).
+- The web-UI tier needs no other account: it logs in as the instance's `admin` (its password and TOTP seed). The
+  GitHub App is not an account either.
+- Twelve accounts is the full set. Per instance, `admin`, `author` and `approver` run the tiers of a release or of
+  main; `config_reader` adds the webapp tier of otterdog pull requests, `outsider` the negative tests, and `oracle` is
+  optional. With fewer roles, the items needing a missing one are skipped ([roles.md](roles.md)).
+- **Who holds them**: an alias gives an account its address, not its owner. Under GitHub's
+  [Terms of Service](onboarding.md#what-cannot-be-automated) each account is created by a person who is responsible
+  for it, and a person may hold at most one free machine account besides their own account: record who holds each
+  of the accounts above (one person per account, several people for the full set).
+
+**Fewer accounts: one set for both instances.** The same six accounts may serve the Free and the Enterprise
+organizations: logins without the instance (`csi-e2e-admin`, `csi-bot+otterdog-e2e-admin@mydomain.com`, ...),
+declared in both env files, each organization's id in `E2E_ALLOWED_ORG_IDS` of the other's env file
+([setup-enterprise-org.md](setup-enterprise-org.md#instance-and-env-file)), and one fine-grained token per account
+and organization (a fine-grained token is bound to one organization; the store keeps them apart:
+`otterdog-e2e/free/admin/token`, `otterdog-e2e/enterprise/admin/token`). The outsider must then stay outside both
+organizations. The price: a leaked classic token of a shared account reaches both organizations.
+
 ## 2. The organization
 
 1. Signed in as the admin account, create the organization on the Free plan:
