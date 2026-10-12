@@ -103,6 +103,7 @@ PUBLIC_NAMES: dict[str, list[str]] = {
         "Resolver",
         "RESOLVER",
         "resolve",
+        "store",
     ],
     "otterdog_e2e.procs": [
         "sanitized_env",
@@ -355,6 +356,16 @@ PUBLIC_NAMES: dict[str, list[str]] = {
         "token_steps",
     ],
     "otterdog_e2e.onboard.wizard": ["SetupWizard", "SetupOptions", "WizardIO", "SetupError", "COPYABLE_KEYS"],
+    # the reference layout of an instance's secrets in a secret store (setup --store)
+    "otterdog_e2e.onboard.store": [
+        "STORE_ENV",
+        "LAYOUT",
+        "ENVIRONMENT_ITEMS",
+        "StoreError",
+        "parse_store",
+        "store_reference",
+        "vault_policies",
+    ],
     "otterdog_e2e.onboard.cisync": ["CiSync", "CiSyncError", "Operation", "workflow_names", "environment_kinds"],
     "otterdog_e2e.context": ["E2EContext", "E2EOptions", "get_context", "E2E_CONTEXT_KEY"],
     # the facets E2EContext is assembled from (each over ContextState) and the small helpers

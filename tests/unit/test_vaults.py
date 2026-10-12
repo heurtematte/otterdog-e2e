@@ -32,6 +32,7 @@ VAULT_TOKEN = "hvs.local-token-0123456789"
 OIDC_VAULT_TOKEN = "hvs.oidc-token-0123456789"
 REQUEST_TOKEN = "oidc-request-token-0123456789"
 JWT = "eyJhbGciOiJSUzI1NiJ9.e2e-jwt.signature"
+VERSIONS: dict[str, int] = {}  # KV v2 versions of the secrets written by a test (1 for the others)
 SECRETS: dict[str, dict[str, Any]] = {
     "/v1/secret/data/e2e/free/admin": {"token": ADMIN_TOKEN},
     "/v1/kv/data/e2e/free/app": {"private_key": PEM},
@@ -111,21 +112,31 @@ class FakeVault(BaseHTTPRequestHandler):
         data = SECRETS.get(self.path)
         if data is None:
             return self.answer(404, {"errors": []})
-        return self.answer(200, {"data": {"data": data, "metadata": {"version": 1}}})
+        return self.answer(200, {"data": {"data": data, "metadata": {"version": VERSIONS.get(self.path, 1)}}})
 
     def do_POST(self) -> None:
-        """The JWT login."""
+        """The JWT login, and KV v2 writes with check-and-set (cas = the current version, 0 for a new secret)."""
         body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", "0"))) or b"{}")
         FakeVault.requests.append(("POST", self.path, {**dict(self.headers), "body": json.dumps(body)}))
         if self.path == "/v1/auth/jwt/login" and body == {"role": "e2e", "jwt": JWT}:
             return self.answer(200, {"auth": {"client_token": OIDC_VAULT_TOKEN}})
+        if "/data/" in self.path:
+            if self.headers.get("X-Vault-Token") != VAULT_TOKEN:
+                return self.answer(403, {"errors": ["permission denied"]})
+            current = VERSIONS.get(self.path, 1) if self.path in SECRETS else 0
+            if body.get("options", {}).get("cas") != current:
+                return self.answer(400, {"errors": ["check-and-set parameter did not match the current version"]})
+            SECRETS[self.path], VERSIONS[self.path] = dict(body["data"]), current + 1
+            return self.answer(200, {"data": {"version": current + 1}})
         return self.answer(400, {"errors": ["invalid role or jwt"]})
 
 
 @pytest.fixture
-def vault_addr() -> Iterator[str]:
-    """The loopback Vault's address (its request log reset)."""
+def vault_addr(monkeypatch: pytest.MonkeyPatch) -> Iterator[str]:
+    """The loopback Vault's address (its request log reset, its secrets restored after the test)."""
     FakeVault.requests = []
+    monkeypatch.setattr(f"{__name__}.SECRETS", {path: dict(data) for path, data in SECRETS.items()})
+    monkeypatch.setattr(f"{__name__}.VERSIONS", {})
     server = HTTPServer(("127.0.0.1", 0), FakeVault)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -216,10 +227,17 @@ def stub(path: Path, script: str) -> Path:
 @pytest.fixture
 def pass_bin(tmp_path: Path) -> Path:
     """pass: ``show e2e/admin`` prints the token, ``show e2e/app-key`` the PEM (several lines) and the password store
-    it was given; anything else fails like pass."""
+    it was given, an entry ``insert --multiline --force`` wrote in PASSWORD_STORE_DIR its content; anything else fails
+    like pass."""
     return stub(
         tmp_path / "pass",
-        f"""[ "$1" = show ] || exit 2
+        f"""if [ "$1" = insert ]; then
+  [ "$2 $3" = "--multiline --force" ] || exit 2
+  mkdir -p "$(dirname "$PASSWORD_STORE_DIR/$4")" && cat > "$PASSWORD_STORE_DIR/$4"
+  exit 0
+fi
+[ "$1" = show ] || exit 2
+[ -f "$PASSWORD_STORE_DIR/$2" ] && exec cat "$PASSWORD_STORE_DIR/$2"
 case "$2" in
   e2e/admin) echo '{ADMIN_TOKEN}' ;;
   e2e/app-key) printf '%s\\n' '{PEM}' ;;
@@ -328,3 +346,34 @@ def test_the_scrubber_resolves_references(pass_bin: Path, tmp_path: Path) -> Non
     assert redactor(ADMIN_TOKEN) == "***"
     with pytest.raises(click.ClickException, match=r"E2E_ADMIN_TOKEN: pass:e2e/nope: .*\(the scan needs the value"):
         register_environment_secrets({**env, "E2E_ADMIN_TOKEN": "pass:e2e/nope"}, redactor)
+
+
+# --- writing (setup --store) -----------------------------------------------------------------------------------------
+def test_vault_store_merges_the_field_with_check_and_set(vault_addr: str, tmp_path: Path) -> None:
+    """A new field joins the other fields of an existing secret (cas = its version), a new secret is created (cas
+    0); each value is read back."""
+    env = {"HOME": str(tmp_path), "E2E_VAULT_ADDR": vault_addr, "VAULT_TOKEN": VAULT_TOKEN}
+    vaults.store("vault:e2e/free/admin/note", "a-note-value", env)
+    assert SECRETS["/v1/secret/data/e2e/free/admin"] == {"token": ADMIN_TOKEN, "note": "a-note-value"}
+    vaults.store("vault:e2e/acme/app/private_key", PEM, env)
+    assert SECRETS["/v1/secret/data/e2e/acme/app"] == {"private_key": PEM}
+    writes = [json.loads(headers["body"]) for method, _, headers in FakeVault.requests if method == "POST"]
+    assert [write["options"]["cas"] for write in writes] == [1, 0]
+    assert vaults.resolve("vault:e2e/acme/app/private_key", env) == PEM
+
+
+def test_vault_store_errors_name_the_policy_it_needs(vault_addr: str, tmp_path: Path) -> None:
+    """A token that may only read: the error names the capabilities the write needs."""
+    env = {"HOME": str(tmp_path), "E2E_VAULT_ADDR": vault_addr, "VAULT_TOKEN": "hvs.read-only"}
+    with pytest.raises(VaultError, match=r"needs read, create and update on secret/data/e2e/free/admin\): HTTP 403"):
+        vaults.store("vault:e2e/free/admin/token", "x-value-0123", env)
+
+
+def test_pass_store(pass_bin: Path, tmp_path: Path) -> None:
+    """pass insert --multiline --force: a multi-line value is read back whole; Bitwarden is never written."""
+    env = {"HOME": str(tmp_path), "E2E_PASS_BIN": str(pass_bin), "PASSWORD_STORE_DIR": str(tmp_path / "store")}
+    vaults.store("pass:otterdog-e2e/acme/app/private_key", PEM, env)
+    assert (tmp_path / "store" / "otterdog-e2e/acme/app/private_key").read_text() == PEM + "\n"
+    assert vaults.resolve("pass:otterdog-e2e/acme/app/private_key", env) == PEM
+    with pytest.raises(VaultError, match="cannot write to Bitwarden"):
+        vaults.store("bitwarden:item-1@api_token", ADMIN_TOKEN, env)

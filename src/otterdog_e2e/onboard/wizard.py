@@ -44,7 +44,11 @@ Refused in CI (context.in_ci). Secrets are read with hidden prompts only, regist
 echoed; every echoed text is redacted. Every secret prompt (tokens, web password, TOTP setup key) also accepts a vault
 reference (``vault:<path>/<field>``, ``pass:<path>``, ``bitwarden:<item>@<field>``, vaults.py): it is resolved with
 the operator's own vault access, the value checked like a typed one, and the REFERENCE written; a stored reference is
-resolved before its checks (secret).
+resolved before its checks (secret). With a secret store (``--store vault:<prefix>`` or ``pass:<prefix>``, kept as
+E2E_SECRET_STORE; store_step asks E2E_VAULT_ADDR for Vault), every secret has its place in the reference layout
+(onboard/store.py): a secret already there is used without a prompt, a typed or stored plain value that passes its
+checks is written there (into_store) and only its reference goes to the env file, the App's key and webhook secret
+included (the key file may then be deleted); the end lists the Vault policies of the instance's environments.
 """
 
 from __future__ import annotations
@@ -69,6 +73,7 @@ from otterdog_e2e.onboard.envfile import (
     read_env_file,
     update_env_file,
 )
+from otterdog_e2e.onboard.store import STORE_ENV, StoreError, parse_store, store_reference, vault_policies
 from otterdog_e2e.onboard.tokens import (
     DEFAULT_EXPIRES_IN,
     ROLE_TOKENS,
@@ -86,7 +91,7 @@ from otterdog_e2e.settings import (
     WebCredentialsError,
     normalize_totp_seed,
 )
-from otterdog_e2e.vaults import VaultError, is_reference, resolve
+from otterdog_e2e.vaults import VaultError, is_reference, resolve, store
 from otterdog_e2e.waiting import WaitTimeoutError, wait_until
 
 if TYPE_CHECKING:
@@ -168,6 +173,7 @@ class SetupOptions:
     open_urls: bool = False
     wait_timeout: float = DEFAULT_WAIT_TIMEOUT
     poll_interval: float = POLL_INTERVAL
+    store: str | None = None  # secret store vault:<prefix> / pass:<prefix> (onboard/store.py)
 
 
 @dataclass(frozen=True)
@@ -370,6 +376,7 @@ class SetupWizard:
         )
         self.echo(f"otterdog-e2e setup of instance {self.instance}: {self.env_path}")
         self.copy_from()
+        self.store_step()
         org = self.org_step()
         self.role_step("admin", org)
         self.profile_step(org)
@@ -467,6 +474,11 @@ class SetupWizard:
         rotate = role in self.options.rotate
         if stored and not rotate and self.keep_stored(role, stored, org):
             return
+        found = None if stored or rotate else self.from_store(spec.token_env)
+        if found is not None:
+            self.echo(f"{role}: found in the store at {found}")
+            if self.keep_stored(role, found, org):
+                return
         # the oracle is usually left out (the admin token serves as oracle): only that question defaults to no
         if (
             not stored
@@ -489,7 +501,7 @@ class SetupWizard:
         passes."""
         spec = ROLE_TOKENS[role]
         try:
-            token = self.secret(spec.token_env) or ""
+            token = self.reveal(stored, spec.token_env)
             checked = self.check_token(role, token, org)
         except (TokenRejectedError, SetupError) as exc:
             self.echo(f"{role}: the stored {spec.token_env} is not usable: {exc}")
@@ -497,18 +509,77 @@ class SetupWizard:
         self.echo(
             f"{role}: keeping the token of {checked.login} ({TOKEN_KIND_LABELS[checked.kind]}, {_expiry(checked)})"
         )
-        self.record(role, token, checked, org, written=stored)
+        self.record(role, token, checked, org, written=stored if is_reference(stored) else None)
         return True
+
+    def provider_env(self) -> dict[str, str]:
+        """The environment of the vaults: the operator's, overlaid with the env file (E2E_VAULT_ADDR, ...)."""
+        return {**self.environ, **self.values}
+
+    def reveal(self, value: str, name: str) -> str:
+        """``value``, a vault reference resolved (SetupError naming ``name`` when it cannot be read)."""
+        if not is_reference(value):
+            return value
+        try:
+            return resolve(value, self.provider_env()).strip()
+        except VaultError as exc:
+            raise SetupError(f"{name}: {exc}") from None
 
     def secret(self, name: str) -> str | None:
         """The stored value of a secret variable, a vault reference resolved (SetupError when it cannot be read)."""
         value = self.values.get(name)
-        if not value or not is_reference(value):
-            return value
+        return self.reveal(value, name) if value else value
+
+    # --- secret store -------------------------------------------------------------------------------------------
+    @property
+    def store(self) -> str | None:
+        """The instance's secret store (E2E_SECRET_STORE, set by store_step), None without one."""
+        return self.values.get(STORE_ENV) or None
+
+    def store_step(self) -> None:
+        """--store (else the stored E2E_SECRET_STORE): validated and written; Vault needs E2E_VAULT_ADDR (asked,
+        default VAULT_ADDR), so that ci-sync gives the jobs the same Vault."""
+        value = self.options.store or self.values.get(STORE_ENV)
+        if not value:
+            return
         try:
-            return resolve(value, {**self.environ, **self.values}).strip()
+            provider, prefix = parse_store(value)
+        except StoreError as exc:
+            raise SetupError(str(exc)) from None
+        self.write({STORE_ENV: f"{provider}:{prefix}"})
+        if provider == "vault" and not self.values.get("E2E_VAULT_ADDR"):
+            default = self.environ.get("VAULT_ADDR") or None
+            address = self.io.prompt("Vault address (E2E_VAULT_ADDR, https://...)", default).strip().rstrip("/")
+            if not address:
+                raise SetupError("a vault: store needs the Vault address (E2E_VAULT_ADDR)")
+            self.write({"E2E_VAULT_ADDR": address})
+        self.echo(f"secret store {provider}:{prefix}: the secrets of {self.instance} go to {prefix}/{self.instance}/")
+
+    def from_store(self, name: str) -> str | None:
+        """The reference of secret ``name`` at its place in the store when it can be read there, else None."""
+        if not self.store:
+            return None
+        reference = store_reference(self.store, self.instance, name)
+        try:
+            resolve(reference, self.provider_env())
+        except VaultError:
+            return None
+        return reference
+
+    def into_store(self, name: str, value: str) -> str:
+        """Write a checked secret at its place in the store; the reference the env file gets instead of the value."""
+        assert self.store is not None
+        reference = store_reference(self.store, self.instance, name)
+        try:
+            store(reference, value, self.provider_env())
         except VaultError as exc:
             raise SetupError(f"{name}: {exc}") from None
+        self.echo(f"  {name}: stored in {reference}")
+        return reference
+
+    def stored_or_plain(self, name: str, value: str) -> str:
+        """What the env file gets for a plain secret: its store reference (written there) with a store, else it."""
+        return self.into_store(name, value) if self.store and not is_reference(value) else value
 
     def typed_secret(self, label: str, answer: str) -> tuple[str, str | None]:
         """(value, reference) of a typed secret: a vault reference resolved (SetupError when it cannot be read)."""
@@ -713,6 +784,8 @@ class SetupWizard:
             self.echo("oracle: same token as the admin, which is the oracle's fallback anyway: nothing stored")
             self.write({spec.token_env: None, spec.login_env: None, spec.type_env: None})
             return
+        if written is None and self.store:
+            written = self.into_store(spec.token_env, token)
         previous = self.values.get(spec.login_env)
         if previous and previous.lower() != checked.login.lower():
             self.echo(f"{role}: the login changes from {previous} to {checked.login}")
@@ -957,17 +1030,32 @@ class SetupWizard:
     def web_step(self) -> None:
         """Optional web-UI login of the admin account: password and normalized TOTP seed (hidden prompts)."""
         password_env, seed_env = DEFAULT_WEB_ENV["password_env"], DEFAULT_WEB_ENV["totp_seed_env"]
+        rotate = WEB_ROTATION in self.options.rotate
+        if not rotate and not (self.values.get(password_env) or self.values.get(seed_env)):
+            found = {name: self.from_store(name) for name in (password_env, seed_env)}
+            if all(found.values()):
+                self.echo(f"web-UI login: found in the store at {found[password_env]} and {found[seed_env]}")
+                self.write({name: str(reference) for name, reference in found.items()})
         stored_seed = self.values.get(seed_env)
-        if self.values.get(password_env) and stored_seed and WEB_ROTATION not in self.options.rotate:
+        if self.values.get(password_env) and stored_seed and not rotate:
             try:
-                self.secret(password_env)
-                normalize_totp_seed(self.secret(seed_env) or "", where=seed_env)
+                kept_password = self.secret(password_env) or ""
+                kept_seed = normalize_totp_seed(self.secret(seed_env) or "", where=seed_env)
             except (WebCredentialsError, SetupError) as exc:
                 self.echo(f"web-UI login: {exc}")
             else:
                 self.echo(f"web-UI login: keeping {password_env} and {seed_env}")
+                if self.store:  # plain values move into the store, references stay as they are
+                    values = ((password_env, kept_password), (seed_env, kept_seed))
+                    moved = {
+                        name: self.into_store(name, value)
+                        for name, value in values
+                        if not is_reference(self.values[name])
+                    }
+                    if moved:
+                        self.write(moved)
                 return
-        elif WEB_ROTATION not in self.options.rotate and not self.io.confirm(
+        elif not rotate and not self.io.confirm(
             "Set up the web-UI login of the admin account? (optional: the web-UI tier logs in to github.com as the "
             "admin, trusted SUTs only)",
             False,
@@ -1003,7 +1091,12 @@ class SetupWizard:
         if seed is None:
             self.echo("web-UI login: skipped")
             return
-        self.write({password_env: password, seed_env: seed})
+        self.write(
+            {
+                password_env: self.stored_or_plain(password_env, password),
+                seed_env: self.stored_or_plain(seed_env, seed),
+            }
+        )
 
     def read_seed(self, seed_env: str) -> str | None:
         """A TOTP setup key normalized by settings.normalize_totp_seed, or the vault reference of a valid one (None:
@@ -1033,6 +1126,7 @@ class SetupWizard:
         rotate = APP_ROTATION in self.options.rotate
         if app_id and not rotate:
             self.echo(f"GitHub App: keeping {self.values.get('E2E_APP_SLUG') or '?'} (id {app_id})")
+            self.app_into_store()
             self.wait_installation(org)
             return APP_READY
         if self.run_manifest is None:
@@ -1073,6 +1167,7 @@ class SetupWizard:
                 "E2E_APP_PRIVATE_KEY": None,  # an inline key of a former App would win over the new key file
             }
         )
+        self.app_into_store()
         if result.get("secret_generated"):
             self.echo(
                 "GitHub returned no webhook secret: a random one was generated; set it as the App's webhook secret: "
@@ -1080,6 +1175,32 @@ class SetupWizard:
             )
         self.wait_installation(org)
         return APP_READY
+
+    def app_into_store(self) -> None:
+        """With a store: the App's private key (inline, else the content of its key file) and webhook secret move
+        into the store; the key file is no longer referenced and may be deleted."""
+        if not self.store:
+            return
+        updates: dict[str, str | None] = {}
+        key, key_file = self.values.get("E2E_APP_PRIVATE_KEY"), self.values.get("E2E_APP_PRIVATE_KEY_FILE")
+        if key and not is_reference(key):
+            updates["E2E_APP_PRIVATE_KEY"] = self.into_store("E2E_APP_PRIVATE_KEY", key)
+        elif not key and key_file:
+            path = Path(key_file).expanduser()
+            try:
+                pem = path.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError) as exc:
+                raise SetupError(f"E2E_APP_PRIVATE_KEY_FILE: cannot read {path} ({type(exc).__name__})") from None
+            REDACTOR.add(pem, pem.strip())
+            updates["E2E_APP_PRIVATE_KEY"] = self.into_store("E2E_APP_PRIVATE_KEY", pem.strip() + "\n")
+        if updates and key_file:
+            updates["E2E_APP_PRIVATE_KEY_FILE"] = None
+            self.echo(f"  the files of {Path(key_file).expanduser().parent} are no longer used: delete them")
+        secret = self.values.get("E2E_APP_WEBHOOK_SECRET")
+        if secret and not is_reference(secret):
+            updates["E2E_APP_WEBHOOK_SECRET"] = self.into_store("E2E_APP_WEBHOOK_SECRET", secret)
+        if updates:
+            self.write(updates)
 
     def webhook_url(self) -> str:
         """The App's webhook sink (--webhook-url, the stored one, else asked): https, not loopback; written."""
@@ -1209,5 +1330,14 @@ class SetupWizard:
                 "- approve the members' fine-grained token requests: "
                 f"https://github.com/organizations/{org.login}/settings/personal-access-token-requests"
             )
+        if self.store and self.store.startswith("vault:"):
+            mount = self.values.get("E2E_VAULT_MOUNT") or self.environ.get("E2E_VAULT_MOUNT") or "secret"
+            lines.append(
+                "- Vault: one JWT role per GitHub environment, bound to it, with its read-only policy; then set "
+                "E2E_VAULT_ROLE (E2E_VAULT_ROLE_UNTRUSTED, E2E_VAULT_ROLE_WEBUI) in the env file (docs/security.md):"
+            )
+            for name, policy in vault_policies(self.store, self.instance, mount).items():
+                lines.append(f"  policy {name}:")
+                lines.extend(f"    {line}" for line in policy.splitlines())
         lines.append(f"- CI environments, variables and secrets: otterdog-e2e ci-sync --target {self.instance}")
         return lines

@@ -289,9 +289,9 @@ E2E_VAULT_ADDR=https://vault.example.org
   unlock them first (a gpg-agent holding the passphrase, or a graphical pinentry;
   `export BW_SESSION="$(bw unlock --raw)"`).
 - **setup** accepts a reference at every secret prompt (tokens, web password, TOTP setup key): it resolves the
-  reference with your own vault access, checks the value like a typed one and writes the reference. The App step
-  still writes the key file and the webhook secret: move them to the vault afterwards (`E2E_APP_PRIVATE_KEY=vault:...`,
-  `E2E_APP_WEBHOOK_SECRET=vault:...`) and delete the files.
+  reference with your own vault access, checks the value like a typed one and writes the reference. With
+  `--store vault:<prefix>` or `pass:<prefix>` it also puts every secret at its place in the
+  [reference layout](#reference-layout), the App's key and webhook secret included, and writes references only.
 - **CI** reads HashiCorp Vault only. `ci-sync` stores a `vault:` reference as it is when the env file sets
   `E2E_VAULT_ROLE` and `E2E_VAULT_ADDR`: the GitHub secret then holds a path, and the job reads the value with its
   OIDC token. Without a role, and for `pass:` and `bitwarden:` references (a runner has no such vault), ci-sync
@@ -320,6 +320,63 @@ vault write auth/jwt/role/otterdog-e2e-acme-a-untrusted - <<'ROLE'
  "token_policies": ["otterdog-e2e-acme-a-untrusted"], "token_ttl": "15m"}
 ROLE
 ```
+
+#### Reference layout
+
+`otterdog-e2e setup --store vault:<prefix>` (or `pass:<prefix>`) keeps every secret of an instance at a fixed place
+in the store and writes only references into the instance env file (`onboard/store.py`):
+
+```text
+<prefix>/                     e.g. otterdog-e2e, in the KV v2 mount E2E_VAULT_MOUNT (default secret)
+└── <instance>/               one subtree per test organization: nothing is shared between instances
+    ├── admin                 token                         E2E_ADMIN_TOKEN
+    ├── oracle                token                         E2E_ORACLE_TOKEN
+    ├── author                token                         E2E_AUTHOR_TOKEN
+    ├── approver              token                         E2E_APPROVER_TOKEN
+    ├── outsider              token                         E2E_OUTSIDER_TOKEN
+    ├── config_reader         token                         E2E_CONFIG_READER_TOKEN
+    ├── web                   password, totp_seed           E2E_ADMIN_PASSWORD, E2E_ADMIN_TOTP_SEED
+    └── app                   private_key, webhook_secret   E2E_APP_PRIVATE_KEY, E2E_APP_WEBHOOK_SECRET
+```
+
+With Vault each item is one KV v2 secret and each field one of its keys (`vault:otterdog-e2e/acme-a/admin/token`);
+with pass each field is one entry (`pass:otterdog-e2e/acme-a/admin/token`). Logins, ids and the other settings are not
+secrets: they stay in the env file and in the variables of the GitHub environments.
+
+Why this shape:
+
+- one subtree per instance: each test organization has its own machine-account tokens and App, and the policy of one
+  instance never reaches another;
+- one item per role: a token rotates alone (`setup --rotate <role>` writes the new one at the same place);
+- the web login apart from the admin token: only the web-UI environment reads it, the untrusted one never does.
+
+| GitHub environment | Items its jobs read | Vault policy |
+|---|---|---|
+| `e2e-<instance>` (trusted runs, janitor) | the six roles, `app` | `otterdog-e2e-<instance>` |
+| `e2e-<instance>-untrusted` | the six roles, `app` | `otterdog-e2e-<instance>-untrusted` |
+| `e2e-<instance>-webui` | `admin`, `oracle`, `web` | `otterdog-e2e-<instance>-webui` |
+
+`tests/unit/test_onboard_store.py` keeps this table equal to the secrets the workflow jobs read; setup prints the
+three read-only policies of the instance (one `path "<mount>/data/<prefix>/<instance>/<item>"` rule per item) at its
+end.
+
+What setup does with a store:
+
+- it writes `E2E_SECRET_STORE` and, for Vault, asks the address once (`E2E_VAULT_ADDR`, default `VAULT_ADDR`);
+- a secret already at its place (a store filled by hand, or by a setup on another machine) is checked and its
+  reference written, without a prompt;
+- a typed secret that passes its checks is written at its place (Vault: merged into the other fields of the item,
+  check-and-set on the version read; pass: `insert --multiline --force`), read back, and only its reference written;
+  the plain values of an earlier setup move the same way, so `setup --store ...` on an existing instance migrates it;
+- the App's key (from its key file) and webhook secret move into `app`; the key file is no longer used and can be
+  deleted;
+- then: bind each policy to a JWT role (above), set `E2E_VAULT_ROLE`, `E2E_VAULT_ROLE_UNTRUSTED` and
+  `E2E_VAULT_ROLE_WEBUI` in the env file, and run `otterdog-e2e ci-sync --target <instance> --apply`.
+
+Your own Vault token needs `read`, `create` and `update` on `<mount>/data/<prefix>/<instance>/*` for setup; the CI
+roles only read. Bitwarden addresses items by id, so setup has no layout for it: create one item per role and
+instance (the token in a custom field `token`, the admin's web login in `login.password` and `login.totp`) and enter
+their `bitwarden:<item id>@<field>` references at the prompts.
 
 ### Processes and environment (T3)
 

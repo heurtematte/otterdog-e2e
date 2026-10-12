@@ -99,6 +99,21 @@ A token kept in an external vault is entered as its reference (`vault:<path>/<fi
 vault access, checks the value like a typed token and writes the reference, never the value
 ([Secrets in an external vault](security.md#secrets-in-an-external-vault-t1-t3)).
 
+### Secrets in a store
+
+With `--store`, setup keeps the secrets of the instance in HashiCorp Vault or pass, at the places of the
+[reference layout](security.md#reference-layout) (`<prefix>/<instance>/<role>/token`, `web`, `app`), and the env file
+holds references only:
+
+```bash
+vault login                                                   # your token: read, create, update on the instance's paths
+otterdog-e2e setup --target acme-a --store vault:otterdog-e2e # or --store pass:otterdog-e2e
+```
+
+A secret already at its place is used without a prompt, a typed one is written there once it passed its checks, and
+the plain values of an earlier setup move there (run it once with `--store` to migrate an instance). The store is
+remembered (`E2E_SECRET_STORE`); the end of the run prints the Vault policies of the instance's environments.
+
 Each token is checked before anything is written: its shape, `GET /user` (the login is taken from the token), its kind,
 the classic scopes of the role, the isolation of the account (`safety.check_identity_isolation`, as in every session)
 and, for the admin, an active owner membership. A token or an account already stored for another role is refused (only

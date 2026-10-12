@@ -121,6 +121,12 @@ def _setup_manifest(port: int, open_url: Callable[[str], Any] | None) -> Callabl
     "afterwards); bootstrap --wait started by setup waits as long",
 )
 @click.option("--open", "open_browser", is_flag=True, help="open the token, App and installation URLs in a browser")
+@click.option(
+    "--store",
+    default=None,
+    help="keep the secrets in a secret store, vault:<prefix> or pass:<prefix> (e.g. vault:otterdog-e2e): the env file "
+    "gets references only (docs/security.md, reference layout)",
+)
 @_handled
 def setup_command(
     target: str,
@@ -134,6 +140,7 @@ def setup_command(
     port: int,
     wait_timeout: str,
     open_browser: bool,
+    store: str | None,
 ) -> None:
     """Onboard a test org interactively: org, tokens of every role, web login, GitHub App, then bootstrap and doctor.
 
@@ -161,6 +168,7 @@ def setup_command(
         webhook_url=webhook_url,
         open_urls=open_browser,
         wait_timeout=timeout,
+        store=store,
     )
     io = WizardIO(
         prompt=lambda text, default: str(click.prompt(text, default=default)).strip(),

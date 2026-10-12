@@ -1285,3 +1285,93 @@ def test_web_login_references(world: World, vault: dict[str, str]) -> None:
     script = Script(secrets=[])
     run_wizard(world, script)
     assert "web-UI login: keeping E2E_ADMIN_PASSWORD and E2E_ADMIN_TOTP_SEED" in script.output
+
+
+# --- secret store (--store) -------------------------------------------------------------------------------------------
+@pytest.fixture
+def secret_store(monkeypatch: pytest.MonkeyPatch) -> dict[str, str]:
+    """An in-memory secret store: references resolve from it (a missing one is unreadable), store writes into it;
+    settings (the App credentials of the installation check) reads it too."""
+    entries: dict[str, str] = {}
+
+    def resolve(value: str, environ: object) -> str:
+        """entries[value]."""
+        if value not in entries:
+            raise VaultError(f"{value}: HTTP 404")
+        return entries[value]
+
+    def store(value: str, secret: str, environ: object) -> None:
+        """entries[value] = secret."""
+        entries[value] = secret
+
+    monkeypatch.setattr("otterdog_e2e.onboard.wizard.resolve", resolve)
+    monkeypatch.setattr("otterdog_e2e.onboard.wizard.store", store)
+    monkeypatch.setattr("otterdog_e2e.settings.resolve", resolve)
+    return entries
+
+
+def test_a_vault_store_gets_the_secrets_and_the_env_file_their_references(
+    world: World, secret_store: dict[str, str]
+) -> None:
+    """--store vault:<prefix>: the store and its Vault address are written, a typed token that passed its checks goes
+    to <prefix>/<instance>/admin/token and the env file holds only the reference; the end lists the Vault policies of
+    the instance's environments; a re-run keeps the stored reference."""
+    script = Script(secrets=[TOKENS["admin"]], answers=["https://vault.example.org/"])
+    run_wizard(world, script, store="vault:otterdog-e2e")
+    env = world.env()
+    assert env["E2E_SECRET_STORE"] == "vault:otterdog-e2e" and env["E2E_VAULT_ADDR"] == "https://vault.example.org"
+    assert env["E2E_ADMIN_TOKEN"] == "vault:otterdog-e2e/org2/admin/token"
+    assert secret_store == {"vault:otterdog-e2e/org2/admin/token": TOKENS["admin"]}
+    assert TOKENS["admin"] not in (world.config_dir / "org2.env").read_text()
+    assert "  policy otterdog-e2e-org2-webui:" in script.output
+    assert '    path "secret/data/otterdog-e2e/org2/web" { capabilities = ["read"] }' in script.output
+    rerun = Script(secrets=[])
+    run_wizard(world, rerun)
+    assert "admin: keeping the token of e2e-admin" in rerun.output
+    assert_no_secret(script.output + rerun.output)
+
+
+def test_a_token_at_its_place_in_the_store_needs_no_prompt(world: World, secret_store: dict[str, str]) -> None:
+    """A token already at <prefix>/<instance>/<role>/token is checked and its reference written, without a prompt."""
+    secret_store["pass:otterdog-e2e/org2/admin/token"] = TOKENS["admin"]
+    script = Script(secrets=[])
+    run_wizard(world, script, store="pass:otterdog-e2e")
+    assert "admin: found in the store at pass:otterdog-e2e/org2/admin/token" in script.output
+    assert world.env()["E2E_ADMIN_TOKEN"] == "pass:otterdog-e2e/org2/admin/token"
+
+
+def test_plain_secrets_move_into_the_store(world: World, secret_store: dict[str, str]) -> None:
+    """An instance set up without a store: a run with --store moves its plain token, web login and App secrets into
+    the store (the key file is no longer referenced) and leaves references only."""
+    run_wizard(world, Script(secrets=[TOKENS["admin"], PASSWORD, SEED], confirms={"web-UI login": True}))
+    key_file = world.config_dir / "org2" / "app-4242.private-key.pem"
+    key_file.parent.mkdir(parents=True, exist_ok=True)
+    key_file.write_text(PEM)
+    path = world.config_dir / "org2.env"
+    path.write_text(
+        path.read_text() + f"E2E_APP_ID=4242\nE2E_APP_SLUG=otterdog-e2e-e2e-test-org\n"
+        f"E2E_APP_PRIVATE_KEY_FILE={key_file}\nE2E_APP_WEBHOOK_SECRET={WEBHOOK_SECRET}\n"
+    )
+    script = Script(secrets=[])
+    run_wizard(world, script, store="pass:otterdog-e2e")
+    env = world.env()
+    prefix = "pass:otterdog-e2e/org2"
+    assert env["E2E_ADMIN_TOKEN"] == f"{prefix}/admin/token"
+    assert env["E2E_ADMIN_PASSWORD"] == f"{prefix}/web/password"
+    assert env["E2E_ADMIN_TOTP_SEED"] == f"{prefix}/web/totp_seed"
+    assert env["E2E_APP_PRIVATE_KEY"] == f"{prefix}/app/private_key" and "E2E_APP_PRIVATE_KEY_FILE" not in env
+    assert env["E2E_APP_WEBHOOK_SECRET"] == f"{prefix}/app/webhook_secret"
+    assert secret_store[f"{prefix}/web/totp_seed"] == "JBSWY3DPEHPK3PXP"
+    assert (
+        secret_store[f"{prefix}/app/private_key"] == PEM
+        and secret_store[f"{prefix}/app/webhook_secret"] == WEBHOOK_SECRET
+    )
+    assert f"the files of {key_file.parent} are no longer used: delete them" in script.output
+    text = path.read_text()
+    assert not [value for value in (TOKENS["admin"], PASSWORD, WEBHOOK_SECRET, "JBSWY3DPEHPK3PXP") if value in text]
+
+
+def test_an_invalid_store_is_refused(world: World, secret_store: dict[str, str]) -> None:
+    """Bitwarden has no path layout: --store refuses it (and anything that is not vault:/pass:<prefix>)."""
+    with pytest.raises(SetupError, match="expected vault:<prefix> or pass:<prefix>"):
+        run_wizard(world, Script(secrets=[]), store="bitwarden:x")

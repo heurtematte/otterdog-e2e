@@ -18,6 +18,9 @@ vaults of the secrets it uses. The syntax is the one of otterdog's own secret re
 
 Each reference is resolved once per process (RESOLVER caches values, Vault logins and Bitwarden items) and its value
 registered with REDACTOR, as is every token of a Vault login; errors (VaultError) name the reference, never a value.
+``store`` writes a secret at a reference for ``otterdog-e2e setup --store`` (onboard/store.py): Vault KV v2 merges the
+field into the other fields of the secret (check-and-set on the version read), pass and gopass ``insert --multiline
+--force``; the value is read back. Bitwarden references are read-only here.
 The provider CLIs run through procs.run with the operator's HOME and the provider's own variables (password store,
 GnuPG, Bitwarden session), which procs strips from every other child.
 """
@@ -192,8 +195,11 @@ class Resolver:
             self._session = requests.Session()
         return self._session
 
-    def _request(self, method: str, url: str, what: str, settings: VaultSettings, **kwargs: Any) -> Any:
-        """One HTTP call; VaultError on a network error, a non-2xx answer or a body that is not JSON."""
+    def _request(
+        self, method: str, url: str, what: str, settings: VaultSettings, *, missing_ok: bool = False, **kwargs: Any
+    ) -> Any:
+        """One HTTP call; VaultError on a network error, a non-2xx answer (None for a 404 with ``missing_ok``) or a
+        body that is not JSON."""
         import requests
 
         verify: bool | str = settings.ca_cert or True
@@ -201,6 +207,10 @@ class Resolver:
             response = self._http().request(method, url, timeout=VAULT_TIMEOUT, verify=verify, **kwargs)
         except requests.RequestException as exc:
             raise VaultError(f"{what}: {type(exc).__name__} reaching {urllib.parse.urlsplit(url).netloc}") from None
+        if missing_ok and response.status_code == 404:
+            return None
+        if response.status_code == 204:
+            return {}
         if not 200 <= response.status_code < 300:
             raise VaultError(f"{what}: HTTP {response.status_code}{_vault_errors(response)}")
         try:
@@ -230,6 +240,38 @@ class Resolver:
         if not isinstance(value, str) or not value:
             raise VaultError(f"{reference}: no field {reference.field!r} (fields: {', '.join(sorted(data)) or 'none'})")
         return value
+
+    def _write_vault(self, reference: Reference, settings: VaultSettings, env: Mapping[str, str], secret: str) -> None:
+        """Merge ``field: secret`` into the KV v2 secret ``reference.path`` (created when missing; check-and-set on the
+        version read, so a concurrent change fails instead of being lost)."""
+        token = self._vault_token(settings, env)
+        url = f"{settings.addr}/v1/{urllib.parse.quote(settings.mount)}/data/{urllib.parse.quote(reference.path)}"
+        what = f"writing {reference} (needs read, create and update on {settings.mount}/data/{reference.path})"
+        headers = self._headers(settings, token)
+        body = self._request("GET", url, what, settings, missing_ok=True, headers=headers)
+        current: dict[str, Any] = ((body or {}).get("data") or {}) if isinstance(body, dict) else {}
+        fields = current.get("data")
+        data: dict[str, Any] = fields if isinstance(fields, dict) else {}
+        version = (current.get("metadata") or {}).get("version") or 0
+        payload = {"options": {"cas": int(version)}, "data": {**data, str(reference.field): secret}}
+        self._request("POST", url, what, settings, headers=headers, json=payload)
+
+    def store(self, value: str, secret: str, environ: Mapping[str, str]) -> None:
+        """Write ``secret`` at the reference ``value`` (module docstring), then read it back (VaultError when the write
+        fails or the value read back differs; Bitwarden is read-only here)."""
+        reference = parse(value)
+        env = operator_env(environ)
+        REDACTOR.add(secret, secret.strip())
+        with self._lock:
+            if reference.provider == "vault":
+                self._write_vault(reference, VaultSettings.from_env(env), env, secret)
+            elif reference.provider == "pass":
+                self._write_pass(reference, env, secret)
+            else:
+                raise VaultError(f"{reference}: setup cannot write to Bitwarden: create the item, enter its reference")
+            self._values.pop(self._cache_key(reference, env), None)
+            if self.resolve(value, environ).strip() != secret.strip():
+                raise VaultError(f"{reference}: the value read back differs from the value written")
 
     def _vault_token(self, settings: VaultSettings, env: Mapping[str, str]) -> str:
         """The Vault token: a GitHub Actions OIDC login with E2E_VAULT_ROLE, else VAULT_TOKEN, else ~/.vault-token."""
@@ -273,8 +315,11 @@ class Resolver:
         return token
 
     # --- pass / gopass and Bitwarden -----------------------------------------------------------------------------
-    def _cli(self, argv: list[str], env: Mapping[str, str], prefixes: tuple[str, ...], what: str) -> str:
-        """Run a provider CLI with the operator's HOME and the provider variables; its stdout (VaultError otherwise)."""
+    def _cli(
+        self, argv: list[str], env: Mapping[str, str], prefixes: tuple[str, ...], what: str, *, stdin: str | None = None
+    ) -> str:
+        """Run a provider CLI with the operator's HOME and the provider variables (``stdin`` on its standard input);
+        its stdout (VaultError otherwise)."""
         from otterdog_e2e import procs
 
         run = self._run or procs.run
@@ -282,7 +327,7 @@ class Resolver:
         if env.get("PATH"):
             extra["PATH"] = env["PATH"]
         try:
-            result = run(argv, extra_env=extra, keep_home=True, timeout=PROVIDER_TIMEOUT)
+            result = run(argv, extra_env=extra, keep_home=True, timeout=PROVIDER_TIMEOUT, input=stdin)
         except FileNotFoundError:
             raise VaultError(f"{what}: {argv[0]} is not installed (or not on PATH)") from None
         except procs.TimeoutExpired:
@@ -297,6 +342,12 @@ class Resolver:
         command = (env.get("E2E_PASS_BIN") or "pass").strip()
         output = self._cli([command, "show", reference.path], env, PASS_ENV_PREFIXES, str(reference))
         return output.rstrip("\r\n")
+
+    def _write_pass(self, reference: Reference, env: Mapping[str, str], secret: str) -> None:
+        """``pass insert --multiline --force <path>``: the whole entry is the secret."""
+        command = (env.get("E2E_PASS_BIN") or "pass").strip()
+        argv = [command, "insert", "--multiline", "--force", reference.path]
+        self._cli(argv, env, PASS_ENV_PREFIXES, f"writing {reference}", stdin=secret.rstrip("\n") + "\n")
 
     def _read_bitwarden(self, reference: Reference, env: Mapping[str, str]) -> str:
         """A custom field of the item, or one of BITWARDEN_FIELDS."""
@@ -363,3 +414,8 @@ RESOLVER = Resolver()
 def resolve(value: str, environ: Mapping[str, str]) -> str:
     """RESOLVER.resolve: the secret a reference names (VaultError when it cannot be read)."""
     return RESOLVER.resolve(value, environ)
+
+
+def store(value: str, secret: str, environ: Mapping[str, str]) -> None:
+    """RESOLVER.store: write ``secret`` at the reference ``value`` and read it back (VaultError otherwise)."""
+    RESOLVER.store(value, secret, environ)
