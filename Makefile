@@ -26,7 +26,9 @@ VENV ?= .venv
 E2E := $(VENV)/bin/otterdog-e2e
 PYTHON := $(VENV)/bin/python
 POETRY ?= poetry
-# Python files outside the package: the MkDocs hooks of the documentation site
+# `make init` links the command otterdog-e2e of the venv here (a directory of the PATH), as otterdog's links otterdog
+E2E_LINK ?= $(HOME)/.local/bin/otterdog-e2e
+# Python files outside the package: the staging of the documentation site (docs_site.py and its modules)
 HOOKS := docs_hooks.py docs_scenarios.py docs_site.py
 
 # one target instance, or several for the run-based targets, pr, doctor and janitor: a comma list, @all, @<list>
@@ -70,8 +72,15 @@ help: ## Show this help
 	@echo "           TARGET=a,b|@all|@<list> runs several instances (run-based targets, pr, doctor, janitor);"
 	@echo "           PARALLEL=<n> runs up to n of them at once"
 
-init: ## Create .venv with the harness and its dev tools (poetry install --with dev)
+init: ## Create .venv with the harness and its dev tools (poetry install --with dev), link otterdog-e2e into E2E_LINK
 	$(POETRY) install --with dev
+	@target="$(abspath $(VENV))/bin/otterdog-e2e"; link="$(E2E_LINK)"; \
+	if [ -e "$$link" ] && [ ! -L "$$link" ]; then \
+		echo "$$link exists and is not a symlink: left alone (run $(VENV)/bin/otterdog-e2e)"; \
+	elif [ "$$(readlink "$$link")" != "$$target" ]; then \
+		mkdir -p "$$(dirname "$$link")" && ln -sfn "$$target" "$$link" && echo "Updated symlink: $$link -> $$target"; \
+	fi; \
+	case ":$$PATH:" in *":$$(dirname "$$link"):"*) ;; *) echo "$$(dirname "$$link") is not on the PATH: add it to run otterdog-e2e";; esac
 
 unit: ## Unit tier: harness self-tests (no network, no docker)
 	$(PYTHON) -m pytest -q -p no:cacheprovider tests/unit $(ARGS)

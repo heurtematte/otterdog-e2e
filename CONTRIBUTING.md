@@ -6,7 +6,7 @@ contribution is licensed under the [Eclipse Public License 2.0](LICENSE), the li
 ## Set up
 
 ```bash
-make init        # .venv with the harness and its dev tools (poetry install --with dev)
+make init        # .venv with the harness and its dev tools, otterdog-e2e in ~/.local/bin
 make check       # ruff, mypy and the unit tier: no network, no docker
 make offline     # the offline tier against an otterdog release (docker, no GitHub)
 ```

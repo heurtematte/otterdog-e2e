@@ -3,11 +3,14 @@
 ## Setup
 
 ```bash
-make init          # poetry install --with dev: .venv with the harness, pytest, ruff, mypy
+make init          # poetry install --with dev: .venv with the harness, pytest, ruff, mypy; links otterdog-e2e
 make check         # ruff check, ruff format --check, mypy, unit tier
 ```
 
 `poetry.toml` keeps the virtualenv in `.venv/`; every Makefile target and workflow calls `.venv/bin/otterdog-e2e`.
+`make init` also links it as `~/.local/bin/otterdog-e2e` (`E2E_LINK=<path>` elsewhere), like otterdog's own
+`make init`, so `otterdog-e2e` runs from any directory of a shell whose `PATH` holds `~/.local/bin` (it finds the
+project from its own location; a file that is not a symlink is left alone).
 
 ### `OTTERDOG_CONFIG_ROOT` pitfall
 
