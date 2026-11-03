@@ -511,6 +511,7 @@ lease, bootstrap) call, mapped with GitHub's tables "Permissions required for fi
 | Commit statuses | Read | the oracle's view of webapp statuses |
 | Contents | Read and write | branches, files, refs, commits, merges, the org lease and run ledger refs |
 | Custom properties | Read and write | repository property values |
+| Dependabot secrets | Read and write | repository Dependabot secrets, read by every plan of otterdog from main d9dac78 on (#890) when the template defines them |
 | Environments | Read and write | environment secrets and variables |
 | Metadata | Read | mandatory |
 | Pages | Read | GitHub Pages configuration (writes go through Administration) |
@@ -521,9 +522,18 @@ lease, bootstrap) call, mapped with GitHub's tables "Permissions required for fi
 | Webhooks | Read and write | repository webhooks |
 | Workflows | Read and write | files under `.github/workflows` (template repositories, `push-config`, `delete-file`, scenario workflows) |
 
-Not needed: organization Blocking users, Projects, Self-hosted runners, Dependabot or Codespaces secrets; repository
-Issues, Deployments, Dependabot alerts, Code scanning alerts, Secret scanning alerts (otterdog toggles these features
-through Administration and `PATCH /repos/{owner}/{repo}`).
+Not needed: organization Blocking users, Projects, Self-hosted runners; repository Issues, Deployments, Dependabot
+alerts, Code scanning alerts, Secret scanning alerts (otterdog toggles these features through Administration and
+`PATCH /repos/{owner}/{repo}`).
+
+Since #890 (main d9dac78, after v1.7.1) otterdog reads the Dependabot and Codespaces secrets of the organization and of
+every repository whenever the template defines them, and a refused read aborts `plan`, `apply` and `import` (it is no
+longer taken as "no secret"). Besides the repository Dependabot secrets above, grant the organization **Dependabot
+secrets** and **Codespaces secrets** and the repository **Codespaces secrets** permissions (Read and write) by hand on
+the token form before testing such a SUT: their URL parameter names are not documented in GitHub's OpenAPI
+description, so the prefilled URL cannot preselect them (unverified: `organization_dependabot_secrets`,
+`organization_codespaces_secrets`, `codespaces_secrets`). The GitHub App of the webapp tier needs the same permissions
+(otterdog's `docs/operating_otterdog/install.md`).
 
 **`oracle`** (optional; omit it to let the admin token serve as oracle): an organization owner, every permission of
 the admin table at **Read**, except two reads that GitHub lists under write: organization Administration **Read and

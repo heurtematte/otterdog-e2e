@@ -48,6 +48,9 @@ local newRepo(name) = {
 
   web_commit_signoff_required: true,
 
+  # ignored when the organization enforces immutable releases for the repository
+  immutable_releases_enabled: false,
+
   # security analysis
   secret_scanning: "enabled",
   secret_scanning_push_protection: "enabled",
@@ -68,6 +71,10 @@ local newRepo(name) = {
   gh_pages_source_branch: null,
   gh_pages_source_path: null,
   gh_pages_visibility: "public",
+  # custom domain of the GitHub Pages site, null to use the default github.io domain
+  gh_pages_cname: null,
+  # only taken into account when a custom domain is set
+  gh_pages_https_enforced: true,
 
   # Custom Properties
   custom_properties: {},
@@ -116,6 +123,10 @@ local newRepo(name) = {
 
   # team permissions
   team_permissions: {},
+
+  # the name of the code security configuration attached to the repo,
+  # null keeps the configuration currently attached to the repo
+  code_security_configuration: null,
 };
 
 # Function to extend an existing repo with the same name.
@@ -160,6 +171,7 @@ local newPullRequest() = {
   requires_last_push_approval: false,
   requires_review_thread_resolution: false,
   dismisses_stale_reviews: false,
+  allowed_merge_methods: ["merge", "squash", "rebase"],
 };
 
 # Function to create status checks with default settings.
@@ -215,6 +227,54 @@ local newOrgRuleset(name) = newRepoRuleset(name) {
   protect_repo_names: false,
 };
 
+# --8<-- [start:code_security_configuration]
+# Function to create a new organization code security configuration with default settings.
+# Settings set to null are not managed, e.g. as they are not available to every organization.
+local newOrgCodeSecurityConfiguration(name) = {
+  name: name,
+  description: "",
+
+  # GitHub Code Security and GitHub Secret Protection
+  code_security: "disabled",
+  secret_protection: "disabled",
+
+  # dependency graph and Dependabot
+  dependency_graph: "enabled",
+  dependency_graph_autosubmit_action: "disabled",
+  dependency_graph_autosubmit_action_labeled_runners: null,
+  dependabot_alerts: "disabled",
+  dependabot_security_updates: "disabled",
+  dependabot_reachability: null,
+  dependabot_delegated_alert_dismissal: null,
+
+  # code scanning
+  code_scanning_default_setup: "disabled",
+  code_scanning_default_setup_runner_type: null,
+  code_scanning_default_setup_runner_label: null,
+  code_scanning_allow_advanced: null,
+  code_scanning_delegated_alert_dismissal: null,
+
+  # secret scanning
+  secret_scanning: "disabled",
+  secret_scanning_push_protection: "disabled",
+  secret_scanning_delegated_bypass: "disabled",
+  secret_scanning_delegated_bypass_reviewers: null,
+  secret_scanning_validity_checks: "disabled",
+  secret_scanning_non_provider_patterns: "disabled",
+  secret_scanning_generic_secrets: null,
+  secret_scanning_generic_secrets_push_protection: null,
+  secret_scanning_delegated_alert_dismissal: null,
+  secret_scanning_extended_metadata: null,
+
+  private_vulnerability_reporting: "disabled",
+  enforcement: "enforced",
+
+  # the visibility of new repositories this configuration is applied to by default:
+  # 'none', 'all', 'public' or 'private_and_internal'
+  default_for_new_repos: "none",
+};
+# --8<-- [end:code_security_configuration]
+
 # Function to create a new organization webhook with default settings.
 local newOrgWebhook(url) = {
   active: true,
@@ -240,6 +300,16 @@ local newOrgSecret(name) = newRepoSecret(name) {
   visibility: "public",
   selected_repositories: [],
 };
+
+# Functions for organization-level secret scopes with the same shape as
+# Actions organization secrets.
+local newOrgDependabotSecret(name) = newOrgSecret(name);
+local newOrgCodespacesSecret(name) = newOrgSecret(name);
+
+# Functions for repository-level secret scopes with the same shape as Actions
+# repository secrets.
+local newRepoDependabotSecret(name) = newRepoSecret(name);
+local newRepoCodespacesSecret(name) = newRepoSecret(name);
 
 # Function to create a new repository variable with default settings.
 local newRepoVariable(name) = {
@@ -278,7 +348,7 @@ local newEnvironment(name) = {
   wait_timer: 0,
   reviewers: [],
   prevent_self_review: false,
-  # Can be one of: all, protected_branches, branch_policies
+  # Can be one of: all, protected, selected
   deployment_branch_policy: "all",
   branch_policies: [],
   secrets: [],
@@ -352,6 +422,12 @@ local newOrg(name, id=name) = {
 
     # Disable default code security configurations
     default_code_security_configurations_disabled: true,
+
+    # Repositories that must use immutable releases.
+    # Can be one of: all, none, selected
+    immutable_releases_enforced_repositories: "none",
+    # Only taken into account when 'immutable_releases_enforced_repositories' is set to 'selected'
+    immutable_releases_selected_repositories: [],
 
     ## Admin repository permissions
 
@@ -431,6 +507,9 @@ local newOrg(name, id=name) = {
   # organization rulesets
   rulesets: [],
 
+  # organization code security configurations
+  code_security_configurations: [],
+
   # List of repositories of the organization.
   # Entries here can be extended during template manifestation:
   #  * new repos should be defined using the newRepo template
@@ -449,13 +528,18 @@ local newOrg(name, id=name) = {
   newTeam:: newTeam,
   newOrgWebhook:: newOrgWebhook,
   newOrgSecret:: newOrgSecret,
+  newOrgDependabotSecret:: newOrgDependabotSecret,
+  newOrgCodespacesSecret:: newOrgCodespacesSecret,
   newOrgVariable:: newOrgVariable,
   newOrgRuleset:: newOrgRuleset,
+  newOrgCodeSecurityConfiguration:: newOrgCodeSecurityConfiguration,
   newCustomProperty:: newCustomProperty,
   newRepo:: newRepo,
   extendRepo:: extendRepo,
   newRepoWebhook:: newRepoWebhook,
   newRepoSecret:: newRepoSecret,
+  newRepoDependabotSecret:: newRepoDependabotSecret,
+  newRepoCodespacesSecret:: newRepoCodespacesSecret,
   newRepoVariable:: newRepoVariable,
   newBranchProtectionRule:: newBranchProtectionRule,
   newRepoRuleset:: newRepoRuleset,

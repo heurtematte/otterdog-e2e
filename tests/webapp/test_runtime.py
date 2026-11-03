@@ -34,6 +34,7 @@ W-RT-PAGES: the project, repository, defaults and playground pages, the /organiz
 
 from __future__ import annotations
 
+import json
 import re
 import urllib.parse
 from collections.abc import Callable, Mapping
@@ -333,6 +334,26 @@ def test_project_api(webapp_scenario: WebappScenario) -> None:
         assert response.json() == {}, f"GET {path}: {response.status_code} {response.text[:200]!r}"
 
 
+# since eclipse-csi/otterdog#878 (v1.7.0) the playground is a CodeMirror 6 page fed by a JSON script (no <textarea>)
+PLAYGROUND_DATA_RE = re.compile(
+    r'<script type="application/json" id="playground-data">(?P<data>.*?)</script>', re.DOTALL
+)
+
+
+def playground_templates(page: str) -> list[str]:
+    """Sources of the template files a project playground shows: the templateFiles of its playground-data script, or
+    the template textareas of SUTs before #878."""
+    match = PLAYGROUND_DATA_RE.search(page)
+    if match is not None:
+        files = json.loads(match.group("data")).get("templateFiles") or []
+        return [str(entry.get("content") or "") for entry in files if isinstance(entry, dict)]
+    return [
+        area.text()
+        for area in parse_html(page).iter("textarea")
+        if area.attrs.get("id") not in ("playground-jsonnet", "json-output")
+    ]
+
+
 @pytest.mark.scenario("W-RT-PAGES", priority="P2")
 @pytest.mark.tags("webapp", "template")
 def test_project_and_admin_pages(webapp_scenario: WebappScenario, installation_id: int) -> None:
@@ -359,13 +380,10 @@ def test_project_and_admin_pages(webapp_scenario: WebappScenario, installation_i
     defaults = parse_html(s.api.get(f"/projects/{quoted}/defaults", timeout=PAGE_TIMEOUT).text).text()
     for snippet in ("orgs.newOrg('<project-name>', '<github-id>') =", "orgs.newRepo('<name>') ="):
         assert snippet in defaults, f"the defaults page lacks {snippet!r} (template not evaluated?)"
-    playground = parse_html(s.api.get(f"/projects/{quoted}/playground", timeout=PAGE_TIMEOUT).text)
-    templates = [
-        area
-        for area in playground.iter("textarea")
-        if area.attrs.get("id") not in ("playground-jsonnet", "json-output")
-    ]
-    assert any("newRepo" in area.text() for area in templates), "the playground does not show the base template"
+    playground = s.api.get(f"/projects/{quoted}/playground", timeout=PAGE_TIMEOUT).text
+    assert any("newRepo" in source for source in playground_templates(playground)), (
+        "the playground does not show the base template"
+    )
 
     unknown = s.run_ctx.name(f"{s.slug}-unknown")
     for path in (f"/organizations/{unknown}", f"/projects/{unknown}", f"/projects/{quoted}/repos/{unknown}"):

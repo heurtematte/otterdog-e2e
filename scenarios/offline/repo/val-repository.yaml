@@ -15,6 +15,18 @@ priority: P1
 tags: [offline, repo, custom-properties]
 observe: true
 variables: {plan: free}
+references:
+  - pr: 878
+    note: >-
+      "Configuration guides playground": the JSON schemas enumerate the allowed values, so an invalid value is a
+      load error ("failed to load configuration: invalid value at '<path>': '<value>' is not one of [...]", exit 1)
+      before the model's own check; show fails to load the configuration too. ENUM_SCHEMA_STEPS of
+      tests/offline/test_scenarios.py asserts each side (model errors before, the load error since).
+    expected_deltas:
+      - {step: code-scanning-query-suite, kind: cli, key: validate}
+      - {step: code-scanning-query-suite, kind: cli, key: show}
+      - {step: code-scanning-language, kind: cli, key: validate}
+      - {step: code-scanning-language, kind: cli, key: show}
 steps:
   - name: description-too-long
     fragments:
@@ -115,14 +127,7 @@ steps:
   - name: code-scanning-query-suite
     fragments:
       repositories: ["orgs.newRepo('{{ p }}-cs') { code_scanning_default_query_suite: 'full' }"]
-    validate:
-      ok: false
-      errors: 1
-      exit_code: 1
-      contains:
-        - >-
-          Error: repository[name="{{ p }}-cs"] has 'code_scanning_default_query_suite' set to value 'full', while
-          only values ['default' | 'extended'] are allowed.
+    validate: {ok: false}  # outcome per SUT (#878): ENUM_SCHEMA_STEPS of tests/offline/test_scenarios.py
   - name: code-scanning-language
     fragments:
       repositories:
@@ -131,15 +136,7 @@ steps:
             code_scanning_default_setup_enabled: false,
             code_scanning_default_languages: ['cobol'],
           }
-    validate:
-      ok: false
-      errors: 1
-      exit_code: 1
-      contains:
-        # the allowed values are a Python set: only the stable prefix is asserted (KB-038)
-        - >-
-          Error: repository[name="{{ p }}-lang"] has defined an invalid code scanning language 'cobol', only values (
-      not_contains: ["could not validate 'code_scanning_default_languages'"]
+    validate: {ok: false}  # outcome per SUT (#878): ENUM_SCHEMA_STEPS of tests/offline/test_scenarios.py
   - name: limits
     fragments:
       settings: ["members_can_fork_private_repositories: true"]

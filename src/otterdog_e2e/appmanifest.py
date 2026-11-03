@@ -40,6 +40,7 @@ DEFAULT_PERMISSIONS: dict[str, str] = {
     "statuses": "write",
     "contents": "write",
     "repository_custom_properties": "write",
+    "dependabot_secrets": "write",  # read by otterdog since #890 (main after v1.7.1) when the template defines them
     "environments": "write",
     "issues": "read",
     "metadata": "read",

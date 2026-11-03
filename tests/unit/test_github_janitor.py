@@ -431,3 +431,27 @@ def test_code_security_configurations_of_finished_runs_are_swept() -> None:
     assert ("set_code_security_default", (plain["id"],)) not in calls
     assert [c["name"] for c in oracle.code_security_configurations()] == [f"e2e-{ACTIVE}-csc", "GitHub recommended"]
     assert oracle.code_security_default_configurations() == []
+
+
+def test_org_dependabot_and_codespaces_secrets_of_finished_runs_are_swept() -> None:
+    """Run-named organization Dependabot and Codespaces secrets (#890) of purgeable runs are listed and deleted through
+    their own Mutator calls; foreign and active-run secrets are kept."""
+    oracle = GitFakeOracle()
+    old_dep, old_cs = f"E2E_{OLD.upper()}_DEP", f"E2E_{OLD.upper()}_CS"
+    oracle.set(
+        "org_dependabot_secrets", value=[{"name": old_dep}, {"name": "FOREIGN"}, {"name": f"E2E_{ACTIVE.upper()}_D"}]
+    )
+    oracle.set("org_codespaces_secrets", value=[{"name": old_cs}])
+    janitor = make_janitor(oracle, mutator=RecordingMutator(oracle=oracle))
+    kinds = ("org_dependabot_secret", "org_codespaces_secret")
+    items = [item for item in janitor.scan() if item.kind in kinds]
+    assert {(item.kind, item.name, item.run_id) for item in items} == {
+        ("org_dependabot_secret", old_dep, OLD),
+        ("org_codespaces_secret", old_cs, OLD),
+    }
+    assert set(janitor.sweep(items)) == set(items) and janitor.failures == []
+    calls = [(call.method, call.args) for call in janitor.mutator.calls]  # type: ignore[attr-defined]
+    assert ("delete_org_dependabot_secret", (old_dep,)) in calls and (
+        "delete_org_codespaces_secret",
+        (old_cs,),
+    ) in calls

@@ -27,6 +27,15 @@ references:
       - {step: unknown-bypass-role, kind: cli, key: show}
       - {step: valid-rulesets, kind: cli, key: show}
       - {step: valid-rulesets, kind: cli, key: local-plan}
+  - pr: 878
+    note: >-
+      "Configuration guides playground": the JSON schemas enumerate the allowed values, so an invalid value is a
+      load error ("failed to load configuration: invalid value at '<path>': '<value>' is not one of [...]", exit 1)
+      before the model's own check; show fails to load the configuration too. ENUM_SCHEMA_STEPS of
+      tests/offline/test_scenarios.py asserts each side (model errors before, the load error since).
+    expected_deltas:
+      - {step: target-and-enforcement, kind: cli, key: validate}
+      - {step: target-and-enforcement, kind: cli, key: show}
 steps:
   - name: target-and-enforcement
     fragments:
@@ -38,16 +47,7 @@ steps:
               orgs.newRepoRuleset('{{ p }}-enforcement') { enforcement: 'on' },
             ],
           }
-    validate:
-      ok: false
-      errors: 2
-      contains:
-        - >-
-          Error: repo_ruleset[name="{{ p }}-target", repository={{ p }}-rs] has 'target' of value 'tags', while only
-          values ('branch' | 'tag' | 'push') are allowed.
-        - >-
-          Error: repo_ruleset[name="{{ p }}-enforcement", repository={{ p }}-rs] has 'enforcement' of value 'on',
-          while only values ('active' | 'disabled' | 'evaluate') are allowed.
+    validate: {ok: false}  # outcome per SUT (#878): ENUM_SCHEMA_STEPS of tests/offline/test_scenarios.py
   - name: branch-and-push-patterns
     fragments:
       repositories:

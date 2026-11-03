@@ -120,11 +120,12 @@ def dummy_secrets_on_both_sides(cli: OtterdogCli) -> None:
 
 
 @pytest.mark.scenario("O-LPLAN-SECRET-REFS")
-def test_local_apply_forces_no_dummy_secret(vendored_cli: OtterdogCli) -> None:
+def test_local_apply_forces_no_dummy_secret(local_apply_cli: OtterdogCli) -> None:
     """local-apply --update-secrets skips secrets that only have a dummy value: nothing to do ('No changes required.',
-    no prompt, exit 0); the two dummies are reported as Info only."""
-    dummy_secrets_on_both_sides(vendored_cli)
-    result = vendored_cli.run("local-apply", "-n", "--update-secrets", local=True, input="n\n")
+    no prompt, exit 0); the two dummies are reported as Info only (template without code security configurations,
+    fixture local_apply_cli)."""
+    dummy_secrets_on_both_sides(local_apply_cli)
+    result = local_apply_cli.run("local-apply", "-n", "--update-secrets", local=True, input="n\n")
     text = normalize_text(result.output)
     assert result.exit_code == 0 and "No changes required." in text, tail(result)
     assert "there have been 2 validation infos" in text, tail(result)

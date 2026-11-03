@@ -1,0 +1,45 @@
+# repositories.immutable-releases (P2): immutable releases of a repository end to end (eclipse-csi/otterdog#665).
+id: cli.repo.immutable-releases
+title: Immutable releases of a repository (enabled at creation, then disabled)
+tier: cli
+description: |
+  Since #665 (v1.7.0) otterdog manages immutable_releases_enabled of a repository (PUT to enable, DELETE to disable
+  /repos/{org}/{repo}/immutable-releases, read back as {enabled, enforced_by_owner}, 404 when disabled; a 402 or 403
+  leaves the setting unset with a warning, otterdog/providers/github/rest/repo_client.py). The organization policy
+  stays the template's 'none', so the repository manages its own setting: a new public repository is created with
+  immutable releases enabled, then disabled, each step converging. Older SUTs skip it (fixed_in). Unverified on a
+  live organization: whether every plan offers immutable releases (otherwise the read answers 402/403 and the plan
+  cannot converge).
+priority: P2
+fixed_in: 1.7.0.dev58
+tags: [repo]
+references:
+  - pr: 665
+    note: >-
+      "Apply fixes from PR 664": adds immutable_releases_enabled of repositories (and the organization policy);
+      older SUTs have no such key in the template and skip the scenario (fixed_in).
+steps:
+  - name: create-enabled
+    fragments:
+      repositories:
+        - "orgs.newRepo('{{ p }}-immutable') { description: 'otterdog e2e: immutable releases', immutable_releases_enabled: true }"
+    plan:
+      expect: changes
+      contains: ['+ add repository[name="{{ p }}-immutable"]', "immutable_releases_enabled"]
+    state:
+      - kind: repo_immutable_releases
+        repo: "{{ p }}-immutable"
+        match: {enabled: true}
+
+  - name: disable
+    fragments:
+      repositories:
+        - "orgs.newRepo('{{ p }}-immutable') { description: 'otterdog e2e: immutable releases', immutable_releases_enabled: false }"
+    plan:
+      expect: changes
+      counts: {add: 0, change: 1, delete: 0}
+      contains: ['~ immutable_releases_enabled = true -> false']
+    state:
+      - kind: repo_immutable_releases
+        repo: "{{ p }}-immutable"
+        match: {enabled: false}

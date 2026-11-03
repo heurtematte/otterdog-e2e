@@ -64,6 +64,13 @@ NEW_KINDS = {
     "repo_invitations",
     "org_webhook_delivery",
     "repo_webhook_delivery",
+    "org_dependabot_secret",
+    "org_dependabot_secret_repos",
+    "org_codespaces_secret",
+    "repo_dependabot_secret",
+    "repo_codespaces_secret",
+    "repo_code_security_configuration",
+    "repo_immutable_releases",
 }
 
 

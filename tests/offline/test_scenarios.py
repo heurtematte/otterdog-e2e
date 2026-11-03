@@ -3,7 +3,7 @@
 Offline steps share no state, so every step is a case of its own: one ``test_offline_scenario[<id>/<step>]`` item
 (collect.scenario_params per_step), whose result never depends on another step of the scenario. OfflineEngine runs,
 per case, validate --local, local-plan --local (steps with base_fragments), show --local and the
-step's extra commands on the minimal e2e-offline organization with the SUT's own examples/template vendored. Failures
+step's extra commands on the minimal e2e-offline organization with the SUT's own standard template vendored. Failures
 of the scenario's expectations fail the item with the outcome summary (output tails included). Offline items are
 exempt from --e2e-tags: the offline regression tier always runs in full (selection still honours --e2e-scenario).
 
@@ -18,6 +18,7 @@ from __future__ import annotations
 import functools
 import warnings
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
@@ -29,7 +30,7 @@ from otterdog_e2e.otterdog.runner import CliResult
 from otterdog_e2e.scenarios.collect import collect_scenarios, generate_scenario_tests
 from otterdog_e2e.scenarios.engine import StepOutcome
 from otterdog_e2e.scenarios.model import Scenario
-from otterdog_e2e.scenarios.offline import OfflineEngine
+from otterdog_e2e.scenarios.offline import OfflineEngine, offline_run_context
 from otterdog_e2e.sut.template import PUBLISHED_TEMPLATE_FILE
 
 # eclipse-csi/otterdog#790 "fix: validate required status checks of rulesets" (squash commit on main)
@@ -91,6 +92,378 @@ SCHEMA_ERROR_STEPS: dict[str, dict[str, tuple[str, str]]] = {
         "values-editable-by": (
             "'anyone' is not ",  # anyOf message before #777, enum message ("is not one of [...]") since
             "['custom_properties']['items']['properties']['values_editable_by']",
+        ),
+    },
+}
+
+
+# eclipse-csi/otterdog#878 "Configuration guides playground" (squash commit on main, v1.7.0): the JSON schemas enumerate
+# the allowed values of most string settings, so an invalid value is a load error ("Validation failed" + "failed to
+# load configuration: invalid value at '<path>': '<value>' is not one of [...]", exit 1, #777) and the model's own
+# check of the value, which the YAML asserted before, can no longer be reached from the CLI
+FIX_878 = "a26b5433c11028ea706bf52ceccd7cea5a12d2b6"
+OFFLINE_RUN = offline_run_context()
+
+
+@dataclass(frozen=True)
+class EnumSchemaStep:
+    """The SUT-dependent outcome of a step with a value the schema enumerates since #878 (``{{ p }}``/``{{ P }}`` are
+    the offline names, like in the YAML, and ``{{ hook_base }}``).
+
+    ``path``/``schema_message``: the load error since #878 (the first invalid value of the step); ``before``/``errors``:
+    the model's validation errors before; ``known_bug``: before #878 the model misses the value (or crashes on it), an
+    expected failure of that bug, which #878 makes unreachable.
+    """
+
+    path: str
+    schema_message: str
+    before: tuple[str, ...] = ()
+    errors: int = 1
+    known_bug: str | None = None
+
+
+def offline_names(text: str) -> str:
+    """``{{ p }}``, ``{{ P }}`` and ``{{ hook_base }}`` replaced by their offline values (e2e-spduo000, E2E_SPDUO000,
+    https://otterdog-e2e.invalid/spduo000/)."""
+    for variable, value in (
+        ("{{ hook_base }}", OFFLINE_RUN.hook_base),
+        ("{{ p }}", OFFLINE_RUN.prefix),
+        ("{{ P }}", OFFLINE_RUN.const_prefix.rstrip("_")),
+    ):
+        text = text.replace(variable, value)
+    return text
+
+
+WORKFLOW_VALUES = "('all' | 'local_only' | 'selected') are allowed."
+# scenario -> step -> outcome (the YAML step only expects validate ok: false, or records when an older SUT validates)
+ENUM_SCHEMA_STEPS: dict[str, dict[str, EnumSchemaStep]] = {
+    "O-VAL-CUSTOM-PROPERTIES": {
+        "value-type": EnumSchemaStep(
+            'settings.custom_properties[name="{{ p }}-num"].value_type',
+            "'number' is not one of ['string', 'single_select', 'multi_select', 'true_false']",
+            (
+                (
+                    "custom_property[name=\"{{ p }}-num\"] has 'value_type' set to 'number', while only values ('string' | "
+                    "'single_select' | 'multi_select' | 'true_false') are allowed."
+                ),
+            ),
+        ),
+    },
+    "O-VAL-ENVIRONMENTS": {
+        "template-comment-policy": EnumSchemaStep(
+            'repositories[name="{{ p }}-env"].environments[name="{{ p }}-policy"].deployment_branch_policy',
+            "'protected_branches' is not one of ['all', 'protected', 'selected']",
+            (
+                (
+                    "Error: environment[name=\"{{ p }}-policy\", repository={{ p }}-env] has 'deployment_branch_policy' of "
+                    "value 'protected_branches', while only values ('all' | 'protected' | 'selected') are allowed."
+                ),
+            ),
+        ),
+    },
+    "O-VAL-ORG-ROLES": {
+        "unknown-base-role": EnumSchemaStep(
+            'roles[name="{{ p }}-r1"].base_role',
+            "'super' is not one of ['none', 'read', 'triage', 'write', 'maintain', 'admin']",
+            (
+                (
+                    "org_role[name=\"{{ p }}-r1\"] has 'base_role' of value 'super', while only values ('none' | 'read' | "
+                    "'triage' | 'write' | 'maintain' | 'admin') are allowed."
+                ),
+            ),
+        ),
+    },
+    "O-VAL-ORG-SETTINGS": {
+        "default-repository-permission": EnumSchemaStep(
+            "settings.default_repository_permission",
+            "'maintain' is not one of ['none', 'read', 'write', 'admin']",
+            (
+                (
+                    "'default_repository_permission' has value 'maintain', while only values ('none' | 'read' | 'write' | "
+                    "'admin') are allowed."
+                ),
+            ),
+        ),
+    },
+    "O-VAL-MERGE-SETTINGS": {
+        "squash-title-value": EnumSchemaStep(
+            'repositories[name="{{ p }}-merge"].squash_merge_commit_title',
+            "'X' is not one of ['PR_TITLE', 'COMMIT_OR_PR_TITLE']",
+            (
+                (
+                    "Error: repository[name=\"{{ p }}-merge\"] has 'squash_merge_commit_title' of value 'X', while only "
+                    "values ('PR_TITLE' | 'COMMIT_OR_PR_TITLE') are allowed."
+                ),
+                "of value ('X', 'COMMIT_MESSAGES'), while only combinations",
+            ),
+            errors=2,
+        ),
+        "squash-message-value": EnumSchemaStep(
+            'repositories[name="{{ p }}-merge"].squash_merge_commit_message',
+            "'X' is not one of ['PR_BODY', 'COMMIT_MESSAGES', 'BLANK']",
+            (
+                (
+                    "Error: repository[name=\"{{ p }}-merge\"] has 'squash_merge_commit_message' of value 'X', while only "
+                    "values ('PR_BODY' | 'COMMIT_MESSAGES' | 'BLANK') are allowed."
+                ),
+                "of value ('COMMIT_OR_PR_TITLE', 'X'), while only combinations",
+            ),
+            errors=2,
+        ),
+        "merge-title-value": EnumSchemaStep(
+            'repositories[name="{{ p }}-merge"].merge_commit_title',
+            "'X' is not one of ['PR_TITLE', 'MERGE_MESSAGE']",
+            (
+                (
+                    "Error: repository[name=\"{{ p }}-merge\"] has 'merge_commit_title' of value 'X', while only values "
+                    "('PR_TITLE' | 'MERGE_MESSAGE') are allowed."
+                ),
+                "of value ('X', 'PR_TITLE'), while only combinations",
+            ),
+            errors=2,
+        ),
+        "merge-message-value": EnumSchemaStep(
+            'repositories[name="{{ p }}-merge"].merge_commit_message',
+            "'X' is not one of ['PR_TITLE', 'PR_BODY', 'BLANK']",
+            (
+                (
+                    "Error: repository[name=\"{{ p }}-merge\"] has 'merge_commit_message' of value 'X', while only values "
+                    "('PR_TITLE' | 'PR_BODY' | 'BLANK') are allowed."
+                ),
+                "of value ('PR_TITLE', 'X'), while only combinations",
+            ),
+            errors=2,
+        ),
+    },
+    "O-VAL-PAGES-ENTERPRISE": {
+        "unknown-visibility": EnumSchemaStep(
+            'repositories[name="{{ p }}-pages"].gh_pages_visibility',
+            "'hidden' is not one of ['public', 'private']",
+            (
+                (
+                    "Error: repository[name=\"{{ p }}-pages\"] has 'gh_pages_visibility' set to value 'hidden', while only "
+                    "values ['public' | 'private'] are allowed."
+                ),
+            ),
+        ),
+    },
+    "O-VAL-COERCED": {
+        "pages-visibility-below-enterprise": EnumSchemaStep(
+            'repositories[name="{{ p }}-pages"].gh_pages_visibility',
+            "'hidden' is not one of ['public', 'private']",
+            (
+                (
+                    "Error: repository[name=\"{{ p }}-pages\"] has 'gh_pages_visibility' set to value 'hidden', while only "
+                    "values ['public' | 'private'] are allowed."
+                ),
+            ),
+            known_bug="KB-033",
+        ),
+    },
+    "O-VAL-PAGES": {
+        "unknown-build-type": EnumSchemaStep(
+            'repositories[name="{{ p }}-pages"].gh_pages_build_type',
+            "'foo' is not one of ['disabled', 'legacy', 'workflow']",
+            (
+                (
+                    "Error: repository[name=\"{{ p }}-pages\"] has 'gh_pages_build_type' set to value 'foo', while only "
+                    "values ['disabled' | 'legacy' | 'workflow'] are allowed."
+                ),
+            ),
+        ),
+    },
+    "O-VAL-REPO": {
+        "code-scanning-query-suite": EnumSchemaStep(
+            'repositories[name="{{ p }}-cs"].code_scanning_default_query_suite',
+            "'full' is not one of ['default', 'extended']",
+            (
+                (
+                    "Error: repository[name=\"{{ p }}-cs\"] has 'code_scanning_default_query_suite' set to value 'full', "
+                    "while only values ['default' | 'extended'] are allowed."
+                ),
+            ),
+        ),
+        # the enum gained 'javascript' and 'typescript' with #888 (main after v1.7.1): the list is left out
+        "code-scanning-language": EnumSchemaStep(
+            'repositories[name="{{ p }}-lang"].code_scanning_default_languages[0]',
+            "'cobol' is not one of ['actions', 'c-cpp', ",
+            (
+                (
+                    "Error: repository[name=\"{{ p }}-lang\"] has defined an invalid code scanning language 'cobol', only "
+                    "values ("
+                ),
+            ),
+        ),
+    },
+    "O-VAL-ORG-RULESETS": {
+        "target-and-enforcement": EnumSchemaStep(
+            'rulesets[name="{{ p }}-ors"].target',
+            "'tags' is not one of ['branch', 'tag', 'push']",
+            (
+                (
+                    "org_ruleset[name=\"{{ p }}-ors\"] has 'target' of value 'tags', while only values ('branch' | 'tag' | "
+                    "'push') are allowed."
+                ),
+                (
+                    "org_ruleset[name=\"{{ p }}-ors\"] has 'enforcement' of value 'on', while only values ('active' | "
+                    "'disabled' | 'evaluate') are allowed."
+                ),
+            ),
+            errors=2,
+        ),
+    },
+    "O-VAL-RULESET-NESTED": {
+        "merge-queue-values": EnumSchemaStep(
+            'repositories[name="{{ p }}-nested"].rulesets[name="{{ p }}-queue"].required_merge_queue.merge_method',
+            "'FAST' is not one of ['MERGE', 'SQUASH', 'REBASE']",
+            (
+                (
+                    "has 'required_merge_queue.merge_method' of value 'FAST', only values ('MERGE' | 'SQUASH' | 'REBASE') "
+                    "are allowed."
+                ),
+                (
+                    "has 'required_merge_queue.build_concurrency' of value '-1' while only non-negative integers are "
+                    "allowed."
+                ),
+                (
+                    "has 'required_merge_queue.status_check_timeout' of value '-5' while only non-negative integers are "
+                    "allowed."
+                ),
+            ),
+            errors=3,
+        ),
+    },
+    "O-VAL-RULESETS": {
+        "target-and-enforcement": EnumSchemaStep(
+            'repositories[name="{{ p }}-rs"].rulesets[name="{{ p }}-target"].target',
+            "'tags' is not one of ['branch', 'tag', 'push']",
+            (
+                (
+                    "Error: repo_ruleset[name=\"{{ p }}-target\", repository={{ p }}-rs] has 'target' of value 'tags', "
+                    "while only values ('branch' | 'tag' | 'push') are allowed."
+                ),
+                (
+                    "Error: repo_ruleset[name=\"{{ p }}-enforcement\", repository={{ p }}-rs] has 'enforcement' of value "
+                    "'on', while only values ('active' | 'disabled' | 'evaluate') are allowed."
+                ),
+            ),
+            errors=2,
+        ),
+    },
+    "O-VAL-ORG-SECRETS": {
+        "unknown-visibility": EnumSchemaStep(
+            'secrets[name="{{ P }}_VIS"].visibility',
+            "'everyone' is not one of ['public', 'private', 'selected']",
+            (
+                (
+                    "Error: org_secret[name=\"{{ P }}_VIS\"] has 'visibility' of value 'everyone', while only values "
+                    "('public' | 'private' | 'selected') are allowed."
+                ),
+            ),
+        ),
+    },
+    "O-VAL-ORGVAR": {
+        "invalid-visibility": EnumSchemaStep(
+            'variables[name="{{ P }}_VIS"].visibility',
+            "'nonsense' is not one of ['public', 'private', 'selected']",
+            (
+                (
+                    "org_variable[name=\"{{ P }}_VIS\"] has 'visibility' of value 'nonsense', while only values ('public' | "
+                    "'private' | 'selected') are allowed."
+                ),
+            ),
+            known_bug="KB-028",
+        ),
+    },
+    "O-VAL-WEBHOOKS": {
+        "invalid-webhooks": EnumSchemaStep(
+            "webhooks[0].content_type",
+            "'xml' is not one of ['json', 'form']",
+            (
+                (
+                    "Error: org_webhook[url=\"{{ hook_base }}org-invalid\"] has 'content_type' of value "
+                    "'xml', while only values ('json' | 'form') are allowed."
+                ),
+                (
+                    "Error: org_webhook[url=\"{{ hook_base }}org-invalid\"] has 'insecure_ssl' of value "
+                    "'2', while only values ('0' | '1') are allowed."
+                ),
+                "has 'content_type' of value 'xml', while only values ('json' | 'form') are allowed.",
+            ),
+            errors=3,
+        ),
+    },
+    "O-VAL-ORG-WORKFLOWS": {
+        "allowed-actions": EnumSchemaStep(
+            "settings.workflows.allowed_actions",
+            "'some' is not one of ['all', 'local_only', 'selected']",
+            (f"settings has 'workflows.allowed_actions' of value 'some', while only values {WORKFLOW_VALUES}",),
+        ),
+        "allowed-actions-with-repository": EnumSchemaStep(
+            "settings.workflows.allowed_actions",
+            "'some' is not one of ['all', 'local_only', 'selected']",
+            (f"settings has 'workflows.allowed_actions' of value 'some', while only values {WORKFLOW_VALUES}",),
+            known_bug="KB-029",
+        ),
+        "workflow-permissions": EnumSchemaStep(
+            "settings.workflows.default_workflow_permissions",
+            "'admin' is not one of ['read', 'write']",
+            (
+                (
+                    "settings has 'workflows.default_workflow_permissions' of value 'admin', while only values ('read' | "
+                    "'write') are allowed."
+                ),
+            ),
+        ),
+        "fork-pr-approval-policy": EnumSchemaStep(
+            "settings.workflows.fork_pr_approval_policy",
+            "'nobody' is not one of ['first_time_contributors_new_to_github', 'first_time_contributors', "
+            "'all_external_contributors']",
+            (  # a Python set before #878 (KB-038): the values come in any order
+                "settings has 'workflows.fork_pr_approval_policy' of value 'nobody', while only values {",
+                "'first_time_contributors'",
+                "'first_time_contributors_new_to_github'",
+                "'all_external_contributors'",
+                "} are allowed.",
+            ),
+        ),
+        "enabled-repositories": EnumSchemaStep(
+            "settings.workflows.enabled_repositories",
+            "'some' is not one of ['all', 'none', 'selected']",
+            (
+                (
+                    "settings has 'enabled_repositories' of value 'some', while only values ('all' | 'none' | 'selected') "
+                    "are allowed."
+                ),
+            ),
+        ),
+    },
+    "O-VAL-REPO-WORKFLOWS": {
+        "workflow-enums": EnumSchemaStep(
+            'repositories[name="{{ p }}-wf"].workflows.default_workflow_permissions',
+            "'admin' is not one of ['read', 'write']",
+            (
+                (
+                    "Error: repository[name=\"{{ p }}-wf\"] has 'workflows.default_workflow_permissions' of value 'admin', "
+                    "while only values ('read' | 'write') are allowed."
+                ),
+                (
+                    "Error: repository[name=\"{{ p }}-wf\"] has 'workflows.fork_pr_approval_policy' of value 'nobody', "
+                    "while only values {"
+                ),
+            ),
+            errors=2,
+        ),
+        "unknown-allowed-actions": EnumSchemaStep(
+            'repositories[name="{{ p }}-wf"].workflows.allowed_actions',
+            "'some' is not one of ['all', 'local_only', 'selected']",
+            (
+                (
+                    "Error: repository[name=\"{{ p }}-wf\"] has 'workflows.allowed_actions' of value 'some', while only "
+                    f"values {WORKFLOW_VALUES}"
+                ),
+            ),
+            known_bug="KB-029",
         ),
     },
 }
@@ -231,13 +604,72 @@ def expect_schema_error(message: str, schema_path: str, step: StepOutcome, histo
         assert "Validation failed" not in text, f"step {name!r}: no validation summary\n{tail(validate)}"
 
 
+# eclipse-csi/otterdog#890 "feat: manage Dependabot and Codespaces secrets" (squash commit on main, after v1.7.1):
+# Secret.validate requires uppercase names for every kind of secret
+FIX_890 = "664e2907400532c920cd1d09f0a2b6df89765128"
+LOWERCASE_SECRET = (
+    "Error: repo_secret[name=\"{{ P | lower }}_lower\"] has 'name' of value '{{ P | lower }}_lower' which is not "
+    "uppercase, while only uppercase names are allowed for secrets."
+)
+
+
+def expect_secret_name_case(step: StepOutcome, history: History) -> None:
+    """O-VAL-SECRETS step lowercase-name: a lowercase repository secret name validates before #890 (GitHub
+    upper-cases it) and is one validation error since (exit 1)."""
+    validate = result_of(step, "validate")
+    text, validation = normalize_text(validate.output), validate.validation()
+    message = LOWERCASE_SECRET.replace("{{ P | lower }}", OFFLINE_RUN.const_prefix.rstrip("_").lower())
+    has_fix = has_commit(history, FIX_890, "#890")
+    rejected = has_fix if has_fix is not None else not validation.ok
+    if rejected:
+        assert validation.errors == 1 and validate.exit_code == 1, f"since #890 one error, exit 1\n{tail(validate)}"
+        assert message in text, f"{message!r} missing\n{tail(validate)}"
+        return
+    assert validation.ok and validate.exit_code == 0, f"before #890 the name validates\n{tail(validate)}"
+    assert "Error:" not in text and "Warning:" not in text, tail(validate)
+
+
+def expect_enum_schema_error(spec: EnumSchemaStep, step: StepOutcome, history: History) -> None:
+    """A step of ENUM_SCHEMA_STEPS: since #878 the invalid value is a load error naming its path (exit 1); before, the
+    model reports its validation errors, or misses the value (spec.known_bug: an expected failure). When the mirror
+    cannot tell, the output decides which of the two behaviours must hold."""
+    validate, name = result_of(step, "validate"), step.name
+    text, validation = normalize_text(validate.output), validate.validation()
+    has_fix = has_commit(history, FIX_878, "#878")
+    load_error = has_fix if has_fix is not None else SCHEMA_LOAD_ERROR in text
+    if load_error:
+        expected = f"{SCHEMA_LOAD_ERROR}{offline_names(spec.path)}': {offline_names(spec.schema_message)}"
+        assert validate.exit_code == 1, f"step {name!r}: since #878 exit 1, got {validate.exit_code}\n{tail(validate)}"
+        assert "Validation failed" in text and expected in text, (
+            f"step {name!r}: {expected!r} missing\n{tail(validate)}"
+        )
+        return
+    before = [offline_names(message) for message in spec.before]
+    missing = [message for message in before if message not in text]
+    if spec.known_bug is not None and (missing or validation.errors != spec.errors):
+        pytest.xfail(
+            f"{spec.known_bug} (before #878, step {name!r}): the model misses the invalid value, got exit "
+            f"{validate.exit_code} and errors={validation.errors}"
+        )
+    assert not missing, f"step {name!r}: before #878 the model reports {missing!r}\n{tail(validate)}"
+    assert validation.errors == spec.errors, (
+        f"step {name!r}: before #878 {spec.errors} validation error(s), got {validation.errors}\n{tail(validate)}"
+    )
+
+
 # (scenario id, step) -> the check of that step's outcome
 SUT_EXPECTATIONS: dict[tuple[str, str], Callable[[StepOutcome, History], None]] = {
     ("O-VAL-RULESET-STRICT", "no-strict"): expect_ruleset_strict,
     ("O-VAL-ORG-RULESET-STRICT", "org-no-strict"): expect_org_ruleset_strict,
+    ("O-VAL-SECRETS", "lowercase-name"): expect_secret_name_case,
     **{
         (scenario, step): functools.partial(expect_schema_error, message, schema_path)
         for scenario, steps in SCHEMA_ERROR_STEPS.items()
         for step, (message, schema_path) in steps.items()
+    },
+    **{
+        (scenario, step): functools.partial(expect_enum_schema_error, spec)
+        for scenario, steps in ENUM_SCHEMA_STEPS.items()
+        for step, spec in steps.items()
     },
 }

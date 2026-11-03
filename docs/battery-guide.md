@@ -67,7 +67,7 @@ linked to a known bug as a whole is never P0 and carries the `known-bug` tag.
 
 The vocabulary is `otterdog_e2e.selection.SCENARIO_TAGS`: the model areas `repo`, `bpr`, `rulesets`,
 `environments`, `secrets`, `variables`, `webhooks`, `teams`, `custom-properties`, `org-settings`, `workflows`,
-`org-roles`, and `template`, `cli`, `webapp`, `webhooks-app`, `offline`, `smoke` (the PR lane selects scenarios by the
+`org-roles`, `code-security`, and `template`, `cli`, `webapp`, `webhooks-app`, `offline`, `smoke` (the PR lane selects scenarios by the
 files a PR changes, through these tags). Live YAML scenarios carry at least one model-area tag and may add
 `regression` and `pr-<n>` (regressions) and `known-bug` (scenario-level known bugs); offline YAML scenarios start with
 `offline` and use the vocabulary only; webapp and webhooks tests carry `tags(...)` from the vocabulary only.

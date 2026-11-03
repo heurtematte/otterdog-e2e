@@ -361,6 +361,10 @@ def test_check_env_overrides_accepts_the_allowlist() -> None:
         "CACHE_CONTROL": "",
         "GITHUB_OAUTH_CLIENT_ID": "e2e-dummy-oauth-client",
         "GITHUB_OAUTH_CLIENT_SECRET": "e2e-dummy-oauth-secret",
+        "MAX_CONCURRENT_INSTALLATION_TASKS": "1",
+        "PLAYGROUND_VALIDATION_MAX_SIZE": "1024",
+        "PLAYGROUND_MAX_CONCURRENT_VALIDATIONS": "1",
+        "DOCUMENTATION_URL": "https://otterdog-e2e.invalid/docs/",
     }
     assert set(values) == set(WEBAPP_ENV_OVERRIDES)
     assert check_env_overrides(values) == values

@@ -25,6 +25,10 @@ fix commit in the webapp image (its revision label).
 O-WEB-ROUTES: the pages and endpoints that need no installation: redirects, static files, the public and admin pages
 (no login), the 404 page, /internal/* (404 ``{}`` for unknown paths), the JSON listings of an empty database, the
 GraphQL explorer and queries, the parameter validation of the pull request statistics; /myprojects without a session.
+O-WEB-PLAYGROUND-VALIDATE: since #891 (main after v1.7.1) the playground posts the evaluated configuration of an
+organization to /playground/validate (or /projects/<project>/playground/validate), which refuses a body that is no
+JSON object (400), a body larger than PLAYGROUND_VALIDATION_MAX_SIZE (413) and an unknown project (404) before any
+GitHub call; a valid body needs the otterdog.json of the instance (GitHub), the live tier's part.
 Never write a 500 body to artifacts: under DEBUG it may be a debug page.
 """
 
@@ -80,6 +84,13 @@ SENDER = "e2e-user"  # payloads.DEFAULT_SENDER
 FIX_775 = "5466db562ffbccab7d3105949ea8bb0680a4ae2a"
 UNKNOWN_PROJECT = f"{OFFLINE_ORG}-no-such-project"
 EMPTY_PAGE = {"data": [], "itemsCount": 0}
+# eclipse-csi/otterdog#852 "Replace jsgrid with datatables" (v1.7.0): the paged /api listings add totalCount, the count
+# of their scope without the filters
+FIX_852 = "b84249bb33421b923614c053c8b3f605202db3be"
+# eclipse-csi/otterdog#891 "validate configurations with otterdog in the playground" (main after v1.7.1)
+FIX_891 = "d6f14f41d3226a206771514e32adf867786d32c8"
+PLAYGROUND_MAX_SIZE = 5 * 1024 * 1024  # PLAYGROUND_VALIDATION_MAX_SIZE default (otterdog/webapp/config.py:135)
+NOT_A_CONFIGURATION = {"error": "an evaluated configuration of an organization is expected"}
 
 
 def free_loopback_port() -> int:
@@ -116,22 +127,39 @@ def injector(offline_stack: WebappStack) -> WebhookInjector:
     return WebhookInjector(offline_stack.webhook_url, offline_stack.settings.app.webhook_secret)
 
 
-@pytest.fixture(scope="module")
-def has_fix_775(offline_context: E2EContext, webapp_image: BuiltImage) -> bool | None:
-    """Whether the webapp image contains #775 (ancestry of its revision in the upstream mirror; None: undecidable,
-    e.g. a prebuilt image without revision label)."""
-    settings = offline_context.settings
+def image_contains(context: E2EContext, image: BuiltImage, commit: str, what: str) -> bool | None:
+    """Whether the webapp image contains an upstream commit (ancestry of its revision in the upstream mirror; None:
+    undecidable, e.g. a prebuilt image without revision label, with a warning)."""
+    settings = context.settings
     mirror = UpstreamMirror(settings.cache_dir, settings.upstream_repo)
     try:
-        if not webapp_image.revision or not (mirror.has_commit(FIX_775) and mirror.has_commit(webapp_image.revision)):
+        if not image.revision or not (mirror.has_commit(commit) and mirror.has_commit(image.revision)):
             found = None
         else:
-            found = mirror.is_ancestor(FIX_775, webapp_image.revision)
+            found = mirror.is_ancestor(commit, image.revision)
     except (ValueError, OSError, procs.CalledProcessError):
         found = None
     if found is None:
-        warnings.warn(f"cannot tell whether {webapp_image.tag} contains #775 ({FIX_775[:7]})", stacklevel=1)
+        warnings.warn(f"cannot tell whether {image.tag} contains {what} ({commit[:7]})", stacklevel=2)
     return found
+
+
+@pytest.fixture(scope="module")
+def has_fix_775(offline_context: E2EContext, webapp_image: BuiltImage) -> bool | None:
+    """Whether the webapp image contains #775 (None: undecidable)."""
+    return image_contains(offline_context, webapp_image, FIX_775, "#775")
+
+
+@pytest.fixture(scope="module")
+def has_fix_891(offline_context: E2EContext, webapp_image: BuiltImage) -> bool | None:
+    """Whether the webapp image contains #891 (None: undecidable)."""
+    return image_contains(offline_context, webapp_image, FIX_891, "#891")
+
+
+@pytest.fixture(scope="module")
+def has_fix_852(offline_context: E2EContext, webapp_image: BuiltImage) -> bool | None:
+    """Whether the webapp image contains #852 (None: undecidable)."""
+    return image_contains(offline_context, webapp_image, FIX_852, "#852")
 
 
 def delivery_id(case: str) -> str:
@@ -533,12 +561,21 @@ def test_login_required_page_without_session(offline_stack: WebappStack) -> None
         pytest.param("/api/scorecard/results", 200, EMPTY_PAGE, id="scorecard-results"),
     ],
 )
-def test_json_endpoints(offline_stack: WebappStack, path: str, status: int, body: Any) -> None:
+def test_json_endpoints(
+    offline_stack: WebappStack, has_fix_852: bool | None, path: str, status: int, body: Any
+) -> None:
     """/internal and /api answer JSON: health and an empty blueprint check {}, an unknown /internal path 404 {}, the
-    listings of an empty database, 404 {} for an unknown organization or project."""
+    listings of an empty database, 404 {} for an unknown organization or project. Since #852 the paged listings also
+    answer totalCount 0."""
     response = get(offline_stack, path)
     assert response.status_code == status, f"GET {path}: {shown(response)}"
     assert response.headers.get("content-type", "").startswith("application/json"), response.headers
+    if body == EMPTY_PAGE:
+        paged = [{**EMPTY_PAGE, "totalCount": 0}] if has_fix_852 else [EMPTY_PAGE]
+        if has_fix_852 is None:
+            paged.append({**EMPTY_PAGE, "totalCount": 0})
+        assert response.json() in paged, shown(response)
+        return
     assert response.json() == body, shown(response)
 
 
@@ -572,3 +609,37 @@ def test_statistics_parameters(offline_stack: WebappStack, interval: str, range_
     answer 400 {"error": ...} before any job starts (the interval is checked first)."""
     status, answer = offline_stack.api.statistics_progress(interval=interval, range_=range_)
     assert (status, answer) == (400, {"error": error}), answer
+
+
+def post_raw(stack: WebappStack, path: str, body: bytes, content_type: str) -> requests.Response:
+    """POST ``body`` as it is to ``path`` (no redirects, any status)."""
+    headers = {"Content-Type": content_type}
+    return stack.api.session.post(stack.api.url(path), data=body, headers=headers, timeout=60, allow_redirects=False)
+
+
+@pytest.mark.scenario("O-WEB-PLAYGROUND-VALIDATE", references=[{"pr": 891}])
+def test_playground_validation_refuses_malformed_requests(offline_stack: WebappStack, has_fix_891: bool | None) -> None:
+    """The validation endpoints of the playground answer JSON errors before any GitHub call: 400 for a body that is no
+    JSON object (another content type, invalid JSON, a list), 413 above PLAYGROUND_VALIDATION_MAX_SIZE, 404 for an
+    unknown project; each rejection is logged with the playground and the anonymous user."""
+    if has_fix_891 is not True:
+        pytest.skip(f"the webapp image does not contain #891 ({FIX_891[:7]}): no playground validation")
+    endpoint = "/playground/validate"
+    for body, content_type in (
+        (b"orgs.newOrg('e2e', 'e2e')", "text/plain"),
+        (b"{not json", "application/json"),
+        (b'["not", "an", "object"]', "application/json"),
+    ):
+        response = post_raw(offline_stack, endpoint, body, content_type)
+        assert (response.status_code, response.json()) == (400, NOT_A_CONFIGURATION), shown(response)
+    too_large = post_raw(offline_stack, endpoint, b"{" + b" " * PLAYGROUND_MAX_SIZE + b"}", "application/json")
+    expected = {"error": f"the configuration must not exceed {PLAYGROUND_MAX_SIZE} bytes"}
+    assert (too_large.status_code, too_large.json()) == (413, expected), shown(too_large)
+    unknown = post_raw(offline_stack, f"/projects/{UNKNOWN_PROJECT}/playground/validate", b"{}", "application/json")
+    assert (unknown.status_code, unknown.json()) == (404, {"error": "unknown project"}), shown(unknown)
+    wait_logged(
+        offline_stack,
+        "rejecting a validation for the global playground by an anonymous user: no evaluated configuration",
+        f"rejecting a validation for the global playground by an anonymous user: larger than {PLAYGROUND_MAX_SIZE} bytes",
+        "rejecting a validation for the playground of an unknown project by an anonymous user",
+    )

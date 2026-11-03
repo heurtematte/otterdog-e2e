@@ -79,10 +79,10 @@ shortened to the relevant lines.
 | KB-002 | install-app/uninstall-app: token-only credentials but a web login | suspected | CLI | `webui.cmd.install-app` |
 | KB-003 | variables read without pagination (10 per page) | suspected | provider | `cli.kb.variables-pagination` |
 | KB-004 | webhook URL change through `aliases` never applied | confirmed | model | `cli.kb.webhook-url-alias`, `H-ORG-HOOK-ALIAS` |
-| KB-005 | one-way dict diffs (team_permissions/custom_properties removals) | confirmed | model | `cli.kb.team-permissions-removal` |
+| KB-005 | one-way dict diffs (team_permissions/custom_properties removals) | fixed (#842, 1.7.0) | model | `cli.kb.team-permissions-removal` |
 | KB-006 | org cache storage-limit on `/orgs/...` instead of `/organizations/...` | suspected | provider | - |
 | KB-007 | cache storage-limit PUT although the GET said unavailable | suspected | provider | - |
-| KB-008 | org ruleset validation AttributeError (#790, deployment rules) | confirmed | model | `enterprise.org-ruleset.missing-strict` |
+| KB-008 | org ruleset validation AttributeError (#790) | fixed (#891, main) | model | `enterprise.org-ruleset.missing-strict` |
 | KB-009 | org rulesets rejected unless plan enterprise (#776) | confirmed | model | - |
 | KB-010 | canonical-diff labels inverted | confirmed | CLI | - |
 | KB-011 | check-status always exits 0 | confirmed | CLI | `cli.kb.check-status-exit-code` |
@@ -92,7 +92,7 @@ shortened to the relevant lines.
 | KB-015 | otterdog.json not reloaded on App push deliveries | suspected | webapp | `W-BP-GLOBAL-PUSH` |
 | KB-016 | `_` in a custom property name forbids multi_select values | confirmed | schema | `cli.kb.custom-property-underscore` |
 | KB-017 | author_association FIRST_TIMER drops the event | confirmed | webapp | - |
-| KB-018 | stale snapshot overwrites a merged PR status (#792) | suspected | webapp | - |
+| KB-018 | stale snapshot overwrites a merged PR status (#792) | fixed (#792, 1.7.0) | webapp | - |
 | KB-019 | sync status `success` even when out of sync | suspected | webapp | - |
 | KB-020 | ruleset status check `any:<ctx>` never converges | confirmed | model | `cli.kb.ruleset-any-status-check` |
 | KB-021 | ruleset with the default empty newStatusChecks() never converges | confirmed | model | `cli.kb.ruleset-default-status-checks` |
@@ -103,16 +103,16 @@ shortened to the relevant lines.
 | KB-026 | plain secret values echoed in output and PR comments | confirmed | model, webapp | - |
 | KB-027 | auto-merge eligibility compares team names with slugs | suspected | webapp | - |
 | KB-028 | organization variables are never validated (F-01) | confirmed | model | - |
-| KB-029 | invalid `workflows.allowed_actions` crashes validation with a KeyError (F-02) | confirmed | model | - |
+| KB-029 | invalid `workflows.allowed_actions` crashes validation with a KeyError (F-02) | fixed (#878, 1.7.0) | model | - |
 | KB-030 | required custom property without default crashes loading (F-03) | confirmed | model | - |
 | KB-031 | missing `required_pull_request` / `required_merge_queue` keys unreported, apply crashes (F-04) | confirmed | model | - |
 | KB-032 | `team_permissions` values: uncaught schema error, dead model check (F-05) | confirmed | schema | - |
 | KB-033 | org-dependent repository rules never fire (coerced at load) (F-06) | confirmed | model | - |
 | KB-034 | validate/plan exit with the error count (256 errors exit 0) (F-07) | confirmed | CLI | `O-KB-EXIT-STATUS-ERROR-COUNT` |
-| KB-035 | docs use `newEnvironmentSecret` / `newEnvironmentVariable` (F-08) | confirmed | docs | - |
-| KB-036 | template comment of `deployment_branch_policy` lists invalid values (F-09) | confirmed | template | - |
+| KB-035 | docs use `newEnvironmentSecret` / `newEnvironmentVariable` (F-08) | fixed (#878, 1.7.0) | docs | - |
+| KB-036 | template comment of `deployment_branch_policy` lists invalid values (F-09) | fixed (#878, 1.7.0) | template | - |
 | KB-037 | team privacy error lists `('secret' \| 'closed')` (F-10) | confirmed | model | - |
-| KB-038 | set-ordered values in two validation messages (F-11) | confirmed | model | - |
+| KB-038 | set-ordered values in two validation messages (F-11) | fixed (#878, 1.7.0) | model | - |
 | KB-039 | unknown `#role` bypass actor validates, apply crashes with a KeyError (F-12) | confirmed | model | - |
 | KB-040 | crashing sync check: misleading `failure` status (F-13) | confirmed | webapp | `W-SYNC-FAILURE` |
 | KB-041 | `two_factor_requirement` never read through the web UI | confirmed | web UI | `webui.kb.import-two-factor` |
@@ -129,7 +129,7 @@ shortened to the relevant lines.
 | KB-052 | bypass actor `<actor>:always` never converges | confirmed | model | step of `cli.ruleset.bypass` |
 | KB-053 | `merge_commit_message` sent without `merge_commit_title` | suspected | model | step of `cli.repo.merge-messages` |
 | KB-054 | app status checks in a spelling otterdog does not read back never converge | confirmed | model | steps of `cli.ruleset.status-checks`, `cli.protection.app-checks` |
-| KB-055 | nested ruleset messages name the repository twice | confirmed | model | - |
+| KB-055 | nested ruleset messages name the repository twice | fixed (#891, main) | model | - |
 | KB-056 | local-plan diffs and forces dummy-secret objects that every apply skips | confirmed | CLI, webapp | `O-KB-LPLAN-DUMMY-SECRETS` |
 | KB-057 | webhook secrets: unknown providers validate, several `:` crash the apply | confirmed | model | - |
 | KB-058 | topics of an archived repository planned and sent | suspected | model | - |
@@ -144,8 +144,8 @@ shortened to the relevant lines.
 | KB-067 | sync check of an invalid main reports in sync | confirmed | webapp | `W-SYNC-INVALID-MAIN` |
 | KB-068 | wildcard webhook PATCHed with the pattern as its url | confirmed | model, webapp | `W-MERGE-TEAM-HOOK` |
 | KB-069 | one unreadable definition file fails the blueprint or policy fetch | confirmed | webapp | `W-BP-LOAD-YAML`, `W-POL-LOAD-MALFORMED` |
-| KB-070 | multi-field definition change stored one field per fetch | confirmed | webapp | `W-BP-UPDATE` |
-| KB-071 | a second fetch drops a pending blueprint recheck | confirmed | webapp | `W-BP-RECHECK-LOST` |
+| KB-070 | multi-field definition change stored one field per fetch | fixed (#864, 1.7.0) | webapp | `W-BP-UPDATE` |
+| KB-071 | a second fetch drops a pending blueprint recheck | fixed (#864, 1.7.0) | webapp | `W-BP-RECHECK-LOST` |
 | KB-072 | blueprint type change breaks /internal/check | confirmed | webapp | `W-BP-TYPE-CHANGE` |
 | KB-073 | pin_workflow skips workflows with docker:// actions | confirmed | webapp | `W-BP-PIN` |
 | KB-074 | /internal/init marks every merged PR completed | suspected | webapp | `W-RT-INIT-APPLY-STATUS` |
@@ -155,6 +155,7 @@ shortened to the relevant lines.
 | KB-078 | check-token-permissions reports every classic scope missing for a fine-grained token | confirmed | CLI | `cli.kb.check-token-permissions-fine-grained` |
 | KB-079 | 403 with X-Accepted-OAuth-Scopes aborts a fine-grained session (InsufficientPermissionsException) | suspected | provider | - |
 | KB-080 | reads refused for lack of a permission taken as absent configuration | suspected | provider | - |
+| KB-081 | org ruleset requiring deployments: AttributeError 'environments' | confirmed | model | step of `O-VAL-ORG-RULESETS` |
 
 ## Issues
 
@@ -266,7 +267,15 @@ side live.
 
 ### KB-005 — dict values diff one way only
 
-Status: **confirmed** · Upstream: none · Scenarios: step `remove-permission` of `cli.kb.team-permissions-removal`
+Status: **fixed** (1.7.0.dev76) · Upstream: https://github.com/eclipse-csi/otterdog/pull/842 · Scenarios: step
+`remove-permission` of `cli.kb.team-permissions-removal`, steps `team-permission-removed` and `custom-property-removed`
+of `O-LPLAN-DICT-ONE-WAY`
+
+Fixed by #842 (c1cdc54, in v1.7.0): `is_different_ignoring_order` reports a difference as soon as the two dicts have
+different keys (`otterdog/utils.py:131-133` at main d9dac78), so the removal is planned as a change of the repository
+(`~ team_permissions = {` with a `-` line for the removed team) and applied without `--delete-resources`. The steps
+that declare the bug are strict again on SUTs from 1.7.0.dev76 and stay expected failures on older ones. The text
+below describes the defect as it was.
 
 Evidence: `otterdog/utils.py:105-124`, `otterdog/models/__init__.py:437-475`.
 
@@ -328,10 +337,15 @@ change of the workflow settings resends the PUT. Not reproduced: it needs an org
 The harness avoids it by hiding the field when `actions_cache_limit` is missing. A scenario that wants the field must
 write `max_cache_size_gb::: <n>` and require the capability.
 
-### KB-008 — org ruleset validation raises AttributeError for incomplete nested rules (#790) and deployment rules
+### KB-008 — org ruleset validation raises AttributeError for incomplete nested rules (#790)
 
-Status: **confirmed** · Upstream: https://github.com/eclipse-csi/otterdog/pull/790 ·
+Status: **fixed** (1.8.0.dev6) · Upstream: https://github.com/eclipse-csi/otterdog/pull/891 (introduced by #790) ·
 Scenarios: `enterprise.org-ruleset.missing-strict`
+
+Fixed by #891 (d6f14f4, main after v1.7.1): nested ruleset rules are validated with their ruleset as parent object, so
+the missing `strict` of an organization ruleset is reported (`Error: org_ruleset[name="<name>"] has not set required
+parameter 'required_status_checks.strict'.`) instead of crashing. v1.7.0 and v1.7.1 still crash. The text below
+describes the defect as it was. The deployment rule crash, once part of this entry, is not fixed: KB-081.
 
 Evidence: `otterdog/models/ruleset.py:128-136`, `otterdog/models/ruleset.py:57-65`, `otterdog/models/ruleset.py:240-247`,
 `otterdog/models/ruleset.py:451-458`, `otterdog/models/github_organization.py:84-85`,
@@ -373,36 +387,6 @@ without #790 (v1.6.1, b5f7bb1) the org ruleset validates and the test passes. Th
 listed under `scenarios` in `known_bugs.yaml`: that would add an xfail on every SUT, and SUTs without #790 would then
 show XPASS. In the #790 differential (`--change 790`: the references of O-VAL-RULESET-STRICT and O-VAL-ORG-RULESET-STRICT) the
 crash is the one *unexpected* delta.
-
-#### Deployment rules (since before v1.6.1)
-
-`Ruleset.validate` also checks the environments of a deployment rule with `cast("Repository",
-parent_object).environments` (`otterdog/models/ruleset.py:436-447`). For an organization ruleset with
-`requires_deployments: true` and environments the parent is the organization again, and validation crashes with
-`'GitHubOrganization' object has no attribute 'environments'` (exit 2) on every version that has the check (v1.6.1
-included), where the repository variant reports an undefined environment. GitHub's `org-rules` include the
-`required_deployments` rule, so the configuration itself is valid. Both crashes are steps of `O-VAL-ORG-RULESETS`
-(`scenarios/offline/rulesets/val-org-rulesets.yaml`: `review-count-range` and `deployment-rule`, step-level known
-bugs); KB-055 is the same root cause for repository rulesets (their messages name the repository twice).
-
-```jsonnet
-orgs.newOrg('e2e-test-org') {
-  settings+: { plan: 'enterprise' },
-  rulesets+: [
-    orgs.newOrgRuleset('org-deploy') {
-      include_refs+: ['~DEFAULT_BRANCH'],
-      include_repo_names: ['~ALL'],
-      requires_deployments: true,
-      required_deployment_environments: ['prod'],
-    },
-  ],
-}
-```
-
-```console
-$ otterdog validate -c otterdog.json --local e2e-test-org         # exit code 2
-│ Error:   'GitHubOrganization' object has no attribute 'environments'
-```
 
 ### KB-009 — organization rulesets are rejected unless settings.plan is enterprise (#776)
 
@@ -632,7 +616,10 @@ ValueError: 'FIRST_TIMER' is not a valid AuthorAssociation
 
 ### KB-018 — a stale webhook snapshot can overwrite the status of a merged pull request
 
-Status: **suspected** · Upstream: https://github.com/eclipse-csi/otterdog/pull/792 (open) · Scenarios: none
+Status: **fixed** (1.7.0.dev20) · Upstream: https://github.com/eclipse-csi/otterdog/pull/792 · Scenarios: none
+
+Fixed by #792 (837d799, in v1.7.0); never reproduced live by this harness: W-PR-STALE-SNAPSHOT guards it on a live
+webapp run. The text below describes the defect as it was.
 
 Evidence: `otterdog/webapp/db/service.py:505-564`, `otterdog/webapp/tasks/check_sync.py:73-133`.
 
@@ -885,6 +872,10 @@ tier does not hit this.
 
 Status: **confirmed** · Upstream: none · Scenarios: none
 
+Since #878 (v1.7.0) an unknown visibility is refused by the schema at load (step `invalid-visibility` of
+`O-VAL-ORGVAR`, asserted per SUT by `ENUM_SCHEMA_STEPS` of `tests/offline/test_scenarios.py`); the lowercase and
+`GITHUB_` names and the plan-gated visibility still pass.
+
 Evidence: `otterdog/models/github_organization.py:196-234`, `otterdog/models/organization_variable.py:40-63`,
 `otterdog/models/variable.py:29-42`.
 
@@ -928,7 +919,13 @@ $ otterdog validate -c otterdog.json --local e2e-test-org         # orgs.newRepo
 
 ### KB-029 — an invalid workflows.allowed_actions crashes validation with a KeyError
 
-Status: **confirmed** · Upstream: none · Scenarios: none
+Status: **fixed** (1.7.0.dev75) · Upstream: https://github.com/eclipse-csi/otterdog/pull/878 · Scenarios: none
+
+Unreachable since #878 (a26b543, in v1.7.0): the workflow settings schemas enumerate `allowed_actions`, so an invalid
+value is a load error (`failed to load configuration: invalid value at 'settings.workflows.allowed_actions': 'some' is
+not one of ['all', 'local_only', 'selected']`, exit 1) before the model code that crashes. The steps that reproduce
+the crash are asserted per SUT by `ENUM_SCHEMA_STEPS` of `tests/offline/test_scenarios.py`. The text below describes
+the defect as it was.
 
 Evidence: `otterdog/models/workflow_settings.py:94-99`, `otterdog/models/workflow_settings.py:101-106`,
 `otterdog/models/repo_workflow_settings.py:99-105`, `otterdog/models/workflow_settings.py:115-123`,
@@ -1106,6 +1103,13 @@ $ otterdog validate -c otterdog.json --local e2e-test-org         # exit code 2
 
 Status: **confirmed** · Upstream: none · Scenarios: none
 
+Since #878 (v1.7.0) an invalid `gh_pages_visibility` is refused by the schema at load, before the coercion: the
+step `pages-visibility-below-enterprise` is asserted per SUT by `ENUM_SCHEMA_STEPS` of `tests/offline/test_scenarios.py`
+(this bug before #878, the load error since). The other three rules still never fire, and since #665 (v1.7.0) neither does the Info about
+`immutable_releases_enabled` disabled while the organization enforces immutable releases (`repository.py:571-576` of
+main d9dac78; the coercion unsets the field at `:374-375`): step `repository-setting-enforced` of
+`O-VAL-IMMUTABLE-RELEASES` declares the bug.
+
 Evidence: `otterdog/models/github_organization.py:349-351`, `otterdog/models/repository.py:284-316`,
 `otterdog/models/repository.py:436-465`, `otterdog/models/repository.py:583-600`.
 
@@ -1200,7 +1204,10 @@ $ otterdog local-plan -c otterdog.json --local e2e-test-org       # exit code 0 
 
 ### KB-035 — the environment docs use newEnvironmentSecret / newEnvironmentVariable
 
-Status: **confirmed** · Upstream: none · Scenarios: none
+Status: **fixed** (1.7.0.dev75) · Upstream: https://github.com/eclipse-csi/otterdog/pull/878 · Scenarios: none
+
+Fixed by #878 (a26b543, in v1.7.0): the reference pages and guides use `orgs.newEnvSecret` and `orgs.newEnvVariable`.
+The text below describes the defect as it was.
 
 Evidence: `docs/reference/organization/repository/environment/index.md:45-54`,
 `examples/template/otterdog-defaults.libsonnet:288-292`.
@@ -1235,7 +1242,10 @@ With `orgs.newEnvSecret` and `orgs.newEnvVariable` the configuration validates.
 
 ### KB-036 — the template comment of deployment_branch_policy lists values validation rejects
 
-Status: **confirmed** · Upstream: none · Scenarios: none
+Status: **fixed** (1.7.0.dev75) · Upstream: https://github.com/eclipse-csi/otterdog/pull/878 · Scenarios: none
+
+Fixed by #878 (a26b543, in v1.7.0): the template comment reads `# Can be one of: all, protected, selected`, and the
+environment schema refuses any other value at load. The text below describes the defect as it was.
 
 Evidence: `examples/template/otterdog-defaults.libsonnet:281-282`, `otterdog/models/environment.py:128-135`,
 `docs/reference/organization/repository/environment/index.md:9`.
@@ -1310,7 +1320,11 @@ EOF
 
 ### KB-038 — two validation messages print Python sets in a random order
 
-Status: **confirmed** · Upstream: none · Scenarios: none
+Status: **fixed** (1.7.0.dev75) · Upstream: https://github.com/eclipse-csi/otterdog/pull/878 · Scenarios: none
+
+Unreachable since #878 (a26b543, in v1.7.0): `fork_pr_approval_policy` and `code_scanning_default_languages` are
+schema enums, so an invalid value is a load error listing the allowed values in the schema order, before the two
+messages that print a set. The text below describes the defect as it was.
 
 Evidence: `otterdog/models/workflow_settings.py:30-34`, `otterdog/models/workflow_settings.py:143-150`,
 `otterdog/models/repository.py:611-618`, `otterdog/models/repository.py:731-732`.
@@ -1953,7 +1967,12 @@ print(
 
 ### KB-055 — nested ruleset messages name the repository twice
 
-Status: **confirmed** · Upstream: none · Scenarios: none (`O-VAL-RULESET-NESTED` asserts the messages after the header)
+Status: **fixed** (1.8.0.dev6) · Upstream: https://github.com/eclipse-csi/otterdog/pull/891 · Scenarios: none
+(`O-VAL-RULESET-NESTED` asserts the messages after the header)
+
+Fixed by #891 (d6f14f4, main after v1.7.1): the messages name the ruleset, e.g. `Error: repo_ruleset[name="<rs>",
+repository=<repo>] has 'required_pull_request.required_approving_review_count' of value '11' ...`. The text below
+describes the defect as it was.
 
 Evidence: `otterdog/models/ruleset.py:57-73`, `otterdog/models/ruleset.py:128-136`, `otterdog/models/ruleset.py:240-272`,
 `otterdog/models/ruleset.py:451-458`.
@@ -2299,7 +2318,12 @@ except Exception as ex:
 
 ### KB-070 — a definition change of several fields is stored one field per fetch
 
-Status: **confirmed** · Upstream: none · Scenarios: `W-BP-UPDATE` (tests/webapp/test_blueprints.py)
+Status: **fixed** (1.7.0.dev66) · Upstream: https://github.com/eclipse-csi/otterdog/pull/864 · Scenarios: `W-BP-UPDATE`
+(tests/webapp/test_blueprints.py)
+
+Fixed by #864 (7b863ff, in v1.7.0): `update_or_create_blueprint` updates path, name, description and config without
+short-circuiting (`otterdog/webapp/db/service.py:957-988` at main d9dac78). Not yet run live against the fix:
+`W-BP-UPDATE` guards it from 1.7.0.dev66 on. The text below describes the defect as it was.
 
 Evidence: `otterdog/webapp/db/service.py:943-958`.
 
@@ -2316,7 +2340,12 @@ the previous `repo_selector`; a second identical fetch stores the selector.
 
 ### KB-071 — a second fetch drops the pending recheck of a changed definition
 
-Status: **confirmed** · Upstream: none · Scenarios: `W-BP-RECHECK-LOST` (tests/webapp/test_blueprints.py)
+Status: **fixed** (1.7.0.dev66) · Upstream: https://github.com/eclipse-csi/otterdog/pull/864 · Scenarios:
+`W-BP-RECHECK-LOST` (tests/webapp/test_blueprints.py)
+
+Fixed by #864 (7b863ff, in v1.7.0): `recheck_needed = recheck_needed or any(changed)` keeps a pending recheck
+(`otterdog/webapp/db/service.py:985-986` at main d9dac78). Not yet run live against the fix: `W-BP-RECHECK-LOST`
+guards it from 1.7.0.dev66 on. The text below describes the defect as it was.
 
 Evidence: `otterdog/webapp/db/service.py:958`, `otterdog/webapp/internal/routes.py:83-89`,
 `otterdog/webapp/blueprints/__init__.py:84-91`.
@@ -2529,3 +2558,41 @@ tables list under organization Administration **write**) produces a plausible bu
 proposes to add what exists, and apply fails or duplicates. Suspected: established from the source and GitHub's
 permission tables, a live org with a deliberately incomplete fine-grained token reproduces it. The harness doctor
 probes the read permissions of a fine-grained admin token to catch this before a session.
+
+### KB-081 — an organization ruleset requiring deployments crashes validation
+
+Status: **confirmed** · Upstream: none · Scenarios: step `deployment-rule` of `O-VAL-ORG-RULESETS`
+
+Evidence: `otterdog/models/ruleset.py:475-479` (main d9dac78).
+
+Reported with KB-008 until #891 fixed the other crash of that entry (`get_model_header`): this one is still there on
+main d9dac78 (reproduced offline, exit 2).
+
+`Ruleset.validate` also checks the environments of a deployment rule with `cast("Repository",
+parent_object).environments` (`otterdog/models/ruleset.py:436-447` at 9bdeb75, `:475-479` at d9dac78). For an organization ruleset with
+`requires_deployments: true` and environments the parent is the organization again, and validation crashes with
+`'GitHubOrganization' object has no attribute 'environments'` (exit 2) on every version that has the check (v1.6.1
+included), where the repository variant reports an undefined environment. GitHub's `org-rules` include the
+`required_deployments` rule, so the configuration itself is valid. The step `deployment-rule` of `O-VAL-ORG-RULESETS`
+(`scenarios/offline/rulesets/val-org-rulesets.yaml`) declares the bug.
+
+#### Reproduction
+
+```jsonnet
+orgs.newOrg('e2e-test-org') {
+  settings+: { plan: 'enterprise' },
+  rulesets+: [
+    orgs.newOrgRuleset('org-deploy') {
+      include_refs+: ['~DEFAULT_BRANCH'],
+      include_repo_names: ['~ALL'],
+      requires_deployments: true,
+      required_deployment_environments: ['prod'],
+    },
+  ],
+}
+```
+
+```console
+$ otterdog validate -c otterdog.json --local e2e-test-org         # exit code 2
+│ Error:   'GitHubOrganization' object has no attribute 'environments'
+```

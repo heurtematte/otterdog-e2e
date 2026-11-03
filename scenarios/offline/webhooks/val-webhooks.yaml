@@ -12,6 +12,16 @@ priority: P1
 tags: [offline, webhooks]
 observe: true
 variables: {plan: free}
+references:
+  - pr: 878
+    note: >-
+      "Configuration guides playground": the JSON schemas enumerate the allowed values, so an invalid value is a
+      load error ("failed to load configuration: invalid value at '<path>': '<value>' is not one of [...]", exit 1)
+      before the model's own check; show fails to load the configuration too. ENUM_SCHEMA_STEPS of
+      tests/offline/test_scenarios.py asserts each side (model errors before, the load error since).
+    expected_deltas:
+      - {step: invalid-webhooks, kind: cli, key: validate}
+      - {step: invalid-webhooks, kind: cli, key: show}
 steps:
   - name: invalid-webhooks
     fragments:
@@ -22,22 +32,7 @@ steps:
           orgs.newRepo('{{ p }}-hooks') {
             webhooks: [orgs.newRepoWebhook('{{ hook_base }}repo-invalid') { content_type: 'xml' }],
           }
-    validate:
-      ok: false
-      errors: 3
-      warnings_min: 1
-      contains:
-        - >-
-          Error: org_webhook[url="{{ hook_base }}org-invalid"] has 'content_type' of value 'xml', while only values
-          ('json' | 'form') are allowed.
-        - >-
-          Error: org_webhook[url="{{ hook_base }}org-invalid"] has 'insecure_ssl' of value '2', while only values
-          ('0' | '1') are allowed.
-        - >-
-          Error: repo_webhook[url="{{ hook_base }}repo-invalid", repository={{ p }}-hooks] has 'content_type' of
-          value 'xml', while only values ('json' | 'form') are allowed.
-        - "Warning: org_webhook[url=\"{{ hook_base }}org-invalid\"] has a secret"
-        - "that does not use a credential provider."
+    validate: {ok: false}  # outcome per SUT (#878): ENUM_SCHEMA_STEPS of tests/offline/test_scenarios.py
   - name: secret-notices
     base_fragments: {}
     fragments:

@@ -11,6 +11,16 @@ priority: P1
 tags: [offline, org-settings]
 observe: true
 variables: {plan: free}
+references:
+  - pr: 878
+    note: >-
+      "Configuration guides playground": the JSON schemas enumerate the allowed values, so an invalid value is a
+      load error ("failed to load configuration: invalid value at '<path>': '<value>' is not one of [...]", exit 1)
+      before the model's own check; show fails to load the configuration too. ENUM_SCHEMA_STEPS of
+      tests/offline/test_scenarios.py asserts each side (model errors before, the load error since).
+    expected_deltas:
+      - {step: default-repository-permission, kind: cli, key: validate}
+      - {step: default-repository-permission, kind: cli, key: show}
 steps:
   - name: description-too-long
     base_fragments: {}
@@ -58,14 +68,7 @@ steps:
   - name: default-repository-permission
     fragments:
       settings: ["default_repository_permission: 'maintain'"]
-    validate:
-      ok: false
-      errors: 1
-      exit_code: 1
-      contains:
-        - >-
-          'default_repository_permission' has value 'maintain', while only values ('none' | 'read' | 'write' |
-          'admin') are allowed.
+    validate: {ok: false}  # outcome per SUT (#878): ENUM_SCHEMA_STEPS of tests/offline/test_scenarios.py
   - name: limits
     fragments:
       settings:

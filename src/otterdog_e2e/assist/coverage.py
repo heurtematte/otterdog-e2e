@@ -45,6 +45,7 @@ AREA_TAGS: Mapping[str, tuple[str, ...]] = {
     "org-workflows": ("workflows",),
     "custom-properties": ("custom-properties",),
     "org-roles": ("org-roles",),
+    "code-security": ("code-security",),
     "teams": ("teams",),
     "webhooks": ("webhooks",),
     "secrets-variables": ("secrets", "variables"),

@@ -8,6 +8,8 @@
 #   optional  E2E_WEBAPP_PORT (5000) E2E_WEBAPP_PULL_POLICY (never) E2E_CONFIGS_REPO (otterdog-e2e-configs)
 #             E2E_VALIDATION_CONTEXT E2E_SYNC_CONTEXT E2E_ADMIN_TEAMS E2E_APPROVAL_TEAMS
 #             E2E_DEPENDENCY_TRACK_URL (http://127.0.0.1:9: nothing listens) E2E_DTRACK_MOCK_IMAGE E2E_DTRACK_MOCK_STATUS
+#             E2E_HYPERCORN_WORKERS (1: since otterdog#843 start-webapp passes --workers "${HYPERCORN_WORKERS}", which
+#             overrides hypercorn-cfg.toml; older images ignore the variable)
 #
 # Profile `dtrack` (WebappSettings.dtrack_mock / WebappStack.enable_dtrack_mock): the Dependency-Track mock
 # resources/dtrack_mock.py (written next to this file) answers PUT /api/v1/bom and records the requests; the webapp then
@@ -51,6 +53,7 @@ services:
       DEPENDENCY_TRACK_URL: ${E2E_DEPENDENCY_TRACK_URL:-http://127.0.0.1:9}
       DEPENDENCY_TRACK_TOKEN: e2e-dummy-token
       SECRET_KEY: ${E2E_SECRET_KEY:?set E2E_SECRET_KEY}
+      HYPERCORN_WORKERS: ${E2E_HYPERCORN_WORKERS:-1}
     secrets:
       - github_app_key
     volumes:

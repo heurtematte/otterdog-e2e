@@ -99,7 +99,7 @@ def test_default_permissions_cover_what_otterdog_manages() -> None:
     assert DEFAULT_PERMISSIONS["organization_custom_properties"] == "admin"
     assert DEFAULT_PERMISSIONS["repository_custom_properties"] == "write"
     assert DEFAULT_PERMISSIONS["actions_variables"] == DEFAULT_PERMISSIONS["organization_actions_variables"] == "write"
-    assert len(DEFAULT_PERMISSIONS) == 22
+    assert len(DEFAULT_PERMISSIONS) == 23
 
 
 def test_default_events() -> None:

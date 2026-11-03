@@ -59,8 +59,8 @@ missing or ambiguous (which behaviour, which otterdog version, offline or live).
    | webapp, webhooks, web UI | Python tests | `tests/webapp/`, `tests/webhooks/`, `tests/web_ui/` |
 
    `<domain>` is the model area the scenario pins (`repo`, `workflows`, `org-settings`, `org-roles`, `teams`,
-   `custom-properties`, `secrets`, `variables`, `webhooks`, `bpr`, `rulesets`, `environments`: the scenario carries
-   that tag) or the cross-cutting `template`, `cli`, `plan`; no deeper subdirectory. A live scenario is one journey
+   `custom-properties`, `secrets`, `variables`, `webhooks`, `bpr`, `rulesets`, `environments`, `code-security`: the
+   scenario carries that tag) or the cross-cutting `template`, `cli`, `plan`; no deeper subdirectory. A live scenario is one journey
    (its steps share the organization's state, the first failure stops it); an offline scenario is a set of
    independent cases, one pytest item per step (`test_offline_scenario[<id>/<step>]`): one rule per negative step,
    named after the case, plus a control step.

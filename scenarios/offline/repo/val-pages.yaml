@@ -12,18 +12,21 @@ priority: P1
 tags: [offline, repo, environments]
 observe: true
 variables: {plan: free}
+references:
+  - pr: 878
+    note: >-
+      "Configuration guides playground": the JSON schemas enumerate the allowed values, so an invalid value is a
+      load error ("failed to load configuration: invalid value at '<path>': '<value>' is not one of [...]", exit 1)
+      before the model's own check; show fails to load the configuration too. ENUM_SCHEMA_STEPS of
+      tests/offline/test_scenarios.py asserts each side (model errors before, the load error since).
+    expected_deltas:
+      - {step: unknown-build-type, kind: cli, key: validate}
+      - {step: unknown-build-type, kind: cli, key: show}
 steps:
   - name: unknown-build-type
     fragments:
       repositories: ["orgs.newRepo('{{ p }}-pages') { gh_pages_build_type: 'foo' }"]
-    validate:
-      ok: false
-      errors: 1
-      exit_code: 1
-      contains:
-        - >-
-          Error: repository[name="{{ p }}-pages"] has 'gh_pages_build_type' set to value 'foo', while only values
-          ['disabled' | 'legacy' | 'workflow'] are allowed.
+    validate: {ok: false}  # outcome per SUT (#878): ENUM_SCHEMA_STEPS of tests/offline/test_scenarios.py
   - name: legacy-without-source-path
     fragments:
       repositories: ["orgs.newRepo('{{ p }}-pages') { gh_pages_build_type: 'legacy', gh_pages_source_branch: 'main' }"]

@@ -8,11 +8,24 @@ description: >-
   organization overrides (Actions disabled for all or only for selected repositories, more restricted allowed
   actions, read-only workflow permissions, no pull request approvals). The enums of the shared workflow settings
   apply with the repository header (the fork policy set order varies: KB-038). An invalid repository allowed_actions
-  crashes validation with a KeyError (KB-029): that step expects the documented error.
+  crashes validation with a KeyError (KB-029). Since #878 (v1.7.0) the schema refuses these values at load, before
+  the model: ENUM_SCHEMA_STEPS of tests/offline/test_scenarios.py asserts the outcome of the enum steps per SUT.
 priority: P2
 tags: [offline, workflows, repo]
 observe: true
 variables: {plan: free}
+references:
+  - pr: 878
+    note: >-
+      "Configuration guides playground": the JSON schemas enumerate the allowed values, so an invalid value is a
+      load error ("failed to load configuration: invalid value at '<path>': '<value>' is not one of [...]", exit 1)
+      before the model's own check; show fails to load the configuration too. ENUM_SCHEMA_STEPS of
+      tests/offline/test_scenarios.py asserts each side (model errors before, the load error since).
+    expected_deltas:
+      - {step: workflow-enums, kind: cli, key: validate}
+      - {step: workflow-enums, kind: cli, key: show}
+      - {step: unknown-allowed-actions, kind: cli, key: validate}
+      - {step: unknown-allowed-actions, kind: cli, key: show}
 steps:
   - name: code-scanning-without-actions
     fragments:
@@ -103,14 +116,7 @@ steps:
     fragments:
       repositories:
         - "orgs.newRepo('{{ p }}-wf') { workflows+: { default_workflow_permissions: 'admin', fork_pr_approval_policy: 'nobody' } }"
-    validate:
-      ok: false
-      errors: 2
-      contains:
-        - >-
-          Error: repository[name="{{ p }}-wf"] has 'workflows.default_workflow_permissions' of value 'admin', while
-          only values ('read' | 'write') are allowed.
-        - "Error: repository[name=\"{{ p }}-wf\"] has 'workflows.fork_pr_approval_policy' of value 'nobody', while only values {"
+    validate: {ok: false}  # outcome per SUT (#878): ENUM_SCHEMA_STEPS of tests/offline/test_scenarios.py
   - name: action-patterns-ignored
     fragments:
       repositories:
@@ -125,14 +131,6 @@ steps:
           Warning: repository[name="{{ p }}-wf"] has 'workflows.allowed_actions' set to 'all', but
           'allow_action_patterns' is set to '['actions/*@*']', setting will be ignored.
   - name: unknown-allowed-actions
-    known_bug: KB-029
     fragments:
       repositories: ["orgs.newRepo('{{ p }}-wf') { workflows+: { allowed_actions: 'some' } }"]
-    validate:
-      ok: false
-      errors: 1
-      exit_code: 1
-      contains:
-        - >-
-          Error: repository[name="{{ p }}-wf"] has 'workflows.allowed_actions' of value 'some', while only values
-          ('all' | 'local_only' | 'selected') are allowed.
+    validate: {ok: false}  # outcome per SUT (#878): ENUM_SCHEMA_STEPS of tests/offline/test_scenarios.py

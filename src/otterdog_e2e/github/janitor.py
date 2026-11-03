@@ -40,6 +40,8 @@ JANITOR_KINDS = (
     "repo",
     "team",
     "org_secret",
+    "org_dependabot_secret",
+    "org_codespaces_secret",
     "org_variable",
     "org_ruleset",
     "custom_property",
@@ -71,6 +73,8 @@ SWEEP_ORDER = (
     "org_hook",
     "org_ruleset",
     "org_secret",
+    "org_dependabot_secret",
+    "org_codespaces_secret",
     "org_variable",
     "custom_property",
     "org_role",
@@ -129,6 +133,15 @@ class Janitor:
             ("repositories", self._scan_repos),
             ("teams", lambda: self._named("team", self.oracle.teams(), key="slug")),
             ("org secrets", lambda: self._named("org_secret", self.oracle.org_secrets())),
+            # managed by otterdog since #890 (main after v1.7.1): org-level only, run repositories take theirs along
+            (
+                "org Dependabot secrets",
+                lambda: self._named("org_dependabot_secret", self.oracle.org_dependabot_secrets()),
+            ),
+            (
+                "org Codespaces secrets",
+                lambda: self._named("org_codespaces_secret", self.oracle.org_codespaces_secrets()),
+            ),
             ("org variables", lambda: self._named("org_variable", self.oracle.org_variables())),
             ("org rulesets", lambda: self._named("org_ruleset", self.oracle.org_rulesets(), detail="id")),
             (
@@ -364,6 +377,8 @@ class Janitor:
             "config_repo": lambda: m.delete_repo(name),
             "team": lambda: m.delete_team(name),
             "org_secret": lambda: m.delete_org_secret(name),
+            "org_dependabot_secret": lambda: m.delete_org_dependabot_secret(name),
+            "org_codespaces_secret": lambda: m.delete_org_codespaces_secret(name),
             "org_variable": lambda: m.delete_org_variable(name),
             "org_ruleset": lambda: m.delete_org_ruleset(int(item.detail), name=name),
             "custom_property": lambda: m.delete_custom_property(name),

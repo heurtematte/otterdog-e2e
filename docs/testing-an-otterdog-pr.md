@@ -132,7 +132,7 @@ and explains every delta for your review ([ai-assistance.md](ai-assistance.md)).
 | `note` | `""` | what the change did to this behaviour (known-bad version, evidence, what must not change) |
 | `expected_deltas` | `[]` | deltas the change causes in THIS scenario between base and head (below) |
 | `base` | `null` | differential base of the change (a release, tag, branch or sha spec; default: the merge base) |
-| `template` | `own` | `own` (each side vendors its own `examples/template`), `head` or `base` (both sides use that side's template), to separate code changes from template changes |
+| `template` | `own` | `own` (each side vendors its own standard template: `otterdog/resources/defaults`, or `examples/template` up to v1.7.1), `head` or `base` (both sides use that side's template), to separate code changes from template changes |
 
 The scenario model validates the references (unknown keys, types, a step pattern that matches no step of the
 scenario, a `step` in a Python test, duplicates); two references of one change with different `base` or `template`
@@ -250,7 +250,7 @@ instance is a test organization with its environments `e2e-<instance>` and `e2e-
 2. `e2e.yml` validates the instances again, classifies `pr:<n>@<sha>` (untrusted) and writes the review block to the
    job summary: PR title (as a code span), author, head repository, pinned sha versus current head, number of changed
    files, the changed build or template files (`pyproject.toml`, `poetry.lock`, `docker/*`, Dockerfiles,
-   `examples/template/*`) and the instances.
+   `examples/template/*`, `otterdog/resources/defaults/*`) and the instances.
 3. One `e2e` job per instance waits for an approval of its `e2e-<instance>-untrusted` environment. **Review the PR at
    the pinned sha and the classify summary before approving**: once approved, the PR code runs with the credentials of
    that test organization. The jobs of the other instances keep running when one fails.

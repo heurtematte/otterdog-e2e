@@ -13,18 +13,21 @@ priority: P1
 tags: [offline, custom-properties]
 observe: true
 variables: {plan: free}
+references:
+  - pr: 878
+    note: >-
+      "Configuration guides playground": the JSON schemas enumerate the allowed values, so an invalid value is a
+      load error ("failed to load configuration: invalid value at '<path>': '<value>' is not one of [...]", exit 1)
+      before the model's own check; show fails to load the configuration too. ENUM_SCHEMA_STEPS of
+      tests/offline/test_scenarios.py asserts each side (model errors before, the load error since).
+    expected_deltas:
+      - {step: value-type, kind: cli, key: validate}
+      - {step: value-type, kind: cli, key: show}
 steps:
   - name: value-type
     fragments:
       custom_properties: ["orgs.newCustomProperty('{{ p }}-num') { value_type: 'number' }"]
-    validate:
-      ok: false
-      errors: 1
-      exit_code: 1
-      contains:
-        - >-
-          custom_property[name="{{ p }}-num"] has 'value_type' set to 'number', while only values ('string' |
-          'single_select' | 'multi_select' | 'true_false') are allowed.
+    validate: {ok: false}  # outcome per SUT (#878): ENUM_SCHEMA_STEPS of tests/offline/test_scenarios.py
   - name: select-without-values
     fragments:
       custom_properties: ["orgs.newCustomProperty('{{ p }}-sel') { value_type: 'single_select', allowed_values: [] }"]

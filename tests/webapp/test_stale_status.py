@@ -10,10 +10,11 @@ schedules only an UpdatePullRequestTask (webhook/__init__.py:112-128).
 
 Expected on SUTs including #792: the /api record stays ``merged`` with apply_status ``completed`` and the PR stays out
 of /api/pullrequests/open. SUTs without the fix (v1.6.1, main 9bdeb75) show it ``open`` again (known bug KB-018 of
-scenarios/known_bugs.yaml). Unless the webapp image is known to contain the fix commit 2c5f977 (the PR's first commit,
-which fixes this strictly-older variant), the test is a NON-strict xfail limited to StaleStatusRegressionError: base
-SUTs xfail, fixed ones xpass (also after a squash merge upstream, whose commit sha differs), and any other failure
-(infra, flow) still fails. The before/after records are written to <artifacts>/webapp/w-pr-stale-snapshot.json
+scenarios/known_bugs.yaml, fixed in 1.7.0.dev20). #792 was squash-merged on main as 837d799 (in v1.7.0): images
+containing it run the test strictly, older ones are a strict xfail limited to StaleStatusRegressionError (every later
+version descends from the merge), and an image whose inclusion is unknown a non-strict one; any other failure (infra,
+flow) still fails. The PR branch commits (2c5f977 ... d0d3b08) are not ancestors of main: a pr:792 SUT is an unknown
+inclusion. The before/after records are written to <artifacts>/webapp/w-pr-stale-snapshot.json
 either way: that file is the base-vs-head evidence of the expected delta its reference to #792 declares (the
 in-session differential only compares CLI observations, so the report lists that delta as not observed).
 """
@@ -33,7 +34,8 @@ if TYPE_CHECKING:
 
 pytestmark = [pytest.mark.webapp]
 
-FIX_792 = "2c5f9775994f35d813d23119b0ed313c49ac32fc"  # fix: do not revert pull request status with an outdated snapshot
+# fix: do not revert pull request status with an outdated snapshot (#792, squash commit on main, v1.7.0)
+FIX_792 = "837d79928754c521704c9c4a22b273fe0a284951"
 STALE_ACTION = "converted_to_draft"  # schedules UpdatePullRequestTask only (no validation, help or apply task)
 TASK = "UpdatePullRequestTask"
 CLOCK_SLACK = timedelta(seconds=30)  # webapp container clock vs harness clock (task created_at is naive UTC)
@@ -83,7 +85,7 @@ def test_stale_snapshot_keeps_merged_status(
     """Merge + apply, then a signed stale ``converted_to_draft`` snapshot: /api keeps the PR merged and completed."""
     s = webapp_scenario
     reason = s.known_bug_reason("/pull/792", KNOWN_BUG)
-    s.xfail_unless_includes(request, FIX_792, error=StaleStatusRegressionError, reason=reason, strict=False)
+    s.xfail_unless_includes(request, FIX_792, error=StaleStatusRegressionError, reason=reason, strict=True)
     name = s.run_repo()
     pr = s.open_pr(s.text(repos={name: s.describe("merged before the stale snapshot")}))
     snapshot = s.oracle.pull(s.repo, pr.number)  # the open snapshot, strictly older than the merge

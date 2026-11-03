@@ -1,6 +1,7 @@
-# Documentation site (GitHub Pages): a strict MkDocs build of docs/ and README.md (the home page) for every change of the
-# documentation, deployed from main. It uses no secret: the build job only reads the repository (and, on main, the
-# Pages settings); the deploy job alone may publish the site, in the github-pages environment.
+# Documentation site (GitHub Pages): a strict MkDocs build of docs/ and README.md (the home page), with the scenario
+# explorer generated from scenarios/ and tests/ (docs_scenarios.py), for every change of the documentation, deployed
+# from main. It uses no secret: the build job only reads the repository (and, on main, the Pages settings); the deploy
+# job alone may publish the site, in the github-pages environment.
 #
 # Repository setup, once: Settings > Pages > Build and deployment > Source: "GitHub Actions" (docs/local-development.md).
 name: docs
@@ -13,6 +14,12 @@ on:
       - "README.md"
       - "mkdocs.yml"
       - "docs_hooks.py"
+      # the scenario explorer is generated from these (docs_scenarios.py)
+      - "docs_scenarios.py"
+      - "scenarios/**"
+      - "tests/**/*.py"
+      - "src/otterdog_e2e/scenarios/checks.py"
+      - "src/otterdog_e2e/github/oracle.py"
       - ".github/workflows/docs.yml"
   pull_request:
     paths:
@@ -20,6 +27,12 @@ on:
       - "README.md"
       - "mkdocs.yml"
       - "docs_hooks.py"
+      # the scenario explorer is generated from these (docs_scenarios.py)
+      - "docs_scenarios.py"
+      - "scenarios/**"
+      - "tests/**/*.py"
+      - "src/otterdog_e2e/scenarios/checks.py"
+      - "src/otterdog_e2e/github/oracle.py"
       - ".github/workflows/docs.yml"
   workflow_dispatch:
 

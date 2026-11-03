@@ -110,12 +110,13 @@ when the two diverge. After editing the YAML, regenerate the page:
 .venv/bin/python tests/unit/test_coverage_matrix.py --write   # rewrites docs/coverage-matrix.md, prints the coverage per area
 ```
 
-At otterdog main 9bdeb75 the matrix lists 337 features: 300 covered, 32 partial and 5 gaps (89% covered, 94% when a
-partial feature counts half); 139 are covered by offline items, the only tier run against real SUTs so far. The battery
-behind it has 137 YAML scenarios (59 offline, 71 cli of which 7 regressions, 7 enterprise) and 218 Python test
-functions (75 offline, 58 cli, 5 webhooks, 64 webapp, 11 web-UI, 1 enterprise, 4 differential); the offline tier runs
-582 items (one per offline scenario step) in about 10 minutes. [scenarios/known_bugs.yaml](scenarios/known_bugs.yaml)
-registers 77 otterdog defects (57 confirmed, 20 suspected): the items that reproduce one assert the correct behaviour
+At otterdog main d9dac78 (after v1.7.1) the matrix lists 360 features: 309 covered, 40 partial and 11 gaps (86%
+covered, 91% when a partial feature counts half); 156 are covered by offline items, the only tier run against real SUTs
+so far (`release:latest` v1.7.1 and `branch:main` d9dac78). The battery behind it has 147 YAML scenarios (66 offline,
+74 cli of which 7 regressions, 7 enterprise) and 222 Python test functions (78 offline, 59 cli, 5 webhooks, 64 webapp,
+11 web-UI, 1 enterprise, 4 differential); the offline tier runs about 640 items (one per offline scenario step) in
+about 12 minutes. [scenarios/known_bugs.yaml](scenarios/known_bugs.yaml) registers 81 otterdog defects (50 confirmed,
+21 suspected, 10 fixed upstream): the items that reproduce one assert the correct behaviour
 and run as expected failures while it is open.
 
 Every run's `summary.md` has a "Coverage matrix" section: the covered, partial and gap shares per tier, and the

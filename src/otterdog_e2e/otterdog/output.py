@@ -76,6 +76,9 @@ FAILED_PATCH_PREFIX = "failed to apply patch: "
 SHA_RE = re.compile(r"\b[0-9a-f]{40}\b")
 TIMESTAMP_RE = re.compile(r"\b\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?")
 DURATION_RE = re.compile(r"\b\d+(?:\.\d+)?\s?(?:ms|s|secs?|seconds?)\b")
+# -v logs the GitHub API usage of each organization since eclipse-csi/otterdog#881 (v1.7.0): "github api usage for
+# organization '<id>': rest: 12 request(s) (0 retries, 0 errors, 3 cached), graphql: ...", counts that vary between runs
+API_USAGE_RE = re.compile(r"(github api usage for organization '[^']*': ).*$", re.MULTILINE)
 TMP_PATH_RE = re.compile(r"(?<![\w./-])(?:/private)?(?:/tmp|/var/tmp|/var/folders)/[^\s'\":]*")
 # values otterdog prints from Python sets, in an order that changes from run to run (KB-038): "{'a', 'b'}" (set repr)
 # and ('"a" | "b"') (code scanning languages); differential observations sort them
@@ -593,10 +596,12 @@ def sort_set_values(text: str) -> str:
 
 
 def _apply_context(text: str, ctx: NormalizeContext) -> str:
-    """Literal replacements (longest first), then <SHA>, <TS>, <DUR> and <TMP> placeholders, and set values sorted."""
+    """Literal replacements (longest first), then <SHA>, <TS>, <DUR>, <API-USAGE> and <TMP> placeholders, and set
+    values sorted."""
     for literal, placeholder in sorted(ctx.literals, key=lambda pair: -len(pair[0])):
         if literal:
             text = text.replace(literal, placeholder)
+    text = API_USAGE_RE.sub(r"\1<API-USAGE>", text)
     text = SHA_RE.sub("<SHA>", text)
     text = TIMESTAMP_RE.sub("<TS>", text)
     text = DURATION_RE.sub("<DUR>", text)
@@ -608,8 +613,8 @@ def normalize_text(text: str, ctx: NormalizeContext | None = None) -> str:
 
     strip_ansi; unbox; logger lines: strip LOGGER_SOURCE_SUFFIX_RE, collapse padding, sort runs of consecutive logger
     lines; PROGRESS_RE -> <PROGRESS>; rstrip; collapse blank runs. With ctx: literal replacements (longest first),
-    40-hex -> <SHA>, ISO timestamps -> <TS>, durations -> <DUR>, scratch/tmp paths -> <TMP>, the values of printed
-    Python sets sorted (sort_set_values, KB-038).
+    40-hex -> <SHA>, ISO timestamps -> <TS>, durations -> <DUR>, the API usage summaries of -v (#881) ->
+    <API-USAGE>, scratch/tmp paths -> <TMP>, the values of printed Python sets sorted (sort_set_values, KB-038).
     """
     lines = [_normalize_logger_line(line.rstrip()) for line in unbox(strip_ansi(text)).splitlines()]
     lines = [PROGRESS_RE.sub("<PROGRESS>", line).rstrip() for line in lines]

@@ -4,7 +4,8 @@
 #   .venv/bin/python tests/unit/test_coverage_matrix.py --write
 # tests/unit/test_coverage_matrix.py validates the schema, checks that every covered_by item exists (scenario ids of
 # scenarios/{offline,cli,enterprise}, pytest node ids of tests/<tier>/), that every property of the
-# example template (tests/unit/data/template, = otterdog examples/template @9bdeb75) and every inventory key (CLI
+# standard template (tests/unit/data/template, = otterdog otterdog/resources/defaults @d9dac78, examples/template up to
+# v1.7.1) and every inventory key (CLI
 # commands, webhook events, comment commands, tasks, endpoints, pages, blueprint/policy types, markers, statuses,
 # receiver checks) belongs to a feature, and that the generated documentation is up to date.
 #
@@ -12,7 +13,8 @@
 #   id           stable dotted id (rename only together with every reference)
 #   area         one of `areas`
 #   title        one line
-#   source       otterdog paths at main 9bdeb75 (path:line or path:line-line; "ws:" = a local branch of the maintainer)
+#   source       otterdog paths at main 9bdeb75 (path:line or path:line-line; "ws:" = a local branch of the maintainer);
+#                features added for main d9dac78 (after v1.7.1) cite that commit
 #   model        with `properties`: the template model whose keys the feature groups (exhaustiveness check)
 #   inventory    '<kind>:<value>' keys of EXPECTED_INVENTORY in the test
 #   operations   what has to be exercised (`operations` vocabulary)
@@ -35,19 +37,24 @@
 # exact. Offline scenarios run `validate --local` WITHOUT -v (Info messages are hidden) unless a step sets
 # `validate: {verbose: true}`; the offline loader refuses teams, and code_scanning_default_languages unless
 # code_scanning_default_setup_enabled is false beside them (they call GitHub).
+# The features of the changes up to main d9dac78 (v1.7.0, v1.7.1 and after) were verified offline with the CLI of
+# main d9dac78 (1.8.0.dev7) and of v1.7.1. Since #878 (v1.7.0) the JSON schemas enumerate most string values: an
+# invalid value is a load error before the model's own check (tests/offline/test_scenarios.py ENUM_SCHEMA_STEPS
+# asserts the model message before #878 and the load error since).
 schema_version: 1
 title: otterdog feature coverage of the e2e battery
 description: >-
-  Inventory of otterdog main @9bdeb75 (after v1.6.1; release:latest is v1.6.1): every CLI command and its flags, every
+  Inventory of otterdog main @d9dac78 (after v1.7.1; release:latest is v1.7.1), first built at main 9bdeb75 (after
+  v1.6.1): every CLI command and its flags, every
   property of the configuration model grouped by feature, validation rules, diff semantics, the webapp (webhook
   events, comment commands, tasks, auto-merge, apply, blueprints, policies, /api and /internal), the webhook receiver
   contract and notable CHANGELOG fixes, mapped to the existing scenarios and tests of this repository. Gaps and partial
   coverage carry the outline of the missing test.
 otterdog:
   repository: eclipse-csi/otterdog
-  ref: 9bdeb75f3e82a6cbd107d6bc3c9ec90392475c08
-  release: v1.6.1
-  offline_probe: otterdog 1.7.0.dev19 (offline CLI of the research notes)
+  ref: d9dac7868f3cd2d1bae1bf1b1675b572547d9136
+  release: v1.7.1
+  offline_probe: otterdog 1.7.0.dev19 (offline CLI of the research notes), then 1.8.0.dev7 (main d9dac78) and v1.7.1
 
 areas:
   - {id: cli, title: CLI commands and global options}
@@ -58,6 +65,7 @@ areas:
   - {id: org-workflows, title: Organization Actions settings}
   - {id: custom-properties, title: Organization custom properties}
   - {id: org-roles, title: Custom organization roles}
+  - {id: code-security, title: "Code security configurations (organization) and their repositories"}
   - {id: teams, title: Teams}
   - {id: webhooks, title: Managed organization and repository webhooks}
   - {id: secrets-variables, title: "Secrets and variables (organization, repository, environment)"}
@@ -112,11 +120,11 @@ operations:
   state: "webapp database state"
   security: "signatures, import confinement, secret handling"
 
-# Template constructors (examples/template/otterdog-defaults.libsonnet) -> models. Every template key of a model that
+# Template constructors (otterdog/resources/defaults/otterdog-defaults.libsonnet, examples/template up to v1.7.1) -> models. Every template key of a model that
 # is not `nested` (child collections or embedded objects with their own model) and not inherited from `extends` must
 # be listed by a feature of that model; `extra` lists model fields that are not template keys (model-only fields).
 models:
-  - {id: org, constructor: newOrg, source: "otterdog/models/github_organization.py:84-99", nested: [settings, roles, teams, secrets, variables, webhooks, rulesets, _repositories, repositories]}
+  - {id: org, constructor: newOrg, source: "otterdog/models/github_organization.py:84-99", nested: [settings, roles, teams, secrets, variables, webhooks, rulesets, code_security_configurations, _repositories, repositories]}
   - {id: org-settings, constructor: newOrg.settings, source: "otterdog/models/organization_settings.py:48-89", nested: [workflows, custom_properties]}
   - {id: org-workflows, constructor: newOrg.settings.workflows, source: "otterdog/models/organization_workflow_settings.py:27-34", extra: [fork_pr_approval_policy]}
   - {id: custom-property, constructor: newCustomProperty, source: "otterdog/models/custom_property.py:32-46"}
@@ -125,8 +133,13 @@ models:
   - {id: org-webhook, constructor: newOrgWebhook, source: "otterdog/models/webhook.py:36-51", extra: [aliases]}
   - {id: repo-webhook, constructor: newRepoWebhook, source: "otterdog/models/repo_webhook.py:24-31", extra: [aliases]}
   - {id: org-secret, constructor: newOrgSecret, source: "otterdog/models/organization_secret.py:27-34"}
+  - {id: org-dependabot-secret, constructor: newOrgDependabotSecret, extends: org-secret, source: "otterdog/models/organization_dependabot_secret.py:22-52"}
+  - {id: org-codespaces-secret, constructor: newOrgCodespacesSecret, extends: org-secret, source: "otterdog/models/organization_codespaces_secret.py:22-52"}
+  - {id: org-code-security-configuration, constructor: newOrgCodeSecurityConfiguration, source: "otterdog/models/organization_code_security_configuration.py:122-196"}
   - {id: org-variable, constructor: newOrgVariable, source: "otterdog/models/organization_variable.py:27-34"}
   - {id: repo-secret, constructor: newRepoSecret, source: "otterdog/models/repo_secret.py:24-31"}
+  - {id: repo-dependabot-secret, constructor: newRepoDependabotSecret, extends: repo-secret, source: "otterdog/models/repo_dependabot_secret.py:22-55"}
+  - {id: repo-codespaces-secret, constructor: newRepoCodespacesSecret, extends: repo-secret, source: "otterdog/models/repo_codespaces_secret.py:22-55"}
   - {id: repo-variable, constructor: newRepoVariable, source: "otterdog/models/repo_variable.py:24-31"}
   - {id: env-secret, constructor: newEnvSecret, source: "otterdog/models/environment_secret.py:24-31"}
   - {id: env-variable, constructor: newEnvVariable, source: "otterdog/models/environment_variable.py:24-31"}
@@ -386,7 +399,7 @@ features:
     priority: P2
     status: covered
     covered_by: [tests/offline/test_cli_basics.py::test_show_default_markdown_prints_one_tab_per_object]
-    notes: "12 tabs, each with a jsonnet fence holding its orgs.new... = { block, no plain-text header"
+    notes: "12 tabs up to v1.7.1, 17 with the template of main d9dac78 (Dependabot and Codespaces secrets, code security configurations: show-default skips the types the template does not define), each with a jsonnet fence holding its orgs.new... = { block, no plain-text header"
 
   - id: cli.canonical-diff
     area: cli
@@ -1543,8 +1556,8 @@ features:
     priority: P2
     status: covered
     covered_by: [enterprise.kb.org-ruleset-repo-patterns, O-VAL-ORG-RULESET-STRICT, enterprise.org-ruleset.missing-strict, O-VAL-ORG-RULESETS]
-    known_bugs: [KB-008, KB-023]
-    notes: "verified offline with variables.plan enterprise: 'nomatch-*' -> \"org_ruleset[name=\"ors\"] has an 'include_repo_names' pattern 'nomatch-*' that does not match any existing repository\"; protect without names -> \"... has 'protect_repo_names' set to 'True' but 'include_repo_names' and 'exclude_repo_names' are empty.\"; required_pull_request count 11 or requires_deployments crash with AttributeError (get_model_header / environments), exit 2. include/exclude no-match and protect warnings, target/enforcement/ref-pattern errors with the org_ruleset header, valid control planned; KB-023 (second pattern) and KB-008 (review count 11, deployment rule: AttributeError 'environments') as step-level expected failures."
+    known_bugs: [KB-008, KB-023, KB-081]
+    notes: "verified offline with variables.plan enterprise: 'nomatch-*' -> \"org_ruleset[name=\"ors\"] has an 'include_repo_names' pattern 'nomatch-*' that does not match any existing repository\"; protect without names -> \"... has 'protect_repo_names' set to 'True' but 'include_repo_names' and 'exclude_repo_names' are empty.\"; required_pull_request count 11 or requires_deployments crash with AttributeError (get_model_header / environments), exit 2. include/exclude no-match and protect warnings, target/enforcement/ref-pattern errors with the org_ruleset header, valid control planned; KB-023 (second pattern), KB-008 (review count 11, fixed by #891 in 1.8.0.dev6) and KB-081 (deployment rule: AttributeError 'environments', still on main d9dac78) as step-level expected failures."
 
   - id: validation.teams
     area: validation
@@ -1954,26 +1967,17 @@ features:
 
   - id: plan-semantics.dict-one-way
     area: plan-semantics
-    title: "dict fields (team_permissions, repository custom_properties) diff one way: removing an entry alone is invisible; together with another change of the same dict the removed key is printed ('- b = \"pull\"') and sent (custom properties as null)"
+    title: "dict fields (team_permissions, repository custom_properties): removing an entry is planned ('- b = \"pull\"') and sent (custom properties as null); before #842 (1.7.0.dev76) a removal alone was invisible (KB-005)"
     source: ["otterdog/utils.py:105-124", "otterdog/models/__init__.py:437-475", "otterdog/models/repository.py:1247-1257"]
     operations: [remove, modify, plan]
     min_plan: free
     tier: offline
     ui_only: false
     priority: P1
-    status: partial
+    status: covered
     covered_by: [cli.kb.team-permissions-removal, O-LPLAN-DICT-ONE-WAY]
     known_bugs: [KB-005]
-    notes: "verified offline: team_permissions {a: 'push', b: 'pull'} -> {a: 'push'}: 'Plan: 0 to add, 0 to change, 0 to delete.'; -> {a: 'maintain'}: '~ team_permissions = {', '~ a = \"push\" -> \"maintain\"', '- b = \"pull\"', 1 to change; custom_properties {p1: 'x', p2: 'y'} -> {p1: 'x'}: no change. offline complete: removal-only (KB-005 step-level, team_permissions and custom_properties), removal with change, addition."
-    gap_outline:
-      scenario: cli.kb.custom-property-value-removal
-      file: scenarios/cli/custom-properties/kb-custom-property-value-removal.yaml
-      steps:
-        - "org_level: a string custom property {{ p }}-p and a run repository with custom_properties {'{{ p }}-p': 'x'}; apply"
-        - "the same configuration without the repository value (the definition stays)"
-      assertions:
-        - "plan expects changes on '~ repository[name=\"{{ p }}-r\"]' (today: noop, KB-005 at scenario level) and the oracle repo_custom_properties loses the key after the apply"
-      needs: [target, "org_level (custom property definitions)", "requires: [custom_properties]"]
+    notes: "KB-005 fixed by #842 (1.7.0.dev76): the removal-only steps of O-LPLAN-DICT-ONE-WAY and cli.kb.team-permissions-removal are strict from that version on (release:latest included), expected failures before. Verified offline before the fix: team_permissions {a: 'push', b: 'pull'} -> {a: 'push'}: 'Plan: 0 to add, 0 to change, 0 to delete.'; -> {a: 'maintain'}: '~ team_permissions = {', '~ a = \"push\" -> \"maintain\"', '- b = \"pull\"', 1 to change; custom_properties {p1: 'x', p2: 'y'} -> {p1: 'x'}: no change. offline complete: removal-only (KB-005 step-level, team_permissions and custom_properties), removal with change, addition."
 
   - id: plan-semantics.wildcard-keys
     area: plan-semantics
@@ -4597,7 +4601,7 @@ features:
     priority: P2
     status: covered
     covered_by: [tests/webapp/test_runtime.py::test_project_and_admin_pages]
-    notes: "W-RT-PAGES: /organizations/<org> -> 302 /projects/<project>; /organizations/<org>/repos/<repo> -> 302 /projects/<project>/repos/<repo>. The project page has the policies and blueprints tabs and the repo link; the repository page shows 'Repository <repo>'; /defaults shows the snippets orgs.newOrg('<project-name>', '<github-id>') = and orgs.newRepo('<name>') =; /playground shows the template in a textarea; unknown org, project and repo get the 404 HTML page; /allprojects lists the project. The redirect and 404 shapes were checked offline."
+    notes: "W-RT-PAGES: /organizations/<org> -> 302 /projects/<project>; /organizations/<org>/repos/<repo> -> 302 /projects/<project>/repos/<repo>. The project page has the policies and blueprints tabs and the repo link; the repository page shows 'Repository <repo>'; /defaults shows the snippets orgs.newOrg('<project-name>', '<github-id>') = and orgs.newRepo('<name>') =; /playground shows the template (in a textarea up to v1.6.1, in the templateFiles of its playground-data JSON script since #878, v1.7.0); unknown org, project and repo get the 404 HTML page; /allprojects lists the project. The redirect and 404 shapes were checked offline."
 
   - id: webapp-runtime.pages-admin
     area: webapp-runtime
@@ -4862,16 +4866,9 @@ features:
     tier: cli
     ui_only: false
     priority: P1
-    status: partial
+    status: covered
     covered_by: [regression.private-repo-template-defaults]
-    gap_outline:
-      scenario: regression.private-repo-template-defaults
-      steps:
-        - "regression.private-repo-template-defaults declares fixed_in 1.7.0.dev14: it runs on SUTs containing the fix (branch:main, PR builds) and is skipped on release:latest"
-      assertions:
-        - "covered on the default SUT once a release contains the fix (otterdog >= 1.7.0.dev14)"
-      needs:
-        - "an otterdog release >= 1.7.0.dev14"
+    notes: "fixed_in 1.7.0.dev14, released in v1.7.0: regression.private-repo-template-defaults runs on release:latest (v1.7.1) and later, older SUTs skip it."
 
   - id: regression.779-user-bypass-actors
     area: regressions
@@ -4882,17 +4879,9 @@ features:
     tier: cli
     ui_only: false
     priority: P2
-    status: partial
+    status: covered
     covered_by: [regression.user-bypass-actors]
-    notes: "fixed_in 1.7.0.dev7 (f055d51 = v1.6.1 + 7). The user actor in the default mode, then pull_request mode, converging; skips on release:latest."
-    gap_outline:
-      scenario: regression.user-bypass-actors
-      steps:
-        - "regression.user-bypass-actors declares fixed_in 1.7.0.dev7: it runs on SUTs containing the fix (branch:main, PR builds) and is skipped on release:latest"
-      assertions:
-        - "covered on the default SUT once a release contains the fix (otterdog >= 1.7.0.dev7)"
-      needs:
-        - "an otterdog release >= 1.7.0.dev7"
+    notes: "fixed_in 1.7.0.dev7, released in v1.7.0: regression.user-bypass-actors runs on release:latest (v1.7.1) and later, older SUTs skip it. fixed_in 1.7.0.dev7 (f055d51 = v1.6.1 + 7). The user actor in the default mode, then pull_request mode, converging; skips on release:latest."
 
   - id: regression.775-unformattable-webhook-events
     area: regressions
@@ -4941,16 +4930,9 @@ features:
     tier: cli
     ui_only: false
     priority: P1
-    status: partial
+    status: covered
     covered_by: [regression.code-scanning-new-repo]
-    gap_outline:
-      scenario: regression.code-scanning-new-repo
-      steps:
-        - "regression.code-scanning-new-repo declares fixed_in 1.7.0.dev2: it runs on SUTs containing the fix (branch:main, PR builds) and is skipped on release:latest"
-      assertions:
-        - "covered on the default SUT once a release contains the fix (otterdog >= 1.7.0.dev2)"
-      needs:
-        - "an otterdog release >= 1.7.0.dev2"
+    notes: "fixed_in 1.7.0.dev2, released in v1.7.0: regression.code-scanning-new-repo runs on release:latest (v1.7.1) and later, older SUTs skip it."
 
   - id: regression.770-cost-automerge
     area: regressions
@@ -5295,6 +5277,463 @@ features:
     covered_by: [tests/webapp/test_web_ui_flags.py::test_web_ui_setting_needs_a_manual_apply, tests/webapp/test_merge_apply.py::test_team_and_wildcard_webhook_are_applied]
     known_bugs: [KB-068]
     notes: "W-MERGE-TEAM-HOOK (P2): run team + run repo whose hook url carries a token, declared on main with '<prefix>*' (trusted CLI then reset_main): the merged PR's team description is applied (strict); the wildcard webhook update loses the live url (scoped xfail WildcardWebhookUpdateError: KB-068, otterdog PATCHes config.url = the pattern)."
+
+  # ==================================================================================================================
+  # otterdog main d9dac78: changes after main 9bdeb75 (v1.7.0, v1.7.1 and main after v1.7.1), sources at d9dac78
+  # ==================================================================================================================
+  - id: code-security.configuration.lifecycle
+    area: code-security
+    title: "organization code_security_configurations (orgs.newOrgCodeSecurityConfiguration): add, change (one PATCH, default_for_new_repos through PUT .../defaults), delete with -d, by name; foreign organization configurations are deletions (#892)"
+    source: ["otterdog/models/organization_code_security_configuration.py:122-196", "otterdog/models/organization_code_security_configuration.py:610-669", "otterdog/providers/github/rest/org_client.py:321-515", "otterdog/models/github_organization.py:966-978"]
+    model: org-code-security-configuration
+    properties: [name, description, enforcement, default_for_new_repos]
+    operations: [add, modify, remove, plan, converge]
+    min_plan: free
+    tier: cli
+    ui_only: false
+    priority: P1
+    status: partial
+    covered_by: [O-LPLAN-CODE-SECURITY, O-VAL-CODE-SECURITY, cli.code-security.configuration]
+    notes: "verified offline with main d9dac78: '+ add org_code_security_configuration[name=\"<n>\"]', '~ description = \"before\" -> \"after\"', '~ default_for_new_repos = \"none\" -> \"public\"', '- remove org_code_security_configuration[name=\"<n>\"]' (1 to delete; applied only with -d). cli.code-security.configuration (fixed_in 1.8.0.dev7) creates, changes and deletes one live configuration; it has not run live yet and skips on release:latest."
+    gap_outline:
+      scenario: cli.code-security.configuration
+      file: scenarios/cli/code-security/configuration.yaml
+      steps:
+        - "run the scenario on a test organization with branch:main (org_level), then on the first release containing #892"
+      assertions:
+        - "oracle code_security_configuration and repo_code_security_configuration as written; covered on the default SUT once a release contains #892 (otterdog >= 1.8.0.dev7)"
+      needs: [target, org_level, "an otterdog release >= 1.8.0.dev7", "no foreign organization code security configuration in the test org (the -d step would refuse to delete it)"]
+
+  - id: code-security.configuration.settings
+    area: code-security
+    title: "the settings of a code security configuration: GitHub Advanced Security products, dependency graph, Dependabot, code scanning default setup (runner), secret scanning (delegated bypass reviewers), private vulnerability reporting; null = not managed"
+    source: ["otterdog/models/organization_code_security_configuration.py:122-196", "otterdog/models/organization_code_security_configuration.py:345-442"]
+    model: org-code-security-configuration
+    properties: [code_security, secret_protection, dependency_graph, dependency_graph_autosubmit_action, dependency_graph_autosubmit_action_labeled_runners, dependabot_alerts, dependabot_security_updates, dependabot_reachability, dependabot_delegated_alert_dismissal, code_scanning_default_setup, code_scanning_default_setup_runner_type, code_scanning_default_setup_runner_label, code_scanning_allow_advanced, code_scanning_delegated_alert_dismissal, secret_scanning, secret_scanning_push_protection, secret_scanning_delegated_bypass, secret_scanning_delegated_bypass_reviewers, secret_scanning_validity_checks, secret_scanning_non_provider_patterns, secret_scanning_generic_secrets, secret_scanning_generic_secrets_push_protection, secret_scanning_delegated_alert_dismissal, secret_scanning_extended_metadata, private_vulnerability_reporting]
+    operations: [add, modify, validate, plan, converge]
+    min_plan: free
+    tier: cli
+    ui_only: false
+    priority: P2
+    status: partial
+    covered_by: [O-VAL-CODE-SECURITY, O-LPLAN-CODE-SECURITY, cli.code-security.configuration]
+    notes: "offline: the product/feature rules, the free-plan product rule, labeled runner, bypass reviewers (team, role, mode), settings without effect and the schema enum (enabled | disabled | not_set) with exact messages; live: dependabot_alerts and dependabot_security_updates only (both products disabled, valid on every plan)."
+    gap_outline:
+      scenario: enterprise.code-security.products
+      file: scenarios/enterprise/code-security/products.yaml
+      steps:
+        - "org_level on a plan with GitHub Advanced Security: a configuration with code_security and secret_protection enabled, code scanning default setup on a labeled runner, secret scanning with delegated bypass reviewers '#RepositoryAdmin'"
+      assertions:
+        - "oracle code_security_configuration matches every managed key (bypass reviewers as ids), converge"
+      needs: [target, "a plan with GitHub Advanced Security (Code Security, Secret Protection)", org_level, "an otterdog release >= 1.8.0.dev7"]
+
+  - id: code-security.repository-attachment
+    area: code-security
+    title: "repository code_security_configuration: the configuration attached to the repository (after creation; null keeps the attached one); the security settings it controls are not managed on the repository"
+    source: ["otterdog/models/repository.py:121", "otterdog/models/repository.py:612-620", "otterdog/models/repository.py:1478", "otterdog/models/repository.py:1621-1639", "otterdog/providers/github/rest/repo_client.py:329"]
+    model: repository
+    properties: [code_security_configuration]
+    operations: [add, modify, coerce, plan, converge]
+    min_plan: free
+    tier: cli
+    ui_only: false
+    priority: P1
+    status: partial
+    covered_by: [O-LPLAN-CODE-SECURITY, O-VAL-CODE-SECURITY, cli.code-security.configuration]
+    notes: "verified offline: '~ code_security_configuration = null -> \"<cfg>\"' (1 change); a null reference plans nothing; dependabot_alerts_enabled of an attached repository plans nothing (released setting) while an unattached repository plans '~ dependabot_alerts_enabled = true -> false'; an added repository with a configuration has no dependabot_alerts_enabled; an undefined (or differently cased) name is an error."
+    gap_outline:
+      scenario: cli.code-security.configuration
+      steps:
+        - "attach an EXISTING repository (unarchived first by otterdog when archived) to the configuration in a later step"
+      assertions:
+        - "oracle repo_code_security_configuration names the configuration; the repository security settings controlled by the configuration are not planned"
+      needs: [target, org_level, "an otterdog release >= 1.8.0.dev7"]
+
+  - id: validation.code-security
+    area: validation
+    title: "code security configuration validation: products required by a feature, free plan products of the same status, labeled runner without label, bypass reviewers (team, role, mode), settings without effect, defaults while default_code_security_configurations_disabled, two defaults for one visibility (#892)"
+    source: ["otterdog/models/organization_code_security_configuration.py:375-442", "otterdog/models/github_organization.py:411-429", "otterdog/models/repository.py:612-620"]
+    operations: [validate]
+    min_plan: free
+    tier: offline
+    ui_only: false
+    priority: P1
+    status: partial
+    covered_by: [O-VAL-CODE-SECURITY]
+    notes: "exact messages from main d9dac78, e.g. \"org_code_security_configuration[name=\\\"<n>\\\"] has 'code_scanning_default_setup' enabled while 'code_security' is disabled, GitHub requires 'code_security' to be enabled for it.\" and \"... is set as default for new 'public' repositories, while code security configuration '<other>' is already the default for them.\"; the model's enum and description length checks are unreachable (schema errors at load)."
+    gap_outline:
+      scenario: O-VAL-CODE-SECURITY
+      steps:
+        - "O-VAL-CODE-SECURITY declares fixed_in 1.8.0.dev7: it runs on SUTs containing #892 (branch:main, PR builds) and is skipped on release:latest"
+      assertions:
+        - "covered on the default SUT once a release contains #892"
+      needs: ["an otterdog release >= 1.8.0.dev7"]
+
+  - id: cli.local-apply.code-security-metadata
+    area: cli
+    title: "local-apply reads the code security configurations of the organization and the configuration of each repository from GitHub before its plan whenever the template defines them (#892): no offline local-apply any more"
+    source: ["otterdog/operations/local_apply.py:90-92", "otterdog/models/github_organization.py:238-249"]
+    operations: [run, error]
+    min_plan: free
+    tier: offline
+    ui_only: false
+    priority: P2
+    status: partial
+    covered_by: [tests/offline/test_cli_local_apply.py::test_local_apply_reads_code_security_configurations_from_github]
+    notes: "verified offline with main d9dac78: 'Cannot connect to host api.github.com:443' (exit 2) before any plan line; the offline local-apply tests hide newOrgCodeSecurityConfiguration from the vendored template (fixture local_apply_cli) to keep their prompt, credentials and hook checks on every SUT."
+    gap_outline:
+      scenario: tests/offline/test_cli_local_apply.py::test_local_apply_reads_code_security_configurations_from_github
+      steps:
+        - "the test skips on SUTs without #892 (release:latest v1.7.1)"
+      assertions:
+        - "covered on the default SUT once a release contains #892"
+      needs: ["an otterdog release >= 1.8.0.dev7"]
+
+  - id: secrets-variables.org-dependabot-codespaces-secrets
+    area: secrets-variables
+    title: "organization dependabot_secrets and codespaces_secrets (orgs.newOrgDependabotSecret, newOrgCodespacesSecret): like Actions secrets (visibility public == 'all' | private | selected, names, values), private allowed on every plan (#890)"
+    source: ["otterdog/models/organization_dependabot_secret.py:22-52", "otterdog/models/organization_codespaces_secret.py:22-52", "otterdog/models/organization_secret.py:27-110", "otterdog/providers/github/rest/secret_client.py:94-212"]
+    operations: [add, modify, remove, validate, plan, forced-update, converge, security]
+    min_plan: free
+    tier: cli
+    ui_only: false
+    priority: P1
+    status: partial
+    covered_by: [O-VAL-DEPENDABOT-CODESPACES-SECRETS, O-LPLAN-DEPENDABOT-CODESPACES-SECRETS, cli.secrets.dependabot-codespaces]
+    known_bugs: [KB-025, KB-026]
+    notes: "verified offline with main d9dac78: headers org_dependabot_secret[name=...] / org_codespaces_secret[name=...], the GITHUB_ prefix and uppercase errors, the visibility enum at load, 'private' validates on free (only org_secret is gated), the selected_repositories warning, '<DUMMY>', reference diffs, forced updates (4 changes per secret) and --only-secrets. A refused read now aborts plan, apply and import for every secret kind (KB-080's secrets part is fixed). cli.secrets.dependabot-codespaces has not run live yet."
+    gap_outline:
+      scenario: cli.secrets.dependabot-codespaces
+      file: scenarios/cli/secrets/dependabot-codespaces-secrets.yaml
+      steps:
+        - "run it on a test organization with branch:main (org_level), the admin token holding the Dependabot and Codespaces secrets permissions"
+      assertions:
+        - "oracle org_dependabot_secret, org_codespaces_secret, org_dependabot_secret_repos as written, absent after -d"
+      needs: [target, org_level, "an otterdog release >= 1.8.0.dev5", "Dependabot and Codespaces secrets permissions of the admin token (docs/setup-free-org.md)"]
+
+  - id: secrets-variables.repo-dependabot-codespaces-secrets
+    area: secrets-variables
+    title: "repository dependabot_secrets and codespaces_secrets (orgs.newRepoDependabotSecret, newRepoCodespacesSecret): name and value like repository Actions secrets (#890)"
+    source: ["otterdog/models/repo_dependabot_secret.py:22-55", "otterdog/models/repo_codespaces_secret.py:22-55", "otterdog/models/repository.py:133-138"]
+    operations: [add, modify, remove, validate, plan, converge, security]
+    min_plan: free
+    tier: cli
+    ui_only: false
+    priority: P1
+    status: partial
+    covered_by: [O-VAL-DEPENDABOT-CODESPACES-SECRETS, O-LPLAN-DEPENDABOT-CODESPACES-SECRETS, cli.secrets.dependabot-codespaces]
+    notes: "verified offline: repo_dependabot_secret[name=..., repository=<repo>] headers in local-plan; the validation headers name no repository (repo_codespaces_secret[name=\"...\"]), like repository Actions secrets."
+    gap_outline:
+      scenario: cli.secrets.dependabot-codespaces
+      steps:
+        - "the repository secrets of the live scenario (create, remove with -d)"
+      assertions:
+        - "oracle repo_dependabot_secret and repo_codespaces_secret present, then absent"
+      needs: [target, "an otterdog release >= 1.8.0.dev5"]
+
+  - id: validation.secret-names-uppercase
+    area: validation
+    title: "every kind of secret (Actions, Dependabot, Codespaces, environment) needs an uppercase name: a lowercase name is an error since #890 (accepted before, GitHub upper-cases it)"
+    source: ["otterdog/models/secret.py:69-74"]
+    operations: [validate]
+    min_plan: free
+    tier: offline
+    ui_only: false
+    priority: P2
+    status: covered
+    covered_by: [O-VAL-SECRETS, O-VAL-DEPENDABOT-CODESPACES-SECRETS]
+    notes: "O-VAL-SECRETS step lowercase-name records only; tests/offline/test_scenarios.py expect_secret_name_case asserts 'Validation succeeded' before #890 and \"Error: repo_secret[name=\\\"<lower>\\\"] has 'name' of value '<lower>' which is not uppercase, while only uppercase names are allowed for secrets.\" (1 error, exit 1) since."
+
+  - id: org-settings.immutable-releases
+    area: org-settings
+    title: "immutable_releases_enforced_repositories (all | none | selected) and immutable_releases_selected_repositories (compared without case, aliases resolved, duplicates dropped; only with 'selected') (#665)"
+    source: ["otterdog/models/organization_settings.py:71-72", "otterdog/models/organization_settings.py:98-99", "otterdog/models/organization_settings.py:159-181", "otterdog/models/github_organization.py:981-1005"]
+    model: org-settings
+    properties: [immutable_releases_enforced_repositories, immutable_releases_selected_repositories]
+    operations: [modify, validate, plan, converge]
+    min_plan: free
+    tier: cli
+    ui_only: false
+    priority: P2
+    status: partial
+    covered_by: [O-VAL-IMMUTABLE-RELEASES]
+    known_bugs: [KB-033]
+    notes: "verified offline (main d9dac78 and v1.7.1): the policy enum at load, the warning \"'immutable_releases_enforced_repositories' is set to 'all', but 'immutable_releases_selected_repositories' is set to '[...]', setting will be ignored.\", '~ immutable_releases_enforced_repositories = \"none\" -> \"selected\"' (2 changes with the list), ['<P>-APP', '<p>-app'] vs ['<p>-app'] plans nothing."
+    gap_outline:
+      scenario: cli.org.immutable-releases
+      file: scenarios/cli/org-settings/immutable-releases.yaml
+      steps:
+        - "org_level: policy 'selected' with a run repository, then 'none' (the baseline)"
+      assertions:
+        - "GET /orgs/{org}/settings/immutable-releases (+ /repositories) as written; converge"
+      needs: [target, org_level, "harness: oracle kind org_immutable_releases (GET /orgs/{org}/settings/immutable-releases)", "a plan offering immutable releases (402/403 leave it unset)"]
+
+  - id: repositories.immutable-releases
+    area: repositories
+    title: "repository immutable_releases_enabled (PUT/DELETE /repos/{o}/{r}/immutable-releases); not managed while the organization enforces it (#665)"
+    source: ["otterdog/models/repository.py:96", "otterdog/models/repository.py:374-375", "otterdog/models/repository.py:399-410", "otterdog/providers/github/rest/repo_client.py:94-128"]
+    model: repository
+    properties: [immutable_releases_enabled]
+    operations: [add, modify, coerce, plan, converge]
+    min_plan: free
+    tier: cli
+    ui_only: false
+    priority: P2
+    status: covered
+    covered_by: [O-VAL-IMMUTABLE-RELEASES, cli.repo.immutable-releases]
+    known_bugs: [KB-033]
+    notes: "offline: '~ immutable_releases_enabled = false -> true'; with the policy 'all' the repository setting plans nothing (coerced at load, so the documented Info never prints: KB-033 step); live: cli.repo.immutable-releases (fixed_in 1.7.0.dev58, runs on release:latest) enables then disables it through the oracle kind repo_immutable_releases (not run live yet)."
+
+  - id: repositories.pages-custom-domain
+    area: repositories
+    title: "gh_pages_cname (custom domain, null = github.io) and gh_pages_https_enforced (only with a custom domain) (#858)"
+    source: ["otterdog/models/repository.py:111-112", "otterdog/models/repository.py:723-735", "otterdog/models/repository.py:1770-1778"]
+    model: repository
+    properties: [gh_pages_cname, gh_pages_https_enforced]
+    operations: [modify, validate, plan, converge]
+    min_plan: free
+    tier: cli
+    ui_only: false
+    priority: P2
+    status: partial
+    covered_by: [O-VAL-PAGES-CNAME]
+    notes: "verified offline (main d9dac78 and v1.7.1): \"... has 'gh_pages_cname' set to value 'not a domain', which is not a valid domain name.\", \"... but a custom domain can not be a 'github.io' domain.\", '~ gh_pages_cname = null -> \"docs.<p>.invalid\"', https_enforced excluded from the diff without a domain and planned with one."
+    gap_outline:
+      scenario: cli.repo.pages-custom-domain
+      file: scenarios/cli/repo/repo-pages-custom-domain.yaml
+      steps:
+        - "a run repository with workflow pages and gh_pages_cname '<p>.<a domain the org controls>', then null"
+      assertions:
+        - "oracle pages {cname: ...}, then cname null; converge (https enforcement needs a valid certificate: not asserted)"
+      needs: [target, "a DNS name the test organization may point at GitHub Pages"]
+
+  - id: rulesets.pull-request.allowed-merge-methods
+    area: rulesets
+    title: "required_pull_request allowed_merge_methods (merge | squash | rebase, at least one, unique; template default all three) (#777)"
+    source: ["otterdog/models/ruleset.py:49-55", "otterdog/resources/schemas/ruleset.json:56-66"]
+    model: ruleset-pull-request
+    properties: [allowed_merge_methods]
+    operations: [add, modify, plan, converge]
+    min_plan: free
+    tier: cli
+    ui_only: false
+    priority: P2
+    status: partial
+    covered_by: [O-VAL-RULESETS, O-VAL-ORG-RULESETS, O-VAL-RULESET-NESTED]
+    notes: "the references to #777 of the ruleset scenarios declare the show and local-plan deltas that print allowed_merge_methods; no step asserts a changed list yet."
+    gap_outline:
+      scenario: cli.ruleset.pull-request
+      steps:
+        - "a step restricting allowed_merge_methods to ['squash'] on the run ruleset"
+      assertions:
+        - "plan '~ allowed_merge_methods', oracle repo_ruleset rules[pull_request].parameters.allowed_merge_methods == ['squash'], converge"
+      needs: [target]
+
+  - id: config.exclude-environments
+    area: config
+    title: "defaults.github.exclude_environments (regexes, re.match, case-sensitive): matching live environments that the configuration does not declare are ignored by plan, apply -d, import and show-live (#887)"
+    source: ["otterdog/config.py:308-318", "otterdog/utils.py:99-114", "otterdog/models/github_organization.py:1508-1526"]
+    operations: [config, import, plan]
+    min_plan: free
+    tier: cli
+    ui_only: false
+    priority: P2
+    status: gap
+    covered_by: []
+    notes: "not observable offline: local-plan loads both sides from files. Since #887 exclude_teams uses the same per-pattern matching (ExclusionPatterns)."
+    gap_outline:
+      scenario: tests/cli/test_org_config.py::test_excluded_environments_are_ignored
+      file: tests/cli/test_org_config.py
+      steps:
+        - "a run repository with an environment '<p>-excluded' created out of band (Mutator), the workspace's .otterdog-defaults.json setting exclude_environments ['^<p>-excluded$']"
+        - "plan and apply -d of the configuration without the environment; then import"
+      assertions:
+        - "no '- remove environment' for it, the environment still exists (oracle environment), the import does not write it; a control plan without the pattern removes it"
+      needs: [target, "available: workspace defaults override (like test_excluded_teams_are_neither_loaded_nor_configurable)", "an otterdog release >= 1.8.0.dev2"]
+
+  - id: config.exclude-teams.repository-permissions
+    area: config
+    title: "repository permissions of excluded teams (exclude_teams) are ignored unless the repository declares the team (#879)"
+    source: ["otterdog/models/github_organization.py:1411-1427", "otterdog/models/github_organization.py:1596-1601"]
+    operations: [config, plan, import]
+    min_plan: free
+    tier: cli
+    ui_only: false
+    priority: P2
+    status: gap
+    covered_by: []
+    notes: "live only (team permissions are read from GitHub); since #842 an undeclared team with access would otherwise be planned for removal."
+    gap_outline:
+      scenario: tests/cli/test_org_config.py::test_excluded_teams_keep_their_repository_access
+      steps:
+        - "an out-of-band run team with push access to a run repository, exclude_teams matching it in the workspace defaults override"
+      assertions:
+        - "the plan of the repository without the team plans nothing; declaring it in team_permissions manages it (change to 'pull' planned and applied)"
+      needs: [target, "identity admin (team access)", "an otterdog release >= 1.7.0.dev78"]
+
+  - id: cli.global.stats
+    area: cli
+    title: "--stats / OTTERDOG_STATS (GitHub API usage report on stderr) and --stats-file / OTTERDOG_STATS_FILE (JSON) of every StdCommand; -v logs one 'github api usage for organization' INFO line per organization (#881)"
+    source: ["otterdog/cli.py:122-144", "otterdog/cli.py:1050", "otterdog/providers/github/stats/report.py:83-120"]
+    operations: [run, config]
+    min_plan: free
+    tier: offline
+    ui_only: false
+    priority: P2
+    status: partial
+    covered_by: [tests/offline/test_cli_exit_codes.py::test_verbosity_levels]
+    notes: "verified offline with main d9dac78 and v1.7.1: 'INFO github api usage for organization '<id>': no requests' with -v, nothing without; observations replace the summary by <API-USAGE> (request counts vary between live runs; otterdog.output.API_USAGE_RE)."
+    gap_outline:
+      scenario: tests/offline/test_cli_stats.py::test_stats_report_and_file
+      file: tests/offline/test_cli_stats.py
+      steps:
+        - "validate --local --stats; validate --local --stats-file <scratch>/stats.json (OTTERDOG_STATS_FILE through extra_env); an unwritable --stats-file"
+      assertions:
+        - "stderr 'GitHub API usage · validate · 1 organization(s)' with REST/GraphQL/Total rows; the JSON has command, outcome 'completed', duration_seconds, total, apis, rate_limits, organizations; 'failed to write github api usage statistics' and an unchanged exit code"
+      needs: ["available: OtterdogCli.invoke(env=...)"]
+
+  - id: config.web-timeout
+    area: config
+    title: "OTTERDOG_WEB_TIMEOUT (milliseconds, default 10000): timeout of otterdog's web-UI pages (#880)"
+    source: ["otterdog/providers/github/web.py:41", "otterdog/providers/github/web.py:557"]
+    operations: [config]
+    min_plan: free
+    tier: web_ui
+    ui_only: true
+    priority: P2
+    status: gap
+    covered_by: []
+    notes: "read when web.py is imported, i.e. by every command that builds a provider (validate --local included): a non-integer value fails them with a bare \"invalid literal for int() with base 10\" (exit 2, by reading, not run)."
+    gap_outline:
+      scenario: tests/offline/test_config_credentials.py::test_web_timeout_must_be_an_integer
+      steps:
+        - "validate --local with OTTERDOG_WEB_TIMEOUT=abc (extra_env), then 20000"
+      assertions:
+        - "the observed outcome of the invalid value (today an int() error, exit 2), the valid one validates; the web-UI tier passes the variable to its login"
+      needs: ["available: OtterdogCli.invoke(env=...)"]
+
+  - id: webapp-runtime.playground-validation
+    area: webapp-runtime
+    title: "POST /playground/validate[?template=example] and /projects/<project>/playground/validate: the evaluated organization configuration is validated with otterdog; JSON rejections 400 (no JSON object), 413 (PLAYGROUND_VALIDATION_MAX_SIZE), 404 (unknown project), 503 (PLAYGROUND_MAX_CONCURRENT_VALIDATIONS) (#891)"
+    source: ["otterdog/webapp/home/routes.py:546-740", "otterdog/webapp/config.py:57-69", "otterdog/webapp/config.py:135-138"]
+    inventory: ["endpoint:POST /playground/validate", "endpoint:POST /projects/<project_name>/playground/validate"]
+    operations: [api, validate, security]
+    min_plan: free
+    tier: webapp
+    ui_only: false
+    priority: P2
+    status: partial
+    covered_by: [tests/offline/test_webapp_contract.py::test_playground_validation_refuses_malformed_requests]
+    notes: "verified offline against the main d9dac78 image: 400 {\"error\": \"an evaluated configuration of an organization is expected\"} (text/plain, invalid JSON, a list), 413 {\"error\": \"the configuration must not exceed 5242880 bytes\"}, 404 {\"error\": \"unknown project\"}, each logged 'rejecting a validation for ... by an anonymous user'. The test skips on images without #891."
+    gap_outline:
+      scenario: tests/webapp/test_runtime.py::test_playground_validates_the_configuration
+      steps:
+        - "POST the evaluated configuration of the test organization (otterdog show --json-like evaluation of the config repo) to /projects/<project>/playground/validate"
+      assertions:
+        - "200 {\"problems\": [...]} without error problems, like otterdog validate; a nested ruleset problem names the ruleset (repo_ruleset[name=...])"
+      needs: [webapp, "an otterdog release >= 1.8.0.dev6"]
+
+  - id: webapp-runtime.playground-pages
+    area: webapp-runtime
+    title: "GET /playground (instance or ?template=example template), /admin/template-impact and its /configurations JSON (projects using the default base template); the project playground is a CodeMirror page fed by a JSON script (#878)"
+    source: ["otterdog/webapp/home/routes.py:484-545", "otterdog/webapp/home/routes.py:1045-1091", "otterdog/webapp/tasks/fetch_config.py:58-67"]
+    inventory: ["page:/playground", "page:/admin/template-impact", "page:/admin/template-impact/configurations"]
+    operations: [api, state]
+    min_plan: free
+    tier: webapp
+    ui_only: false
+    priority: P2
+    status: gap
+    covered_by: []
+    notes: "each page reads the otterdog.json of the instance from GitHub (no offline answer without seeding Valkey). tests/webapp/test_runtime.py reads the template of the project playground from its playground-data script since #878."
+    gap_outline:
+      scenario: tests/webapp/test_runtime.py::test_playground_and_template_impact_pages
+      steps:
+        - "GET /playground, /playground?template=example, /admin/template-impact, /admin/template-impact/configurations"
+      assertions:
+        - "playground-data names the instance template (templateFiles), the example template under otterdog/resources/defaults, the configurations JSON lists the test project with its jsonnet"
+      needs: [webapp, "an otterdog release >= 1.7.0.dev75"]
+
+  - id: webapp-runtime.installation-refresh-bound
+    area: webapp-runtime
+    title: "installation refresh tasks run behind MAX_CONCURRENT_INSTALLATION_TASKS per worker (default 10, checked at boot like the playground limits); /internal/init refreshes every installation once; HYPERCORN_WORKERS sets the workers (#843)"
+    source: ["otterdog/webapp/config.py:57-69", "otterdog/webapp/config.py:131", "otterdog/webapp/db/service.py:316-333", "otterdog/webapp/internal/routes.py:36-47", "docker/start-webapp:1-10"]
+    operations: [task, config]
+    min_plan: free
+    tier: webapp
+    ui_only: false
+    priority: P2
+    status: gap
+    covered_by: []
+    notes: "the harness passes HYPERCORN_WORKERS (E2E_HYPERCORN_WORKERS) since the image's --workers wins over hypercorn-cfg.toml; MAX_CONCURRENT_INSTALLATION_TASKS and the PLAYGROUND_* limits are restart_webapp overrides."
+    gap_outline:
+      scenario: tests/offline/test_webapp_runtime.py::test_positive_limits_are_checked_at_boot
+      steps:
+        - "restart_webapp with MAX_CONCURRENT_INSTALLATION_TASKS=0, then PLAYGROUND_VALIDATION_MAX_SIZE=0"
+      assertions:
+        - "the webapp refuses to start with 'MAX_CONCURRENT_INSTALLATION_TASKS must be at least 1, got 0' (the exit status is KB-061); one FetchConfigTask per organization after /internal/init (live tier)"
+      needs: ["available: WebappStack.restart_webapp(env)", "an otterdog release >= 1.7.0.dev48"]
+
+  - id: regression.842-team-permission-removal
+    area: regressions
+    title: "#842 (c1cdc54): removing an entry of a dict setting (team_permissions, repository custom_properties) is planned and applied (KB-005)"
+    source: ["otterdog/utils.py:131-133", "otterdog/models/repository.py:1782-1872"]
+    operations: [remove, modify, plan]
+    min_plan: free
+    tier: cli
+    ui_only: false
+    priority: P1
+    status: covered
+    covered_by: [O-LPLAN-DICT-ONE-WAY, cli.kb.team-permissions-removal]
+    known_bugs: [KB-005]
+    notes: "KB-005 fixed in 1.7.0.dev76: the steps that declared it are strict from that version on (release:latest included) and expected failures before."
+
+  - id: regression.878-schema-enums
+    area: regressions
+    title: "#878 (a26b543): the JSON schemas enumerate the allowed values (custom property value_type, environment deployment_branch_policy, role base_role, default_repository_permission, merge commit settings, Pages, code scanning, ruleset target/enforcement/merge method, secret and variable visibility, webhook content_type/insecure_ssl, workflow settings): an invalid value is a load error"
+    source: ["otterdog/resources/schemas/repository.json:38-41", "otterdog/resources/schemas/ruleset.json:4-8", "otterdog/resources/schemas/settings.json:45-50"]
+    operations: [validate, error]
+    min_plan: free
+    tier: offline
+    ui_only: false
+    priority: P1
+    status: covered
+    covered_by: [O-VAL-CUSTOM-PROPERTIES, O-VAL-ENVIRONMENTS, O-VAL-ORG-ROLES, O-VAL-ORG-SETTINGS, O-VAL-MERGE-SETTINGS, O-VAL-PAGES, O-VAL-REPO, O-VAL-RULESETS, O-VAL-ORG-SECRETS, O-VAL-WEBHOOKS, O-VAL-ORG-WORKFLOWS, O-VAL-REPO-WORKFLOWS]
+    known_bugs: [KB-028, KB-029, KB-033, KB-038]
+    notes: "ENUM_SCHEMA_STEPS of tests/offline/test_scenarios.py: model errors before #878, \"failed to load configuration: invalid value at '<path>': '<value>' is not one of [...]\" (exit 1) since; the KB-029 crash and the KB-038 set ordering are unreachable since (fixed in 1.7.0.dev75), the KB-028 and KB-033 parts on enum values too."
+
+  - id: regression.854-885-cost-related
+    area: regressions
+    title: "#854 (0229baa) private repository creation and conversion are cost-related; #885 (529ca89) only a max_cache_size_gb change of the workflow settings is cost-related (the webapp's cost warning and auto-merge exclusion)"
+    source: ["otterdog/models/repository.py:245-266", "otterdog/models/__init__.py:671-686", "otterdog/webapp/tasks/validate_pull_request.py:164-205"]
+    operations: [comment, permission]
+    min_plan: free
+    tier: webapp
+    ui_only: false
+    priority: P2
+    status: gap
+    covered_by: []
+    notes: "only the webapp consumes the flag ('some of the requested changes may incur costs, need review by the designated team', supports_auto_merge false); the CLI never prints it. W-PR-WARNINGS covers the cache-size case."
+    gap_outline:
+      scenario: tests/webapp/test_pr_validation.py::test_cost_related_changes
+      steps:
+        - "a PR creating a private run repository (team plan), a PR changing the run repository's allowed_actions only"
+      assertions:
+        - "the first validation comment has the cost warning and /otterdog merge refuses ('may incur costs'); the second has no cost warning and is auto-mergeable"
+      needs: [webapp, "team plan (private repositories)", "an otterdog release >= 1.8.0.dev1"]
+
+  - id: regression.889-packaged-defaults
+    area: regressions
+    title: "#889 (3bfd24d): the standard template moved from examples/template to otterdog/resources/defaults (base_template URL and vendor import path change for configurations on main)"
+    source: ["otterdog/resources/defaults/otterdog-defaults.libsonnet:1-552", "examples/otterdog.json:1-32"]
+    operations: [config]
+    min_plan: free
+    tier: offline
+    ui_only: false
+    priority: P0
+    status: covered
+    covered_by: [tests/offline/test_scenarios.py::test_sut_template_can_be_vendored]
+    notes: "the harness takes the template of a SUT from otterdog/resources/defaults when it exists, else examples/template (sut.template.template_source_dir), and points the upstream base template URL there; every offline item of branch:main depends on it."
 
   # ==================================================================================================================
   # pending: unmerged otterdog changes the battery already targets ("ws:" = a checkout of the maintainer's workspace)

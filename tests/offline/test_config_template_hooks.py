@@ -30,7 +30,7 @@ from otterdog_e2e.scenarios.offline import (
     OfflineConfigRenderer,
     offline_run_context,
 )
-from otterdog_e2e.sut.template import vendor_template
+from otterdog_e2e.sut.template import OFFLINE_LOCAL_APPLY_HIDDEN, hide_template_functions, vendor_template
 
 pytestmark = [pytest.mark.offline, pytest.mark.tags("offline", "template")]
 
@@ -126,6 +126,8 @@ def test_pre_add_object_hook_runs_for_every_addition(offline_cli: OtterdogCli, t
     )
     workspace.write_base_config(render_org(workspace, base))
     workspace.write_org_config(render_org(workspace, head))
+    # local-apply reads code security configurations from GitHub when the template defines them (#892)
+    hide_template_functions(workspace.org_dir, workspace.template, OFFLINE_LOCAL_APPLY_HIDDEN)
 
     plan = offline_cli.local_plan()
     parsed = plan.plan()

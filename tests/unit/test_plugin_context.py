@@ -1048,14 +1048,22 @@ class StubPublisher:
 
 
 @pytest.fixture
-def templates(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
-    """Fake resolution (pr: untrusted, release: trusted) and the stub publisher."""
+def templates(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> dict[str, Any]:
+    """Fake resolution (pr: untrusted, release: trusted, its source with the v1.6.1 template layout) and the stub
+    publisher."""
+    release_source = tmp_path / "release-source"
+    (release_source / "examples" / "template").mkdir(parents=True)
+    (release_source / "examples" / "template" / "otterdog-defaults.libsonnet").write_text("{}\n")
     resolved = {
         "pr:792@" + fake_sha("pr"): SimpleNamespace(
             spec=SimpleNamespace(kind="pr"), label="pr792-abc1234", sha=fake_sha("pr"), trusted=False
         ),
         "release:latest": SimpleNamespace(
-            spec=SimpleNamespace(kind="release"), label="v1.6.1", sha=fake_sha("v1.6.1"), trusted=True
+            spec=SimpleNamespace(kind="release"),
+            label="v1.6.1",
+            sha=fake_sha("v1.6.1"),
+            trusted=True,
+            source_dir=release_source,
         ),
     }
     StubPublisher.created = []
@@ -1076,6 +1084,7 @@ def test_template_publishing_needs_the_lease_and_references_its_tag(
     assert StubPublisher.created == []
     upstream = context.template_for("reset")  # release SUT: the upstream template, no lease, no publisher
     assert upstream.repo_name == "otterdog" and upstream.tag is None and StubPublisher.created == []
+    assert upstream.file == "examples/template/otterdog-defaults.libsonnet"
     context.acquire_lease(heartbeat=False)
     template = context.template_for("head")
     (publisher,) = StubPublisher.created

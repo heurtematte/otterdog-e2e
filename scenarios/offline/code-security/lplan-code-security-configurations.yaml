@@ -1,0 +1,98 @@
+# Offline tier (battery, plan): diff of code security configurations and of their repositories (eclipse-csi/otterdog#892).
+id: O-LPLAN-CODE-SECURITY
+tier: offline
+title: local-plan diffs code security configurations and releases the repository settings they control
+description: >-
+  Since #892 (main after v1.7.1) local-plan compares the code_security_configurations of the organization by name
+  (added, changed, removed) and the configuration a repository names. A repository attached to a configuration no
+  longer manages the security settings that configuration controls (dependabot_alerts_enabled and the other released
+  settings become unset), so changing them plans nothing, while a repository without configuration still plans them;
+  a null reference keeps whatever is attached (never a change). Older SUTs skip it (fixed_in).
+priority: P1
+tags: [offline, code-security, repo]
+observe: true
+fixed_in: 1.8.0.dev7
+variables: {plan: free}
+references:
+  - pr: 892
+    note: >-
+      "feat(org): manage code security configurations": configurations and repository references are planned; the
+      template of older SUTs has no newOrgCodeSecurityConfiguration, so the scenario skips them (fixed_in).
+steps:
+  - name: description-changed
+    base_fragments:
+      extra: ["code_security_configurations: [orgs.newOrgCodeSecurityConfiguration('{{ p }}-cfg') { description: 'before' }]"]
+    fragments:
+      extra: ["code_security_configurations: [orgs.newOrgCodeSecurityConfiguration('{{ p }}-cfg') { description: 'after' }]"]
+    plan:
+      expect: changes
+      counts: {add: 0, change: 1, delete: 0}
+      contains:
+        - '~ org_code_security_configuration[name="{{ p }}-cfg"] {'
+        - '~ description = "before" -> "after"'
+  - name: default-changed
+    base_fragments:
+      settings: ["default_code_security_configurations_disabled: false"]
+      extra: ["code_security_configurations: [orgs.newOrgCodeSecurityConfiguration('{{ p }}-cfg')]"]
+    fragments:
+      settings: ["default_code_security_configurations_disabled: false"]
+      extra: ["code_security_configurations: [orgs.newOrgCodeSecurityConfiguration('{{ p }}-cfg') { default_for_new_repos: 'public' }]"]
+    plan:
+      expect: changes
+      counts: {add: 0, change: 1, delete: 0}
+      contains:
+        - '~ org_code_security_configuration[name="{{ p }}-cfg"] {'
+        - '~ default_for_new_repos = "none" -> "public"'
+  - name: configuration-removed
+    base_fragments:
+      extra: ["code_security_configurations: [orgs.newOrgCodeSecurityConfiguration('{{ p }}-gone')]"]
+    fragments: {}
+    plan:
+      expect: changes
+      counts: {add: 0, change: 0, delete: 1}
+      contains: ['- remove org_code_security_configuration[name="{{ p }}-gone"] {']
+  - name: repository-attached
+    base_fragments:
+      extra: &config ["code_security_configurations: [orgs.newOrgCodeSecurityConfiguration('{{ p }}-cfg') { dependabot_alerts: 'enabled' }]"]
+      repositories: ["orgs.newRepo('{{ p }}-app')"]
+    fragments:
+      extra: *config
+      repositories: ["orgs.newRepo('{{ p }}-app') { code_security_configuration: '{{ p }}-cfg' }"]
+    plan:
+      expect: changes
+      counts: {add: 0, change: 1, delete: 0}
+      contains:
+        - '~ repository[name="{{ p }}-app"] {'
+        - '~ code_security_configuration = null -> "{{ p }}-cfg"'
+      not_contains: [dependabot_alerts_enabled]
+  - name: reference-dropped
+    base_fragments:
+      extra: *config
+      repositories: ["orgs.newRepo('{{ p }}-app') { code_security_configuration: '{{ p }}-cfg' }"]
+    fragments:
+      extra: *config
+      repositories: ["orgs.newRepo('{{ p }}-app')"]
+    plan:  # a null reference keeps the configuration attached on GitHub: nothing to change
+      expect: noop
+      counts: {add: 0, change: 0, delete: 0}
+  - name: released-setting-changed
+    base_fragments:
+      extra: *config
+      repositories: ["orgs.newRepo('{{ p }}-app') { code_security_configuration: '{{ p }}-cfg', dependabot_alerts_enabled: true }"]
+    fragments:
+      extra: *config
+      repositories: ["orgs.newRepo('{{ p }}-app') { code_security_configuration: '{{ p }}-cfg', dependabot_alerts_enabled: false }"]
+    plan:  # dependabot_alerts_enabled is controlled by the attached configuration
+      expect: noop
+      counts: {add: 0, change: 0, delete: 0}
+  - name: setting-changed-without-configuration
+    base_fragments:
+      extra: *config
+      repositories: ["orgs.newRepo('{{ p }}-app') { dependabot_alerts_enabled: true }"]
+    fragments:
+      extra: *config
+      repositories: ["orgs.newRepo('{{ p }}-app') { dependabot_alerts_enabled: false }"]
+    plan:
+      expect: changes
+      counts: {add: 0, change: 1, delete: 0}
+      contains: ['~ dependabot_alerts_enabled = true -> false']

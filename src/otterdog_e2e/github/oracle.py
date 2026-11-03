@@ -409,6 +409,27 @@ class Oracle:
         path = f"/orgs/{self._org}/actions/secrets/{_q(name)}/repositories"
         return self._selected_repositories("org_secret_repositories", (name,), path)
 
+    def org_dependabot_secrets(self) -> list[dict[str, Any]]:
+        """GET /orgs/{org}/dependabot/secrets (item_key secrets)."""
+        return self._list("org_dependabot_secrets", (), f"/orgs/{self._org}/dependabot/secrets", item_key="secrets")
+
+    def org_codespaces_secrets(self) -> list[dict[str, Any]]:
+        """GET /orgs/{org}/codespaces/secrets (item_key secrets)."""
+        return self._list("org_codespaces_secrets", (), f"/orgs/{self._org}/codespaces/secrets", item_key="secrets")
+
+    def org_dependabot_secret(self, name: str) -> dict[str, Any] | None:
+        """GET /orgs/{org}/dependabot/secrets/{name} (managed by otterdog since eclipse-csi/otterdog#890)."""
+        return self._get(f"/orgs/{self._org}/dependabot/secrets/{_q(name)}")
+
+    def org_dependabot_secret_repositories(self, name: str) -> list[str]:
+        """Names of the selected repositories of an org Dependabot secret."""
+        path = f"/orgs/{self._org}/dependabot/secrets/{_q(name)}/repositories"
+        return self._selected_repositories("org_dependabot_secret_repositories", (name,), path)
+
+    def org_codespaces_secret(self, name: str) -> dict[str, Any] | None:
+        """GET /orgs/{org}/codespaces/secrets/{name} (managed by otterdog since eclipse-csi/otterdog#890)."""
+        return self._get(f"/orgs/{self._org}/codespaces/secrets/{_q(name)}")
+
     def org_variables(self) -> list[dict[str, Any]]:
         """GET /orgs/{org}/actions/variables (per_page 30)."""
         path = f"/orgs/{self._org}/actions/variables"
@@ -644,6 +665,20 @@ class Oracle:
         """{enabled} of GET /repos/{org}/{repo}/vulnerability-alerts (204 enabled, 404 disabled; None: no repo)."""
         return self._enabled_flag(repo, f"{self._repo(repo)}/vulnerability-alerts")
 
+    def repo_code_security_configuration(self, repo: str) -> dict[str, Any] | None:
+        """GET /repos/{org}/{repo}/code-security-configuration: {status, configuration} of the attached configuration
+        (eclipse-csi/otterdog#892); 204 (none attached) -> {status: None, configuration: None}; None on 404."""
+        response = self.http.request("GET", f"{self._repo(repo)}/code-security-configuration", allow=(404,))
+        if response.status_code == 404:
+            return None
+        body = self._body(response)
+        return dict(body) if isinstance(body, dict) else {"status": None, "configuration": None}
+
+    def repo_immutable_releases(self, repo: str) -> dict[str, Any] | None:
+        """GET /repos/{org}/{repo}/immutable-releases: {enabled, enforced_by_owner}; 404 (not enabled) ->
+        {enabled: False}; None: no repository (eclipse-csi/otterdog#665)."""
+        return self._enabled_flag(repo, f"{self._repo(repo)}/immutable-releases")
+
     def repo_automated_security_fixes(self, repo: str) -> dict[str, Any] | None:
         """GET /repos/{org}/{repo}/automated-security-fixes: {enabled, paused}; 404 (not enabled) -> {enabled: False};
         None: no repository."""
@@ -767,6 +802,14 @@ class Oracle:
     def repo_secret(self, repo: str, name: str) -> dict[str, Any] | None:
         """GET /repos/{org}/{repo}/actions/secrets/{name}."""
         return self._get(f"{self._repo(repo)}/actions/secrets/{_q(name)}")
+
+    def repo_dependabot_secret(self, repo: str, name: str) -> dict[str, Any] | None:
+        """GET /repos/{org}/{repo}/dependabot/secrets/{name} (eclipse-csi/otterdog#890)."""
+        return self._get(f"{self._repo(repo)}/dependabot/secrets/{_q(name)}")
+
+    def repo_codespaces_secret(self, repo: str, name: str) -> dict[str, Any] | None:
+        """GET /repos/{org}/{repo}/codespaces/secrets/{name} (eclipse-csi/otterdog#890)."""
+        return self._get(f"{self._repo(repo)}/codespaces/secrets/{_q(name)}")
 
     def repo_variables(self, name: str) -> list[dict[str, Any]]:
         """GET /repos/{org}/{name}/actions/variables (per_page 30)."""

@@ -256,17 +256,35 @@ def test_plan_without_github_exits_2(vendored_cli: OtterdogCli) -> None:
     assert plan.aborted and plan.add is None and "planning aborted" not in text, tail(result)
 
 
+# eclipse-csi/otterdog#881 (v1.7.0): -v logs the GitHub API usage of every organization at INFO, the only logger line
+# printed below -vv ("github api usage for organization 'e2e-offline': no requests" offline)
+API_USAGE_LINE = "github api usage for organization '"
+
+
 def logger_levels(result: CliResult) -> set[str]:
-    """The levels of the logger lines printed on stdout (``DEBUG  <message>``, ``TRACE  <message>``, ...)."""
+    """The levels of the logger lines printed on stdout (``DEBUG  <message>``, ``TRACE  <message>``, ...), the API
+    usage line of #881 left out."""
     levels = {"TRACE", "DEBUG", "INFO", "WARNING", "ERROR"}
-    return {line.split(" ", 1)[0] for line in strip_ansi(result.stdout).splitlines() if line.split(" ", 1)[0] in levels}
+    return {
+        line.split(" ", 1)[0]
+        for line in strip_ansi(result.stdout).splitlines()
+        if line.split(" ", 1)[0] in levels and API_USAGE_LINE not in line
+    }
+
+
+def api_usage_lines(result: CliResult) -> list[str]:
+    """The INFO lines of #881 reporting the GitHub API usage of an organization."""
+    return [
+        line for line in strip_ansi(result.stdout).splitlines() if line.startswith("INFO") and API_USAGE_LINE in line
+    ]
 
 
 @pytest.mark.scenario("O-VERBOSITY")
 def test_verbosity_levels(vendored_cli: OtterdogCli) -> None:
     """Without -v the Info of a dummy secret is only counted ('in order to print validation infos ...'); -v prints
     the Info box and drops the hint; -vv adds DEBUG logger lines and -vvv TRACE lines; the result is the same at every
-    level. local-plan counts the hidden Info ('there have been 1 validation infos ...') and prints it with -v."""
+    level (#881 adds one INFO line on the API usage from -v on, 'no requests' offline). local-plan counts the hidden
+    Info ('there have been 1 validation infos ...') and prints it with -v."""
     workspace = vendored_cli.workspace
     workspace.write_org_config(render_org(workspace, DUMMY_SECRET))
     results = {flags: validate(vendored_cli, DUMMY_SECRET, *flags) for flags in ((), ("-v",), ("-vv",), ("-vvv",))}
@@ -276,6 +294,9 @@ def test_verbosity_levels(vendored_cli: OtterdogCli) -> None:
     assert INFOS_HINT in text_of(quiet) and DUMMY_INFO not in text_of(quiet), tail(quiet)
     assert DUMMY_INFO in text_of(info) and INFOS_HINT not in text_of(info), tail(info)
     assert (logger_levels(quiet), logger_levels(info)) == (set(), set()), "no logger line below -vv"
+    assert api_usage_lines(quiet) == [], "no API usage line without -v"
+    for line in api_usage_lines(info):  # SUTs with #881 only
+        assert line.split(API_USAGE_LINE, 1)[1].startswith("e2e-offline': no requests"), line
     assert "DEBUG" in logger_levels(debug) and "TRACE" not in logger_levels(debug), logger_levels(debug)
     assert {"DEBUG", "TRACE"} <= logger_levels(trace), logger_levels(trace)
 

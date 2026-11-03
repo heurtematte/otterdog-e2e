@@ -22,7 +22,7 @@ literal (or a module constant), e.g. `@pytest.mark.scenario("W-PR-STALE-SNAPSHOT
 | `note` | `""` | what the change did to this behaviour, the known-bad version, what must not change |
 | `expected_deltas` | `[]` | deltas the change causes in THIS scenario between base and head (below) |
 | `base` | `null` | differential base of the change (`sha:<hex>`, `tag:v1.6.1`, `branch:main`, `release:latest`; never `pr:` or `dirty:`); default: the merge base of the pin (`--base-sut auto`) |
-| `template` | `own` | `own` (each side vendors its own `examples/template`), `head` or `base` (both sides use that side's template) |
+| `template` | `own` | `own` (each side vendors its own standard template: `otterdog/resources/defaults`, or `examples/template` up to v1.7.1), `head` or `base` (both sides use that side's template) |
 
 The model refuses unknown keys, wrong types, a step pattern matching no step of the scenario, a `step` in a Python
 test, duplicate changes or deltas; two references of one change with different `base` or `template` values are an

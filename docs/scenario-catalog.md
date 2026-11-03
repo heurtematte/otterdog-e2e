@@ -3,8 +3,8 @@
 Status values:
 
 - **verified**: implemented, and passed in a real run of this build. That covers the offline tiers against real
-  otterdog SUTs: `release:latest` (v1.6.1), `sha:9bdeb75`, `sha:b5f7bb1`, the untrusted `sha:d0d3b08` (docker
-  runtime) and a `dirty:` local checkout;
+  otterdog SUTs: `release:latest` (v1.6.1, then v1.7.1), `sha:9bdeb75`, `sha:b5f7bb1`, `branch:main` (d9dac78), the
+  untrusted `sha:d0d3b08` (docker runtime) and a `dirty:` local checkout;
 - **implemented**: the scenario or test exists, loads, is collected and skips cleanly without a target. It needs a
   live test organization (target, App, docker) and has not run against one yet;
 - **harness**: covered by a harness feature rather than by a scenario (the code exists in `src/otterdog_e2e`);
@@ -14,6 +14,10 @@ Status values:
 
 Priorities: P0 must run in the `pr-fast` lane, P1 in `nightly-full`, P2 when time allows. The "Sources" column lists
 the research scenario ids the entry was derived from (deduplicated); several research items often became one entry.
+
+To browse the scenarios one by one (what each step writes, runs and expects, the code and the context), use the
+[scenario explorer](https://heurtematte.github.io/otterdog-e2e/scenarios/) of the documentation site, generated from
+the sources.
 
 This catalog lists scenarios. The feature view is the [coverage matrix](coverage-matrix.md), generated from
 `scenarios/coverage.yaml`: every otterdog feature with its status (covered, partial, gap), the scenarios and tests
@@ -178,7 +182,8 @@ logins (they could lock the bot out).
 The battery written against the [coverage matrix](coverage-matrix.md): 226 scenario ids beyond the v1
 scenarios above (generated from the scenario files, the test markers and `scenarios/coverage.yaml`; the last column
 lists the features whose `covered_by` names the item). Offline items are **verified**: they ran green, or as
-expected failures of a registered known bug, on `release:latest` (v1.6.1) and `sha:9bdeb75`. Live items are
+expected failures of a registered known bug, on `release:latest` (v1.6.1, then v1.7.1), `sha:9bdeb75` and
+`branch:main` (d9dac78; items gated by `fixed_in` skip on older SUTs). Live items are
 **implemented**: they load, are collected and skip cleanly without a target, and the steps of the live YAML
 scenarios pass the offline scenario lint where they can run offline; they have not run against a test organization
 yet. Known-bug items assert the correct behaviour and run as non-strict expected failures while the bug is open
@@ -236,6 +241,13 @@ yet. Known-bug items assert the correct behaviour and run as non-strict expected
 | `O-VAL-SECRETS` | Secret names and values are validated at every level | P1 | verified | `offline/secrets/val-secrets.yaml` | `config.secret-references`, `validation.secrets` |
 | `O-VAL-VARIABLES` | Repository and environment variable names are validated | P1 | verified | `offline/variables/val-variables.yaml` | `validation.variables` |
 | `O-VAL-WEBHOOKS` | Webhook content type, SSL flag and secret notices are validated | P1 | verified | `offline/webhooks/val-webhooks.yaml` | `validation.webhooks` |
+| `O-VAL-CODE-SECURITY` | Code security configurations and the repositories referencing them are validated | P1 | verified (main d9dac78; skipped before 1.8.0.dev7) | `offline/code-security/val-code-security-configurations.yaml` | `code-security.configuration.lifecycle`, `code-security.configuration.settings`, `code-security.repository-attachment`, `validation.code-security` |
+| `O-LPLAN-CODE-SECURITY` | local-plan diffs code security configurations and releases the repository settings they control | P1 | verified (main d9dac78; skipped before 1.8.0.dev7) | `offline/code-security/lplan-code-security-configurations.yaml` | `code-security.configuration.lifecycle`, `code-security.configuration.settings`, `code-security.repository-attachment` |
+| `O-VAL-DEPENDABOT-CODESPACES-SECRETS` | Dependabot and Codespaces secrets are validated like Actions secrets at organization and repository level | P1 | verified (main d9dac78; skipped before 1.8.0.dev5) | `offline/secrets/val-dependabot-codespaces-secrets.yaml` | `secrets-variables.org-dependabot-codespaces-secrets`, `secrets-variables.repo-dependabot-codespaces-secrets`, `validation.secret-names-uppercase` |
+| `O-LPLAN-DEPENDABOT-CODESPACES-SECRETS` | local-plan diffs Dependabot and Codespaces secrets as objects of their own kind | P1 | verified (main d9dac78; skipped before 1.8.0.dev5) | `offline/secrets/lplan-dependabot-codespaces-secrets.yaml` | `secrets-variables.org-dependabot-codespaces-secrets`, `secrets-variables.repo-dependabot-codespaces-secrets` |
+| `O-VAL-IMMUTABLE-RELEASES` | Immutable releases are validated and planned at organization and repository level | P2 | verified (v1.7.1, main d9dac78) | `offline/org-settings/val-immutable-releases.yaml` | `org-settings.immutable-releases`, `repositories.immutable-releases` |
+| `O-VAL-PAGES-CNAME` | The custom domain of GitHub Pages is validated and planned | P2 | verified (v1.7.1, main d9dac78) | `offline/repo/val-pages-custom-domain.yaml` | `repositories.pages-custom-domain` |
+| `O-SHOW-CODE-SCANNING-LANGUAGES` | The deprecated code scanning language javascript-typescript is loaded as javascript and typescript | P2 | verified (main d9dac78; skipped before 1.8.0.dev3) | `offline/repo/show-code-scanning-languages.yaml` | - |
 
 ### Live CLI scenarios (`scenarios/cli`)
 
@@ -286,6 +298,9 @@ yet. Known-bug items assert the correct behaviour and run as non-strict expected
 | `cli.repo.visibility` | Switch an existing repository between public and private | P1 | implemented | `cli/repo/repo-visibility.yaml` | `repositories.visibility-forking` |
 | `cli.repo.webhook-secret` | Repository webhook secrets (plain value, dummy, --update-webhooks, removal) | P1 | implemented | `cli/webhooks/repo-webhook-secret.yaml` | `cli.plan.update-webhooks`, `webhooks.repo.secret` |
 | `cli.repo.webhook-settings` | Repository webhook settings (events, content_type, active, insecure_ssl) | P1 | implemented | `cli/webhooks/repo-webhook-settings.yaml` | `webhooks.repo.settings` |
+| `cli.code-security.configuration` | Code security configuration (create, attach to a new repository, change, delete) | P1 | implemented (fixed_in 1.8.0.dev7, lint-clean on main d9dac78) | `cli/code-security/configuration.yaml` | `code-security.configuration.lifecycle`, `code-security.configuration.settings`, `code-security.repository-attachment` |
+| `cli.secrets.dependabot-codespaces` | Dependabot and Codespaces secrets (organization and repository, visibility, removal) | P1 | implemented (fixed_in 1.8.0.dev5, lint-clean on main d9dac78) | `cli/secrets/dependabot-codespaces-secrets.yaml` | `secrets-variables.org-dependabot-codespaces-secrets`, `secrets-variables.repo-dependabot-codespaces-secrets` |
+| `cli.repo.immutable-releases` | Immutable releases of a repository (enabled at creation, then disabled) | P2 | implemented (fixed_in 1.7.0.dev58, lint-clean on main d9dac78) | `cli/repo/immutable-releases.yaml` | `repositories.immutable-releases` |
 
 ### Regressions (tag `regression`, in `scenarios/cli/<domain>/`)
 
@@ -340,6 +355,8 @@ yet. Known-bug items assert the correct behaviour and run as non-strict expected
 | `O-WEB-HOOK-ERROR` | MongoDB stopped: a pull_request delivery answers 500 (with #775 the hook failure is logged with the delivery context), /internal/check 500 {} and /index the... | - | verified | `tests/offline/test_webapp_runtime.py` (1 test) | `receiver.hook-exception`, `webapp-runtime.internal-unknown` |
 | `O-WEB-LOGIN-REQUIRED` | With a (dummy) OAuth client the webapp initializes its login manager: /myprojects without a session answers 401 with the 'Error 401 - Access Denied' page... | - | verified | `tests/offline/test_webapp_runtime.py` (1 test) | `webapp-runtime.login-required` |
 | `O-WEB-ROUTES` | / redirects to /index; /&lt;name&gt;[.html] redirects to the page of the endpoint &lt;name&gt; | - | verified | `tests/offline/test_webapp_contract.py` (8 tests) | `webapp-runtime.pages-public`, `webapp-runtime.api-graphql`, `webapp-runtime.pages-admin`, `webapp-runtime.internal-unknown`, `webapp-runtime.api-statistics` |
+| `O-LOCAL-APPLY-CODE-SECURITY` | With the full template, a SUT containing #892 reads the code security configurations from GitHub before printing the plan of local-apply | - | verified (main d9dac78; skipped before #892) | `tests/offline/test_cli_local_apply.py` (1 test) | `cli.local-apply.code-security-metadata` |
+| `O-WEB-PLAYGROUND-VALIDATE` | The validation endpoints of the playground answer JSON errors before any GitHub call | - | verified (main d9dac78 image; skipped before #891) | `tests/offline/test_webapp_contract.py` (1 test) | `webapp-runtime.playground-validation` |
 
 ### Live CLI Python tests (`tests/cli`)
 

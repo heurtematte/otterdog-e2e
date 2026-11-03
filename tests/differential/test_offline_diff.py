@@ -6,7 +6,7 @@ offline run context) and record every command's normalized output into observati
 compares both files at session end into differential.{md,json} (--e2e-strict-diff fails the session on unexpected
 deltas). With a change under test (--e2e-change or E2E_CHANGE, default: N of a pr:N@<sha> SUT), the ``template`` of
 the references of the scenarios referencing it picks the template both sides vendor (own: each SUT its own
-examples/template; head/base: both use that side's) and test_change_expected_deltas_observed, the last item of the
+standard template; head/base: both use that side's) and test_change_expected_deltas_observed, the last item of the
 module, checks that every expected delta of a scenario recorded on both sides was observed.
 
 A recording item fails only when its observations are meaningless: infrastructure problems (timeouts, sandbox or
@@ -32,7 +32,7 @@ from otterdog_e2e.scenarios.collect import collect_scenarios, scenario_params
 from otterdog_e2e.scenarios.engine import INFRA_PREFIX, DifferentialRunner, ScenarioOutcome, SutSide
 from otterdog_e2e.scenarios.model import Scenario
 from otterdog_e2e.selection import SCENARIO_TAGS
-from otterdog_e2e.sut.template import PUBLISHED_TEMPLATE_FILE, TEMPLATE_SOURCE_DIR
+from otterdog_e2e.sut.template import PUBLISHED_TEMPLATE_FILE, template_source_dir
 
 logger = logging.getLogger(__name__)
 
@@ -53,8 +53,8 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
 
 
 def template_dir(side: SutSide) -> Path:
-    """examples/template of a side's SUT source."""
-    return side.installed.sut.source_dir / TEMPLATE_SOURCE_DIR
+    """The standard template of a side's SUT source (otterdog/resources/defaults or examples/template)."""
+    return template_source_dir(side.installed.sut.source_dir)
 
 
 def template_chooser(pair: SutPair, change: ChangeSpec | None) -> Callable[[SutSide], Path]:
@@ -86,7 +86,10 @@ def runner(sut_pair: SutPair, change_spec: ChangeSpec | None) -> DifferentialRun
 def test_sides_are_ready(sut_pair: SutPair, change_spec: ChangeSpec | None) -> None:
     """Both SUTs are installed, ship the example template and record into their own observation files."""
     for side in sut_pair:
-        source = template_dir(side)
+        try:
+            source = template_dir(side)
+        except FileNotFoundError as ex:
+            pytest.fail(f"{side.role} SUT {side.installed.sut.label}: {ex}")
         assert (source / PUBLISHED_TEMPLATE_FILE).is_file(), f"{side.role} SUT {side.installed.sut.label}: no {source}"
         assert side.recorder.role == side.role and side.recorder.out_file.name == f"{side.role}.jsonl"
     base, head = sut_pair.base.installed.sut, sut_pair.head.installed.sut

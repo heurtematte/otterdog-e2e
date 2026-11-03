@@ -7,8 +7,8 @@ and an OtterdogCli built with ``offline=True``: dummy token, ``unshare -rn`` net
 ``.../offline/<workspace>/workspace/`` when the test ends.
 
 The SUT is the session's ``--e2e-sut`` (plugin fixture ``sut``: host venv for trusted SUTs, the CLI of the SUT image
-for untrusted ones); the base template is the SUT's own ``examples/template``, vendored with ``--local`` so nothing is
-cloned. Offline renders use the deterministic offline run context (run id ``spduo000``): identical names on every
+for untrusted ones); the base template is the SUT's own standard template (``otterdog/resources/defaults``, or
+``examples/template`` before eclipse-csi/otterdog#889), vendored with ``--local`` so nothing is cloned. Offline renders use the deterministic offline run context (run id ``spduo000``): identical names on every
 run and on both sides of a differential run.
 """
 
@@ -27,7 +27,12 @@ from otterdog_e2e.otterdog.workspace import ConfigWorkspace
 from otterdog_e2e.scenarios.offline import OfflineEngine, offline_run_context
 from otterdog_e2e.sut.cli_install import InstalledCli
 from otterdog_e2e.sut.source import UpstreamMirror
-from otterdog_e2e.sut.template import PUBLISHED_TEMPLATE_FILE, TEMPLATE_SOURCE_DIR, vendor_template
+from otterdog_e2e.sut.template import (
+    OFFLINE_LOCAL_APPLY_HIDDEN,
+    hide_template_functions,
+    template_source_dir,
+    vendor_template,
+)
 
 
 @dataclass(frozen=True)
@@ -61,11 +66,11 @@ def offline_context(request: pytest.FixtureRequest) -> E2EContext:
 
 @pytest.fixture(scope="session")
 def template_src(sut: InstalledCli) -> Path:
-    """examples/template of the SUT source: the template every offline workspace vendors."""
-    path = sut.sut.source_dir / TEMPLATE_SOURCE_DIR
-    if not (path / PUBLISHED_TEMPLATE_FILE).is_file():
-        pytest.fail(f"SUT {sut.sut.label} has no {TEMPLATE_SOURCE_DIR}/{PUBLISHED_TEMPLATE_FILE}", pytrace=False)
-    return path
+    """The standard template of the SUT source: the template every offline workspace vendors."""
+    try:
+        return template_source_dir(sut.sut.source_dir)
+    except FileNotFoundError as ex:
+        pytest.fail(f"SUT {sut.sut.label}: {ex}", pytrace=False)
 
 
 @pytest.fixture(scope="session")
@@ -93,6 +98,16 @@ def vendored_cli(offline_cli: OtterdogCli, template_src: Path) -> OtterdogCli:
     workspace = offline_cli.workspace
     vendor_template(template_src, workspace.org_dir, workspace.template)
     return offline_cli
+
+
+@pytest.fixture
+def local_apply_cli(vendored_cli: OtterdogCli) -> OtterdogCli:
+    """vendored_cli whose template hides newOrgCodeSecurityConfiguration (OFFLINE_LOCAL_APPLY_HIDDEN), like a template
+    that predates eclipse-csi/otterdog#892: local-apply then plans without reading the organization's code security
+    configurations from GitHub, so its plan, prompt, credentials and hooks stay testable offline on every SUT."""
+    workspace = vendored_cli.workspace
+    hide_template_functions(workspace.org_dir, workspace.template, OFFLINE_LOCAL_APPLY_HIDDEN)
+    return vendored_cli
 
 
 @pytest.fixture

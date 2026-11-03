@@ -1,0 +1,44 @@
+/* Filter and sort controls of the scenario explorer's tables (docs/assets/explorer.js), in Material's colors. */
+.e2e-filter__controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin: 1em 0 0.5em;
+}
+
+.e2e-filter__search,
+.e2e-filter__select {
+  font: inherit;
+  font-size: 0.7rem;
+  padding: 0.35em 0.6em;
+  border: 1px solid var(--md-default-fg-color--lighter);
+  border-radius: 0.2rem;
+  background-color: var(--md-default-bg-color);
+  color: var(--md-default-fg-color);
+}
+
+.e2e-filter__search {
+  flex: 1 1 16rem;
+  min-width: 0;
+}
+
+.e2e-filter__search:focus,
+.e2e-filter__select:focus {
+  outline: none;
+  border-color: var(--md-accent-fg-color);
+}
+
+.e2e-filter__count {
+  font-size: 0.7rem;
+  color: var(--md-default-fg-color--light);
+}
+
+.md-typeset table:not([class]) th.e2e-sortable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.md-typeset table:not([class]) th.e2e-sortable:hover {
+  color: var(--md-accent-fg-color);
+}

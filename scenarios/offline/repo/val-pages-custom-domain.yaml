@@ -1,0 +1,76 @@
+# Offline tier (battery, validation and plan): custom domain of GitHub Pages (eclipse-csi/otterdog#858).
+id: O-VAL-PAGES-CNAME
+tier: offline
+title: The custom domain of GitHub Pages is validated and planned
+description: >-
+  Since #858 (v1.7.0) a repository manages gh_pages_cname (the custom domain of its Pages site, null for the default
+  github.io domain) and gh_pages_https_enforced (only taken into account with a custom domain). Repository.validate
+  refuses a value that is not a domain name and a github.io domain while Pages are built; https_enforced is excluded
+  from the diff while no custom domain is set, and planned with one. Older SUTs skip it (fixed_in).
+priority: P2
+tags: [offline, repo]
+observe: true
+fixed_in: 1.7.0.dev60
+variables: {plan: free}
+references:
+  - pr: 858
+    note: >-
+      "gh pages custom domain": adds gh_pages_cname and gh_pages_https_enforced to repositories; older SUTs have no
+      such keys in the template, so the scenario skips them (fixed_in).
+steps:
+  - name: invalid-domain
+    fragments:
+      repositories:
+        - "orgs.newRepo('{{ p }}-site') { gh_pages_build_type: 'workflow', gh_pages_cname: 'not a domain' }"
+    validate:
+      ok: false
+      errors: 1
+      exit_code: 1
+      contains:
+        - >-
+          Error: repository[name="{{ p }}-site"] has 'gh_pages_cname' set to value 'not a domain', which is not a valid
+          domain name.
+  - name: github-io-domain
+    fragments:
+      repositories:
+        - "orgs.newRepo('{{ p }}-site') { gh_pages_build_type: 'workflow', gh_pages_cname: '{{ p }}.github.io' }"
+    validate:
+      ok: false
+      errors: 1
+      exit_code: 1
+      contains:
+        - >-
+          Error: repository[name="{{ p }}-site"] has 'gh_pages_cname' set to value '{{ p }}.github.io', but a custom
+          domain can not be a 'github.io' domain.
+  - name: custom-domain-added
+    base_fragments:
+      repositories: ["orgs.newRepo('{{ p }}-site') { gh_pages_build_type: 'workflow' }"]
+    fragments:
+      repositories:
+        - "orgs.newRepo('{{ p }}-site') { gh_pages_build_type: 'workflow', gh_pages_cname: 'docs.{{ p }}.invalid' }"
+    validate: {ok: true}
+    plan:
+      expect: changes
+      counts: {add: 0, change: 1, delete: 0}
+      contains: ['~ gh_pages_cname = null -> "docs.{{ p }}.invalid"']
+  - name: https-without-domain
+    base_fragments:
+      repositories: ["orgs.newRepo('{{ p }}-site') { gh_pages_build_type: 'workflow' }"]
+    fragments:
+      repositories: ["orgs.newRepo('{{ p }}-site') { gh_pages_build_type: 'workflow', gh_pages_https_enforced: false }"]
+    plan:  # gh_pages_https_enforced is excluded from the diff while gh_pages_cname is null
+      expect: noop
+      counts: {add: 0, change: 0, delete: 0}
+  - name: https-with-domain
+    base_fragments:
+      repositories:
+        - "orgs.newRepo('{{ p }}-site') { gh_pages_build_type: 'workflow', gh_pages_cname: 'docs.{{ p }}.invalid' }"
+    fragments:
+      repositories:
+        - >-
+          orgs.newRepo('{{ p }}-site') { gh_pages_build_type: 'workflow', gh_pages_cname: 'docs.{{ p }}.invalid',
+          gh_pages_https_enforced: false }
+    plan:
+      expect: changes
+      counts: {add: 0, change: 1, delete: 0}
+      contains: ['~ gh_pages_https_enforced = true -> false']

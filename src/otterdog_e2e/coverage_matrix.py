@@ -120,7 +120,7 @@ NODE_ID_RE = re.compile(r"^tests/(?P<dir>[a-z_]+)/(?P<file>[A-Za-z0-9_/]+\.py)::
 INVENTORY_RE = re.compile(r"^(?P<kind>[a-z]+):(?P<value>\S.*)$")
 AVAILABLE_PREFIX = "available:"  # a gap_outline need the harness already provides (docs/battery-guide.md)
 
-# otterdog main @9bdeb75: what must be inventoried (keys of the features' ``inventory`` lists)
+# otterdog main @9bdeb75, updated to main @d9dac78: what must be inventoried (keys of the features' ``inventory`` lists)
 EXPECTED_INVENTORY: dict[str, tuple[str, ...]] = {
     # otterdog/cli.py:179-969 (29 subcommands; --version is a group option)
     "command": (
@@ -210,7 +210,8 @@ EXPECTED_INVENTORY: dict[str, tuple[str, ...]] = {
         "UpdateBlueprintStatusTask",
         "UploadSBOMTask",
     ),
-    # otterdog/webapp/api/routes.py:37-183, otterdog/webapp/internal/routes.py:33-106, webhook receiver
+    # otterdog/webapp/api/routes.py:37-183, otterdog/webapp/internal/routes.py:33-106, webhook receiver, the playground
+    # validation of otterdog/webapp/home/routes.py:550-610 (main d9dac78, #891)
     "endpoint": (
         "GET /api/organizations",
         "GET /api/organizations/<github_id>",
@@ -224,6 +225,8 @@ EXPECTED_INVENTORY: dict[str, tuple[str, ...]] = {
         "GET /api/scorecard/results",
         "GET /api/graphql",
         "POST /api/graphql",
+        "POST /playground/validate",
+        "POST /projects/<project_name>/playground/validate",
         "GET /internal/health",
         "GET /internal/init",
         "GET /internal/check",
@@ -231,7 +234,8 @@ EXPECTED_INVENTORY: dict[str, tuple[str, ...]] = {
         "GET /internal/<template>",
         "POST /github-webhook/receive",
     ),
-    # otterdog/webapp/home/routes.py:50-532, otterdog/webapp/auth/routes.py:22-118
+    # otterdog/webapp/home/routes.py:50-532, otterdog/webapp/auth/routes.py:22-118; /playground and /admin/template-impact
+    # since #878 (main d9dac78 home/routes.py:489, 1045-1091)
     "page": (
         "/",
         "/index",
@@ -246,10 +250,13 @@ EXPECTED_INVENTORY: dict[str, tuple[str, ...]] = {
         "/projects/<project>/defaults",
         "/projects/<project>/playground",
         "/projects/<project>/repos/<repo>",
+        "/playground",
         "/admin/organizations",
         "/admin/pullrequests",
         "/admin/blueprints",
         "/admin/policies",
+        "/admin/template-impact",
+        "/admin/template-impact/configurations",
         "/admin/tasks",
         "/scorecard/checks",
         "/<template>",
@@ -406,9 +413,19 @@ class MatrixProject:
     @cached_property
     def scenario_gates(self) -> dict[str, tuple[bool, bool]]:
         """Scenario id -> (a scenario-level known bug: the whole item xfails while it exists; fixed_in: the scenario is
-        skipped on SUTs that predate an unreleased fix, release:latest among them)."""
+        skipped on release:latest, the matrix's ``otterdog.release``, because that release predates its ``fixed_in``;
+        without a release every fixed_in counts as unreleased)."""
+        from otterdog_e2e.sut.version import predates
+
+        release = str(((self.data.get("otterdog") or {}).get("release")) or "").removeprefix("v") or None
         listed = {name for bug in self.known_bugs.values() if not bug.fixed for name in bug.scenarios}
-        return {s.id: (bool(s.known_bug) or s.id in listed, s.fixed_in is not None) for s in self.scenarios}
+        return {
+            s.id: (
+                bool(s.known_bug) or s.id in listed,
+                s.fixed_in is not None and predates(release, s.fixed_in) is not False,
+            )
+            for s in self.scenarios
+        }
 
     def known_bug_tests(self, relative: str) -> frozenset[str]:
         """Test functions of a module decorated with ``pytest.mark.known_bug(...)`` and no scoped

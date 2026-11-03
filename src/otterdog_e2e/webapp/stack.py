@@ -117,6 +117,7 @@ COMPOSE_OPTIONAL_VARIABLES = (
     "E2E_DEPENDENCY_TRACK_URL",
     "E2E_DTRACK_MOCK_IMAGE",
     "E2E_DTRACK_MOCK_STATUS",
+    "E2E_HYPERCORN_WORKERS",
 )
 COMPOSE_VARIABLES = COMPOSE_REQUIRED_VARIABLES + COMPOSE_OPTIONAL_VARIABLES
 LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
@@ -159,6 +160,11 @@ WEBAPP_ENV_OVERRIDES = frozenset(
         # possible with them, the pages only answer as they would without a session)
         "GITHUB_OAUTH_CLIENT_ID",
         "GITHUB_OAUTH_CLIENT_SECRET",
+        # bounds checked at boot since eclipse-csi/otterdog#843 and #891 ("<NAME> must be at least 1, got <value>")
+        "MAX_CONCURRENT_INSTALLATION_TASKS",
+        "PLAYGROUND_VALIDATION_MAX_SIZE",
+        "PLAYGROUND_MAX_CONCURRENT_VALIDATIONS",
+        "DOCUMENTATION_URL",
     }
 )
 DUMMY_OVERRIDES = frozenset({"DEPENDENCY_TRACK_TOKEN", "GITHUB_OAUTH_CLIENT_ID", "GITHUB_OAUTH_CLIENT_SECRET"})
@@ -518,6 +524,9 @@ class WebappStack:
             "E2E_DEPENDENCY_TRACK_URL": DTRACK_INTERNAL_URL if self._dtrack else NO_DTRACK_URL,
             "E2E_DTRACK_MOCK_IMAGE": DTRACK_MOCK_IMAGE,
             "E2E_DTRACK_MOCK_STATUS": str(settings.dtrack_status),
+            # since eclipse-csi/otterdog#843 (v1.7.0) start-webapp passes --workers "${HYPERCORN_WORKERS}" (image
+            # default 4), which wins over the workers of the mounted hypercorn-cfg.toml
+            "E2E_HYPERCORN_WORKERS": str(settings.workers),
             **{_override_variable(key): value for key, value in sorted(self._env_overrides.items())},
         }
 

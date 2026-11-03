@@ -132,7 +132,8 @@ def validate(cli: OtterdogCli, env: Mapping[str, str] | None = None) -> CliResul
 
 
 def local_apply_all_keys(cli: OtterdogCli, env: Mapping[str, str] | None = None) -> CliResult:
-    """A removal-only ``local-apply -f`` WITHOUT -n (all four credential keys resolved; nothing applied)."""
+    """A removal-only ``local-apply -f`` WITHOUT -n (all four credential keys resolved; nothing applied); ``cli`` is the
+    local_apply_cli fixture (template without code security configurations, so nothing is read from GitHub)."""
     workspace = cli.workspace
     workspace.write_base_config(render_org(workspace, ConfigFragments(repositories=[f"orgs.newRepo('{GONE}')"])))
     config = str(workspace.config_file.resolve())
@@ -252,18 +253,18 @@ def test_env_organization_keys_are_literal(vendored_cli: OtterdogCli) -> None:
 
 
 @pytest.mark.scenario("O-CREDENTIALS-ENV")
-def test_env_resolves_the_four_keys_without_no_web_ui(vendored_cli: OtterdogCli) -> None:
+def test_env_resolves_the_four_keys_without_no_web_ui(local_apply_cli: OtterdogCli) -> None:
     """local-apply without -n resolves api_token, username, password and twofa_seed (each missing variable is named
     with its key, exit 1); with every variable set the removal-only apply ends with 'No changes required.' (exit 0)."""
-    use_credentials(vendored_cli, None, defaults={"credentials": {"provider": "env"}, "env": dict(ENV_TEMPLATES)})
-    complete = local_apply_all_keys(vendored_cli, ENV_VALUES)
+    use_credentials(local_apply_cli, None, defaults={"credentials": {"provider": "env"}, "env": dict(ENV_TEMPLATES)})
+    complete = local_apply_all_keys(local_apply_cli, ENV_VALUES)
     text = normalize_text(complete.output)
     assert complete.exit_code == 0 and "No changes required." in text, tail(complete)
     assert "1 resource(s) would be deleted with flag '--delete-resources'." in text, tail(complete)
     for variable, key in KEY_OF_VARIABLE.items():
         partial = {name: value for name, value in ENV_VALUES.items() if name != variable}
         refused(
-            local_apply_all_keys(vendored_cli, partial),
+            local_apply_all_keys(local_apply_cli, partial),
             f"environment variable '{variable}' for key '{key}' not found",
         )
 
@@ -333,34 +334,34 @@ def test_pass_store_dir_from_the_defaults_override(vendored_cli: OtterdogCli) ->
 
 
 @pytest.mark.scenario("O-CREDENTIALS-PROVIDERS")
-def test_bitwarden_provider_with_a_stub_vault(vendored_cli: OtterdogCli) -> None:
+def test_bitwarden_provider_with_a_stub_vault(local_apply_cli: OtterdogCli) -> None:
     """bitwarden: the item's api_token_admin field (or the organization's api_token_key, or defaults.bitwarden
     api_token_key) gives the token; a missing item, a missing field, a missing item_id and a locked vault are refused
     with the provider's message; local-apply without -n also reads the login and refuses an item without totp."""
-    host_only(vendored_cli)
-    stubs, locked = write_bw_stub(vendored_cli.workspace)
+    host_only(local_apply_cli)
+    stubs, locked = write_bw_stub(local_apply_cli.workspace)
     env = stub_path(stubs)
-    use_credentials(vendored_cli, {"provider": "bitwarden", "item_id": BW_ITEM})
-    succeeded(validate(vendored_cli, env))
-    use_credentials(vendored_cli, {"provider": "bitwarden", "item_id": BW_ITEM, "api_token_key": "e2e_token"})
-    succeeded(validate(vendored_cli, env))
+    use_credentials(local_apply_cli, {"provider": "bitwarden", "item_id": BW_ITEM})
+    succeeded(validate(local_apply_cli, env))
+    use_credentials(local_apply_cli, {"provider": "bitwarden", "item_id": BW_ITEM, "api_token_key": "e2e_token"})
+    succeeded(validate(local_apply_cli, env))
     use_credentials(
-        vendored_cli,
+        local_apply_cli,
         {"provider": "bitwarden", "item_id": BW_ITEM},
         defaults={"bitwarden": {"api_token_key": "e2e_nope"}},
     )
-    refused(validate(vendored_cli, env), f"field with key 'e2e_nope' not found in item with id '{BW_ITEM}'")
-    use_credentials(vendored_cli, {"provider": "bitwarden", "item_id": "e2e-missing"})
-    refused(validate(vendored_cli, env), "item with id 'e2e-missing' not found in your bitwarden vault: Not found.")
-    use_credentials(vendored_cli, {"provider": "bitwarden"})
-    refused(validate(vendored_cli, env), "required key 'item_id' not found in authorization data")
+    refused(validate(local_apply_cli, env), f"field with key 'e2e_nope' not found in item with id '{BW_ITEM}'")
+    use_credentials(local_apply_cli, {"provider": "bitwarden", "item_id": "e2e-missing"})
+    refused(validate(local_apply_cli, env), "item with id 'e2e-missing' not found in your bitwarden vault: Not found.")
+    use_credentials(local_apply_cli, {"provider": "bitwarden"})
+    refused(validate(local_apply_cli, env), "required key 'item_id' not found in authorization data")
 
-    use_credentials(vendored_cli, {"provider": "bitwarden", "item_id": BW_ITEM})
-    complete = local_apply_all_keys(vendored_cli, env)
+    use_credentials(local_apply_cli, {"provider": "bitwarden", "item_id": BW_ITEM})
+    complete = local_apply_all_keys(local_apply_cli, env)
     assert complete.exit_code == 0 and "No changes required." in normalize_text(complete.output), tail(complete)
-    use_credentials(vendored_cli, {"provider": "bitwarden", "item_id": BW_ITEM_WITHOUT_TOTP})
-    refused(local_apply_all_keys(vendored_cli, env), f"totp is empty in item with id '{BW_ITEM_WITHOUT_TOTP}'")
+    use_credentials(local_apply_cli, {"provider": "bitwarden", "item_id": BW_ITEM_WITHOUT_TOTP})
+    refused(local_apply_all_keys(local_apply_cli, env), f"totp is empty in item with id '{BW_ITEM_WITHOUT_TOTP}'")
 
     locked.touch()
-    use_credentials(vendored_cli, {"provider": "bitwarden", "item_id": BW_ITEM})
-    refused(validate(vendored_cli, env), "could not access bitwarden vault:\nVault is locked.")
+    use_credentials(local_apply_cli, {"provider": "bitwarden", "item_id": BW_ITEM})
+    refused(validate(local_apply_cli, env), "could not access bitwarden vault:\nVault is locked.")

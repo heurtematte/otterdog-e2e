@@ -7,7 +7,8 @@ description: >-
   repository of the configuration and when protect_repo_names has no names, and inherits the ruleset rules (target,
   enforcement, ref patterns) with the organization ruleset header. Two known defects run as expected failures of
   their own steps: every pattern after the first one warns spuriously (KB-023), and the nested rule validators crash
-  with an AttributeError for an organization ruleset (KB-008: an out-of-range review count, a deployment rule).
+  with an AttributeError for an organization ruleset (KB-008: an out-of-range review count, fixed by #891; KB-081: a
+  deployment rule).
 priority: P2
 tags: [offline, rulesets]
 observe: true
@@ -29,6 +30,15 @@ references:
       - {step: target-and-enforcement, kind: cli, key: show}
       - {step: valid-patterns, kind: cli, key: show}
       - {step: valid-patterns, kind: cli, key: local-plan}
+  - pr: 878
+    note: >-
+      "Configuration guides playground": the JSON schemas enumerate the allowed values, so an invalid value is a
+      load error ("failed to load configuration: invalid value at '<path>': '<value>' is not one of [...]", exit 1)
+      before the model's own check; show fails to load the configuration too. ENUM_SCHEMA_STEPS of
+      tests/offline/test_scenarios.py asserts each side (model errors before, the load error since).
+    expected_deltas:
+      - {step: target-and-enforcement, kind: cli, key: validate}
+      - {step: target-and-enforcement, kind: cli, key: show}
 steps:
   - name: include-without-match
     fragments:
@@ -80,16 +90,7 @@ steps:
     fragments:
       rulesets:
         - "orgs.newOrgRuleset('{{ p }}-ors') { target: 'tags', enforcement: 'on', include_repo_names: ['~ALL'] }"
-    validate:
-      ok: false
-      errors: 2
-      contains:
-        - >-
-          org_ruleset[name="{{ p }}-ors"] has 'target' of value 'tags', while only values ('branch' | 'tag' |
-          'push') are allowed.
-        - >-
-          org_ruleset[name="{{ p }}-ors"] has 'enforcement' of value 'on', while only values ('active' | 'disabled'
-          | 'evaluate') are allowed.
+    validate: {ok: false}  # outcome per SUT (#878): ENUM_SCHEMA_STEPS of tests/offline/test_scenarios.py
   - name: ref-patterns
     fragments:
       rulesets:
@@ -167,7 +168,7 @@ steps:
           range [0, 10] are allowed.
       not_contains: ["object has no attribute"]
   - name: deployment-rule
-    known_bug: KB-008
+    known_bug: KB-081
     fragments:
       rulesets:
         - |-

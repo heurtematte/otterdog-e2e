@@ -13,7 +13,8 @@
 # step of a YAML scenario never lists that scenario (only that step is an expected failure).
 # KB-028..KB-040 are the findings F-01..F-13 of scenarios/coverage.yaml, KB-041 the web-UI tier's finding, KB-042..
 # KB-077 the findings of the test battery, KB-078..KB-080 the findings of the fine-grained token support (otterdog with
-# a fine-grained admin token); features of the coverage matrix reference them in their `known_bugs`.
+# a fine-grained admin token), KB-081.. the findings of the update to otterdog main d9dac78 (after v1.7.1, evidence at
+# that commit); features of the coverage matrix reference them in their `known_bugs`.
 
 - id: KB-001
   title: apply exits 0 (and the webapp reports success) when validation fails
@@ -70,14 +71,14 @@
 
 - id: KB-005
   title: dict values diff one way only (removing a team_permissions or custom_properties entry is not detected)
-  status: confirmed
+  status: fixed
   evidence:
     - otterdog/utils.py:105-124
     - otterdog/models/__init__.py:437-475
     - "e2e: scenarios/offline/plan/lplan-dict-one-way.yaml (steps team-permission-removed and custom-property-removed declare the bug)"
     - "e2e: scenarios/cli/teams/kb-team-permissions-removal.yaml (step remove-permission declares the bug)"
-  upstream: null
-  fixed_in: null
+  upstream: https://github.com/eclipse-csi/otterdog/pull/842
+  fixed_in: 1.7.0.dev76
   scenarios: []
 
 - id: KB-006
@@ -106,8 +107,8 @@
   scenarios: []
 
 - id: KB-008
-  title: org ruleset validation raises AttributeError for incomplete nested rules (no get_model_header, #790) and for deployment rules (no environments)
-  status: confirmed
+  title: "org ruleset validation raises AttributeError for incomplete nested rules (no get_model_header, #790)"
+  status: fixed
   crash_signature: "object has no attribute 'get_model_header'"
   evidence:
     - otterdog/models/ruleset.py:128-136
@@ -118,10 +119,9 @@
     - otterdog/models/github_organization.py:226-227
     - otterdog/models/__init__.py:566
     - "e2e: scenarios/offline/rulesets/val-org-ruleset-strict.yaml (O-VAL-ORG-RULESET-STRICT, tests/offline: exit 2 on 9bdeb75 and d0d3b08)"
-    - otterdog/models/ruleset.py:436-447
-    - "e2e: scenarios/offline/rulesets/val-org-rulesets.yaml (steps review-count-range and deployment-rule declare the bug)"
-  upstream: https://github.com/eclipse-csi/otterdog/pull/790
-  fixed_in: null
+    - "e2e: scenarios/offline/rulesets/val-org-rulesets.yaml (step review-count-range declares the bug)"
+  upstream: https://github.com/eclipse-csi/otterdog/pull/891
+  fixed_in: 1.8.0.dev6
   scenarios: [enterprise.org-ruleset.missing-strict]
 
 - id: KB-009
@@ -223,12 +223,12 @@
 
 - id: KB-018
   title: a stale webhook snapshot can overwrite the status of a merged pull request (e.g. back to open)
-  status: suspected
+  status: fixed
   evidence:
     - otterdog/webapp/db/service.py:505-564
     - otterdog/webapp/tasks/check_sync.py:73-133
   upstream: https://github.com/eclipse-csi/otterdog/pull/792
-  fixed_in: null
+  fixed_in: 1.7.0.dev20
   scenarios: []
 
 - id: KB-019
@@ -344,23 +344,23 @@
     - otterdog/models/organization_variable.py:40-63
     - otterdog/models/variable.py:29-42
     - "e2e: scenarios/offline/variables/val-org-variables.yaml (step invalid-variables declares the bug)"
+    - "e2e: tests/offline/test_scenarios.py (ENUM_SCHEMA_STEPS: step invalid-visibility of O-VAL-ORGVAR, an expected failure before #878)"
   upstream: null
   fixed_in: null
   scenarios: []
 
 - id: KB-029
   title: an invalid workflows.allowed_actions crashes validation with a KeyError as soon as a repository exists (exit 2)
-  status: confirmed
+  status: fixed
   evidence:
     - otterdog/models/workflow_settings.py:94-99
     - otterdog/models/workflow_settings.py:101-106
     - otterdog/models/repo_workflow_settings.py:99-105
     - otterdog/models/workflow_settings.py:115-123
     - otterdog/cli.py:999-1001
-    - "e2e: scenarios/offline/workflows/val-org-workflows.yaml (step allowed-actions-with-repository declares the bug)"
-    - "e2e: scenarios/offline/workflows/val-repo-workflows.yaml (step unknown-allowed-actions declares the bug)"
-  upstream: null
-  fixed_in: null
+    - "e2e: tests/offline/test_scenarios.py (ENUM_SCHEMA_STEPS: steps allowed-actions-with-repository of O-VAL-ORG-WORKFLOWS and unknown-allowed-actions of O-VAL-REPO-WORKFLOWS, an expected failure before #878)"
+  upstream: https://github.com/eclipse-csi/otterdog/pull/878
+  fixed_in: 1.7.0.dev75
   scenarios: []
 
 - id: KB-030
@@ -410,14 +410,16 @@
   scenarios: []
 
 - id: KB-033
-  title: repository rules that depend on organization settings never fire, because repositories are coerced at load (has_projects, web_commit_signoff_required, the discussion source's has_discussions, gh_pages_visibility below enterprise)
+  title: repository rules that depend on organization settings never fire, because repositories are coerced at load (has_projects, web_commit_signoff_required, the discussion source's has_discussions, gh_pages_visibility below enterprise, immutable_releases_enabled while enforced)
   status: confirmed
   evidence:
     - otterdog/models/github_organization.py:349-351
     - otterdog/models/repository.py:284-316
     - otterdog/models/repository.py:436-465
     - otterdog/models/repository.py:583-600
-    - "e2e: scenarios/offline/repo/val-coerced.yaml (four steps declare the bug)"
+    - "e2e: scenarios/offline/repo/val-coerced.yaml (three steps declare the bug)"
+    - "e2e: scenarios/offline/org-settings/val-immutable-releases.yaml (step repository-setting-enforced declares the bug, rule at otterdog/models/repository.py:571-576 of main d9dac78, coercion at :374-375)"
+    - "e2e: tests/offline/test_scenarios.py (ENUM_SCHEMA_STEPS: step pages-visibility-below-enterprise of O-VAL-COERCED, an expected failure before #878)"
   upstream: null
   fixed_in: null
   scenarios: []
@@ -437,23 +439,23 @@
 
 - id: KB-035
   title: the environment reference docs use orgs.newEnvironmentSecret / newEnvironmentVariable, the template defines newEnvSecret / newEnvVariable
-  status: confirmed
+  status: fixed
   evidence:
     - docs/reference/organization/repository/environment/index.md:45-54
     - examples/template/otterdog-defaults.libsonnet:288-292
-  upstream: null
-  fixed_in: null
+  upstream: https://github.com/eclipse-csi/otterdog/pull/878
+  fixed_in: 1.7.0.dev75
   scenarios: []
 
 - id: KB-036
   title: the template comment of deployment_branch_policy lists all, protected_branches, branch_policies; validation accepts only 'all' | 'protected' | 'selected'
-  status: confirmed
+  status: fixed
   evidence:
     - examples/template/otterdog-defaults.libsonnet:281-282
     - otterdog/models/environment.py:128-135
     - docs/reference/organization/repository/environment/index.md:9
-  upstream: null
-  fixed_in: null
+  upstream: https://github.com/eclipse-csi/otterdog/pull/878
+  fixed_in: 1.7.0.dev75
   scenarios: []
 
 - id: KB-037
@@ -469,15 +471,15 @@
 
 - id: KB-038
   title: two validation messages print Python sets, so their values come in a different order from run to run (fork_pr_approval_policy, code scanning languages)
-  status: confirmed
+  status: fixed
   evidence:
     - otterdog/models/workflow_settings.py:30-34
     - otterdog/models/workflow_settings.py:143-150
     - otterdog/models/repository.py:611-618
     - otterdog/models/repository.py:731-732
     - "e2e: scenarios/offline/workflows/val-org-workflows.yaml (fork_pr_approval_policy message asserted without the value order)"
-  upstream: null
-  fixed_in: null
+  upstream: https://github.com/eclipse-csi/otterdog/pull/878
+  fixed_in: 1.7.0.dev75
   scenarios: []
 
 - id: KB-039
@@ -674,15 +676,15 @@
 
 - id: KB-055
   title: validation messages of nested repository ruleset settings name the repository twice instead of the ruleset ('repository[name="r", repository=r]')
-  status: confirmed
+  status: fixed
   evidence:
     - otterdog/models/ruleset.py:57-73
     - otterdog/models/ruleset.py:128-136
     - otterdog/models/ruleset.py:240-272
     - otterdog/models/ruleset.py:451-458
     - "e2e: scenarios/offline/rulesets/val-ruleset-nested.yaml (asserts the messages after the header)"
-  upstream: null
-  fixed_in: null
+  upstream: https://github.com/eclipse-csi/otterdog/pull/891
+  fixed_in: 1.8.0.dev6
   scenarios: []
 
 - id: KB-056
@@ -847,22 +849,22 @@
 
 - id: KB-070
   title: a blueprint definition change touching several fields is stored one field per FetchBlueprintsTask (the update chain short-circuits)
-  status: confirmed
+  status: fixed
   evidence:
     - otterdog/webapp/db/service.py:943-958
-  upstream: null
-  fixed_in: null
+  upstream: https://github.com/eclipse-csi/otterdog/pull/864
+  fixed_in: 1.7.0.dev66
   scenarios: [W-BP-UPDATE]
 
 - id: KB-071
   title: every FetchBlueprintsTask overwrites recheck_needed, so a second fetch before the next check drops the recheck of a changed definition
-  status: confirmed
+  status: fixed
   evidence:
     - otterdog/webapp/db/service.py:958
     - otterdog/webapp/internal/routes.py:83-89
     - otterdog/webapp/blueprints/__init__.py:84-91
-  upstream: null
-  fixed_in: null
+  upstream: https://github.com/eclipse-csi/otterdog/pull/864
+  fixed_in: 1.7.0.dev66
   scenarios: [W-BP-RECHECK-LOST]
 
 - id: KB-072
@@ -974,6 +976,17 @@
     - otterdog/providers/github/rest/repo_client.py:1109-1117
     - otterdog/providers/github/rest/repo_client.py:613-620
     - otterdog/providers/github/rest/repo_client.py:487-490
+  upstream: null
+  fixed_in: null
+  scenarios: []
+
+- id: KB-081
+  title: an organization ruleset requiring deployments crashes validation with an AttributeError (the organization has no environments)
+  status: confirmed
+  crash_signature: "object has no attribute 'environments'"
+  evidence:
+    - otterdog/models/ruleset.py:475-479
+    - "e2e: scenarios/offline/rulesets/val-org-rulesets.yaml (step deployment-rule declares the bug)"
   upstream: null
   fixed_in: null
   scenarios: []

@@ -12,6 +12,16 @@ priority: P1
 tags: [offline, environments]
 observe: true
 variables: {plan: free}
+references:
+  - pr: 878
+    note: >-
+      "Configuration guides playground": the JSON schemas enumerate the allowed values, so an invalid value is a
+      load error ("failed to load configuration: invalid value at '<path>': '<value>' is not one of [...]", exit 1)
+      before the model's own check; show fails to load the configuration too. ENUM_SCHEMA_STEPS of
+      tests/offline/test_scenarios.py asserts each side (model errors before, the load error since).
+    expected_deltas:
+      - {step: template-comment-policy, kind: cli, key: validate}
+      - {step: template-comment-policy, kind: cli, key: show}
 steps:
   - name: wait-timer-range
     fragments:
@@ -37,14 +47,7 @@ steps:
     fragments:
       repositories:
         - "orgs.newRepo('{{ p }}-env') { environments: [orgs.newEnvironment('{{ p }}-policy') { deployment_branch_policy: 'protected_branches' }] }"
-    validate:
-      ok: false
-      errors: 1
-      exit_code: 1
-      contains:
-        - >-
-          Error: environment[name="{{ p }}-policy", repository={{ p }}-env] has 'deployment_branch_policy' of value
-          'protected_branches', while only values ('all' | 'protected' | 'selected') are allowed.
+    validate: {ok: false}  # outcome per SUT (#878): ENUM_SCHEMA_STEPS of tests/offline/test_scenarios.py
   - name: ignored-settings
     fragments:
       repositories:

@@ -145,12 +145,17 @@ def test_fixed_bugs_affect_only_older_suts() -> None:
 
 # --- the project registry -----------------------------------------------------------------------------------------
 def test_registry_holds_the_coverage_and_web_ui_findings() -> None:
-    """F-01..F-13 of the coverage matrix and the web-UI finding are confirmed entries; KB-002 lists the web-UI test
-    that exercises install-app (its known_bug marker)."""
+    """F-01..F-13 of the coverage matrix and the web-UI finding are confirmed entries, or fixed ones naming their
+    upstream fix and version (F-08 and F-09 by #878); KB-002 lists the web-UI test that exercises install-app (its
+    known_bug marker)."""
     bugs = load(REGISTRY)
     for bug_id in (*FINDING_BUGS.values(), WEB_UI_BUG):
-        assert bugs[bug_id].status == "confirmed" and bugs[bug_id].evidence, bug_id
-        assert bugs[bug_id].upstream is None and bugs[bug_id].fixed_in is None, bug_id
+        bug = bugs[bug_id]
+        assert bug.status in ("confirmed", "fixed") and bug.evidence, bug_id
+        if bug.fixed:
+            assert bug.upstream and bug.fixed_in, bug_id
+        else:
+            assert bug.upstream is None and bug.fixed_in is None, bug_id
     assert "webui.cmd.install-app" in bugs["KB-002"].scenarios
     assert "two_factor_required" in bugs[WEB_UI_BUG].title
 

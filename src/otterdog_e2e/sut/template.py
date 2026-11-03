@@ -15,7 +15,7 @@ import posixpath
 import re
 import shutil
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any
@@ -28,10 +28,11 @@ if TYPE_CHECKING:
     from otterdog_e2e.github.http import GitHubHttp
     from otterdog_e2e.sut.spec import ResolvedSut
 
-UPSTREAM_TEMPLATE_FILE = "examples/template/otterdog-defaults.libsonnet"
 PUBLISHED_TEMPLATE_FILE = "otterdog-defaults.libsonnet"
 OFFLINE_TEMPLATE_URL = "https://github.com/e2e-offline/template#otterdog-defaults.libsonnet@offline"
-TEMPLATE_SOURCE_DIR = "examples/template"
+# where a SUT source keeps its standard template, newest layout first: eclipse-csi/otterdog#889 (after v1.7.1) moved
+# examples/template to otterdog/resources/defaults; older SUTs (v1.7.1 and before) only have examples/template
+TEMPLATE_SOURCE_DIRS = ("otterdog/resources/defaults", "examples/template")
 TEMPLATE_MODES = ("auto", "upstream", "publish", "url")
 UPSTREAM_KINDS = frozenset({"release", "tag", "branch"})  # their shas are reachable from upstream branches/tags
 BLOB_MODE = "100644"
@@ -41,6 +42,7 @@ HEAD_RETRY_INTERVAL = 3.0
 _GITHUB_REPO_RE = re.compile(r"^https://github\.com/([A-Za-z0-9_.\-]+)/([A-Za-z0-9_.\-]+)$")
 _FULL_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 _REPO_NAME_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
+_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _MAX_TAG_PEEL = 3
 
 _logger = logging.getLogger(__name__)
@@ -71,16 +73,31 @@ class TemplateRef:
         return bool(_FULL_SHA_RE.match(self.ref))
 
 
+def template_subdir(source_dir: Path) -> str:
+    """The TEMPLATE_SOURCE_DIRS entry holding the standard template of a SUT source (FileNotFoundError when none)."""
+    for subdir in TEMPLATE_SOURCE_DIRS:
+        path = source_dir / subdir / PUBLISHED_TEMPLATE_FILE
+        if path.is_file() and not path.is_symlink():
+            return subdir
+    raise FileNotFoundError(f"{source_dir} has no {PUBLISHED_TEMPLATE_FILE} in {' or '.join(TEMPLATE_SOURCE_DIRS)}")
+
+
+def template_source_dir(source_dir: Path) -> Path:
+    """Directory of the standard template of a SUT source: the first TEMPLATE_SOURCE_DIRS entry that has it."""
+    return source_dir / template_subdir(source_dir)
+
+
 def upstream_template(sut: ResolvedSut, upstream_repo: str) -> TemplateRef:
-    """The upstream example template at the SUT's sha (release/tag/branch SUTs only)."""
+    """The upstream standard template at the SUT's sha (release/tag/branch SUTs only), at its location in the SUT."""
     if sut.spec.kind not in UPSTREAM_KINDS:
         raise ValueError(
             f"the upstream template needs a release/tag/branch SUT (got {sut.spec.kind}): otterdog clones the "
             "template repository, which only has upstream branches and tags; publish the template instead"
         )
     name = upstream_repo.split("/", 1)[-1]
-    url = f"https://github.com/{upstream_repo}#{UPSTREAM_TEMPLATE_FILE}@{sut.sha}"
-    return TemplateRef(url=url, repo_name=name, file=UPSTREAM_TEMPLATE_FILE, ref=sut.sha)
+    file = f"{template_subdir(sut.source_dir)}/{PUBLISHED_TEMPLATE_FILE}"
+    url = f"https://github.com/{upstream_repo}#{file}@{sut.sha}"
+    return TemplateRef(url=url, repo_name=name, file=file, ref=sut.sha)
 
 
 def url_template(url: str) -> TemplateRef:
@@ -120,8 +137,8 @@ def git_blob_sha(content: bytes) -> str:
 
 
 def template_files(source_dir: Path) -> dict[str, bytes]:
-    """Every regular *.libsonnet of source_dir/examples/template (name -> content)."""
-    directory = source_dir / TEMPLATE_SOURCE_DIR
+    """Every regular *.libsonnet of the standard template directory of a SUT source (name -> content)."""
+    directory = template_source_dir(source_dir)
     files = {
         path.name: path.read_bytes()
         for path in sorted(directory.glob("*.libsonnet"))
@@ -141,7 +158,7 @@ def content_hash8(files: dict[str, bytes]) -> str:
 
 
 class TemplatePublisher:
-    """Publishes a SUT's examples/template/*.libsonnet as a tagged commit of the defaults repo."""
+    """Publishes the *.libsonnet of a SUT's standard template as a tagged commit of the defaults repo."""
 
     def __init__(self, http: GitHubHttp, verified: VerifiedOrg, repo: str) -> None:
         """Bind the publisher to the defaults repo of the verified org."""
@@ -167,7 +184,7 @@ class TemplatePublisher:
         """Publish (or verify an existing) tag ``sut-<label>-<hash8>`` and return a sha-pinned TemplateRef (its
         ``tag`` names the published or reused tag).
 
-        files = every *.libsonnet of sut.source_dir/examples/template (repo root, no hooks); hash8 = sha256 of the
+        files = every *.libsonnet of the SUT's template_source_dir (repo root, no hooks); hash8 = sha256 of the
         sorted (path, content); an existing tag must have exactly the expected root blobs (else SafetyError); otherwise
         POST git/trees (no base_tree) -> git/commits (parent: default-branch head) -> git/refs refs/tags/<tag>
         (422: accept only an identical tree); never updates the default branch.
@@ -257,7 +274,7 @@ class TemplatePublisher:
         ]
         tree = self.http.post(f"{self._api}/git/trees", json={"tree": entries})
         self._verify_entries(tree.get("tree") or [], expected, tag)
-        message = f"otterdog-e2e template {tag}\n\nexamples/template of {sut.label} ({sut.sha})\n"
+        message = f"otterdog-e2e template {tag}\n\n{template_subdir(sut.source_dir)} of {sut.label} ({sut.sha})\n"
         commit = self.http.post(
             f"{self._api}/git/commits", json={"message": message, "tree": tree["sha"], "parents": [head]}
         )
@@ -308,6 +325,36 @@ def vendor_template(
         shutil.copyfile(source, target / source.name)
     for name, source_text in (hooks or {}).items():
         (vendor_root / name).write_text(source_text, encoding="utf-8")
+
+
+HIDDEN_TEMPLATE_SUFFIX = "-sut"
+# template functions the offline local-apply tests hide: since eclipse-csi/otterdog#892 local-apply reads the code
+# security configurations of the organization from GitHub before its plan whenever the template defines them
+OFFLINE_LOCAL_APPLY_HIDDEN = ("newOrgCodeSecurityConfiguration",)
+
+
+def hide_template_functions(org_dir: Path, ref: TemplateRef, names: Sequence[str]) -> None:
+    """Make template functions of a vendored template unavailable, as in a template that predates them.
+
+    The vendored ``<file>`` becomes ``<stem>-sut.libsonnet`` (its own imports stay relative to the same directory) and
+    a wrapper ``<file>`` overrides each name with a jsonnet error: otterdog evaluates ``<function>('default')`` to tell
+    whether the template supports an object type and skips the type when that fails. Used by the offline tests of
+    local-apply, which reads the code security configurations of the organization from GitHub whenever the template
+    defines ``newOrgCodeSecurityConfiguration`` (eclipse-csi/otterdog#892).
+    """
+    unknown = [name for name in names if not _IDENTIFIER_RE.match(name)]
+    if not names or unknown:
+        raise ValueError(f"invalid template function name(s) {unknown or list(names)}")
+    file = _check_relative(ref.file)
+    target = org_dir / "vendor" / ref.repo_name / file
+    if not target.is_file():
+        raise FileNotFoundError(f"{target} is not vendored")
+    moved = target.with_name(f"{target.stem}{HIDDEN_TEMPLATE_SUFFIX}{target.suffix}")
+    if moved.exists():
+        raise FileExistsError(f"{target} already hides template functions")
+    target.rename(moved)
+    fields = ", ".join(f"{name}:: error 'hidden by otterdog-e2e: {name}'" for name in names)
+    target.write_text(f"(import '{moved.name}') + {{ {fields} }}\n", encoding="utf-8")
 
 
 def needs_publisher(mode: str, sut: ResolvedSut) -> bool:

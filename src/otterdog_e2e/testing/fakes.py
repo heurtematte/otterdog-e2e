@@ -671,6 +671,28 @@ class FakeOracle:
         """Stored list or []."""
         return self._list("org_secret_repositories", name)
 
+    def org_dependabot_secrets(self) -> list[dict[str, Any]]:
+        """Stored list or []."""
+        return self._list("org_dependabot_secrets")
+
+    def org_dependabot_secret(self, name: str) -> dict[str, Any] | None:
+        """Explicit value or the org_dependabot_secrets() entry named ``name``."""
+        items = self.org_dependabot_secrets()
+        return self._find("org_dependabot_secret", (name,), items, lambda s: s.get("name") == name)
+
+    def org_dependabot_secret_repositories(self, name: str) -> list[str]:
+        """Stored list or []."""
+        return self._list("org_dependabot_secret_repositories", name)
+
+    def org_codespaces_secrets(self) -> list[dict[str, Any]]:
+        """Stored list or []."""
+        return self._list("org_codespaces_secrets")
+
+    def org_codespaces_secret(self, name: str) -> dict[str, Any] | None:
+        """Explicit value or the org_codespaces_secrets() entry named ``name``."""
+        items = self.org_codespaces_secrets()
+        return self._find("org_codespaces_secret", (name,), items, lambda s: s.get("name") == name)
+
     def org_variables(self) -> list[dict[str, Any]]:
         """Stored list or []."""
         return self._list("org_variables")
@@ -839,6 +861,14 @@ class FakeOracle:
         """Stored feature value or None."""
         return self._feature("repo_private_vulnerability_reporting", repo)
 
+    def repo_code_security_configuration(self, repo: str) -> dict[str, Any] | None:
+        """Stored feature value or None."""
+        return self._feature("repo_code_security_configuration", repo)
+
+    def repo_immutable_releases(self, repo: str) -> dict[str, Any] | None:
+        """Explicit value, else {enabled: False} for an existing repository, else None."""
+        return self._enabled_flag("repo_immutable_releases", repo)
+
     def repo_code_scanning_default_setup(self, repo: str) -> dict[str, Any] | None:
         """Stored feature value or None."""
         return self._feature("repo_code_scanning_default_setup", repo)
@@ -960,6 +990,14 @@ class FakeOracle:
     def repo_secret(self, repo: str, name: str) -> dict[str, Any] | None:
         """Explicit value or the repo_secrets(repo) entry named ``name``."""
         return self._find("repo_secret", (repo, name), self.repo_secrets(repo), lambda s: s.get("name") == name)
+
+    def repo_dependabot_secret(self, repo: str, name: str) -> dict[str, Any] | None:
+        """Stored value or None."""
+        return self._feature("repo_dependabot_secret", repo, name)
+
+    def repo_codespaces_secret(self, repo: str, name: str) -> dict[str, Any] | None:
+        """Stored value or None."""
+        return self._feature("repo_codespaces_secret", repo, name)
 
     def repo_variables(self, name: str) -> list[dict[str, Any]]:
         """Stored list or []."""
@@ -1668,6 +1706,16 @@ class RecordingMutator:
         """Record (guard: e2e name)."""
         self._check_name("org secret", name)
         self._record("delete_org_secret", name)
+
+    def delete_org_dependabot_secret(self, name: str) -> None:
+        """Record (guard: e2e name)."""
+        self._check_name("org Dependabot secret", name)
+        self._record("delete_org_dependabot_secret", name)
+
+    def delete_org_codespaces_secret(self, name: str) -> None:
+        """Record (guard: e2e name)."""
+        self._check_name("org Codespaces secret", name)
+        self._record("delete_org_codespaces_secret", name)
 
     def delete_org_variable(self, name: str) -> None:
         """Record (guard: e2e name)."""

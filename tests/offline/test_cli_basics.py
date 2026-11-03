@@ -114,6 +114,22 @@ DEFAULT_OBJECTS = (
     "orgs.newRepoRuleset('<name>') =",
     "orgs.newEnvironment('<name>') =",
 )
+# object types show-default prints only when the template defines their function (#890 and #892, main after v1.7.1)
+TEMPLATE_DEPENDENT_OBJECTS = {
+    "newOrgDependabotSecret": "orgs.newOrgDependabotSecret('<name>') =",
+    "newOrgCodespacesSecret": "orgs.newOrgCodespacesSecret('<name>') =",
+    "newOrgCodeSecurityConfiguration": "orgs.newOrgCodeSecurityConfiguration('<name>') =",
+    "newRepoDependabotSecret": "orgs.newRepoDependabotSecret('<name>') =",
+    "newRepoCodespacesSecret": "orgs.newRepoCodespacesSecret('<name>') =",
+}
+
+
+def default_objects(cli: OtterdogCli) -> tuple[str, ...]:
+    """DEFAULT_OBJECTS plus the TEMPLATE_DEPENDENT_OBJECTS whose function the vendored template exports."""
+    workspace = cli.workspace
+    template = (workspace.org_dir / workspace.template.import_path).read_text(encoding="utf-8")
+    optional = [header for name, header in TEMPLATE_DEPENDENT_OBJECTS.items() if f"{name}:: {name}," in template]
+    return (*DEFAULT_OBJECTS, *optional)
 
 
 def table_rows(output: str) -> list[list[str]]:
@@ -226,11 +242,12 @@ def test_list_projects_lists_the_offline_organization(offline_cli: OtterdogCli) 
 
 @pytest.mark.scenario("O-SHOW-DEFAULT")
 def test_show_default_prints_every_object_type(vendored_cli: OtterdogCli) -> None:
-    """``show-default --local`` evaluates the vendored SUT template and prints the defaults of each object type."""
+    """``show-default --local`` evaluates the vendored SUT template and prints the defaults of each object type (the
+    Dependabot and Codespaces secrets and code security configurations when the template defines them)."""
     result = vendored_cli.show_default(local=True).assert_ok("show-default --local")
     text = normalize_text(result.output)
     assert text.startswith("Showing defaults configurations:"), text[:200]
-    missing = [header for header in DEFAULT_OBJECTS if header not in text]
+    missing = [header for header in default_objects(vendored_cli) if header not in text]
     assert not missing, f"show-default lacks {missing}\n{text[:2000]}"
 
 
@@ -358,7 +375,8 @@ def test_show_markdown_keeps_the_repository_links(vendored_cli: OtterdogCli) -> 
 @pytest.mark.scenario("O-SHOW-DEFAULT-MARKDOWN")
 def test_show_default_markdown_prints_one_tab_per_object(vendored_cli: OtterdogCli) -> None:
     """``show-default --markdown`` prints the template defaults as mkdocs tabs: one ``=== "<object>"`` tab per object
-    type holding a jsonnet code fence with the ``orgs.new...(...) = {`` block, and no plain-text header."""
+    type holding a jsonnet code fence with the ``orgs.new...(...) = {`` block, and no plain-text header (12 types up
+    to v1.7.1, 17 with the template of main: Dependabot and Codespaces secrets, code security configurations)."""
     result = vendored_cli.run("show-default", "--markdown", local=True).assert_ok("show-default --markdown")
     text = strip_ansi(result.stdout)
     assert "Showing defaults configurations:" not in text, text[:300]
@@ -367,9 +385,10 @@ def test_show_default_markdown_prints_one_tab_per_object(vendored_cli: OtterdogC
     tabs = [line for line in lines if line.startswith('=== "')]
     fences = [line for line in lines if line.strip() == JSONNET_FENCE]
     closing = [line for line in lines if line.strip() == "```"]
-    assert len(tabs) == len(DEFAULT_OBJECTS) == len(fences) == len(closing), (tabs, len(fences), len(closing))
+    objects = default_objects(vendored_cli)
+    assert len(tabs) == len(objects) == len(fences) == len(closing), (tabs, len(fences), len(closing))
     assert tabs[0] == '=== "Organization Settings"' and '=== "Repository"' in tabs, tabs
-    for header in DEFAULT_OBJECTS:
+    for header in objects:
         block = next((line for line in lines if line.strip().startswith(header)), None)
         assert block is not None and block.strip() == f"{header} {{", f"no block {header!r}\n{text[:1500]}"
     # every block sits inside its fence: tab, fence, block header in this order

@@ -17,7 +17,8 @@ The manifest requests exactly what otterdog's webapp needs (`appmanifest.DEFAULT
 | Commit statuses | write | | Custom properties | admin |
 | Contents | write | | Members | write |
 | Custom properties | write | | Plan | read |
-| Environments | write | | Secrets | write |
+| Dependabot secrets | write | | Secrets | write |
+| Environments | write | | | |
 | Issues | read | | Variables | write |
 | Metadata | read | | Webhooks | write |
 | Pages | write | | | |
@@ -29,6 +30,13 @@ The manifest requests exactly what otterdog's webapp needs (`appmanifest.DEFAULT
 
 Events: `issue_comment`, `pull_request`, `pull_request_review`, `push`, `workflow_job`, `workflow_run`
 (`installation` events are always delivered).
+
+Since #890 (main d9dac78, after v1.7.1) otterdog reads the Dependabot and Codespaces secrets of the organization and
+of every repository when the template defines them, and a refused read fails the validation. The manifest requests the
+repository Dependabot secrets permission; grant the repository Codespaces secrets and the organization Dependabot and
+Codespaces secrets permissions by hand in the App settings before testing such a SUT (their manifest keys are not in
+GitHub's OpenAPI description, so the manifest does not request them: see otterdog's
+`docs/operating_otterdog/install.md`).
 
 The App is private (`public: false`) and named `otterdog-e2e-<org>` (truncated to 34 characters).
 

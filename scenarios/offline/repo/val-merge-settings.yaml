@@ -7,11 +7,29 @@ description: >-
   enum and each pair against the combinations GitHub accepts (four squash pairs, three merge pairs). An invalid pair
   of valid values is one error (exit 1); an invalid value is two errors, the value and its pair. Every valid
   combination validates. otterdog exits with the number of errors, so two errors exit 2 like a crash (KB-034): the
-  last step expects exit status 1 and runs as an expected failure.
+  last step (two invalid pairs) expects exit status 1 and runs as an expected failure. Since #878 (v1.7.0) the schema
+  refuses an invalid value at load ("'X' is not one of [...]", exit 1) before the model sees it: the outcome of the
+  four value steps per SUT is asserted by ENUM_SCHEMA_STEPS of tests/offline/test_scenarios.py.
 priority: P1
 tags: [offline, repo]
 observe: true
 variables: {plan: free}
+references:
+  - pr: 878
+    note: >-
+      "Configuration guides playground": the JSON schemas enumerate the allowed values, so an invalid value is a
+      load error ("failed to load configuration: invalid value at '<path>': '<value>' is not one of [...]", exit 1)
+      before the model's own check; show fails to load the configuration too. ENUM_SCHEMA_STEPS of
+      tests/offline/test_scenarios.py asserts each side (model errors before, the load error since).
+    expected_deltas:
+      - {step: squash-title-value, kind: cli, key: validate}
+      - {step: squash-title-value, kind: cli, key: show}
+      - {step: squash-message-value, kind: cli, key: validate}
+      - {step: squash-message-value, kind: cli, key: show}
+      - {step: merge-title-value, kind: cli, key: validate}
+      - {step: merge-title-value, kind: cli, key: show}
+      - {step: merge-message-value, kind: cli, key: validate}
+      - {step: merge-message-value, kind: cli, key: show}
 steps:
   - name: squash-pair
     fragments:
@@ -42,47 +60,19 @@ steps:
   - name: squash-title-value
     fragments:
       repositories: ["orgs.newRepo('{{ p }}-merge') { squash_merge_commit_title: 'X' }"]
-    validate:
-      ok: false
-      errors: 2
-      contains:
-        - >-
-          Error: repository[name="{{ p }}-merge"] has 'squash_merge_commit_title' of value 'X', while only values
-          ('PR_TITLE' | 'COMMIT_OR_PR_TITLE') are allowed.
-        - "of value ('X', 'COMMIT_MESSAGES'), while only combinations"
+    validate: {ok: false}  # outcome per SUT (#878): ENUM_SCHEMA_STEPS of tests/offline/test_scenarios.py
   - name: squash-message-value
     fragments:
       repositories: ["orgs.newRepo('{{ p }}-merge') { squash_merge_commit_message: 'X' }"]
-    validate:
-      ok: false
-      errors: 2
-      contains:
-        - >-
-          Error: repository[name="{{ p }}-merge"] has 'squash_merge_commit_message' of value 'X', while only values
-          ('PR_BODY' | 'COMMIT_MESSAGES' | 'BLANK') are allowed.
-        - "of value ('COMMIT_OR_PR_TITLE', 'X'), while only combinations"
+    validate: {ok: false}  # outcome per SUT (#878): ENUM_SCHEMA_STEPS of tests/offline/test_scenarios.py
   - name: merge-title-value
     fragments:
       repositories: ["orgs.newRepo('{{ p }}-merge') { merge_commit_title: 'X' }"]
-    validate:
-      ok: false
-      errors: 2
-      contains:
-        - >-
-          Error: repository[name="{{ p }}-merge"] has 'merge_commit_title' of value 'X', while only values
-          ('PR_TITLE' | 'MERGE_MESSAGE') are allowed.
-        - "of value ('X', 'PR_TITLE'), while only combinations"
+    validate: {ok: false}  # outcome per SUT (#878): ENUM_SCHEMA_STEPS of tests/offline/test_scenarios.py
   - name: merge-message-value
     fragments:
       repositories: ["orgs.newRepo('{{ p }}-merge') { merge_commit_title: 'PR_TITLE', merge_commit_message: 'X' }"]
-    validate:
-      ok: false
-      errors: 2
-      contains:
-        - >-
-          Error: repository[name="{{ p }}-merge"] has 'merge_commit_message' of value 'X', while only values
-          ('PR_TITLE' | 'PR_BODY' | 'BLANK') are allowed.
-        - "of value ('PR_TITLE', 'X'), while only combinations"
+    validate: {ok: false}  # outcome per SUT (#878): ENUM_SCHEMA_STEPS of tests/offline/test_scenarios.py
   - name: valid-combinations
     base_fragments: {}
     fragments:
@@ -116,8 +106,11 @@ steps:
       counts: {add: 4, change: 0, delete: 0}
   - name: exit-status-of-two-errors
     known_bug: KB-034
-    fragments:
-      repositories: ["orgs.newRepo('{{ p }}-merge') { squash_merge_commit_title: 'X' }"]
+    fragments:  # two invalid pairs of valid values: two model errors on every SUT (values are refused at load, #878)
+      repositories:
+        - >-
+          orgs.newRepo('{{ p }}-merge') { squash_merge_commit_title: 'COMMIT_OR_PR_TITLE', squash_merge_commit_message:
+          'PR_BODY', merge_commit_title: 'MERGE_MESSAGE', merge_commit_message: 'PR_BODY' }
     validate:
       ok: false
       errors: 2

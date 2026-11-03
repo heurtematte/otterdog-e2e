@@ -20,7 +20,7 @@ Source: `docs/battery-guide.md` section 2. The unit tests named here run in `mak
 
 `<domain>` is the directory of the feature the scenario pins, the same names in every tier: a model area (`repo`,
 `workflows`, `org-settings`, `org-roles`, `teams`, `custom-properties`, `secrets`, `variables`, `webhooks`, `bpr`,
-`rulesets`, `environments`; the scenario carries that tag) or the cross-cutting `template` (the configuration as
+`rulesets`, `environments`, `code-security`; the scenario carries that tag) or the cross-cutting `template` (the configuration as
 written), `cli` (command output and flags across areas) and `plan` (diff semantics across object types). No deeper
 subdirectory; jsonnet files of one domain go into its `files/`. Regressions and known-bug reproductions sit in the
 domain of their feature (`model.domain_problem`, enforced by `tests/unit/test_yaml_cli.py`,
@@ -43,8 +43,8 @@ declared once per change. Format and use: the `otterdog-pr-tests` skill (`refere
 ## Tags
 
 Vocabulary `otterdog_e2e.selection.SCENARIO_TAGS`: model areas `repo`, `bpr`, `rulesets`, `environments`, `secrets`,
-`variables`, `webhooks`, `teams`, `custom-properties`, `org-settings`, `workflows`, `org-roles`, and `template`, `cli`,
-`webapp`, `webhooks-app`, `offline`, `smoke`. The PR lane selects scenarios by the files a PR changes through these
+`variables`, `webhooks`, `teams`, `custom-properties`, `org-settings`, `workflows`, `org-roles`, `code-security`, and
+`template`, `cli`, `webapp`, `webhooks-app`, `offline`, `smoke`. The PR lane selects scenarios by the files a PR changes through these
 tags (`PATH_RULES` of `src/otterdog_e2e/selection.py`).
 
 - offline YAML: `offline` first, then vocabulary tags only;

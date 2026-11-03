@@ -22,7 +22,7 @@ feature under test, with the same names in every tier:
 
 | Domain | Holds | Tag |
 |---|---|---|
-| `repo`, `workflows`, `org-settings`, `org-roles`, `teams`, `custom-properties`, `secrets`, `variables`, `webhooks`, `bpr`, `rulesets`, `environments` | the model area of the [selection vocabulary](#markers-and-selection) | the scenario carries it |
+| `repo`, `workflows`, `org-settings`, `org-roles`, `teams`, `custom-properties`, `secrets`, `variables`, `webhooks`, `bpr`, `rulesets`, `environments`, `code-security` | the model area of the [selection vocabulary](#markers-and-selection) | the scenario carries it |
 | `template` | the configuration as written: jsonnet, schema, canonical form, template defaults, `extendRepo` | |
 | `cli` | command behaviour and output across areas: flags, verbosity, error paths, printing | |
 | `plan` | diff semantics across object types: additions, changes, removals, renames, filters, read-only and dict fields | |
@@ -138,7 +138,7 @@ Capabilities are the values of `otterdog_e2e.capabilities.Cap` (see [capability-
 
 Tag vocabulary (also used by the PR tag selection, `otterdog_e2e.selection`): `repo`, `bpr`, `rulesets`,
 `environments`, `secrets`, `variables`, `webhooks`, `teams`, `custom-properties`, `org-settings`, `workflows`,
-`org-roles`, `template`, `cli`, `webapp`, `webhooks-app`, `offline`, `smoke` (always selected).
+`org-roles`, `code-security`, `template`, `cli`, `webapp`, `webhooks-app`, `offline`, `smoke` (always selected).
 
 ## Step fields
 
@@ -518,6 +518,8 @@ every 5 s for up to 60 s (a check's own `timeout:` in seconds extends the budget
 | `org_cache_storage_limit` | | `{max_cache_size_gb}` of the documented `/organizations/{org}/actions/cache/storage-limit` |
 | `org_cache_storage_limit_orgs_path` | | the same through `/orgs/{org}/...`, the path otterdog calls (KB-006 evidence: `unavailable: true` means that path does not work) |
 | `org_secret` | `name` | secret metadata (never the value) |
+| `org_dependabot_secret`, `org_codespaces_secret` | `name` | Dependabot or Codespaces secret metadata (otterdog from main d9dac78, #890) |
+| `org_dependabot_secret_repos` | `name` | *list* of the selected repository names of an org Dependabot secret |
 | `org_secret_repos` | `name` | *list* of selected repository names |
 | `org_variable` | `name` | variable |
 | `org_variable_repos` | `name` | *list* of selected repository names |
@@ -573,10 +575,13 @@ every 5 s for up to 60 s (a check's own `timeout:` in seconds extends the budget
 | `repo_vulnerability_alerts` | `repo` | `{enabled}` (204 enabled, 404 disabled; absent only when the repository is missing) |
 | `repo_automated_security_fixes` | `repo` | `{enabled, paused}`, `{enabled: false}` on 404 |
 | `repo_private_vulnerability_reporting` | `repo` | `{enabled}` (403/422: unavailable) |
+| `repo_code_security_configuration` | `repo` | `{status, configuration}` of the attached code security configuration (`configuration.name`); `{status: null, configuration: null}` when none is attached (204) |
+| `repo_immutable_releases` | `repo` | `{enabled, enforced_by_owner}`, `{enabled: false}` on 404 |
 | `repo_code_scanning_default_setup` | `repo` | `{state, languages, query_suite, ...}` (403, GitHub Advanced Security not enabled: unavailable) |
 | `repo_security_advisories` | `repo` | *list* of the repository's advisories (every state the owner token sees) |
 | `repo_security_advisory` | `repo`, `ghsa_id` | advisory |
 | `repo_secret` | `repo`, `name` | secret metadata |
+| `repo_dependabot_secret`, `repo_codespaces_secret` | `repo`, `name` | Dependabot or Codespaces secret metadata (#890) |
 | `repo_variable` | `repo`, `name` | variable |
 | `repo_webhook` | `repo`, `url` | hook with this config URL |
 | `repo_webhook_deliveries` | `repo`, `url` | *list* of the deliveries of the repository hook with this URL (`[]` while it does not exist) |

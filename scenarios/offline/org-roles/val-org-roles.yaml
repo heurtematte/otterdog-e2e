@@ -11,18 +11,21 @@ priority: P2
 tags: [offline, org-roles]
 observe: true
 variables: {plan: enterprise}
+references:
+  - pr: 878
+    note: >-
+      "Configuration guides playground": the JSON schemas enumerate the allowed values, so an invalid value is a
+      load error ("failed to load configuration: invalid value at '<path>': '<value>' is not one of [...]", exit 1)
+      before the model's own check; show fails to load the configuration too. ENUM_SCHEMA_STEPS of
+      tests/offline/test_scenarios.py asserts each side (model errors before, the load error since).
+    expected_deltas:
+      - {step: unknown-base-role, kind: cli, key: validate}
+      - {step: unknown-base-role, kind: cli, key: show}
 steps:
   - name: unknown-base-role
     fragments:
       roles: ["orgs.newOrgRole('{{ p }}-r1') { base_role: 'super' }"]
-    validate:
-      ok: false
-      errors: 1
-      exit_code: 1
-      contains:
-        - >-
-          org_role[name="{{ p }}-r1"] has 'base_role' of value 'super', while only values ('none' | 'read' |
-          'triage' | 'write' | 'maintain' | 'admin') are allowed.
+    validate: {ok: false}  # outcome per SUT (#878): ENUM_SCHEMA_STEPS of tests/offline/test_scenarios.py
   - name: none-with-permissions
     fragments:
       roles: ["orgs.newOrgRole('{{ p }}-r2') { base_role: 'none', permissions: ['read_audit_logs'] }"]

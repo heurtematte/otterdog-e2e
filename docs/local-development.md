@@ -410,6 +410,16 @@ The pages stay GitHub-flavored Markdown that renders on github.com; `docs_hooks.
 - GitHub callouts (`> [!WARNING]`) become admonitions;
 - `\|` in a code span of a table row (GitHub needs it to keep the pipe in its cell) loses its backslash.
 
+`docs_scenarios.py` generates the **scenario explorer** (the `scenarios/` section of the site, which exists only there):
+one page per YAML scenario of `scenarios/<tier>/<domain>/` (description, context, references, known bugs, covered
+features with their otterdog sources, each step's jsonnet, commands and expectations, the Python code quoting the
+scenario id, the YAML source) and one page per `tests/<tier>/test_*.py` module (docstring, marks and source of every
+test), with overview tables that filter and sort in the browser (`docs/assets/explorer.js`; the query string holds the
+filter, so `scenarios/?Tags=regression` can be linked). The nav entry `Scenario explorer: scenarios/index.md` of
+`mkdocs.yml` becomes the section, and `docs/scenarios/` must not exist. Nothing is written by hand there: a change of a
+scenario or a test shows on the site at the next build of `main` (the docs workflow also runs for `scenarios/**` and
+`tests/**`).
+
 Python-Markdown is stricter than GitHub in a few places. Both render the page as written when you:
 
 - indent everything nested in a list item by 4 spaces per level: sub-lists, code blocks and paragraphs (GitHub also

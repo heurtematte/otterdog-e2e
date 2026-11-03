@@ -203,7 +203,7 @@ def test_compose_environment_matches_the_compose_file(tmp_path: Path) -> None:
     assert env["E2E_GITHUB_APP_KEY_FILE"] == str(stack.key_file) and env["E2E_HYPERCORN_CFG"] == str(
         stack.hypercorn_file
     )
-    assert env["E2E_WEBAPP_PULL_POLICY"] == "never"
+    assert env["E2E_WEBAPP_PULL_POLICY"] == "never" and env["E2E_HYPERCORN_WORKERS"] == str(stack.settings.workers)
     assert (
         make_stack(tmp_path, image="ghcr.io/eclipse-csi/otterdog:v1.6.1").compose_environment()[
             "E2E_WEBAPP_PULL_POLICY"

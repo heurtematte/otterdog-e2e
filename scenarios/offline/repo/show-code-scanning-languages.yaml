@@ -1,0 +1,45 @@
+# Offline tier (battery, show): code scanning languages as loaded (eclipse-csi/otterdog#888).
+id: O-SHOW-CODE-SCANNING-LANGUAGES
+tier: offline
+title: The deprecated code scanning language javascript-typescript is loaded as javascript and typescript
+description: >-
+  Since #888 (main after v1.7.1) loading a configuration translates the deprecated code scanning language
+  'javascript-typescript' into 'javascript' and 'typescript' (deduplicated, in order), the two languages GitHub
+  reports, so a configured repository no longer differs from GitHub forever; 'javascript' and 'typescript' are valid
+  languages of their own. show prints the loaded list. Default setup stays disabled here: the offline tier never
+  validates languages against GitHub. Older SUTs skip it (fixed_in).
+priority: P2
+tags: [offline, repo]
+observe: true
+fixed_in: 1.8.0.dev3
+variables: {plan: free}
+references:
+  - pr: 888
+    note: >-
+      "fix: translate deprecated code scanning language javascript-typescript": the language is translated at load;
+      the schema of older SUTs refuses 'javascript' and 'typescript', so the scenario skips them (fixed_in).
+steps:
+  - name: deprecated-language-translated
+    fragments:
+      repositories:
+        - >-
+          orgs.newRepo('{{ p }}-lang') { code_scanning_default_setup_enabled: false, code_scanning_default_languages:
+          ['python', 'javascript-typescript', 'typescript'] }
+    validate: {ok: true, errors: 0, exit_code: 0, not_contains: ["Warning:"]}
+    commands:
+      show:
+        exit_code: 0
+        contains: ['"python"', '"javascript"', '"typescript"']
+        not_contains: [javascript-typescript]
+  - name: explicit-languages
+    fragments:
+      repositories:
+        - >-
+          orgs.newRepo('{{ p }}-lang') { code_scanning_default_setup_enabled: false, code_scanning_default_languages:
+          ['typescript'] }
+    validate: {ok: true, errors: 0, exit_code: 0, not_contains: ["Warning:", "invalid code scanning language"]}
+    commands:
+      show:
+        exit_code: 0
+        contains: ['"typescript"']
+        not_contains: ['"javascript"']

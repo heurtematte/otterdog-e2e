@@ -24,7 +24,14 @@ if TYPE_CHECKING:
     from otterdog_e2e.sut.spec import SutSpec
 
 # files of a PR that run code at build time or change templates: flagged in the classify step summary
-RISKY_PATHS = ("pyproject.toml", "poetry.lock", "docker/*", "*Dockerfile*", "examples/template/*")
+RISKY_PATHS = (
+    "pyproject.toml",
+    "poetry.lock",
+    "docker/*",
+    "*Dockerfile*",
+    "examples/template/*",
+    "otterdog/resources/defaults/*",
+)
 
 
 # --- sut ------------------------------------------------------------------------------------------------------------

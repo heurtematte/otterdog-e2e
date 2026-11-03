@@ -5,7 +5,8 @@ path-aware: ``*`` and ``?`` stay inside one path segment, ``**`` spans segments 
 ``a``). Every matching rule contributes its tags (rules are additive, order does not matter).
 
 Scenario tag vocabulary (SCENARIO_TAGS): repo, bpr, rulesets, environments, secrets, variables, webhooks, teams,
-custom-properties, org-settings, workflows, org-roles (model areas, CLI and webapp scenarios alike); template (the
+custom-properties, org-settings, workflows, org-roles, code-security (model areas, CLI and webapp scenarios alike);
+template (the
 base template / jsonnet layer); cli (CLI commands beyond plan/apply: version, list-projects, check-token-permissions,
 push/fetch-config, import, open-pr, check-status); webapp (config-repo PR workflow); webhooks-app (App webhook
 receiver and deliveries); offline (offline tier: validate/local-plan/show) and smoke (always).
@@ -35,6 +36,7 @@ MODEL_TAGS = (
     "org-settings",
     "workflows",
     "org-roles",
+    "code-security",
 )
 SCENARIO_TAGS = (*MODEL_TAGS, "template", "cli", "webapp", "webhooks-app", "offline", "smoke")
 # changes that can affect every scenario (core model/diff machinery, shared utilities, dependencies)
@@ -57,6 +59,10 @@ PATH_RULES: list[tuple[str, tuple[str, ...]]] = [
     ("otterdog/models/secret.py", ("secrets", "offline")),
     ("otterdog/models/repo_secret.py", ("secrets", "repo", "offline")),
     ("otterdog/models/organization_secret.py", ("secrets", "offline")),
+    ("otterdog/models/organization_dependabot_secret.py", ("secrets", "offline")),
+    ("otterdog/models/organization_codespaces_secret.py", ("secrets", "offline")),
+    ("otterdog/models/repo_dependabot_secret.py", ("secrets", "repo", "offline")),
+    ("otterdog/models/repo_codespaces_secret.py", ("secrets", "repo", "offline")),
     ("otterdog/models/variable.py", ("variables", "offline")),
     ("otterdog/models/repo_variable.py", ("variables", "repo", "offline")),
     ("otterdog/models/organization_variable.py", ("variables", "offline")),
@@ -71,6 +77,8 @@ PATH_RULES: list[tuple[str, tuple[str, ...]]] = [
     ("otterdog/models/repo_workflow_settings.py", ("workflows", "repo", "offline")),
     ("otterdog/models/role.py", ("org-roles", "offline")),
     ("otterdog/models/organization_role.py", ("org-roles", "offline")),
+    # code security configurations of the organization, attached to repositories (eclipse-csi/otterdog#892)
+    ("otterdog/models/organization_code_security_configuration.py", ("code-security", "repo", "offline")),
     # --- JSON schemas (validation, offline tier) ------------------------------------------------------------------
     ("otterdog/resources/schemas/**", ("offline",)),
     ("otterdog/resources/schemas/types.json", MODEL_TAGS),
@@ -87,6 +95,7 @@ PATH_RULES: list[tuple[str, tuple[str, ...]]] = [
     ("otterdog/resources/schemas/custom-property.json", ("custom-properties",)),
     ("otterdog/resources/schemas/*workflow-settings.json", ("workflows",)),
     ("otterdog/resources/schemas/*role.json", ("org-roles",)),
+    ("otterdog/resources/schemas/org-code-security-configuration.json", ("code-security",)),
     # --- GraphQL queries and web settings ---------------------------------------------------------------------------
     ("otterdog/resources/graphql/get-branch-protection-rule*.gql", ("bpr",)),
     ("otterdog/resources/graphql/get-bypass-*.gql", ("bpr",)),
@@ -109,11 +118,22 @@ PATH_RULES: list[tuple[str, tuple[str, ...]]] = [
     ),
     (
         "otterdog/providers/github/rest/org_client.py",
-        ("org-settings", "secrets", "variables", "webhooks", "rulesets", "custom-properties", "org-roles", "workflows"),
+        (
+            "org-settings",
+            "secrets",
+            "variables",
+            "webhooks",
+            "rulesets",
+            "custom-properties",
+            "org-roles",
+            "workflows",
+            "code-security",
+        ),
     ),
     ("otterdog/providers/github/rest/team_client.py", ("teams", "webapp")),
     ("otterdog/providers/github/rest/user_client.py", ("teams", "cli")),
     ("otterdog/providers/github/rest/action_client.py", ("workflows",)),
+    ("otterdog/providers/github/rest/secret_client.py", ("secrets", "environments")),  # every secret kind (#890)
     ("otterdog/providers/github/rest/app_client.py", ("webapp", "webhooks-app")),
     ("otterdog/providers/github/rest/content_client.py", ("cli", "webapp")),
     ("otterdog/providers/github/rest/reference_client.py", ("cli", "webapp")),
@@ -169,7 +189,8 @@ PATH_RULES: list[tuple[str, tuple[str, ...]]] = [
     ("otterdog/webapp/__init__.py", ("webhooks-app",)),
     ("otterdog/webapp/config.py", ("webhooks-app",)),
     # --- template, packaging and image ------------------------------------------------------------------------------
-    ("examples/template/**", ("template", "offline", "repo")),
+    ("examples/template/**", ("template", "offline", "repo")),  # the standard template up to v1.7.1
+    ("otterdog/resources/defaults/**", ("template", "offline", "repo")),  # since eclipse-csi/otterdog#889
     ("docker/**", ("webapp", "webhooks-app", "cli")),
     ("pyproject.toml", ALL_TAGS),
     ("poetry.lock", ALL_TAGS),

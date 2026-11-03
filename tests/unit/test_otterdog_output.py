@@ -487,6 +487,19 @@ def test_normalize_text_context_replacements() -> None:
     assert re.search(r"^<TMP>:\d+:\d+$", syntax, re.MULTILINE) and "/tmp/otterdog-e2e-capture" not in syntax
 
 
+def test_normalize_text_hides_api_usage_counts_in_observations() -> None:
+    """#881: the -v INFO line of each organization's API usage keeps its organization and loses its counts in
+    observations (they vary between runs); plain matching keeps them."""
+    live = (
+        "INFO     github api usage for organization 'e2e-org': rest: 12 request(s) (0 retries, 0 errors, 3 cached), "
+        "graphql: 1 request(s) (0 retries, 0 errors, 0 cached)   cli.py:1050\n"
+    )
+    observed = normalize_text(live, NormalizeContext())
+    assert observed == "INFO github api usage for organization 'e2e-org': <API-USAGE>\n"
+    assert observed == normalize_text(live.replace("12 request(s)", "15 request(s)"), NormalizeContext())
+    assert "rest: 12 request(s)" in normalize_text(live)
+
+
 def test_normalize_text_sorts_printed_sets_in_observations() -> None:
     """KB-038: values otterdog prints from Python sets come in a hash-seed dependent order; observations sort them
     (set reprs and the code scanning '"a" | "b"' list), plain matching keeps the text as printed."""

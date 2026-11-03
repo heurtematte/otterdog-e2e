@@ -2,7 +2,7 @@
 
 Each step of scenarios/cli and scenarios/enterprise is rendered for the offline organization ``e2e-offline`` (its
 description carries the safety marker; plan = ``variables.plan``, else the scenario's ``min_plan``) with the SUT's
-own examples/template vendored, then checked with ``validate --local`` through the same
+own standard template vendored, then checked with ``validate --local`` through the same
 machinery as the offline tier (OfflineEngine variables and renderer, offline OtterdogCli: dummy token, no network).
 Broken jsonnet, misplaced or misspelled fields (otterdog's "ignoring unknown properties" warning), bad library or
 fragment files and wrong expectations show up here, before any live run.
@@ -52,7 +52,9 @@ LIVE_DIRS = ("cli", "enterprise")
 TAIL_LINES = 25
 CRASH_MARKERS = ("Traceback (most recent call last)", "object has no attribute")
 CRASH_PROBLEM_PREFIX = "otterdog crashed"
-SCHEMA_ERROR_MARKER = "Failed validating '"  # a jsonschema violation: otterdog reports it as a validation error
+# a jsonschema violation, which otterdog reports as a validation error: the escaped exception before
+# eclipse-csi/otterdog#777, the load error naming the invalid value since (enum values of #878 included)
+SCHEMA_ERROR_MARKERS = ("Failed validating '", "failed to load configuration: invalid value at '")
 TEAM_BLOCKERS = frozenset({"teams fragments", "newTeam"})
 
 
@@ -140,7 +142,7 @@ def error_report_problems(result: CliResult) -> list[str]:
             f"{CRASH_PROBLEM_PREFIX} instead of reporting validation errors ({crash[0]!r}, exit {result.exit_code})"
         ]
     parsed = result.validation()
-    if SCHEMA_ERROR_MARKER in output:
+    if any(marker in output for marker in SCHEMA_ERROR_MARKERS):
         return []
     if parsed.load_error:
         return ["the configuration does not load (broken jsonnet?) instead of failing validation"]

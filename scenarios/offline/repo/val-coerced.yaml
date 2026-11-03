@@ -8,11 +8,23 @@ description: >-
   requires signoff, gh_pages_visibility below the enterprise plan, and the discussion source repository is forced to
   has_discussions true. The control step shows the coercion in 'show --local'; the documented warnings and errors of
   repository.py (has_projects ignored, signoff ignored, discussions disabled on the source repository, an invalid
-  Pages visibility) therefore never print (KB-033, coverage finding F-06): each runs as an expected failure.
+  Pages visibility) therefore never print (KB-033, coverage finding F-06): each runs as an expected failure. Since
+  #878 (v1.7.0) the schema refuses the invalid Pages visibility at load, before the coercion: that step is asserted
+  per SUT by ENUM_SCHEMA_STEPS of tests/offline/test_scenarios.py (KB-033 before #878, the load error since).
 priority: P2
 tags: [offline, repo, org-settings]
 observe: true
 variables: {plan: free}
+references:
+  - pr: 878
+    note: >-
+      "Configuration guides playground": the JSON schemas enumerate the allowed values, so an invalid value is a
+      load error ("failed to load configuration: invalid value at '<path>': '<value>' is not one of [...]", exit 1)
+      before the model's own check; show fails to load the configuration too. ENUM_SCHEMA_STEPS of
+      tests/offline/test_scenarios.py asserts each side (model errors before, the load error since).
+    expected_deltas:
+      - {step: pages-visibility-below-enterprise, kind: cli, key: validate}
+      - {step: pages-visibility-below-enterprise, kind: cli, key: show}
 steps:
   - name: coerced-at-load
     fragments:
@@ -73,7 +85,6 @@ steps:
           Error: repository[name="{{ p }}-discussions"] has 'has_discussions' disabled, while the organization uses
           this repo as source repository for discussions.
   - name: pages-visibility-below-enterprise
-    known_bug: KB-033
     fragments:
       repositories:
         - |-
@@ -82,11 +93,5 @@ steps:
             gh_pages_visibility: 'hidden',
             environments: [orgs.newEnvironment('github-pages')],
           }
-    validate:
-      ok: false
-      errors: 1
-      exit_code: 1
-      contains:
-        - >-
-          Error: repository[name="{{ p }}-pages"] has 'gh_pages_visibility' set to value 'hidden', while only values
-          ['public' | 'private'] are allowed.
+    # no validate expectation: KB-033 before #878, a load error since (test_scenarios.py ENUM_SCHEMA_STEPS)
+    commands: {show: {exit_code: null}}

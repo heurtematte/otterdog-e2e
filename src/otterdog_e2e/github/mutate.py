@@ -475,6 +475,16 @@ class Mutator:
         self._check_name("org secret", name)
         self._delete(f"{self._orgp}/actions/secrets/{_q(name)}")
 
+    def delete_org_dependabot_secret(self, name: str) -> None:
+        """DELETE /orgs/{org}/dependabot/secrets/{name} (e2e names only)."""
+        self._check_name("org Dependabot secret", name)
+        self._delete(f"{self._orgp}/dependabot/secrets/{_q(name)}")
+
+    def delete_org_codespaces_secret(self, name: str) -> None:
+        """DELETE /orgs/{org}/codespaces/secrets/{name} (e2e names only)."""
+        self._check_name("org Codespaces secret", name)
+        self._delete(f"{self._orgp}/codespaces/secrets/{_q(name)}")
+
     def delete_org_variable(self, name: str) -> None:
         """DELETE /orgs/{org}/actions/variables/{name} (e2e names only)."""
         self._check_name("org variable", name)

@@ -21,10 +21,12 @@ from otterdog_e2e.sut.template import (
     TemplateRef,
     content_hash8,
     git_blob_sha,
+    hide_template_functions,
     needs_publisher,
     offline_template,
     resolve_template,
     template_files,
+    template_source_dir,
     upstream_template,
     url_template,
     vendor_template,
@@ -42,11 +44,16 @@ TEMPLATE = {
 
 
 def make_sut(
-    tmp_path: Path, raw: str = "v1.6.1", *, label: str = "v1.6.1", files: dict[str, str] | None = None
+    tmp_path: Path,
+    raw: str = "v1.6.1",
+    *,
+    label: str = "v1.6.1",
+    files: dict[str, str] | None = None,
+    subdir: str = "examples/template",
 ) -> ResolvedSut:
-    """A ResolvedSut whose source dir holds examples/template files."""
+    """A ResolvedSut whose source dir holds template files in ``subdir`` (the layout of v1.7.1 and before)."""
     source = tmp_path / "source"
-    template_dir = source / "examples" / "template"
+    template_dir = source / subdir
     template_dir.mkdir(parents=True, exist_ok=True)
     for name, content in (files if files is not None else TEMPLATE).items():
         (template_dir / name).write_text(content)
@@ -63,6 +70,32 @@ def test_upstream_template_is_sha_pinned(tmp_path: Path) -> None:
     assert ref.url == f"https://github.com/eclipse-csi/otterdog#examples/template/otterdog-defaults.libsonnet@{SHA}"
     assert (ref.repo_name, ref.ref, ref.is_pinned, ref.tag) == ("otterdog", SHA, True, None)  # tags: published only
     assert ref.import_path == "vendor/otterdog/examples/template/otterdog-defaults.libsonnet"
+
+
+def test_upstream_template_follows_the_packaged_defaults(tmp_path: Path) -> None:
+    """SUTs with eclipse-csi/otterdog#889 keep the template in otterdog/resources/defaults: the URL points there, and
+    that directory wins over a leftover examples/template."""
+    sut = make_sut(tmp_path, subdir="otterdog/resources/defaults")
+    file = "otterdog/resources/defaults/otterdog-defaults.libsonnet"
+    ref = upstream_template(sut, "eclipse-csi/otterdog")
+    assert (ref.url, ref.file) == (f"https://github.com/eclipse-csi/otterdog#{file}@{SHA}", file)
+    assert ref.import_path == f"vendor/otterdog/{file}"
+    assert template_source_dir(sut.source_dir) == sut.source_dir / "otterdog" / "resources" / "defaults"
+    make_sut(tmp_path, files={"otterdog-defaults.libsonnet": "{ old: true }\n"})  # same source dir, old layout too
+    assert template_source_dir(sut.source_dir) == sut.source_dir / "otterdog" / "resources" / "defaults"
+    assert (
+        template_files(sut.source_dir)["otterdog-defaults.libsonnet"]
+        == TEMPLATE["otterdog-defaults.libsonnet"].encode()
+    )
+
+
+def test_template_source_dir_needs_the_defaults_file(tmp_path: Path) -> None:
+    """A source without otterdog-defaults.libsonnet in either layout is an error naming both directories."""
+    sut = make_sut(tmp_path, files={"otterdog-functions.libsonnet": "{}"})
+    with pytest.raises(FileNotFoundError, match="otterdog/resources/defaults or examples/template"):
+        template_source_dir(sut.source_dir)
+    with pytest.raises(FileNotFoundError):
+        upstream_template(sut, "eclipse-csi/otterdog")
 
 
 @pytest.mark.parametrize("raw", [f"pr:1@{SHA}", "sha:a07ce8a", "path:/x", "dirty:/x"])
@@ -147,6 +180,28 @@ def test_vendor_template_writes_hook_files_at_the_template_root(tmp_path: Path) 
     assert (root / "pre-add-object-hook.py").is_file()  # refused before the old vendored files were touched
     vendor_template(src, org_dir, offline_template())
     assert not (root / "pre-add-object-hook.py").exists() and set(HOOK_FILES).isdisjoint(p.name for p in root.iterdir())
+
+
+def test_hide_template_functions_wraps_the_vendored_file(tmp_path: Path) -> None:
+    """The vendored file is kept as <stem>-sut.libsonnet and wrapped with error fields; twice or bad names refused."""
+    sut = make_sut(tmp_path)
+    org_dir = tmp_path / "orgs" / "o"
+    vendor_template(sut.source_dir / "examples" / "template", org_dir, offline_template())
+    hide_template_functions(org_dir, offline_template(), ["newOrgCodeSecurityConfiguration"])
+    root = org_dir / "vendor" / "template"
+    assert (root / "otterdog-defaults-sut.libsonnet").read_text() == TEMPLATE["otterdog-defaults.libsonnet"]
+    assert (root / "otterdog-defaults.libsonnet").read_text() == (
+        "(import 'otterdog-defaults-sut.libsonnet') + "
+        "{ newOrgCodeSecurityConfiguration:: error 'hidden by otterdog-e2e: newOrgCodeSecurityConfiguration' }\n"
+    )
+    with pytest.raises(FileExistsError):
+        hide_template_functions(org_dir, offline_template(), ["newOrgRuleset"])
+    with pytest.raises(ValueError, match="invalid template function"):
+        hide_template_functions(org_dir, offline_template(), ["new-org"])
+    with pytest.raises(ValueError):
+        hide_template_functions(org_dir, offline_template(), [])
+    with pytest.raises(FileNotFoundError):
+        hide_template_functions(tmp_path / "other", offline_template(), ["newOrgRuleset"])
 
 
 # --- resolve_template ------------------------------------------------------------------------------------------------

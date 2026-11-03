@@ -26,6 +26,15 @@ references:
       - {step: review-count-range, kind: cli, key: show}
       - {step: valid-limits, kind: cli, key: show}
       - {step: valid-limits, kind: cli, key: local-plan}
+  - pr: 878
+    note: >-
+      "Configuration guides playground": the JSON schemas enumerate the allowed values, so an invalid value is a
+      load error ("failed to load configuration: invalid value at '<path>': '<value>' is not one of [...]", exit 1)
+      before the model's own check; show fails to load the configuration too. ENUM_SCHEMA_STEPS of
+      tests/offline/test_scenarios.py asserts each side (model errors before, the load error since).
+    expected_deltas:
+      - {step: merge-queue-values, kind: cli, key: validate}
+      - {step: merge-queue-values, kind: cli, key: show}
 steps:
   - name: review-count-range
     fragments:
@@ -59,13 +68,7 @@ steps:
               },
             ],
           }
-    validate:
-      ok: false
-      errors: 3
-      contains:
-        - "has 'required_merge_queue.merge_method' of value 'FAST', only values ('MERGE' | 'SQUASH' | 'REBASE') are allowed."
-        - "has 'required_merge_queue.build_concurrency' of value '-1' while only non-negative integers are allowed."
-        - "has 'required_merge_queue.status_check_timeout' of value '-5' while only non-negative integers are allowed."
+    validate: {ok: false}  # outcome per SUT (#878): ENUM_SCHEMA_STEPS of tests/offline/test_scenarios.py
   - name: valid-limits
     base_fragments: {}
     fragments:

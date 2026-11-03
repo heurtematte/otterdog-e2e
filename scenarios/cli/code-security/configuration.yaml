@@ -1,0 +1,100 @@
+# code-security.configuration.lifecycle, .settings and .repository-attachment (P1), org_level: an organization code
+# security configuration and its repository end to end (eclipse-csi/otterdog#892).
+id: cli.code-security.configuration
+title: Code security configuration (create, attach to a new repository, change, delete)
+tier: cli
+description: |
+  Since #892 (main after v1.7.1) otterdog manages the code security configurations of the organization
+  (POST/PATCH/DELETE /orgs/{org}/code-security/configurations, otterdog/providers/github/rest/org_client.py:321-515)
+  and the configuration a repository names (attached after the repository is created,
+  POST .../configurations/{id}/attach). The configuration keeps both GitHub Advanced Security products disabled, so
+  it is valid on every plan (a free organization only accepts both products of the same status), and enables
+  Dependabot alerts. A new repository naming it is created and attached; the security settings the configuration
+  controls are not planned on that repository, so the plan converges. A change of the description and of
+  dependabot_security_updates is one PATCH; the last step deletes the configuration (apply -d, GitHub detaches the
+  repository) while the repository keeps a null reference (null never detaches). Every plan of such a SUT lists the
+  organization configurations that are not in the configuration as deletions: with -d the guard refuses to delete a
+  configuration without the run prefix, so the test organization must hold no foreign organization configuration
+  (GitHub's global configurations are not managed). Older SUTs skip it (fixed_in). org_level: unfiltered plans, full
+  baseline reset as cleanup; the janitor sweeps run-named configurations.
+priority: P1
+org_level: true
+fixed_in: 1.8.0.dev7
+tags: [code-security, repo]
+references:
+  - pr: 892
+    note: >-
+      "feat(org): manage code security configurations": configurations are created, attached, changed and deleted;
+      older SUTs have no newOrgCodeSecurityConfiguration and skip the scenario (fixed_in).
+steps:
+  - name: create
+    fragments:
+      extra: &config
+        - |-
+          code_security_configurations: [
+            orgs.newOrgCodeSecurityConfiguration('{{ p }}-csc') {
+              description: 'otterdog e2e: code security configuration',
+              dependabot_alerts: 'enabled',
+            },
+          ]
+    plan:
+      expect: changes
+      contains: ['+ add org_code_security_configuration[name="{{ p }}-csc"]']
+    state:
+      - kind: code_security_configuration
+        name: "{{ p }}-csc"
+        match:
+          description: "otterdog e2e: code security configuration"
+          dependabot_alerts: enabled
+          dependabot_security_updates: disabled
+          enforcement: enforced
+
+  - name: attach-new-repository
+    fragments:
+      extra: *config
+      repositories:
+        - "orgs.newRepo('{{ p }}-app') { description: 'otterdog e2e: attached repository', code_security_configuration: '{{ p }}-csc' }"
+    plan:
+      expect: changes
+      contains: ['+ add repository[name="{{ p }}-app"]', "code_security_configuration"]
+      not_contains: ["dependabot_alerts_enabled"]
+    state:
+      - kind: repo_code_security_configuration
+        repo: "{{ p }}-app"
+        match: {configuration: {name: "{{ p }}-csc"}}
+        timeout: 120
+
+  - name: change
+    fragments:
+      extra:
+        - |-
+          code_security_configurations: [
+            orgs.newOrgCodeSecurityConfiguration('{{ p }}-csc') {
+              description: 'otterdog e2e: changed configuration',
+              dependabot_alerts: 'enabled',
+              dependabot_security_updates: 'enabled',
+            },
+          ]
+      repositories: &attached
+        - "orgs.newRepo('{{ p }}-app') { description: 'otterdog e2e: attached repository', code_security_configuration: '{{ p }}-csc' }"
+    plan:
+      expect: changes
+      contains:
+        - '~ org_code_security_configuration[name="{{ p }}-csc"]'
+        - '"disabled" -> "enabled"'
+    state:
+      - kind: code_security_configuration
+        name: "{{ p }}-csc"
+        match: {description: "otterdog e2e: changed configuration", dependabot_security_updates: enabled}
+        timeout: 120
+
+  - name: delete
+    fragments:
+      repositories: ["orgs.newRepo('{{ p }}-app') { description: 'otterdog e2e: attached repository' }"]
+    plan:
+      expect: changes
+      contains: ['- remove org_code_security_configuration[name="{{ p }}-csc"]']
+      not_contains: ['~ repository[name="{{ p }}-app"]']
+    apply: {delete: true}
+    state:
+      - {kind: code_security_configuration, name: "{{ p }}-csc", absent: true}

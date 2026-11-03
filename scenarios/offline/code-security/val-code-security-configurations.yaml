@@ -1,0 +1,243 @@
+# Offline tier (battery, validation): organization code security configurations (eclipse-csi/otterdog#892).
+id: O-VAL-CODE-SECURITY
+tier: offline
+title: Code security configurations and the repositories referencing them are validated
+description: >-
+  Since #892 (main after v1.7.1) the organization manages code_security_configurations
+  (orgs.newOrgCodeSecurityConfiguration) and a repository names the one attached to it (code_security_configuration).
+  OrganizationCodeSecurityConfiguration.validate refuses a feature enabled while its product (code_security,
+  secret_protection) is disabled, products of a different status on the free plan, a labeled runner without label,
+  bypass reviewers that are neither '@<org>/<team>' nor a known role, and warns about settings without effect;
+  GitHubOrganization.validate refuses a default configuration while default_code_security_configurations_disabled is
+  true and two defaults for the same visibility; Repository.validate refuses a reference to an undefined
+  configuration. Enum values are schema errors at load. None of these checks calls GitHub. Older SUTs skip it.
+priority: P1
+tags: [offline, code-security, repo]
+observe: true
+fixed_in: 1.8.0.dev7
+variables: {plan: free}
+references:
+  - pr: 892
+    note: >-
+      "feat(org): manage code security configurations": adds the model, its validation and the repository reference;
+      the template of older SUTs has no newOrgCodeSecurityConfiguration, so the scenario skips them (fixed_in).
+steps:
+  - name: default-while-defaults-disabled
+    fragments:
+      extra:
+        - "code_security_configurations: [orgs.newOrgCodeSecurityConfiguration('{{ p }}-default') { default_for_new_repos: 'public' }]"
+    validate:
+      ok: false
+      errors: 1
+      exit_code: 1
+      contains:
+        - >-
+          org_code_security_configuration[name="{{ p }}-default"] is set as default for new repositories, while
+          setting 'default_code_security_configurations_disabled' of the organization removes any default code
+          security configuration, set it to 'false' to use a default code security configuration.
+  - name: two-defaults-for-public
+    fragments:
+      settings: ["default_code_security_configurations_disabled: false"]
+      extra:
+        - |-
+          code_security_configurations: [
+            orgs.newOrgCodeSecurityConfiguration('{{ p }}-all') { default_for_new_repos: 'all' },
+            orgs.newOrgCodeSecurityConfiguration('{{ p }}-public') { default_for_new_repos: 'public' },
+          ]
+    validate:
+      ok: false
+      errors: 1
+      exit_code: 1
+      contains:
+        - >-
+          org_code_security_configuration[name="{{ p }}-public"] is set as default for new 'public' repositories,
+          while code security configuration '{{ p }}-all' is already the default for them.
+  - name: feature-without-product
+    fragments:
+      extra:
+        - "code_security_configurations: [orgs.newOrgCodeSecurityConfiguration('{{ p }}-scan') { code_scanning_default_setup: 'enabled' }]"
+    validate:
+      ok: false
+      errors: 1
+      exit_code: 1
+      contains:
+        - >-
+          org_code_security_configuration[name="{{ p }}-scan"] has 'code_scanning_default_setup' enabled while
+          'code_security' is disabled, GitHub requires 'code_security' to be enabled for it.
+  - name: products-differ-on-free
+    fragments:
+      extra:
+        - "code_security_configurations: [orgs.newOrgCodeSecurityConfiguration('{{ p }}-mixed') { code_security: 'enabled' }]"
+    validate:
+      ok: false
+      errors: 1
+      exit_code: 1
+      contains:
+        - >-
+          org_code_security_configuration[name="{{ p }}-mixed"] has 'code_security' and 'secret_protection' of a
+          different status, which is not available for an organization with free plan, both have to be enabled or
+          disabled.
+  - name: labeled-runner
+    fragments:
+      extra:
+        - |-
+          code_security_configurations: [
+            orgs.newOrgCodeSecurityConfiguration('{{ p }}-nolabel') {
+              code_security: 'enabled',
+              secret_protection: 'enabled',
+              code_scanning_default_setup: 'enabled',
+              code_scanning_default_setup_runner_type: 'labeled',
+            },
+            orgs.newOrgCodeSecurityConfiguration('{{ p }}-standard') {
+              code_security: 'enabled',
+              secret_protection: 'enabled',
+              code_scanning_default_setup: 'enabled',
+              code_scanning_default_setup_runner_type: 'standard',
+              code_scanning_default_setup_runner_label: 'e2e',
+            },
+          ]
+    validate:
+      ok: false
+      errors: 1
+      warnings_min: 1
+      exit_code: 1
+      contains:
+        - >-
+          org_code_security_configuration[name="{{ p }}-nolabel"] has 'code_scanning_default_setup_runner_type' set to
+          'labeled', but no 'code_scanning_default_setup_runner_label' is specified.
+        - >-
+          org_code_security_configuration[name="{{ p }}-standard"] has 'code_scanning_default_setup_runner_label'
+          specified, which is only taken into account if 'code_scanning_default_setup_runner_type' is set to 'labeled'.
+  - name: bypass-reviewers
+    fragments:
+      extra:
+        - |-
+          code_security_configurations: [
+            orgs.newOrgCodeSecurityConfiguration('{{ p }}-bypass') {
+              code_security: 'enabled',
+              secret_protection: 'enabled',
+              secret_scanning: 'enabled',
+              secret_scanning_push_protection: 'enabled',
+              secret_scanning_delegated_bypass: 'enabled',
+              secret_scanning_delegated_bypass_reviewers: ['nobody', '#Admin', '#Write:never'],
+            },
+            orgs.newOrgCodeSecurityConfiguration('{{ p }}-noreviewer') {
+              code_security: 'enabled',
+              secret_protection: 'enabled',
+              secret_scanning: 'enabled',
+              secret_scanning_push_protection: 'enabled',
+              secret_scanning_delegated_bypass: 'enabled',
+              secret_scanning_delegated_bypass_reviewers: [],
+            },
+          ]
+    validate:
+      ok: false
+      errors: 3
+      warnings_min: 1
+      contains:
+        - >-
+          org_code_security_configuration[name="{{ p }}-bypass"] has an invalid bypass reviewer 'nobody', only teams
+          ('@<org>/<team-slug>') or roles ('#<role>') are supported.
+        - >-
+          org_code_security_configuration[name="{{ p }}-bypass"] has bypass reviewer '#Admin' with unknown role
+          'Admin', only roles ('RepositoryAdmin' | 'Write' | 'Maintain' | 'OrganizationAdmin') or the id of a custom
+          role are supported.
+        - >-
+          org_code_security_configuration[name="{{ p }}-bypass"] has bypass reviewer '#Write:never' with mode 'never',
+          while only modes ('always' | 'exempt') are allowed.
+        - >-
+          org_code_security_configuration[name="{{ p }}-noreviewer"] has 'secret_scanning_delegated_bypass' enabled,
+          but no 'secret_scanning_delegated_bypass_reviewers' are specified.
+  - name: settings-without-effect
+    fragments:
+      extra:
+        - |-
+          code_security_configurations: [
+            orgs.newOrgCodeSecurityConfiguration('{{ p }}-noeffect') {
+              code_security: 'enabled',
+              secret_protection: 'enabled',
+              secret_scanning_push_protection: 'enabled',
+              dependabot_security_updates: 'enabled',
+            },
+          ]
+    validate:
+      ok: true
+      errors: 0
+      warnings_min: 2
+      exit_code: 0
+      contains:
+        - >-
+          org_code_security_configuration[name="{{ p }}-noeffect"] has 'secret_scanning_push_protection' enabled while
+          'secret_scanning' is disabled, the setting will have no effect.
+        - >-
+          org_code_security_configuration[name="{{ p }}-noeffect"] has 'dependabot_security_updates' enabled while
+          'dependabot_alerts' is disabled, the setting will have no effect.
+  - name: undefined-reference
+    fragments:
+      extra:
+        - "code_security_configurations: [orgs.newOrgCodeSecurityConfiguration('{{ p }}-defined')]"
+      repositories:
+        - "orgs.newRepo('{{ p }}-app') { code_security_configuration: '{{ p }}-undefined' }"
+        - "orgs.newRepo('{{ p }}-case') { code_security_configuration: '{{ p | upper }}-DEFINED' }"
+    validate:
+      ok: false
+      errors: 2
+      contains:
+        - >-
+          repository[name="{{ p }}-app"] has 'code_security_configuration' set to '{{ p }}-undefined', but no such
+          code security configuration is defined for the organization.
+        - >-
+          repository[name="{{ p }}-case"] has 'code_security_configuration' set to '{{ p | upper }}-DEFINED', but no
+          such code security configuration is defined for the organization.
+  - name: unknown-status
+    fragments:
+      extra:
+        - "code_security_configurations: [orgs.newOrgCodeSecurityConfiguration('{{ p }}-status') { secret_scanning: 'on' }]"
+    validate:
+      ok: false
+      exit_code: 1
+      contains:
+        - >-
+          failed to load configuration: invalid value at
+          'code_security_configurations[name="{{ p }}-status"].secret_scanning': 'on' is not one of ['enabled',
+          'disabled', 'not_set']
+  - name: valid-configuration
+    base_fragments: {}
+    fragments:
+      settings: ["default_code_security_configurations_disabled: false"]
+      extra:
+        - |-
+          code_security_configurations: [
+            orgs.newOrgCodeSecurityConfiguration('{{ p }}-baseline') {
+              description: 'e2e baseline',
+              code_security: 'enabled',
+              secret_protection: 'enabled',
+              dependabot_alerts: 'enabled',
+              secret_scanning: 'enabled',
+              secret_scanning_push_protection: 'enabled',
+              default_for_new_repos: 'public',
+            },
+          ]
+      repositories:
+        - "orgs.newRepo('{{ p }}-app') { code_security_configuration: '{{ p }}-baseline' }"
+    validate:
+      ok: true
+      errors: 0
+      exit_code: 0
+      contains: ["Validation succeeded"]
+      not_contains: ["Warning:"]
+    plan:
+      expect: changes
+      counts: {add: 2}
+      contains:
+        - '+ add org_code_security_configuration[name="{{ p }}-baseline"]'
+        - '+ add repository[name="{{ p }}-app"]'
+        - "+ code_security_configuration "
+      # the settings the attached configuration controls are not managed on the repository
+      not_contains: ["dependabot_alerts_enabled", "private_vulnerability_reporting_enabled"]
+    commands:
+      show:
+        exit_code: 0
+        contains:
+          - 'org_code_security_configuration[name="{{ p }}-baseline"]'
+          - code_security_configuration

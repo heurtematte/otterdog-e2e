@@ -42,11 +42,11 @@ jobs:
           python -m pip install --disable-pip-version-check --no-input "poetry==${POETRY_VERSION}"
           poetry install --no-interaction --with dev
       - name: ruff check
-        run: .venv/bin/ruff check src tests docs_hooks.py
+        run: .venv/bin/ruff check src tests docs_hooks.py docs_scenarios.py
       - name: ruff format
-        run: .venv/bin/ruff format --check src tests docs_hooks.py
+        run: .venv/bin/ruff format --check src tests docs_hooks.py docs_scenarios.py
       - name: mypy
-        run: .venv/bin/mypy src docs_hooks.py
+        run: .venv/bin/mypy src docs_hooks.py docs_scenarios.py
 
   unit:
     name: unit tier

@@ -121,7 +121,20 @@ JOB_PERMISSIONS = {
 }
 PAGES_ENVIRONMENT = {"name": "github-pages", "url": "${{ steps.deployment.outputs.page_url }}"}
 DEPLOY_CONDITION = "github.event_name != 'pull_request' && github.ref == 'refs/heads/main'"
-DOCS_PATHS = ["docs/**", "README.md", "mkdocs.yml", "docs_hooks.py", ".github/workflows/docs.yml"]
+# the sources of the site, the scenario explorer's included (docs_scenarios.py reads scenarios/, tests/, CHECK_KINDS and
+# the oracle)
+DOCS_PATHS = [
+    "docs/**",
+    "README.md",
+    "mkdocs.yml",
+    "docs_hooks.py",
+    "docs_scenarios.py",
+    "scenarios/**",
+    "tests/**/*.py",
+    "src/otterdog_e2e/scenarios/checks.py",
+    "src/otterdog_e2e/github/oracle.py",
+    ".github/workflows/docs.yml",
+]
 MAKE_TARGETS = (
     "help",
     "init",

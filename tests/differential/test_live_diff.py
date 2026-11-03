@@ -23,7 +23,7 @@ from otterdog_e2e.context import SutPair, get_context
 from otterdog_e2e.observe import load_observations
 from otterdog_e2e.scenarios.collect import collect_scenarios, scenario_params
 from otterdog_e2e.scenarios.engine import DifferentialRunner
-from otterdog_e2e.sut.template import TEMPLATE_SOURCE_DIR
+from otterdog_e2e.sut.template import template_source_dir
 
 if TYPE_CHECKING:
     from otterdog_e2e.context import E2EContext
@@ -48,7 +48,7 @@ def live_runner(sut_pair: SutPair, e2e: E2EContext) -> DifferentialRunner:
         base=sut_pair.base,
         head=sut_pair.head,
         renderer_factory=lambda side: e2e.renderer(side.template),
-        template_src_for=lambda side: side.installed.sut.source_dir / TEMPLATE_SOURCE_DIR,
+        template_src_for=lambda side: template_source_dir(side.installed.sut.source_dir),
     )
     runner.run_ctx = e2e.run_ctx
     runner.variables = e2e.scenario_variables()

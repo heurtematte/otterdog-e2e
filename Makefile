@@ -27,7 +27,7 @@ E2E := $(VENV)/bin/otterdog-e2e
 PYTHON := $(VENV)/bin/python
 POETRY ?= poetry
 # Python files outside the package: the MkDocs hooks of the documentation site
-HOOKS := docs_hooks.py
+HOOKS := docs_hooks.py docs_scenarios.py
 
 # one target instance, or several for the run-based targets, pr, doctor and janitor: a comma list, @all, @<list>
 TARGET ?= $(E2E_TARGET)

@@ -7,11 +7,23 @@ description: >-
   the plan does not offer, an unknown visibility, lowercase names, the reserved GITHUB_ prefix, selected_repositories
   ignored outside 'selected'), but GitHubOrganization.validate never calls it (KB-028, coverage finding F-01): the
   strict expectation runs as an expected failure of its own step, while the control step checks that valid
-  organization variables validate and are planned.
+  organization variables validate and are planned. Since #878 (v1.7.0) the schema refuses an unknown visibility at
+  load: step invalid-visibility is a load error there and an expected failure of KB-028 before (its outcome per SUT
+  is asserted by ENUM_SCHEMA_STEPS of tests/offline/test_scenarios.py).
 priority: P1
 tags: [offline, variables]
 observe: true
 variables: {plan: free}
+references:
+  - pr: 878
+    note: >-
+      "Configuration guides playground": the JSON schemas enumerate the allowed values, so an invalid value is a
+      load error ("failed to load configuration: invalid value at '<path>': '<value>' is not one of [...]", exit 1)
+      before the model's own check; show fails to load the configuration too. ENUM_SCHEMA_STEPS of
+      tests/offline/test_scenarios.py asserts each side (model errors before, the load error since).
+    expected_deltas:
+      - {step: invalid-visibility, kind: cli, key: validate}
+      - {step: invalid-visibility, kind: cli, key: show}
 steps:
   - name: invalid-variables
     known_bug: KB-028
@@ -20,11 +32,10 @@ steps:
         - "orgs.newOrgVariable('{{ P }}_PRIV') { value: 'x', visibility: 'private' }"
         - "orgs.newOrgVariable('{{ P | lower }}_lower') { value: 'x' }"
         - "orgs.newOrgVariable('GITHUB_{{ P }}') { value: 'x' }"
-        - "orgs.newOrgVariable('{{ P }}_VIS') { value: 'x', visibility: 'nonsense' }"
         - "orgs.newOrgVariable('{{ P }}_SEL') { value: 'x', visibility: 'public', selected_repositories: ['{{ p }}-r'] }"
     validate:
       ok: false
-      errors: 4
+      errors: 3
       warnings_min: 1
       contains:
         - >-
@@ -35,11 +46,14 @@ steps:
           uppercase, while only uppercase names are allowed for variables.
         - "org_variable[name=\"GITHUB_{{ P }}\"] starts with prefix 'GITHUB_', which is not allowed for variables."
         - >-
-          org_variable[name="{{ P }}_VIS"] has 'visibility' of value 'nonsense', while only values ('public' |
-          'private' | 'selected') are allowed.
-        - >-
           org_variable[name="{{ P }}_SEL"] has 'visibility' set to 'public', but 'selected_repositories' is set to
           '['{{ p }}-r']', setting will be ignored.
+  - name: invalid-visibility
+    fragments:
+      variables:
+        - "orgs.newOrgVariable('{{ P }}_VIS') { value: 'x', visibility: 'nonsense' }"
+    # no validate expectation: KB-028 before #878, a load error since (test_scenarios.py ENUM_SCHEMA_STEPS)
+    commands: {show: {exit_code: null}}
   - name: valid-variables
     base_fragments: {}
     fragments:

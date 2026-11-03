@@ -165,6 +165,45 @@ def test_vulnerability_alerts_204_404_semantics(api: responses.RequestsMock, ora
     assert oracle.repo_vulnerability_alerts("r") is None
 
 
+def test_code_security_configuration_and_immutable_releases(api: responses.RequestsMock, oracle: Oracle) -> None:
+    """The attached configuration: 200 -> the body, 204 (none attached) -> nulls, 404 -> None; immutable releases:
+    200 -> the body, 404 on an existing repository -> {enabled: False}."""
+    url = f"{REPO}/code-security-configuration"
+    api.add(responses.GET, url, json={"status": "attached", "configuration": {"id": 7, "name": "e2e-x"}})
+    api.add(responses.GET, url, status=204)
+    api.add(responses.GET, url, status=404, json=NOT_FOUND)
+    assert oracle.repo_code_security_configuration("r") == {
+        "status": "attached",
+        "configuration": {"id": 7, "name": "e2e-x"},
+    }
+    assert oracle.repo_code_security_configuration("r") == {"status": None, "configuration": None}
+    assert oracle.repo_code_security_configuration("r") is None
+    url = f"{REPO}/immutable-releases"
+    api.add(responses.GET, url, json={"enabled": True, "enforced_by_owner": False})
+    api.add(responses.GET, url, status=404, json=NOT_FOUND)
+    api.add(responses.GET, REPO, json={"name": "r"})
+    assert oracle.repo_immutable_releases("r") == {"enabled": True, "enforced_by_owner": False}
+    assert oracle.repo_immutable_releases("r") == {"enabled": False}
+
+
+def test_dependabot_and_codespaces_secrets(api: responses.RequestsMock, oracle: Oracle) -> None:
+    """Organization and repository Dependabot and Codespaces secrets: metadata, None on 404, selected repositories."""
+    api.add(responses.GET, f"{ORG}/dependabot/secrets/S", json={"name": "S", "visibility": "selected"})
+    api.add(responses.GET, f"{ORG}/codespaces/secrets/S", status=404, json=NOT_FOUND)
+    api.add(
+        responses.GET,
+        f"{ORG}/dependabot/secrets/S/repositories",
+        json={"total_count": 1, "repositories": [{"name": "r"}]},
+    )
+    api.add(responses.GET, f"{REPO}/dependabot/secrets/R", json={"name": "R"})
+    api.add(responses.GET, f"{REPO}/codespaces/secrets/R", json={"name": "R"})
+    assert oracle.org_dependabot_secret("S") == {"name": "S", "visibility": "selected"}
+    assert oracle.org_codespaces_secret("S") is None
+    assert oracle.org_dependabot_secret_repositories("S") == ["r"]
+    assert oracle.repo_dependabot_secret("r", "R") == {"name": "R"}
+    assert oracle.repo_codespaces_secret("r", "R") == {"name": "R"}
+
+
 def test_automated_security_fixes(api: responses.RequestsMock, oracle: Oracle) -> None:
     """200 -> {enabled, paused}; 404 (not enabled) on an existing repository -> {enabled: False}."""
     url = f"{REPO}/automated-security-fixes"
