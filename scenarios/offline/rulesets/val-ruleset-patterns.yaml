@@ -17,6 +17,23 @@ observe: true
 variables: {plan: enterprise}
 libraries:
   e2e: ../../lib/e2e.libsonnet
+references:
+  - pr: 900
+    note: >-
+      "Feat/ruleset additional rule types" (head 15c685a) models the commit metadata and name patterns: base fails
+      to load them (exit 1) in every step; head reports a missing or empty pattern and a name pattern outside its
+      target (twice for a branch_name_pattern on a push ruleset), refuses an unknown operator at load (schema
+      enum) and validates and plans valid-patterns.
+    expected_deltas:
+      - {step: missing-and-empty-pattern, kind: cli, key: show}
+      - {step: missing-and-empty-pattern, kind: cli, key: validate}
+      - {step: operator-not-allowed, kind: cli, key: show}
+      - {step: operator-not-allowed, kind: cli, key: validate}
+      - {step: name-patterns-outside-their-target, kind: cli, key: show}
+      - {step: name-patterns-outside-their-target, kind: cli, key: validate}
+      - {step: valid-patterns, kind: cli, key: local-plan}
+      - {step: valid-patterns, kind: cli, key: show}
+      - {step: valid-patterns, kind: cli, key: validate}
 steps:
   - name: missing-and-empty-pattern
     fragments:

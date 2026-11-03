@@ -14,16 +14,16 @@ description: |
   plan after each apply must be empty (the rules are read back as written). The change step flips both Copilot
   flags and narrows the tools to another threshold; the last step sets both rules to null, which removes them from
   the ruleset. The pull request and status check rules are left out (KB-021). Not verified live yet: whether GitHub
-  accepts the Copilot rule on an organization without Copilot. fixed_in is provisional (1.8.0.dev21 is the version
-  of the PR head ec401aa): set it to the version of the merge commit once #900 is merged.
+  accepts the Copilot rule on an organization without Copilot. fixed_in is provisional (1.8.0.dev27 is the version
+  of the PR head 15c685a): set it to the version of the merge commit once #900 is merged.
 priority: P1
 min_plan: free
-fixed_in: "1.8.0.dev21"
+fixed_in: "1.8.0.dev27"
 tags: [rulesets, repo]
 references:
   - pr: 900
     note: >-
-      "Feat/ruleset additional rule types" (head ec401aa, open): models the copilot_code_review and code_scanning
+      "Feat/ruleset additional rule types" (head 15c685a, open): models the copilot_code_review and code_scanning
       rules (and the other rule types, tested offline by O-VAL-RULESET-CODE-ANALYSIS, O-VAL-RULESET-PATTERNS,
       O-VAL-RULESET-PUSH-RULES and O-VAL-RULESET-REQUIRED-WORKFLOWS); SUTs without it refuse the keys when loading
       the configuration

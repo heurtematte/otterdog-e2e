@@ -4,10 +4,12 @@ tier: offline
 title: Organization ruleset required workflows are validated and compared case-insensitively
 description: >-
   An organization ruleset can require workflows to pass before merging (required_workflows, orgs.newWorkflows()):
-  each workflow is written 'owner/repository:path[@ref]', the ref being a branch, a tag or a commit sha, and otterdog
-  resolves the repository id only when it talks to GitHub. Validation refuses an empty list, a value without owner
-  and a numeric repository id (shown for a repository that could not be resolved), and refuses required workflows in
-  a repository ruleset; repository names compare case-insensitively in the plan, unlike paths. The rule is modelled
+  each workflow is written 'owner/repository:path[@ref][#sha]', the ref being a branch or a tag and the sha a commit,
+  with '%', '@' and '#' written '%25', '%40' and '%23' in a path or a ref, and otterdog resolves the repository id
+  only when it talks to GitHub. Validation refuses an empty list, a value without owner, a numeric repository id
+  (shown for a repository that could not be resolved), a sha that is not 40 hexadecimal digits and an unescaped '%',
+  warns about a path that is not a '.yml' or '.yaml' file (an unescaped '@' starts the ref), and refuses required
+  workflows in a repository ruleset; repository names compare case-insensitively in the plan, unlike paths. The rule is modelled
   by eclipse-csi/otterdog#900: SUTs without it refuse the new keys and template functions, so the negative steps only
   expect a failed validation, the other steps record their outcome and the reference declares the deltas.
 priority: P2
@@ -16,6 +18,29 @@ observe: true
 variables: {plan: enterprise}
 libraries:
   e2e: ../../lib/e2e.libsonnet
+references:
+  - pr: 900
+    note: >-
+      "Feat/ruleset additional rule types" (head 15c685a) models the required workflows of organization rulesets,
+      written 'owner/repository:path[@ref][#sha]': base fails to load them (exit 1) in every step; head reports
+      the empty list, the value without owner, the repository id, the sha that is not one and the unescaped '%' (5
+      errors), refuses a repository ruleset, warns about a path that is not a '.yml' file (an unescaped '@') and
+      plans the others (no change when only the case of the repository differs). Its messages print the format as
+      'owner/repository:path': the brackets of '[@ref][#sha]' are read as markup (KB-050).
+    expected_deltas:
+      - {step: workflow-values, kind: cli, key: show}
+      - {step: workflow-values, kind: cli, key: validate}
+      - {step: repository-ruleset, kind: cli, key: show}
+      - {step: repository-ruleset, kind: cli, key: validate}
+      - {step: valid-workflows, kind: cli, key: local-plan}
+      - {step: valid-workflows, kind: cli, key: show}
+      - {step: valid-workflows, kind: cli, key: validate}
+      - {step: workflow-path-warning, kind: cli, key: local-plan}
+      - {step: workflow-path-warning, kind: cli, key: show}
+      - {step: workflow-path-warning, kind: cli, key: validate}
+      - {step: repository-name-case, kind: cli, key: local-plan}
+      - {step: repository-name-case, kind: cli, key: show}
+      - {step: repository-name-case, kind: cli, key: validate}
 steps:
   - name: workflow-values
     fragments:
@@ -38,8 +63,21 @@ steps:
             include_refs+: ['~DEFAULT_BRANCH'],
             required_workflows: orgs.newWorkflows() { workflows+: ['42:.github/workflows/ci.yml'] },
           }
+        - |-
+          orgs.newOrgRuleset('{{ p }}-bad-format') {
+            include_repo_names: ['~ALL'],
+            include_refs+: ['~DEFAULT_BRANCH'],
+            required_workflows: orgs.newWorkflows() {
+              workflows+: [
+                '{{ org }}/{{ p }}-ci:.github/workflows/ci.yml#main',
+                '{{ org }}/{{ p }}-ci:.github/workflows/ci%2.yml',
+              ],
+            },
+          }
       repositories: ["orgs.newRepo('{{ p }}-ci')"]
-    validate: {ok: false}  # with #900: empty list, value without owner, unresolved id; before: the keys fail to load
+    # with #900: empty list, value without owner, unresolved id, a sha that is not one, an unescaped '%'; before: the
+    # keys fail to load
+    validate: {ok: false}
   - name: repository-ruleset
     fragments:
       repositories:
@@ -68,14 +106,37 @@ steps:
                 '{{ org }}/{{ p }}-ci:.github/workflows/build.yml',
                 '{{ org }}/{{ p }}-ci:.github/workflows/lint.yml@refs/heads/main',
                 '{{ org }}/{{ p }}-ci:.github/workflows/license.yml@0123456789abcdef0123456789abcdef01234567',
+                '{{ org }}/{{ p }}-ci:.github/workflows/deploy.yml#0123456789abcdef0123456789abcdef01234567',
+                '{{ org }}/{{ p }}-ci:.github/workflows/test.yml@refs/heads/main#89abcdef0123456789abcdef0123456789abcdef',
+                '{{ org }}/{{ p }}-ci:.github/workflows/build%40v2%25.yml@refs/tags/v1%232',
               ],
             },
             required_code_scanning: orgs.newCodeScanning() { code_scanning_tools+: ['CodeQL:all:all'] },
             copilot_code_review: orgs.newCopilotCodeReview(),
           }
       repositories: ["orgs.newRepo('{{ p }}-ci')"]
-    # with #900: validates without warning (the other rules are supported by organization rulesets), plans the
-    # repository and the ruleset; before: the keys fail to load
+    # with #900: validates without warning (the other rules are supported by organization rulesets; a ref of 40
+    # hexadecimal digits is a ref, a sha follows '#'), plans the repository and the ruleset; before: the keys fail to
+    # load
+    plan: {expect: any}
+    commands: {show: {exit_code: null}}
+  - name: workflow-path-warning
+    base_fragments: {}
+    fragments:
+      rulesets:
+        - |-
+          orgs.newOrgRuleset('{{ p }}-workflows') {
+            include_repo_names: ['{{ p }}-*'],
+            include_refs+: ['~DEFAULT_BRANCH'],
+            required_pull_request: null,
+            required_status_checks: null,
+            required_workflows: orgs.newWorkflows() {
+              workflows+: ['{{ org }}/{{ p }}-ci:.github/workflows/build@v2.yml'],
+            },
+          }
+      repositories: ["orgs.newRepo('{{ p }}-ci')"]
+    # with #900: a warning (the unescaped '@' makes the path '.github/workflows/build' and the ref 'v2.yml'), the
+    # ruleset planned; before: the keys fail to load
     plan: {expect: any}
     commands: {show: {exit_code: null}}
   - name: repository-name-case

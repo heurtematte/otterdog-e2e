@@ -17,6 +17,13 @@ references:
       it for every ruleset with a pull_request rule.
     expected_deltas:
       - {step: defaults, kind: cli, key: show-default}
+  - pr: 900
+    note: >-
+      "Feat/ruleset additional rule types" (head 15c685a): show-default prints the 17 keys of the new rules
+      (copilot_code_review, the patterns, the push rules, the code analysis rules, required_workflows) in the
+      defaults of rulesets.
+    expected_deltas:
+      - {step: defaults, kind: cli, key: show-default}
 steps:
   - name: defaults
     fragments: {}

@@ -18,6 +18,29 @@ observe: true
 variables: {plan: enterprise}
 libraries:
   e2e: ../../lib/e2e.libsonnet
+references:
+  - pr: 900
+    note: >-
+      "Feat/ruleset additional rule types" (head 15c685a) models required_code_scanning, required_code_quality,
+      required_code_coverage and copilot_code_review: base fails to load them (exit 1) in every step; head reports
+      the tool, threshold and range errors, refuses an unknown severity at load (schema enum), warns about a
+      coverage rule without threshold and validates valid-code-analysis and change-settings. Not declared:
+      local-plan and show of valid-code-analysis, where head crashes printing max_coverage_drop 1.5 ("expected
+      string or bytes-like object, got 'float'", exit 2: _get_value of otterdog/operations/__init__.py only
+      formats bool and int).
+    expected_deltas:
+      - {step: code-scanning-tools, kind: cli, key: show}
+      - {step: code-scanning-tools, kind: cli, key: validate}
+      - {step: code-quality-severity, kind: cli, key: show}
+      - {step: code-quality-severity, kind: cli, key: validate}
+      - {step: code-coverage-range, kind: cli, key: show}
+      - {step: code-coverage-range, kind: cli, key: validate}
+      - {step: code-coverage-without-threshold, kind: cli, key: show}
+      - {step: code-coverage-without-threshold, kind: cli, key: validate}
+      - {step: valid-code-analysis, kind: cli, key: validate}
+      - {step: change-settings, kind: cli, key: local-plan}
+      - {step: change-settings, kind: cli, key: show}
+      - {step: change-settings, kind: cli, key: validate}
 steps:
   - name: code-scanning-tools
     fragments:

@@ -41,6 +41,27 @@ references:
     expected_deltas:
       - {step: target-and-enforcement, kind: cli, key: validate}
       - {step: target-and-enforcement, kind: cli, key: show}
+  - pr: 900
+    note: >-
+      "Feat/ruleset additional rule types" (head 15c685a): the template gives every ruleset the keys of the new
+      rules (copilot_code_review, the name and commit metadata patterns, the push rules, required_code_scanning,
+      required_code_quality, required_code_coverage, requires_license_compliance_scanning, required_workflows)
+      with their defaults, so show and local-plan print 17 more keys for every ruleset. Step repository-only-rules
+      sets required_code_quality, required_code_coverage and requires_license_compliance_scanning on an
+      organization ruleset: base fails to load them (exit 1), head reports 3 errors (only supported by repository
+      rulesets).
+    expected_deltas:
+      - {step: include-without-match, kind: cli, key: show}
+      - {step: exclude-without-match, kind: cli, key: show}
+      - {step: protect-without-names, kind: cli, key: show}
+      - {step: ref-patterns, kind: cli, key: show}
+      - {step: valid-patterns, kind: cli, key: local-plan}
+      - {step: valid-patterns, kind: cli, key: show}
+      - {step: repository-only-rules, kind: cli, key: show}
+      - {step: repository-only-rules, kind: cli, key: validate}
+      - {step: second-pattern, kind: cli, key: show}
+      - {step: review-count-range, kind: cli, key: show}
+      - {step: deployment-rule, kind: cli, key: show}
 steps:
   - name: include-without-match
     fragments:

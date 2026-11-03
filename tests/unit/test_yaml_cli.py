@@ -397,7 +397,7 @@ UNRELEASED_FIXES = {  # scenario -> first otterdog version with the change it as
     "cli.repo.immutable-releases": "1.7.0.dev58",  # #665
     "cli.secrets.dependabot-codespaces": "1.8.0.dev5",  # #890, main after v1.7.1
     "cli.code-security.configuration": "1.8.0.dev7",  # #892, main after v1.7.1
-    "cli.ruleset.copilot-code-scanning": "1.8.0.dev21",  # #900 not merged: version of its head, until the merge
+    "cli.ruleset.copilot-code-scanning": "1.8.0.dev27",  # #900 not merged: version of its head, until the merge
 }
 LATEST_RELEASE = "1.7.1"  # release:latest; its fixed_in scenarios run there, the 1.8.0.dev ones skip
 

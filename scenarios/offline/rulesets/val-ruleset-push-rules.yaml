@@ -18,6 +18,32 @@ observe: true
 variables: {plan: team}
 libraries:
   e2e: ../../lib/e2e.libsonnet
+references:
+  - pr: 900
+    note: >-
+      "Feat/ruleset additional rule types" (head 15c685a) models the file rules of push rulesets: base fails to
+      load the new keys (exit 1) in every step but refs-ignored, where it plans include_refs; head reports the
+      range, list and target errors (exit status: their number, KB-034), warns about the exceptions without their
+      rule and the include_refs a push ruleset ignores (no change planned), and validates and plans
+      valid-push-ruleset.
+    expected_deltas:
+      - {step: limits, kind: cli, key: show}
+      - {step: limits, kind: cli, key: validate}
+      - {step: list-entries, kind: cli, key: show}
+      - {step: list-entries, kind: cli, key: validate}
+      - {step: rules-outside-push, kind: cli, key: show}
+      - {step: rules-outside-push, kind: cli, key: validate}
+      - {step: pull-request-rules-on-push, kind: cli, key: show}
+      - {step: pull-request-rules-on-push, kind: cli, key: validate}
+      - {step: exceptions-without-rule, kind: cli, key: local-plan}
+      - {step: exceptions-without-rule, kind: cli, key: show}
+      - {step: exceptions-without-rule, kind: cli, key: validate}
+      - {step: refs-ignored, kind: cli, key: local-plan}
+      - {step: refs-ignored, kind: cli, key: show}
+      - {step: refs-ignored, kind: cli, key: validate}
+      - {step: valid-push-ruleset, kind: cli, key: local-plan}
+      - {step: valid-push-ruleset, kind: cli, key: show}
+      - {step: valid-push-ruleset, kind: cli, key: validate}
 steps:
   - name: limits
     fragments:

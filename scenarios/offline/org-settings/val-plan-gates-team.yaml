@@ -21,6 +21,19 @@ references:
     expected_deltas:
       - {step: enterprise-gates, kind: cli, key: show}
       - {step: org-rulesets-on-team, kind: cli, key: show}
+  - pr: 900
+    note: >-
+      "Feat/ruleset additional rule types" (head 15c685a): the template gives every ruleset the keys of the new
+      rules (copilot_code_review, the name and commit metadata patterns, the push rules, required_code_scanning,
+      required_code_quality, required_code_coverage, requires_license_compliance_scanning, required_workflows)
+      with their defaults, so show and local-plan print 17 more keys for every ruleset. Step ruleset-rule-plans
+      sets the new rules: base fails to load them (exit 1), head validates it with a warning per rule above the
+      plan of the organization and shows them.
+    expected_deltas:
+      - {step: enterprise-gates, kind: cli, key: show}
+      - {step: org-rulesets-on-team, kind: cli, key: show}
+      - {step: ruleset-rule-plans, kind: cli, key: show}
+      - {step: ruleset-rule-plans, kind: cli, key: validate}
 steps:
   - name: enterprise-gates
     fragments:

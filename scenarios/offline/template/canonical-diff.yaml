@@ -17,6 +17,17 @@ description: >-
 priority: P1
 tags: [offline, template, repo, rulesets]
 observe: true
+references:
+  - pr: 900
+    note: >-
+      "Feat/ruleset additional rule types" (head 15c685a): step ruleset-rule-lists sets the push rules and the
+      code scanning tools, whose lists the canonical form keeps in order: base fails to load them (exit 1); head
+      validates them (restricted_file_extensions warns on the free plan), shows them and canonical-diff compares
+      them.
+    expected_deltas:
+      - {step: ruleset-rule-lists, kind: cli, key: canonical-diff}
+      - {step: ruleset-rule-lists, kind: cli, key: show}
+      - {step: ruleset-rule-lists, kind: cli, key: validate}
 steps:
   - name: canonical
     fragments:

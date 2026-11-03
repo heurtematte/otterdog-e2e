@@ -38,6 +38,26 @@ references:
     expected_deltas:
       - {step: target-and-enforcement, kind: cli, key: validate}
       - {step: target-and-enforcement, kind: cli, key: show}
+  - pr: 900
+    note: >-
+      "Feat/ruleset additional rule types" (head 15c685a): the template gives every ruleset the keys of the new
+      rules (copilot_code_review, the name and commit metadata patterns, the push rules, required_code_scanning,
+      required_code_quality, required_code_coverage, requires_license_compliance_scanning, required_workflows)
+      with their defaults, so show and local-plan print 17 more keys for every ruleset. Validation of the target:
+      head warns about the branch rules (allows_creations, allows_deletions, allows_force_pushes,
+      required_pull_request, required_status_checks) and the include_refs of a push ruleset
+      (branch-and-push-patterns, push-with-branch-rules), whose plan no longer lists include_refs and exclude_refs
+      (valid-rulesets).
+    expected_deltas:
+      - {step: branch-and-push-patterns, kind: cli, key: show}
+      - {step: branch-and-push-patterns, kind: cli, key: validate}
+      - {step: tag-patterns, kind: cli, key: show}
+      - {step: deployment-environments, kind: cli, key: show}
+      - {step: valid-rulesets, kind: cli, key: local-plan}
+      - {step: valid-rulesets, kind: cli, key: show}
+      - {step: push-with-branch-rules, kind: cli, key: show}
+      - {step: push-with-branch-rules, kind: cli, key: validate}
+      - {step: unknown-bypass-role, kind: cli, key: show}
 steps:
   - name: target-and-enforcement
     fragments:

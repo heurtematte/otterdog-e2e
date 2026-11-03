@@ -18,6 +18,14 @@ references:
       it for every ruleset with a pull_request rule.
     expected_deltas:
       - {step: org-ruleset-on-free, kind: cli, key: show}
+  - pr: 900
+    note: >-
+      "Feat/ruleset additional rule types" (head 15c685a): the template gives every ruleset the keys of the new
+      rules (copilot_code_review, the name and commit metadata patterns, the push rules, required_code_scanning,
+      required_code_quality, required_code_coverage, requires_license_compliance_scanning, required_workflows)
+      with their defaults, so show and local-plan print 17 more keys for every ruleset.
+    expected_deltas:
+      - {step: org-ruleset-on-free, kind: cli, key: show}
 steps:
   - name: org-ruleset-on-free
     fragments:
