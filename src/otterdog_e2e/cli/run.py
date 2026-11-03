@@ -37,7 +37,7 @@ from otterdog_e2e.cli.common import (
     main,
     target_names,
 )
-from otterdog_e2e.context import AUTO_BASE, INVOCATION_ENV, split_csv
+from otterdog_e2e.context import AUTO_BASE, INVOCATION_ENV, in_ci, split_csv
 from otterdog_e2e.redact import REDACTOR
 
 if TYPE_CHECKING:
@@ -496,6 +496,22 @@ def plan_pr(
     )
 
 
+def current_pr_head(settings: HarnessSettings, number: int) -> str:
+    """The commit of refs/pull/<number>/head of upstream, fetched into the mirror the PR's SUT is resolved from: the
+    pin of ``pr`` without --sha."""
+    from otterdog_e2e.sut.spec import upstream_mirror
+
+    mirror = upstream_mirror(settings)
+    mirror.ensure()
+    try:
+        head = mirror.fetch_pr(number).lower()
+    except ValueError as exc:
+        raise click.UsageError(str(exc)) from None
+    if not FULL_SHA_RE.match(head):
+        raise click.UsageError(f"{settings.upstream_repo}#{number}: refs/pull/{number}/head has no commit to pin")
+    return head
+
+
 PR_WEB_UI_NOTE = (
     "--allow-web-ui: a pr: SUT is untrusted and the web-UI tier only runs trusted SUTs, so its web_ui items skip with"
     " the reason; test a trusted build of the PR instead (run --sut dirty:<checkout> --suite web_ui --allow-web-ui)"
@@ -539,7 +555,11 @@ def pr_child_args(
 
 @main.command()
 @click.argument("number", type=int)
-@click.option("--sha", required=True, help="40-hex head sha to test (pin)")
+@click.option(
+    "--sha",
+    default=None,
+    help="40-hex commit to test (pin); default: the current head of the PR, pinned and printed (required in CI)",
+)
 @click.option("--target", "targets", multiple=True, help=TARGETS_HELP)
 @click.option("--suite", "suites", default="auto", help="auto (from the PR's changed files) or a comma list")
 @click.option("--strict-diff", is_flag=True, help="fail on unexpected differential deltas")
@@ -551,7 +571,7 @@ def pr_child_args(
 @_handled
 def pr(
     number: int,
-    sha: str,
+    sha: str | None,
     targets: tuple[str, ...],
     suites: str,
     strict_diff: bool,
@@ -563,11 +583,18 @@ def pr(
 ) -> None:
     """Test otterdog PR NUMBER at SHA: regression suites, differential vs its base, the scenarios referencing it.
 
+    Without --sha, the current head of the PR is pinned (and printed): a later push changes nothing in the run. CI
+    passes the reviewed commit.
+
     Several targets: one child ``pr`` process per target with its own run id (sequential unless --parallel).
     """
-    sha = sha.strip().lower()
-    if number <= 0 or not FULL_SHA_RE.match(sha):
-        raise click.UsageError("pr needs a positive PR number and --sha with the 40-hex head commit")
+    if number <= 0:
+        raise click.UsageError("pr needs a positive PR number")
+    if sha is None and in_ci(os.environ):
+        raise click.UsageError("pr needs --sha in CI: the 40-hex commit that was reviewed, never the current head")
+    sha = sha.strip().lower() if sha is not None else None
+    if sha is not None and not FULL_SHA_RE.match(sha):
+        raise click.UsageError("pr needs --sha with the 40-hex head commit")
     explicit = _change_id(change, None) if change is not None and change.strip() else None
     change = str(explicit) if explicit is not None and explicit != _change_id(str(number), None) else None
     if run_id is not None and not RUN_ID_ARG_RE.match(run_id):
@@ -577,6 +604,9 @@ def pr(
         raise click.UsageError(RUN_ID_LIST_ERROR)
     _check_addopts(os.environ)
     settings = _settings()
+    if sha is None:
+        sha = current_pr_head(settings, number)
+        _echo(f"PR #{number}: no --sha, pinned its current head {sha} (refs/pull/{number}/head)", err=True)
     if len(names) > 1:
         _echo(f"PR #{number} @ {sha[:12]} on {len(names)} targets: {', '.join(names)}", err=True)
         if allow_web_ui:

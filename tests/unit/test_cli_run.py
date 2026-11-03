@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import click
@@ -250,6 +251,53 @@ def test_pr_change_option(project: dict[str, Any], monkeypatch: pytest.MonkeyPat
     assert project["command"] == f"otterdog-e2e pr 790 --sha {PIN}"
     result = CliRunner().invoke(cli.main, ["pr", "790", "--sha", PIN, "--change", "bad change"])
     assert result.exit_code == 2 and "--change" in result.output
+
+
+def test_pr_pins_the_current_head_without_sha(project: dict[str, Any], monkeypatch: pytest.MonkeyPatch) -> None:
+    """Without --sha the current head of the PR is pinned, printed and recorded in the command; CI needs --sha."""
+    for key in ("CI", "GITHUB_ACTIONS"):
+        monkeypatch.delenv(key, raising=False)
+    heads: list[int] = []
+    monkeypatch.setattr(cli_run, "current_pr_head", lambda settings, number: heads.append(number) or PIN)
+    monkeypatch.setattr("otterdog_e2e.sut.spec.resolve_sut", lambda spec, settings, http=None: Resolved())
+    monkeypatch.setattr("otterdog_e2e.selection.select_tags", lambda files: {"smoke"})
+    result = CliRunner().invoke(cli.main, ["pr", "790"])
+    assert result.exit_code == 3, result.output
+    assert heads == [790] and f"pinned its current head {PIN}" in result.output
+    assert f"--e2e-sut=pr:790@{PIN}" in project["args"]
+    assert project["command"] == f"otterdog-e2e pr 790 --sha {PIN}"
+    monkeypatch.setenv("CI", "true")
+    result = CliRunner().invoke(cli.main, ["pr", "790"])
+    assert result.exit_code == 2 and "--sha in CI" in result.output and heads == [790]
+
+
+def test_current_pr_head_is_the_fetched_pull_ref(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """The head is refs/pull/N/head fetched into the upstream mirror (what the SUT resolution checks the pin against)."""
+
+    class Mirror:
+        def __init__(self, head: str | Exception) -> None:
+            self.head, self.calls = head, []
+
+        def ensure(self) -> Path:
+            self.calls.append("ensure")
+            return tmp_path
+
+        def fetch_pr(self, number: int) -> str:
+            self.calls.append(f"fetch {number}")
+            if isinstance(self.head, Exception):
+                raise self.head
+            return self.head
+
+    mirror = Mirror(PIN.upper())
+    monkeypatch.setattr("otterdog_e2e.sut.spec.upstream_mirror", lambda settings: mirror)
+    settings = SimpleNamespace(upstream_repo="eclipse-csi/otterdog")
+    assert cli_run.current_pr_head(settings, 790) == PIN and mirror.calls == ["ensure", "fetch 790"]
+    mirror.head = ValueError("cannot fetch refs/pull/790/head")
+    with pytest.raises(click.UsageError, match="cannot fetch"):
+        cli_run.current_pr_head(settings, 790)
+    mirror.head = ""
+    with pytest.raises(click.UsageError, match="no commit to pin"):
+        cli_run.current_pr_head(settings, 790)
 
 
 def test_pr_validates_its_arguments(project: dict[str, Any]) -> None:

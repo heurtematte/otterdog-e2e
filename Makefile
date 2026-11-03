@@ -8,7 +8,7 @@
 #   make one SCENARIO='cli.repo.*' TARGET=free SUT=branch:main
 #   make lint-scenarios                   every live scenario step validated offline (before submitting a scenario)
 #   make inject ARGS='--fragment repositories=scenarios/fragments/repo-basic.jsonnet --print'
-#   make pr PR=792 SHA=<40-hex> TARGET=free
+#   make pr PR=792 TARGET=free              SHA=<40-hex> pins a reviewed commit (default: the PR's current head)
 #   make setup TARGET=acme                 interactive onboarding of a new test org (docs/onboarding.md)
 #   make bootstrap TARGET=acme APPLY=1 WAIT=1
 #   make ci-sync TARGET=acme APPLY=1       GitHub environments, variables and secrets of the instance (gh)
@@ -131,8 +131,8 @@ one: require-scenario ## Only the scenarios matching SCENARIO=<glob[,glob]> (liv
 inject: ## Try jsonnet files with SUT without a scenario: ARGS='--fragment KIND=FILE ...' (offline unless TARGET)
 	$(E2E) inject $(if $(TARGET),--target "$(TARGET)") --sut "$(SUT)" $(ARGS)
 
-pr: require-pr ## Test otterdog PR=<n> pinned at SHA=<40-hex> (differential vs its base; live tiers with TARGET)
-	$(E2E) pr "$(PR)" --sha "$(SHA)" $(if $(TARGET),--target "$(TARGET)") $(if $(SUITE),--suite "$(SUITE)") $(PARALLEL_ARG)
+pr: require-pr ## Test otterdog PR=<n> at SHA=<40-hex> or its current head (differential vs its base; live tiers with TARGET)
+	$(E2E) pr "$(PR)" $(if $(SHA),--sha "$(SHA)") $(if $(TARGET),--target "$(TARGET)") $(if $(SUITE),--suite "$(SUITE)") $(PARALLEL_ARG)
 
 doctor: require-target ## Read-only checks of TARGET (environment, identities, org, repos, teams, App, tools)
 	$(E2E) doctor --target "$(TARGET)"
@@ -191,4 +191,4 @@ require-docs:
 	@test -x "$(VENV)/bin/zensical" || { echo "install the documentation tools first: $(POETRY) install --with docs" >&2; exit 2; }
 
 require-pr:
-	@[[ "$(PR)" =~ ^[0-9]+$$ && "$(SHA)" =~ ^[0-9a-f]{40}$$ ]] || { echo "set PR=<number> SHA=<40-hex head commit>" >&2; exit 2; }
+	@[[ "$(PR)" =~ ^[0-9]+$$ && ( -z "$(SHA)" || "$(SHA)" =~ ^[0-9a-f]{40}$$ ) ]] || { echo "set PR=<number> (and SHA=<40-hex commit> to pin one)" >&2; exit 2; }

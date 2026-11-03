@@ -7,14 +7,18 @@ change and on its base, and reports which differences (deltas) were expected and
 ## What `otterdog-e2e pr` does
 
 ```bash
-.venv/bin/otterdog-e2e pr 792 --sha d0d3b08...                 # offline tiers + differential, no GitHub org needed
-.venv/bin/otterdog-e2e pr 792 --sha d0d3b08... --target free   # plus the live tiers on the test org
-make pr PR=792 SHA=<40-hex> TARGET=free
+otterdog-e2e pr 792                                # offline tiers + differential of its current head, no GitHub org
+otterdog-e2e pr 792 --sha d0d3b08...               # the commit you reviewed
+otterdog-e2e pr 792 --sha d0d3b08... --target free # plus the live tiers on the test org
+make pr PR=792 TARGET=free                         # SHA=<40-hex> pins a commit
 ```
 
-`--sha` must be the full 40-hex commit. Get the current head with
+Without `--sha`, `pr` fetches `refs/pull/792/head` when it starts, pins that commit and prints it (`pinned its current
+head <sha>`); the reproduce command of the run names it. `--sha` pins the full 40-hex commit you reviewed: the code of
+a pull request is untrusted, so review the commit before giving it credentials (`--target`). CI always passes it: `pr`
+without `--sha` is refused when `CI` is set. Get the current head with
 `git ls-remote https://github.com/eclipse-csi/otterdog refs/pull/792/head` (or
-`gh pr view 792 -R eclipse-csi/otterdog --json headRefOid -q .headRefOid`) and review it before running anything.
+`gh pr view 792 -R eclipse-csi/otterdog --json headRefOid -q .headRefOid`).
 
 1. **Resolve** `pr:792@<sha>`: fetch `refs/pull/792/head` into the upstream mirror, check that the pin is the head or
    one of its ancestors, and export exactly the pin (a later push changes nothing). The PR must target

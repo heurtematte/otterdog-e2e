@@ -216,7 +216,8 @@ Baseline resets, scenario cleanups and PR guards run with a trusted SUT (`--e2e-
 Pull requests (`pr:N@sha`) and shas not reachable from upstream main or a `v*` tag are untrusted:
 
 - they must be pinned to a full 40-hex sha that is reachable from `refs/pull/N/head`, and exactly that commit is
-  built (a push after the review does not change what runs);
+  built (a push after the review does not change what runs); `otterdog-e2e pr N` without `--sha` pins the head of the
+  PR when it starts and prints it, which is refused in CI (the reviewed commit is passed there);
 - they are exported to a private directory and only built as a docker image (`otterdog-e2e/untrusted:<label>`,
   never reused as trusted); host installs are refused unless an operator passes `--e2e-trust-code <sha>` from an
   interactive terminal (refused when `CI` is set);
