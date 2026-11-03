@@ -474,7 +474,7 @@ How several targets run:
   organization (an organization serves one session at a time) and two `external` transport targets with the same
   webapp URL (one webapp serves one session at a time), gives each relay webapp that pins no port a free loopback
   port (`E2E_WEBAPP_PORT`), and refuses two instances pinning the same `E2E_WEBAPP_PORT`. Sessions testing the same
-  SUT build its webapp image once (a file lock per image tag), and `cache prune` never removes an entry whose lock a
+  [SUT](glossary.md#systems-under-test) build its webapp image once (a file lock per image tag), and `cache prune` never removes an entry whose lock a
   running session or build holds.
 - `--fail-fast` starts no further target after a failure. Ctrl-C (or SIGTERM) is forwarded to the running children,
   which clean up (sweep, lease release) and exit; no further target starts. Every command, a child included, turns

@@ -16,7 +16,7 @@ web-UI tier (`tests/web_ui`, package `otterdog_e2e.webui`) covers them.
 
 ## Strategy
 
-1. **otterdog itself drives the UI.** The SUT runs `plan`/`apply`/`import` WITHOUT `-n` (`WebOtterdogCli`), with the
+1. **otterdog itself drives the UI.** The [SUT](glossary.md#systems-under-test) runs `plan`/`apply`/`import` WITHOUT `-n` (`WebOtterdogCli`), with the
    admin machine account's web login. The harness never automates the browser itself during tests (only the
    onboarding of the machine accounts does: [onboarding.md](onboarding.md#machine-accounts-in-the-browser)).
 2. **Independent oracles check the result.** 7 of the 12 settings are readable through REST (`GET /orgs/{org}` with

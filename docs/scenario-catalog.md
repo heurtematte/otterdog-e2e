@@ -3,7 +3,7 @@
 Status values:
 
 - **verified**: implemented, and passed in a real run of this build. That covers the offline tiers against real
-  otterdog SUTs: `release:latest` (v1.6.1, then v1.7.1), `sha:9bdeb75`, `sha:b5f7bb1`, `branch:main` (d9dac78), the
+  otterdog [SUTs](glossary.md#systems-under-test): `release:latest` (v1.6.1, then v1.7.1), `sha:9bdeb75`, `sha:b5f7bb1`, `branch:main` (d9dac78), the
   untrusted `sha:d0d3b08` (docker runtime) and a `dirty:` local checkout;
 - **implemented**: the scenario or test exists, loads, is collected and skips cleanly without a target. It needs a
   live test organization (target, App, docker) and has not run against one yet;

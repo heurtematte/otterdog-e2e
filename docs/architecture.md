@@ -12,7 +12,7 @@ otterdog-e2e is a Python package (`src/otterdog_e2e`) with two entry points that
   YAML files and markers into test items, gates them and reports them.
 
 Both build an `E2EContext` (the `context/` package): the settings, the run context, the target, the verified
-organization, the capabilities, the org lease, the SUTs and every client and driver of a session. `context/core.py`
+organization, the capabilities, the org lease, the [SUTs](glossary.md#systems-under-test) and every client and driver of a session. `context/core.py`
 assembles it from one class per facet over the shared state of `context/state.py`: `live` (target, verification,
 GitHub clients, App, org lease), `sut` (SUTs, otterdog drivers, differential sides), `webui`, `webapp` and `rundata`
 (scenario variables, rate budget, known bugs, change under test).

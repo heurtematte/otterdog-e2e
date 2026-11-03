@@ -106,7 +106,7 @@ otterdog prints secret values.
   failure. A bug that surfaces as another exception needs the test's own `pytest.mark.xfail(raises=...)`, which takes
   precedence. In the webapp and webhooks tiers that extra `pytest.mark.xfail` naming the exception it tolerates is
   required, and `pytest.xfail()` is not used.
-- A fixed bug (`status: fixed`, `fixed_in: 1.7.0.devN`) turns its tests into regression guards; SUTs older than
+- A fixed bug (`status: fixed`, `fixed_in: 1.7.0.devN`) turns its tests into regression guards; [SUTs](glossary.md#systems-under-test) older than
   `fixed_in` still xfail.
 - **Unreleased fixes**: a regression of a fix merged after the latest release declares `fixed_in` (the version of the
   fix commit: `X.(Y+1).0.dev<n>` with `n = git rev-list --count v<last release>..<sha>`, computed in the harness mirror

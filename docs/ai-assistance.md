@@ -57,7 +57,7 @@ useful on their own. Every command prints a short human summary with the bundle 
 
 Anonymous public reads only. The bundle holds the PR (title, author, state, merged, base, head, whether the pin is
 the head), the changed files with their patches (each truncated with a marker; binary and large files listed only),
-the risky files, the tags the PR lane would select, the SUT spec `pr:<n>@<sha>`, the suggested base, the coverage
+the risky files, the tags the PR lane would select, the [SUT](glossary.md#systems-under-test) spec `pr:<n>@<sha>`, the suggested base, the coverage
 features whose `source` the PR touches (with status, tier, covering items and gap outline), the related scenarios
 and their files, the scenarios whose `references` already name the PR (`referencing_scenarios`: ids, files, their
 reference entries with the expected deltas, and the base they declare), the documentation to read and the next

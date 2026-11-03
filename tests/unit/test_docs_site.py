@@ -127,7 +127,7 @@ def test_markdown_extensions() -> None:
     assert pymdownx["superfences"]["custom_fences"] == [
         {"name": "mermaid", "class": "mermaid", "format": "pymdownx.superfences.fence_code_format"}
     ]
-    assert "attr_list" not in extensions
+    assert "attr_list" not in extensions and "abbr" in extensions
     assert {"tables", "admonition"} <= set(extensions) and {"magiclink", "tilde", "tasklist"} <= set(pymdownx)
 
 
@@ -225,6 +225,21 @@ def test_staged_configuration_refusals(site_module: Any, text: str, message: str
     override."""
     with pytest.raises(site_module.SiteError, match=message):
         site_module.staged_config(text, [])
+
+
+def test_abbreviations_of_the_glossary(site_module: Any, staged: Any) -> None:
+    """Every row of the abbreviations table of docs/glossary.md is a definition of the extension abbr (plain text),
+    appended to every staged page and never written in a source, where GitHub would show it."""
+    glossary = (DOCS / "glossary.md").read_text(encoding="utf-8")
+    section = glossary.partition("\n## Abbreviations\n")[2]
+    rows = [line for line in section.splitlines() if line.startswith("| ") and not line.startswith("| Abbreviation")]
+    defined = site_module.abbreviations(glossary)
+    assert len(defined) == len(rows) >= 1 and defined[0].startswith("*[SUT]: System under test")
+    assert site_module.abbreviations("# Glossary\n") == []
+    for name, content in staged.files.items():
+        if name.endswith(".md"):
+            assert content.decode().rstrip().endswith(defined[-1]), name
+    assert not any("*[SUT]:" in path.read_text(encoding="utf-8") for path in DOCS.rglob("*.md"))
 
 
 def test_edit_url_front_matter(site_module: Any) -> None:

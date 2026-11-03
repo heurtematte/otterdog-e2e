@@ -34,7 +34,7 @@ Events: `issue_comment`, `pull_request`, `pull_request_review`, `push`, `workflo
 Since #890 (main d9dac78, after v1.7.1) otterdog reads the Dependabot and Codespaces secrets of the organization and
 of every repository when the template defines them, and a refused read fails the validation. The manifest requests the
 repository Dependabot secrets permission; grant the repository Codespaces secrets and the organization Dependabot and
-Codespaces secrets permissions by hand in the App settings before testing such a SUT (their manifest keys are not in
+Codespaces secrets permissions by hand in the App settings before testing such a [SUT](glossary.md#systems-under-test) (their manifest keys are not in
 GitHub's OpenAPI description, so the manifest does not request them: see otterdog's
 `docs/operating_otterdog/install.md`).
 

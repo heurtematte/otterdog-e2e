@@ -48,6 +48,7 @@ nav = [
     { "Coverage matrix" = "coverage-matrix.md" },
     { "Scenario catalog" = "scenario-catalog.md" },
     { "Known otterdog issues" = "known-issues.md" },
+    { "Glossary" = "glossary.md" },
   ] },
 ]
 
@@ -85,6 +86,7 @@ features = [
   "announce.dismiss",
   "content.action.edit",
   "content.code.copy",
+  "content.tooltips",
   "navigation.footer",
   "navigation.indexes",
   "navigation.instant",
@@ -124,6 +126,9 @@ toc.permalink = true
 # on github.com and on the site
 toc.slugify = { object = "pymdownx.slugs.slugify", kwds = { case = "lower" } }
 tables = {}
+# the meaning of SUT, KB... where the pointer rests: docs_site.py appends the definitions of the abbreviations table
+# of docs/glossary.md to the staged pages only, the sources keep GitHub's syntax
+abbr = {}
 md_in_html = {}
 admonition = {}
 pymdownx.details = {}

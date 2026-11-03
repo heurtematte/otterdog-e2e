@@ -35,7 +35,7 @@ the login that acted.
 
 | Role | Required | Account and membership | Token | What it does in the tests | When it is missing |
 |---|---|---|---|---|---|
-| `admin` | yes | owner; admin team (`otterdog-admins`) | classic or fine-grained | runs otterdog (SUT and trusted reset CLI), every harness write, the org lease, bootstrap, the janitor; default author of config PRs, merges and comments | the target does not load: every live item fails; the unit and offline tiers still run |
+| `admin` | yes | owner; admin team (`otterdog-admins`) | classic or fine-grained | runs otterdog ([SUT](glossary.md#systems-under-test) and trusted reset CLI), every harness write, the org lease, bootstrap, the janitor; default author of config PRs, merges and comments | the target does not load: every live item fails; the unit and offline tiers still run |
 | `oracle` | no | owner (a separate account), or the admin itself | classic or fine-grained | checks what really happened on GitHub, without otterdog code: scenario `state` checks, the waits of PR flows, lease and ledger reads, janitor scans | the admin token serves as oracle; nothing is skipped |
 | `author` | for webapp flows | active, public member; contributors team (`e2e-contributors`) only | classic, or fine-grained once a member | opens config PRs and comments as a plain contributor; team member in `cli.team.members` | its tests are skipped |
 | `approver` | for approval and auto-merge flows | active, public member; approval team (`project-leads`) | classic, or fine-grained once a member | approves config PRs, merges for an author, authors PRs as an approval-team member | its tests are skipped |

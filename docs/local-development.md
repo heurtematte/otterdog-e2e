@@ -49,7 +49,7 @@ example), an otterdog command you replay by hand would act on real organizations
 | `docs`, `docs-serve` | strict build of the documentation site into `site/`, live preview (see [Documentation site](#documentation-site)) |
 
 `ARGS` passes extra pytest arguments, e.g. `make cli TARGET=free ARGS='-x -k lifecycle'` (options that could change
-the SUT, load plugins or show locals are refused). `TARGET` (default `$E2E_TARGET`) names an instance or a profile:
+the [SUT](glossary.md#systems-under-test), load plugins or show locals are refused). `TARGET` (default `$E2E_TARGET`) names an instance or a profile:
 [onboarding.md](onboarding.md#instances-and-profiles).
 
 ## Common workflows

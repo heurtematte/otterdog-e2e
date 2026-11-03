@@ -11,7 +11,7 @@ How the registry is used:
   At collection the plugin marks it `xfail(strict=False)`, scoped to the exception that reports the bug
   (`KnownBugReproduced` for a YAML scenario, `AssertionError` for a Python test, so harness errors stay failures): it
   reports XFAIL while the bug exists and XPASS once it is fixed. On an XPASS, set `status: fixed` and `fixed_in: <version or pr-N>` and update this page. From then on the
-  plugin no longer adds the xfail: the test guards against a regression. Only SUTs whose version predates a PEP 440
+  plugin no longer adds the xfail: the test guards against a regression. Only [SUTs](glossary.md#systems-under-test) whose version predates a PEP 440
   `fixed_in` (for example `1.7.0.dev21`) keep it, with "SUT ... predates the fix" in the reason. A `pr-N` value
   cannot be compared with versions: replace it with the released version once there is one.
 - Evidence entries prefixed `e2e:` point at a file of this project that detects the bug. Offline scenarios that

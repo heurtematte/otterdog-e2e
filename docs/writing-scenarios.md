@@ -43,7 +43,7 @@ refuses duplicates among the directories a tier collects). A live scenario becom
 `tests/cli/test_scenarios.py::<test>[cli.repo.lifecycle]`; an offline scenario one item per step, for example
 `tests/offline/test_scenarios.py::test_offline_scenario[O-VAL-REPO/too-many-topics]` (see
 [Journeys, cases and interactions](#journeys-cases-and-interactions)). The differential tier records the offline
-scenarios marked `observe: true` on the base and on the head SUT (one item per scenario).
+scenarios marked `observe: true` on the base and on the head [SUT](glossary.md#systems-under-test) (one item per scenario).
 
 ## Journeys, cases and interactions
 

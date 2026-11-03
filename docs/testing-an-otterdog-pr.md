@@ -26,7 +26,7 @@ without `--sha` is refused when `CI` is set. Get the current head with
    `pr792-d0d3b08`.
 2. **Trust**: a PR is untrusted. Its CLI and its webapp run only from its own docker image (built under the untrusted
    image namespace, never reused for trusted runs), with no network for offline commands, no capabilities and
-   credentials only in a 0600 env-file. Resets, cleanups and PR-text guards use the trusted reset SUT
+   credentials only in a 0600 env-file. Resets, cleanups and PR-text guards use the trusted reset [SUT](glossary.md#systems-under-test)
    (`release:latest`). Docker is therefore required.
 3. **Select**: tags are derived from the changed files (`git diff` between the merge base and the pin, mapped by
    `otterdog_e2e.selection.PATH_RULES`; `smoke` always); the scenarios whose `references` name the PR (the change

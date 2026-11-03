@@ -26,7 +26,7 @@ and refuses the session otherwise.
 | `author` | for webapp flows | opens config PRs as a plain member | member (public), contributors team |
 | `approver` | for approval / auto-merge flows | approves config PRs | member (public), approval team |
 | `outsider` | for negative tests | comments as a non-member | **not** a member |
-| `config_reader` | for webapp tests of untrusted SUTs | powerless token given to the webapp under test (`OTTERDOG_CONFIG_TOKEN`), worthless if an untrusted SUT leaks it | none: not a member |
+| `config_reader` | for webapp tests of untrusted [SUTs](glossary.md#systems-under-test) | powerless token given to the webapp under test (`OTTERDOG_CONFIG_TOKEN`), worthless if an untrusted SUT leaks it | none: not a member |
 | `oracle` | optional | separate read-only ground truth (falls back to admin) | owner |
 
 What each role does in the tests, what is skipped without it, and how the roles interact with otterdog and the

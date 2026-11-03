@@ -37,7 +37,9 @@ request it compares base and head (differential observations) and reports expect
   poetry 2.5.1); `git`.
 - `unshare` (util-linux) with unprivileged user namespaces: offline otterdog commands run without network
   (`unshare -rn`); in CI the harness refuses to run them unsandboxed.
-- Docker (with the compose plugin) for the webapp tiers and for every untrusted SUT (pull requests).
+- Docker (with the compose plugin) for the webapp tiers and for every untrusted SUT (pull requests). The SUT, the
+  *system under test*, is the otterdog version a run tests ([below](#systems-under-test-sut-specs),
+  [glossary](docs/glossary.md)).
 - Network access to github.com and PyPI: the SUT is fetched and installed by the harness.
 
 ## Quickstart
@@ -134,6 +136,10 @@ skills never run live tiers, write to GitHub, commit or push unless you ask. See
 [docs/ai-assistance.md](docs/ai-assistance.md).
 
 ## Systems under test (SUT specs)
+
+The system under test (SUT) is the otterdog version a run tests: its CLI, its webapp image and its standard
+template. `--sut SPEC` names it (`SUT=` for `make`, `release:latest` by default); a differential run also has a base
+SUT (`--base-sut`), and the [glossary](docs/glossary.md) defines the other terms of the harness.
 
 | Spec | Meaning | Trust |
 |---|---|---|

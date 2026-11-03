@@ -19,7 +19,7 @@ harness enforces, what you must set up yourself, and what to do when something w
 
 | Id | Threat |
 |---|---|
-| T1 | A buggy or malicious SUT (an upstream pull request runs arbitrary code at build and run time) acts on a real organization or exfiltrates credentials. |
+| T1 | A buggy or malicious [SUT](glossary.md#systems-under-test) (an upstream pull request runs arbitrary code at build and run time) acts on a real organization or exfiltrates credentials. |
 | T2 | A harness bug deletes objects it does not own (unmanaged repositories, protected repositories, organization settings). |
 | T3 | Secrets leak into logs, artifacts, observations, step summaries or PR comments (otterdog prints secret values and caches request headers). |
 | T4 | Concurrent sessions (local, CI, janitor, App deliveries) race on the same organization. |
