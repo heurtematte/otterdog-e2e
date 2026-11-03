@@ -42,3 +42,27 @@
 .md-typeset table:not([class]) th.e2e-sortable:hover {
   color: var(--md-accent-fg-color);
 }
+
+/* the tags of a scenario page, chips linking to their pages (docs_scenarios.py, Writer.tag_chips) */
+.e2e-tags p {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0 0 1em;
+}
+
+.md-typeset .e2e-tags a {
+  text-decoration: none;
+  padding: 0.15em 0.7em;
+  font-size: 0.65rem;
+  font-weight: 500;
+  color: var(--md-default-fg-color--light);
+  background-color: var(--md-default-fg-color--lightest);
+  border-radius: 1rem;
+}
+
+.md-typeset .e2e-tags a:focus,
+.md-typeset .e2e-tags a:hover {
+  color: var(--md-accent-bg-color);
+  background-color: var(--md-accent-fg-color);
+}

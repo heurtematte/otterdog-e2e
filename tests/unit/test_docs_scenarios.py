@@ -1,8 +1,8 @@
 """docs_scenarios.py, the scenario explorer of the documentation site: one generated page per YAML scenario and per
 Python test module, overview tables and their navigation section.
 
-The hooks run for real in the strict build of .github/workflows/docs.yml (`make docs` locally: every generated link
-and anchor is checked there); these tests need neither MkDocs nor the network. They pin the parsing (step lines,
+docs_site.py stages the pages for the strict build of .github/workflows/docs.yml (`make docs` locally: every generated
+link and anchor is checked there); these tests need neither Zensical nor the network. They pin the parsing (step lines,
 pytest marks, the tables of docs/writing-scenarios.md, CHECK_KINDS), the Markdown helpers, what a step page says it
 runs, and that the real repository yields a page for every scenario and module.
 """
@@ -357,3 +357,81 @@ def test_nav_labels_drop_a_trailing_parenthesis_unless_taken() -> None:
         for i, title in enumerate(["Rename (keep)", "Rename (drop)", "Plain"])
     ]
     assert labels == ["Rename", "Rename (drop)", "Plain"]
+
+
+# --- plan, scope, version and tags ----------------------------------------------------------------------------------------
+@pytest.mark.parametrize(
+    ("data", "tier", "plan"),
+    [
+        ({}, "offline", "free"),
+        ({"variables": {"plan": "team"}}, "offline", "team"),
+        ({"min_plan": "team", "variables": {"plan": "enterprise"}}, "cli", "team"),
+        ({}, "cli", "free"),
+        ({}, "enterprise", "enterprise"),
+    ],
+)
+def test_plan_of_a_scenario(data: dict[str, Any], tier: str, plan: str) -> None:
+    """Offline: the plan of the simulated organization; live: the lowest plan the scenario runs on."""
+    assert scenario(data, tier).plan == plan
+
+
+def test_scope_comes_from_the_fragment_kinds() -> None:
+    """repositories configure repositories, every other kind (and org_level) the organization."""
+
+    def scope(steps: list[dict[str, Any]], **data: Any) -> list[str]:
+        return scenario({"steps": steps, **data}).scope
+
+    assert scope([{"fragments": {"repositories": ["r"]}}]) == ["repository"]
+    assert scope([{"base_fragments": {"settings": "s"}}, {"fragments": {"repositories": []}}]) == [
+        "organization",
+        "repository",
+    ]
+    assert scope([{"fragments": {"rulesets": []}}]) == ["organization"]
+    assert scope([], org_level=True) == ["organization"]
+    assert scope([{"name": "no-fragment"}]) == []
+
+
+def test_scenario_table_filters_plan_scope_and_version() -> None:
+    """The plan, scope and version columns are filterable; the version leaves the notes."""
+    data = {"id": "x", "fixed_in": "1.8.0.dev5", "min_plan": "team", "steps": [{"fragments": {"teams": []}}]}
+    rows = explorer().scenario_table(writer("scenarios/index.md"), [scenario(data)])
+    assert rows[0] == '<div class="e2e-filter" data-columns="Tier,Domain,Priority,Plan,Scope,Since,Tags"></div>'
+    assert rows[2] == "| Scenario | Tier | Domain | Priority | Plan | Scope | Since | Tags | Steps | Notes |"
+    assert rows[4].endswith("| cli | repo | P1 | team | organization | 1.8.0.dev5 |  | 1 |  |")
+
+
+def test_glance_counts_open_the_filtered_table() -> None:
+    """One content tab per dimension, one column per tier and All: a count links the table filtered on it."""
+    scenarios = [
+        scenario({"id": "a", "priority": "P0"}, "offline"),
+        scenario({"id": "b", "fixed_in": "1.8.0.dev5"}),
+        scenario({"id": "c"}),
+    ]
+    text = "\n".join(explorer().glance(writer("scenarios/index.md"), scenarios, "all"))
+    assert [line for line in text.splitlines() if line.startswith("===")] == [
+        '=== "Priority"',
+        '=== "Plan"',
+        '=== "Scope"',
+        '=== "Since"',
+    ]
+    assert "    | `P0` | [1](?Tier=offline&Priority=P0#all) | - | [1](?Priority=P0#all) |" in text
+    assert (
+        "    | `free` | [1](?Tier=offline&Plan=free#all) | [2](?Tier=cli&Plan=free#all) | [3](?Plan=free#all) |" in text
+    )
+    assert "    | `1.8.0.dev5` | - | [1](?Tier=cli&Since=1.8.0.dev5#all) | [1](?Since=1.8.0.dev5#all) |" in text
+    assert "    | every version | 1 | 1 | 2 |" in text
+
+
+def test_tag_pages_and_chips() -> None:
+    """Every tag has a page (its scenarios in a filterable table, its Python tests); a scenario page links its tags."""
+    module = explorer()
+    current = site()
+    tags = module.tags_of(current)
+    assert "rulesets" in tags and list(tags) == sorted(tags)
+    page = module.tag_page(current, "rulesets")
+    assert "# Tag `rulesets`" in page and "data-columns=" in page
+    assert module.tag_uri("Known Bug") == "scenarios/tags/known-bug.md"
+    assert module.tag_uri("index") == "scenarios/tags/tag-index.md"
+    workflows = next(s for s in current.scenarios if s.id == "O-VAL-RULESET-REQUIRED-WORKFLOWS")
+    chips = module.scenario_page(current, workflows)
+    assert '<div class="e2e-tags" markdown>' in chips and "[rulesets](../../tags/rulesets.md)" in chips

@@ -32,7 +32,7 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 
 # its warnings are problems of the staging (docs_site.py: errors with --strict)
 log = logging.getLogger("docs_site.scenarios")
@@ -42,6 +42,8 @@ EXPLORER = "scenarios"
 INDEX = f"{EXPLORER}/index.md"
 PYTHON_DIR = f"{EXPLORER}/python-tests"
 PYTHON_INDEX = f"{PYTHON_DIR}/index.md"
+TAGS_DIR = f"{EXPLORER}/tags"
+TAGS_INDEX = f"{TAGS_DIR}/index.md"
 # the branch the site is built from (also in docs_hooks.py and the edit_uri of zensical.toml)
 BRANCH = "main"
 UPSTREAM = "https://github.com/eclipse-csi/otterdog"
@@ -195,6 +197,12 @@ APPLY_EXPECT = {
 # offline extra commands that load the configuration take --local (scenarios/offline.py NO_LOCAL_COMMANDS)
 NO_LOCAL_COMMANDS = ("--version", "list-projects")
 PRIORITIES = {"P0": "P0 (pr-fast lane)", "P1": "P1 (nightly-full lane)", "P2": "P2 (when time allows)"}
+# the GitHub plans, lowest first; an offline scenario without variables.plan simulates OFFLINE_DEFAULT_PLAN of
+# src/otterdog_e2e/scenarios/offline.py (not imported: the docs workflow installs the docs group only)
+PLANS = ("free", "team", "enterprise")
+OFFLINE_PLAN = "free"
+# what a scenario configures: organization objects (every fragment kind but repositories, or org_level), repositories
+SCOPES = ("organization", "repository")
 
 # Markdown helpers
 BACKTICKS_RE = re.compile(r"`+")
@@ -269,6 +277,33 @@ class Scenario:
         """Selection tags."""
         tags = self.data.get("tags")
         return [str(tag) for tag in tags] if isinstance(tags, list) else []
+
+    @property
+    def plan(self) -> str:
+        """The GitHub plan: the one of the simulated organization (offline, ``variables.plan``), else the lowest one the
+        scenario runs on (``min_plan``; enterprise for the enterprise tier)."""
+        if self.tier == "offline":
+            variables = self.data.get("variables")
+            return str((variables.get("plan") if isinstance(variables, Mapping) else None) or OFFLINE_PLAN)
+        return str(self.data.get("min_plan") or ("enterprise" if self.tier == "enterprise" else PLANS[0]))
+
+    @property
+    def scope(self) -> list[str]:
+        """What the scenario configures (SCOPES): the kinds of the fragments of its steps, ``org_level``."""
+        kinds = {
+            str(kind)
+            for step in self.steps
+            for name in ("fragments", "base_fragments")
+            if isinstance(step.get(name), Mapping)
+            for kind in step[name]
+        }
+        organization = bool(self.data.get("org_level")) or bool(kinds - {"repositories"})
+        return [scope for scope, found in zip(SCOPES, (organization, "repositories" in kinds), strict=True) if found]
+
+    @property
+    def since(self) -> str:
+        """The first otterdog version the scenario asserts (``fixed_in``), empty when it runs on every version."""
+        return str(self.data.get("fixed_in") or "")
 
     def step_name(self, index: int) -> str:
         """The name of step ``index`` (0-based): its ``name``, else ``step-<n>``."""
@@ -754,6 +789,12 @@ def is_newer(version: str, release: str) -> bool:
         return False
 
 
+def tag_uri(tag: str) -> str:
+    """The page of a tag, below docs/ (its name in lower case, dashes for the rest; never the tags index)."""
+    slug = re.sub(r"[^a-z0-9]+", "-", tag.lower()).strip("-") or "tag"
+    return f"{TAGS_DIR}/{slug if slug != 'index' else 'tag-index'}.md"
+
+
 class Writer:
     """Markdown of one generated page: links relative to the page, GitHub URLs of the sources, linked prose."""
 
@@ -856,6 +897,13 @@ class Writer:
         """Tags as links to the filtered table of ``index``."""
         return " ".join(f"[{code(tag)}]({self.rel(index)}?Tags={quote(tag)})" for tag in tags)
 
+    def tag_chips(self, tags: Sequence[str]) -> list[str]:
+        """Tags as chips linking to their pages (docs/assets/explorer.css styles ``e2e-tags``)."""
+        if not tags:
+            return []
+        links = " ".join(f"[{escape(tag)}]({self.rel(tag_uri(tag))})" for tag in tags)
+        return ['<div class="e2e-tags" markdown>', "", links, "", "</div>", ""]
+
 
 def nav_label(scenario: Scenario, taken: set[str]) -> str:
     """The navigation label of a scenario: its title without a trailing parenthesis, the whole title when the short
@@ -867,17 +915,14 @@ def nav_label(scenario: Scenario, taken: set[str]) -> str:
 
 
 def scenario_notes(scenario: Scenario, release: str) -> list[str]:
-    """Short flags of a scenario for the overview tables."""
+    """Short flags of a scenario for the overview tables (its plan and version have their columns)."""
     data = scenario.data
     notes: list[str] = []
-    if data.get("fixed_in"):
-        newer = " (unreleased)" if release and is_newer(str(data["fixed_in"]), release) else ""
-        notes.append(f"otterdog ≥ {data['fixed_in']}{newer}")
+    if scenario.since and release and is_newer(scenario.since, release):
+        notes.append("unreleased otterdog")
     notes += scenario.known_bugs()
     if data.get("org_level"):
         notes.append("org-level")
-    if data.get("min_plan") and data.get("min_plan") != "free":
-        notes.append(f"plan ≥ {data['min_plan']}")
     if data.get("requires"):
         notes.append("needs " + ", ".join(str(cap) for cap in data["requires"]))
     if data.get("observe"):
@@ -900,6 +945,7 @@ def scenario_page(site: Site, scenario: Scenario) -> str:
         ),
         "",
     ]
+    out += w.tag_chips(scenario.tags)
     out += _context_table(w, scenario)
     if data.get("known_bug"):
         out += _known_bug_admonition(w, _kb_id(data["known_bug"]) or "", "every step of this scenario")
@@ -922,9 +968,11 @@ def _context_table(w: Writer, scenario: Scenario) -> list[str]:
     rows = [
         ("Tier", f"**{scenario.tier}**: needs {tier.needs}"),
         ("Priority", PRIORITIES.get(str(data.get("priority") or "P1"), str(data.get("priority")))),
-        ("Tags", w.tags(scenario.tags, INDEX) or "none"),
+        ("Scope", ", ".join(scenario.scope) or "none: no configuration fragment"),
         ("Steps", f"{len(scenario.steps)}" + (" independent cases" if scenario.tier == "offline" else ", chained")),
     ]
+    if scenario.tier == "offline":
+        rows.append(("GitHub plan", f"{code(scenario.plan)}: the plan of the simulated organization"))
     if data.get("fixed_in"):
         fixed = str(data["fixed_in"])
         unreleased = f", after the latest release {w.site.release}" if is_newer(fixed, w.site.release) else ""
@@ -1464,8 +1512,8 @@ WIDE = ["---", "hide:", "  - toc", "---", ""]
 
 def scenario_table(w: Writer, scenarios: Sequence[Scenario], *, with_tier: bool = True) -> list[str]:
     """A filterable table of scenarios."""
-    columns = ["Tier", "Domain", "Priority", "Tags"] if with_tier else ["Domain", "Priority", "Tags"]
-    head = ["Scenario", *(["Tier"] if with_tier else []), "Domain", "Priority", "Tags", "Steps", "Notes"]
+    columns = [*(["Tier"] if with_tier else []), "Domain", "Priority", "Plan", "Scope", "Since", "Tags"]
+    head = ["Scenario", *columns, "Steps", "Notes"]
     out = [FILTER_MARKER.format(columns=",".join(columns)), ""]
     out += ["| " + " | ".join(head) + " |", "|" + "---|" * len(head)]
     for scenario in scenarios:
@@ -1474,12 +1522,57 @@ def scenario_table(w: Writer, scenarios: Sequence[Scenario], *, with_tier: bool 
             *([scenario.tier] if with_tier else []),
             scenario.domain,
             str(scenario.data.get("priority") or "P1"),
+            scenario.plan,
+            ", ".join(scenario.scope),
+            scenario.since,
             ", ".join(scenario.tags),
             str(len(scenario.steps)),
             ", ".join(scenario_notes(scenario, w.site.release)),
         ]
         out.append("| " + " | ".join(cell(value) for value in row) + " |")
     return [*out, ""]
+
+
+def version_key(version: str) -> tuple[int, Any]:
+    """Sort key of an otterdog version (PEP 440), the unreadable ones last."""
+    try:
+        from packaging.version import InvalidVersion, Version
+    except ImportError:  # pragma: no cover - packaging comes with pytest
+        return (1, version)
+    try:
+        return (0, Version(version))
+    except InvalidVersion:
+        return (1, version)
+
+
+def glance(w: Writer, scenarios: Sequence[Scenario], table: str) -> list[str]:
+    """The counts of ``scenarios`` by priority, plan, scope and first version, one content tab each with a column per
+    tier: a count opens the table of anchor ``table`` filtered on it (the query string of docs/assets/explorer.js)."""
+    tiers = [tier.name for tier in TIERS if any(scenario.tier == tier.name for scenario in scenarios)]
+    since = sorted({scenario.since for scenario in scenarios if scenario.since}, key=version_key)
+    dimensions: list[tuple[str, Callable[[Scenario], list[str]], list[str]]] = [
+        ("Priority", lambda scenario: [str(scenario.data.get("priority") or "P1")], list(PRIORITIES)),
+        ("Plan", lambda scenario: [scenario.plan], list(PLANS)),
+        ("Scope", lambda scenario: scenario.scope, list(SCOPES)),
+        ("Since", lambda scenario: [scenario.since] if scenario.since else [], since),
+    ]
+    out: list[str] = []
+    for name, values_of, values in dimensions:
+        rows = ["| " + " | ".join([name, *tiers, "All"]) + " |", "|" + "---|" * (len(tiers) + 2)]
+        for value in values:
+            cells = []
+            for tier in [*tiers, None]:
+                count = sum(
+                    1 for scenario in scenarios if value in values_of(scenario) and tier in (None, scenario.tier)
+                )
+                query = urlencode({**({"Tier": tier} if tier else {}), name: value})
+                cells.append(f"[{count}](?{query}#{table})" if count else "-")
+            rows.append("| " + " | ".join([code(value), *cells]) + " |")
+        if name == "Since":  # no filter value selects the scenarios without fixed_in
+            counts = [sum(1 for s in scenarios if not s.since and tier in (None, s.tier)) for tier in [*tiers, None]]
+            rows.append("| " + " | ".join(["every version", *(str(count) for count in counts)]) + " |")
+        out += [f'=== "{name}"', "", *(f"    {row}" for row in rows), ""]
+    return out
 
 
 def explorer_index(site: Site) -> str:
@@ -1516,7 +1609,8 @@ def explorer_index(site: Site) -> str:
         "",
         (
             f"The [scenario catalog]({w.rel('scenario-catalog.md')}) gives the status and the history of each entry, "
-            f"[Writing scenarios]({w.rel(WRITING)}) the format."
+            f"[Writing scenarios]({w.rel(WRITING)}) the format; the [tags]({w.rel(TAGS_INDEX)}) group the scenarios "
+            "and the Python tests by topic, one page each."
         ),
         "",
         "## Tiers",
@@ -1533,6 +1627,15 @@ def explorer_index(site: Site) -> str:
     out.append(f"| [Python tests]({w.rel(PYTHON_INDEX)}) | {tests} tests | | per tier |")
     out += [
         "",
+        "## At a glance",
+        "",
+        (
+            "The YAML scenarios by priority, GitHub plan (the plan of the simulated organization offline, the lowest "
+            "plan a live scenario runs on), scope (what they configure) and first otterdog version (`fixed_in`), per "
+            "tier: a count opens the table below filtered on it."
+        ),
+        "",
+        *glance(w, site.scenarios, "all-scenarios"),
         "## All scenarios",
         "",
         (
@@ -1693,6 +1796,67 @@ def python_index(site: Site) -> str:
 
 
 # --- site --------------------------------------------------------------------------------------------------------------
+# --- tag pages -------------------------------------------------------------------------------------------------------------
+def tags_of(site: Site) -> dict[str, tuple[list[Scenario], list[tuple[PythonModule, PythonTest]]]]:
+    """Every tag of the YAML scenarios and of the Python tests, sorted, with what carries it."""
+    tags: dict[str, tuple[list[Scenario], list[tuple[PythonModule, PythonTest]]]] = {}
+    for scenario in site.scenarios:
+        for tag in scenario.tags:
+            tags.setdefault(tag, ([], []))[0].append(scenario)
+    for module in site.modules:
+        for test in module.tests:
+            for tag in test.tags:
+                tags.setdefault(tag, ([], []))[1].append((module, test))
+    return dict(sorted(tags.items()))
+
+
+def tags_index(site: Site) -> str:
+    """The page of the tags: every tag with the number of scenarios and Python tests carrying it."""
+    w = Writer(site, TAGS_INDEX)
+    tags = tags_of(site)
+    out = [
+        *WIDE,
+        "# Tags",
+        "",
+        (
+            f"The {len(tags)} tags of the YAML scenarios (`tags:`) and of the Python tests (`@pytest.mark.tags`): "
+            "`otterdog-e2e run --tags <tag>` selects what carries one of them. Each tag has a page listing them."
+        ),
+        "",
+        "| Tag | Scenarios | Tiers | Python tests |",
+        "|---|---|---|---|",
+    ]
+    for tag, (scenarios, tests) in tags.items():
+        tiers = ", ".join(tier.name for tier in TIERS if any(scenario.tier == tier.name for scenario in scenarios))
+        out.append(f"| [{code(tag)}]({w.rel(tag_uri(tag))}) | {len(scenarios)} | {tiers} | {len(tests)} |")
+    return "\n".join(out) + "\n"
+
+
+def tag_page(site: Site, tag: str) -> str:
+    """The page of one tag: its YAML scenarios (a filterable table) and its Python tests."""
+    w = Writer(site, tag_uri(tag))
+    scenarios, tests = tags_of(site)[tag]
+    out = [
+        *WIDE,
+        f"# Tag {code(tag)}",
+        "",
+        (
+            f"{len(scenarios)} YAML scenarios and {len(tests)} Python tests carry the tag {code(tag)}: "
+            f"`otterdog-e2e run --tags {tag}` selects them. [Every tag]({w.rel(TAGS_INDEX)})."
+        ),
+        "",
+    ]
+    if scenarios:
+        out += ["## Scenarios", "", *scenario_table(w, scenarios)]
+    if tests:
+        out += ["## Python tests", "", "| Test | Module | Tier |", "|---|---|---|"]
+        out += [
+            f"| {code(test.heading)} | [{code(module.name)}]({w.rel(module.uri)}) | {module.tier} |"
+            for module, test in tests
+        ]
+    return "\n".join(out).rstrip("\n") + "\n"
+
+
 @dataclass(frozen=True)
 class Generated:
     """A generated page: its Markdown and the repository file its edit button opens."""
@@ -1712,11 +1876,14 @@ def pages(site: Site) -> dict[str, Generated]:
     found[PYTHON_INDEX] = Generated(python_index(site), "docs_scenarios.py")
     for module in site.modules:
         found[module.uri] = Generated(module_page(site, module), module.path)
+    found[TAGS_INDEX] = Generated(tags_index(site), "docs_scenarios.py")
+    for tag in tags_of(site):
+        found[tag_uri(tag)] = Generated(tag_page(site, tag), "docs_scenarios.py")
     return found
 
 
 def nav(site: Site) -> list[Any]:
-    """The entries of the explorer section: overview, YAML tiers (by domain), Python tests (by tier)."""
+    """The entries of the explorer section: overview, YAML tiers (by domain), Python tests (by tier), tags."""
     entries: list[Any] = [INDEX]
     for tier in TIERS:
         selected = [scenario for scenario in site.scenarios if scenario.tier == tier.name]
@@ -1734,6 +1901,7 @@ def nav(site: Site) -> list[Any]:
         if modules:
             python.append({python_tier.title: [{module.name: module.uri} for module in modules]})
     entries.append({"Python tests": python})
+    entries.append({"Tags": [TAGS_INDEX, *({tag: tag_uri(tag)} for tag in tags_of(site))]})
     return entries
 
 

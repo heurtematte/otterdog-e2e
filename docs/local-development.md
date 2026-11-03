@@ -422,8 +422,10 @@ The pages stay GitHub-flavored Markdown that renders on github.com; `docs_hooks.
 one page per YAML scenario of `scenarios/<tier>/<domain>/` (description, context, references, known bugs, covered
 features with their otterdog sources, each step's jsonnet, commands and expectations, the Python code quoting the
 scenario id, the YAML source) and one page per `tests/<tier>/test_*.py` module (docstring, marks and source of every
-test), with overview tables that filter and sort in the browser (`docs/assets/explorer.js`; the query string holds the
-filter, so `scenarios/?Tags=regression` can be linked). The nav entry `{ "Scenario explorer" = "scenarios/index.md" }` of
+test), with overview tables that filter and sort in the browser by tier, domain, priority, GitHub plan, scope (what a
+scenario configures: the organization, its repositories), first otterdog version (`fixed_in`) and tags
+(`docs/assets/explorer.js`; the query string holds the filter, so `scenarios/?Plan=enterprise&Tags=regression` can be
+linked), counts of the scenarios by those values on the overview page and one page per tag. The nav entry `{ "Scenario explorer" = "scenarios/index.md" }` of
 `zensical.toml` becomes the section in the staged configuration, and `docs/scenarios/` must not exist. Nothing is written by hand there: a change of a
 scenario or a test shows on the site at the next build of `main` (the docs workflow also runs for `scenarios/**` and
 `tests/**`).
