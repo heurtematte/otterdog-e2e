@@ -276,6 +276,10 @@ inspection, tunnels (only the pull relay and a loopback external webapp exist), 
 Enterprise Server, ghe.com and Enterprise Managed Users, `repository_dispatch` triggers. The harness never automates a browser itself: the web-UI tier lets
 otterdog's own Playwright client do it.
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md); report vulnerabilities privately as [SECURITY.md](SECURITY.md) explains.
+
 ## License
 
-Eclipse Public License 2.0 (EPL-2.0).
+[Eclipse Public License 2.0](LICENSE) (EPL-2.0).
