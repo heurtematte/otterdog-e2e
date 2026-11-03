@@ -73,9 +73,10 @@ that commit only (a later push changes nothing).
 6. **Add the reference** to every scenario of the changed behaviour (append it when the scenario already references
    other PRs): `{pr: <n>, note, expected_deltas, base?, template?}`. The note says what the PR changes in this
    behaviour (and what must not change); `expected_deltas` are your hypotheses (`step`, `kind: cli`, `key`, each with
-   a factual `note`); `base` only when the merge base is wrong (`sha:<first parent>` of a squash merge), declared once
-   for the PR (two different bases are an error); a variant the PR breaks is referenced WITHOUT an expected delta so
-   the report keeps flagging it.
+   a factual `note`, or compact `{step, kind, key}` entries when the reference's note explains them all, e.g. the keys
+   a template change adds to every `show`); `base` only when the merge base is wrong (`sha:<first parent>` of a squash
+   merge), declared once for the PR (two different bases are an error); a variant the PR breaks is referenced WITHOUT
+   an expected delta so the report keeps flagging it.
 7. **Check** until clean (exit 0):
 
    ```bash
@@ -85,8 +86,10 @@ that commit only (a later push changes nothing).
 
    The second form lints live scenarios with the PR's own CLI (in docker). Then confirm the new offline scenarios
    pass on the release CI runs: `.venv/bin/otterdog-e2e run --suite offline --sut release:latest --scenario <id>`.
-8. **Run the offline and differential tiers on the pinned PR** (docker, no target, no GitHub writes; about 15 minutes
-   with warm caches):
+8. **Run the offline and differential tiers on the pinned PR** (docker, no target, no GitHub writes; about 30 minutes:
+   each session builds the PR's image again). Never run two sessions on the same `pr:` SUT at once (an `assist check
+   --sut pr:<n>` during a `run`): the image of the running one vanishes ("No such image", exit 125, reported as product
+   failures).
 
    ```bash
    .venv/bin/otterdog-e2e run --sut pr:790@0cee9e302282fefa092b4e0767248a997a9272ea --base-sut auto \
@@ -98,11 +101,17 @@ that commit only (a later push changes nothing).
    without any base SUT the differential items are skipped. `run` records every observed offline scenario; add
    `--tags <suggested tags>` to restrict the differential tier like the PR lane does (the referencing scenarios are
    always kept). `otterdog-e2e pr <n> --sha <sha>` without `--target` is the same offline run with that tag selection.
-   The run ends with `pytest exit code N; artifacts: <dir>` and the delta counts.
+   The run ends with `pytest exit code N; artifacts: <dir>` and the delta counts. To check declared deltas again, rerun
+   only the referencing scenarios: `--scenario <id>,<id>,...` takes ONE comma-separated list (a repeated option keeps
+   the last one only).
 9. **Read the results** in that directory: `differential.md` first (verdict, unexpected deltas with unified diffs,
    expected deltas, expected deltas not observed, not comparable scenarios), then `summary.md`; for failures of the
-   head's offline tier use the `triage-e2e-run` skill (`.venv/bin/otterdog-e2e assist triage <dir>`). For each
-   delta, decide (details in [references/references.md](references/references.md)):
+   head's offline tier use the `triage-e2e-run` skill (`.venv/bin/otterdog-e2e assist triage <dir>`). A recording
+   step passes whatever its outcome, so a head crash in it shows only here: read the head's `exit_code` and the end of
+   its output for every delta (an `Error:` with exit 2 in the middle of a `show` or `local-plan` is a crash), not just
+   the diff. Many deltas usually share a cause: group them (`differential.json`, `deltas`) by their added and removed
+   lines with the whitespace collapsed. For each delta, decide (details in
+   [references/references.md](references/references.md)):
    - the intended change: declare it in the `expected_deltas` of the reference (`step`, `kind: cli`, `key`) with a factual
      note "head ...; base ...";
    - not intended: a **suspected regression**. Do not declare it (the report must keep flagging it); reproduce it from
@@ -110,7 +119,9 @@ that commit only (a later push changes nothing).
      `crash_signature` for a crash) and put it in the report;
    - an expected delta not observed: the hypothesis or the scenario is wrong; fix one of them (the last item of the
      differential tier fails on it);
-   - noise that survived the normalization (paths, ordering): report it as a harness issue, never declare it.
+   - noise that survived the normalization (paths, ordering, Python's own messages when a trusted base runs on the
+     host and the `pr:` head in its docker image, e.g. "expected 2" vs "expected 2, got 3"): report it as a harness
+     issue, never declare it.
 
    Repeat steps 5 to 9 until every delta is explained.
 10. **Report** to the user (example below).
