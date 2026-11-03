@@ -13,7 +13,7 @@ cli.list-advisories: ``list-advisories`` prints the CSV header first, then one r
 cli.kb.list-advisories-markup (known bug KB-050): the CSV rows go through rich markup unescaped, so the bracketed
     words of a summary ('[e2e]') disappear from the CSV (and a '[/]' crashes the command).
 cli.token-scopes: ``check-token-permissions -l`` prints the classic token's granted scopes; the config_reader
-    identity (a fine-grained token: no X-OAuth-Scopes header) is reported with every missing scope and exit 1.
+    identity (a token without any scope, classic or fine-grained) is reported with every missing scope and exit 1.
 cli.kb.check-token-permissions-fine-grained (known bug KB-078): with a fine-grained admin token (the supported setup
     when classic PATs are forbidden) the command must not report classic scopes as missing; it reports all five and
     exits 1. Skipped with a classic admin token.
@@ -403,8 +403,8 @@ def test_check_token_permissions_reports_missing_scopes(
     fresh_workspace: ConfigWorkspace,
     cli_lines: Callable[[CliResult], str],
 ) -> None:
-    """``check-token-permissions`` with the config_reader identity (a fine-grained token: no X-OAuth-Scopes): 'Missing
-    scopes:' names exactly the scopes otterdog needs that the token lacks (all five for a fine-grained token), exit 1."""
+    """``check-token-permissions`` with the config_reader identity (a token without any scope): 'Missing scopes:'
+    names exactly the scopes otterdog needs that the token lacks (all five for a token without scope), exit 1."""
     granted = e2e.http("config_reader").oauth_scopes() or set()
     missing = EXPECTED_SCOPES - granted
     if not missing:

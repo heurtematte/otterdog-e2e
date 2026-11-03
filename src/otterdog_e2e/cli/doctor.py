@@ -53,6 +53,10 @@ if TYPE_CHECKING:
 # otterdog's own check-token-permissions requirement for the admin PAT
 REQUIRED_ADMIN_SCOPES = frozenset({"admin:org", "admin:org_hook", "delete_repo", "repo", "workflow"})
 TOKEN_EXPIRY_WARNING = timedelta(days=14)  # doctor WARNs when a token expires sooner
+CONFIG_READER_REMEDIATION = (
+    "create a classic PAT without any scope, or a fine-grained token of its own account: Public repositories, "
+    "no permission"
+)
 # read probes of a fine-grained admin/oracle token: (path, permission); {org} = the test org, {repo} = the configs repo.
 # Each answers 200 only with the permission (docs/setup-free-org.md#fine-grained-personal-access-tokens); write
 # access cannot be probed without mutating, the first live run verifies it
@@ -220,18 +224,20 @@ class Doctor:
             )
         except SafetyError as exc:
             remediation = (
-                "use a dedicated machine account that belongs only to test orgs"
+                CONFIG_READER_REMEDIATION
+                if name == "config_reader"
+                else "use a dedicated machine account that belongs only to test orgs"
                 if info.kind == "classic"
                 else "create the fine-grained token with the test org as resource owner (docs/security.md)"
             )
             self.add(f"isolation:{name}", FAIL, str(exc), remediation)
             return False
         detail = (
-            "member of test orgs only, token scopes allowed"
+            f"{info.kind} token (read-only role)"
+            if name == "config_reader"
+            else "member of test orgs only, token scopes allowed"
             if info.kind == "classic"
             else f"{info.kind} token bound to {target.org}"
-            if name != "config_reader"
-            else f"{info.kind} token (read-only role)"
         )
         self.add(f"isolation:{name}", OK, detail)
         if name in ("admin", "oracle"):
@@ -319,17 +325,21 @@ class Doctor:
             )
 
     def _config_reader(self, http: GitHubHttp) -> None:
-        """config_reader is a fine-grained token distinct from the admin token (SEC-11)."""
+        """config_reader is a token without any permission distinct from the admin token (SEC-11): a classic PAT
+        without scope or a fine-grained token."""
         if self.ctx.identities["config_reader"].token == self.ctx.identities["admin"].token:
+            self.add("scopes:config_reader", FAIL, "same token as admin", CONFIG_READER_REMEDIATION)
+        elif (scopes := http.oauth_scopes()) is None:
+            self.add("scopes:config_reader", OK, "fine-grained token")
+        elif scopes:
             self.add(
-                "scopes:config_reader", FAIL, "same token as admin", "create a fine-grained public read-only token"
-            )
-        elif http.oauth_scopes() is not None:
-            self.add(
-                "scopes:config_reader", FAIL, "classic PAT", "use a fine-grained token: Public repositories (read-only)"
+                "scopes:config_reader",
+                FAIL,
+                f"classic PAT with scopes {', '.join(sorted(scopes))}",
+                CONFIG_READER_REMEDIATION,
             )
         else:
-            self.add("scopes:config_reader", OK, "fine-grained token")
+            self.add("scopes:config_reader", OK, "classic PAT without scope")
 
     def check_org(self, target: Target) -> VerifiedOrg | None:
         """verify_target (id, login, denylist, plan) without the marker; the marker reported separately."""

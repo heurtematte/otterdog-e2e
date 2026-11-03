@@ -5,7 +5,9 @@ title: Organization ruleset repository patterns and nested rules are validated
 description: >-
   On an enterprise plan, OrganizationRuleset.validate warns when an include or exclude repository pattern matches no
   repository of the configuration and when protect_repo_names has no names, and inherits the ruleset rules (target,
-  enforcement, ref patterns) with the organization ruleset header. Two known defects run as expected failures of
+  enforcement, ref patterns) with the organization ruleset header; the rules GitHub only supports in repository
+  rulesets (code quality, code coverage, license compliance, eclipse-csi/otterdog#900) are refused. Two known defects
+  run as expected failures of
   their own steps: every pattern after the first one warns spuriously (KB-023), and the nested rule validators crash
   with an AttributeError for an organization ruleset (KB-008: an out-of-range review count, fixed by #891; KB-081: a
   deployment rule).
@@ -133,6 +135,20 @@ steps:
       contains:
         - '+ add org_ruleset[name="{{ p }}-ors"]'
         - '+ add repository[name="{{ p }}-a"]'
+  - name: repository-only-rules
+    fragments:
+      rulesets:
+        - |-
+          orgs.newOrgRuleset('{{ p }}-ors') {
+            include_refs+: ['~DEFAULT_BRANCH'],
+            include_repo_names: ['~ALL'],
+            required_code_quality: orgs.newCodeQuality(),
+            required_code_coverage: orgs.newCodeCoverage() { minimum_coverage: 50 },
+            requires_license_compliance_scanning: true,
+          }
+    # with #900: code quality, code coverage and license compliance are refused (repository rulesets only); before:
+    # the keys fail to load
+    validate: {ok: false}
   - name: second-pattern
     known_bug: KB-023
     fragments:

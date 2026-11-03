@@ -40,7 +40,7 @@ the login that acted.
 | `author` | for webapp flows | active, public member; contributors team (`e2e-contributors`) only | classic, or fine-grained once a member | opens config PRs and comments as a plain contributor; team member in `cli.team.members` | its tests are skipped |
 | `approver` | for approval and auto-merge flows | active, public member; approval team (`project-leads`) | classic, or fine-grained once a member | approves config PRs, merges for an author, authors PRs as an approval-team member | its tests are skipped |
 | `outsider` | for negative tests | **not** a member, nor invited | classic only | comments as a non-member; the non-member of team validation | its tests are skipped |
-| `config_reader` | for webapp tests of untrusted SUTs | none: **not** a member | fine-grained, public repositories, no permission | the token given to the webapp under test (`OTTERDOG_CONFIG_TOKEN`), worthless if an untrusted SUT leaks it; `check-token-permissions` with a scope-less token | webapp items of an untrusted SUT are skipped; a trusted SUT's webapp gets the admin token |
+| `config_reader` | for webapp tests of untrusted SUTs | none: **not** a member | classic without any scope, or fine-grained: public repositories, no permission | the token given to the webapp under test (`OTTERDOG_CONFIG_TOKEN`), worthless if an untrusted SUT leaks it; `check-token-permissions` with a scope-less token | webapp items of an untrusted SUT are skipped; a trusted SUT's webapp gets the admin token |
 
 - Tokens: the classic scopes are in [3. Tokens](setup-free-org.md#3-tokens), the fine-grained permissions in
   [Permissions per role](setup-free-org.md#permissions-per-role), the allowed scopes and the isolation proofs in
@@ -236,10 +236,11 @@ that code could send the token anywhere. The admin token would give the author o
 test organization ([security.md](security.md#untrusted-suts-t1-t3)); the config_reader token only reads what is public
 anyway, so its leak costs nothing.
 
-**What it is.** A dedicated account that is not a member of the test organization, with a fine-grained token whose
-resource owner is that account, repository access "Public repositories" and no permission. Its isolation check
-accepts any non-classic token and checks the memberships it can see; doctor's `scopes:config_reader` row fails a
-classic PAT and the admin's token.
+**What it is.** A dedicated account that is not a member of the test organization, with a token without any
+permission: a classic PAT without any scope, or a fine-grained token whose resource owner is that account, repository
+access "Public repositories" and no permission. Its isolation check refuses a classic PAT with a scope, tolerates the
+listings of memberships the token cannot read and checks the memberships it can see; doctor's `scopes:config_reader`
+row fails a classic PAT with a scope and the admin's token.
 
 **Which token the webapp gets** (`E2EContext.config_token()`):
 
@@ -256,7 +257,7 @@ token.
 Tests:
 
 - `tests/cli/test_commands_read.py`: `cli.token-scopes`, `check-token-permissions` run with the config_reader token
-  (no `X-OAuth-Scopes`) reports every scope otterdog needs as missing and exits 1.
+  (no scope) reports every scope otterdog needs as missing and exits 1.
 
 Missing: `cli.token-scopes` and the webapp tier of untrusted SUTs are skipped.
 

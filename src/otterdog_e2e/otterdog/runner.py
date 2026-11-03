@@ -52,7 +52,14 @@ from typing import TYPE_CHECKING, Any
 
 from otterdog_e2e import procs
 from otterdog_e2e.otterdog.output import parse_apply, parse_plan, parse_validation, strip_ansi
-from otterdog_e2e.otterdog.runtime import CONTAINER_WORKDIR, CWD_DIR, DockerRuntime, container_name, runtime_for
+from otterdog_e2e.otterdog.runtime import (
+    CONTAINER_WORKDIR,
+    CWD_DIR,
+    PYCACHE_DIR,
+    DockerRuntime,
+    container_name,
+    runtime_for,
+)
 from otterdog_e2e.otterdog.workspace import (
     credentials_env,
     neutralize_untrusted_tree,
@@ -308,7 +315,7 @@ class OtterdogCli:
         self.offline = offline
         self.http_cache = http_cache
         self.http_cache_root = http_cache_root
-        self.runtime = runtime_for(installed, offline=offline)
+        self.runtime = runtime_for(installed, offline=offline, pycache_root=settings.cache_dir / PYCACHE_DIR)
         self._web: WebMode | None = None  # set by WebOtterdogCli only
         # precondition of every live command (E2EContext.check_lease_not_lost: refused once the org lease was lost)
         self.live_check: Callable[[], None] | None = None

@@ -15,7 +15,7 @@ description: >-
   correct orientation ('--- original', '+++ canonical') and declares the bug. A fix of either bug shows as a
   KnownBugNotReproducedWarning instead of a failure (BAT-12).
 priority: P1
-tags: [offline, template, repo]
+tags: [offline, template, repo, rulesets]
 observe: true
 steps:
   - name: canonical
@@ -47,6 +47,34 @@ steps:
         exit_code: 0
         contains: ["Showing canonical diff"]
         not_contains: ["@@ ", "canonical form"]
+  - name: ruleset-rule-lists
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-canon') {
+            description: 'otterdog e2e: canonical form',
+            has_wiki: false,
+            rulesets: [
+              orgs.newRepoRuleset('{{ p }}-scanning') {
+                include_refs+: ['~DEFAULT_BRANCH'],
+                required_code_scanning: orgs.newCodeScanning() { code_scanning_tools+: ['CodeQL:all:all'] },
+              },
+              orgs.newRepoRuleset('{{ p }}-push') {
+                target: 'push',
+                allows_creations: true,
+                allows_deletions: true,
+                allows_force_pushes: true,
+                required_pull_request: null,
+                required_status_checks: null,
+                restricted_file_extensions+: ['*.exe'],
+              },
+            ],
+          }
+    # with #900 the canonical form writes the rule lists as a whole ('code_scanning_tools: [', not '+:'), so a default
+    # list can be narrowed on import; before: the keys and template functions fail to load
+    commands:
+      canonical-diff: {exit_code: null}
+      show: {exit_code: null}
   - name: labels
     known_bug: {id: KB-010, phases: [commands]}
     fragments:

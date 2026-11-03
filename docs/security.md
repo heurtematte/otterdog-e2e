@@ -47,7 +47,7 @@ other check cannot reach a real organization.
 | `admin` | `repo`, `workflow`, `admin:org`, `admin:org_hook`, `delete_repo`, `read:org`, `read:user`, `user:email` | doctor also requires `repo`, `workflow`, `admin:org`, `admin:org_hook`, `delete_repo` (otterdog's requirement) |
 | `oracle` (optional, separate) | same as admin | must be an organization owner |
 | `author`, `approver`, `outsider` | `public_repo`, `repo`, `read:org`, `read:user`, `user:email`, `workflow` | use `public_repo` + `read:org` |
-| `config_reader` | fine-grained tokens only | public repositories, read-only |
+| `config_reader` | none: a classic PAT without any scope, or a fine-grained token | public repositories, read-only; the listings of its memberships may answer 403 without `read:org`, which is tolerated, and the memberships it can see are checked |
 
 - fine-grained tokens are accepted for every role except the `outsider`, under the rules of
   [Fine-grained personal access tokens](#fine-grained-personal-access-tokens-t1-t2) below (GitHub answers
@@ -83,7 +83,7 @@ any other answer (403, 404, an error), and the `SafetyError` names the permissio
 | `admin`, `oracle` | `GET /orgs/{org}/actions/permissions` and `GET /orgs/{org}/hooks` | organization-owner data, reachable only through the organization permissions Administration (read) and Webhooks (read); organization permissions exist only on a token whose resource owner is that organization, and only an owner's token can read them |
 | `author`, `approver` | `GET /user/memberships/orgs/{org}`: `state` `active`, `organization.id` = the pinned id | the token user's membership, read through the organization permission Members (read), which again only applies to the token's resource owner |
 | `outsider` | refused | see below |
-| `config_reader` | unchanged (any non-classic token, visible memberships checked) | it only reads public data |
+| `config_reader` | none (any non-classic token, visible memberships checked, as for its classic PAT without scope) | it only reads public data |
 
 Without the organization login a fine-grained owner or member token is refused (fail closed). Classic tokens keep the
 account-membership and scope checks above.
@@ -220,10 +220,16 @@ Pull requests (`pr:N@sha`) and shas not reachable from upstream main or a `v*` t
 - they are exported to a private directory and only built as a docker image (`otterdog-e2e/untrusted:<label>`,
   never reused as trusted); host installs are refused unless an operator passes `--e2e-trust-code <sha>` from an
   interactive terminal (refused when `CI` is set);
-- the CLI runs in the image: `docker run --rm --init --name otterdog-e2e-<run>-<seq> --read-only --tmpfs /tmp
+- the CLI runs in the image: `docker run --rm --init --name otterdog-e2e-<run>-<seq> -i --read-only --tmpfs /tmp
   --user <uid>:<gid> -e HOME=/tmp --cap-drop ALL --security-opt no-new-privileges`, the workspace bind-mounted at
   `/ws`, an env-file (0600) holding only the `E2E_OTTERDOG_*` credentials, `--network none` for offline commands; a
-  timed-out container is removed (`docker rm -f`), so it cannot keep applying;
+  timed-out container is removed (`docker rm -f`), so it cannot keep applying; `-i` only forwards the command's
+  input (`/dev/null` without input, never a TTY);
+- offline commands of an image given by its id also mount a bytecode directory of that image only
+  (`<cache>/pycache/sha256-<id>` at `/pycache`, `PYTHONPYCACHEPREFIX`): the images ship no bytecode, so every
+  command recompiled its modules on the read-only root. The untrusted code can write there what the next offline
+  command of the same image loads, which gives it nothing it does not already have; live commands (network,
+  credentials), other images and the host never use it, and `cache prune` removes the old ones;
 - the mounted workspace is untrusted once a container ran in it (same uid, read-write): after every container
   command the harness removes every symlink that resolves outside the workspace and every special file (FIFO, socket)
   the container left there, reads the files it wrote (check-status JSON, imported and fetched configs) only as
@@ -232,7 +238,7 @@ Pull requests (`pr:N@sha`) and shas not reachable from upstream main or a `v*` t
   the workspace; otherwise a planted `check-status.json -> ~/.aws/credentials` would be read and exported, or a
   planted destination link would turn a copy into a host file write;
 - they never receive web-UI credentials (username, password, TOTP: the harness passes `unset`), and the webapp tier
-  of an untrusted SUT requires a `config_reader` fine-grained token for `OTTERDOG_CONFIG_TOKEN`;
+  of an untrusted SUT requires a `config_reader` token without any scope or permission for `OTTERDOG_CONFIG_TOKEN`;
 - they never write the trusted caches (sources, builds, HTTP cache).
 
 ### Web-UI credentials (T1, T3, T4)
@@ -633,7 +639,7 @@ organization.
    (organization settings, GitHub Apps, Configure, Suspend), which also invalidates its installation tokens.
 2. **Rotate** every credential the run could see:
     - each machine account's PATs (account settings, Developer settings, Personal access tokens: delete the old
-      token, create a new one with the same scopes) and the fine-grained `config_reader` token;
+      token, create a new one with the same scopes) and the `config_reader` token;
     - the App private key (App settings, Private keys: generate a new key, then delete the old one) and the webhook
       secret (App settings, Webhook secret);
     - with the web-UI tier: the admin bot's password, its TOTP seed (remove the authenticator app from the account and

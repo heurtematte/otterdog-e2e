@@ -34,6 +34,18 @@
     required_status_checks: null,
   },
 
+  // A push ruleset (target 'push') without the template's branch rules (creation, deletion, non_fast_forward, pull
+  // request, status checks), which push rulesets do not support (one warning each since otterdog#900): add the push
+  // rules the scenario tests (restricted_file_paths, max_file_size, ...).
+  pushRuleset(name):: orgs.newRepoRuleset(name) {
+    target: 'push',
+    allows_creations: true,
+    allows_deletions: true,
+    allows_force_pushes: true,
+    required_pull_request: null,
+    required_status_checks: null,
+  },
+
   // Required status checks of a ruleset; 'strict' is required since otterdog#790, and checks are written without
   // the 'any:' prefix (rulesets read them back without it, KB-020).
   statusChecks(checks, strict=true):: orgs.newStatusChecks() {

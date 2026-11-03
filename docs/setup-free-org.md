@@ -84,13 +84,13 @@ one instance never reaches the other organization):
 | `free` | `author` | `csi-e2e-free-author` | `csi-bot+otterdog-e2e-free-author@mydomain.com` | public member, team `e2e-contributors` | classic, or fine-grained once a member | webapp flows |
 | `free` | `approver` | `csi-e2e-free-approver` | `csi-bot+otterdog-e2e-free-approver@mydomain.com` | public member, team `project-leads` | classic, or fine-grained once a member | approval and auto-merge flows |
 | `free` | `outsider` | `csi-e2e-free-outsider` | `csi-bot+otterdog-e2e-free-outsider@mydomain.com` | **not** a member, never invited | classic only | negative tests |
-| `free` | `config_reader` | `csi-e2e-free-config-reader` | `csi-bot+otterdog-e2e-free-config-reader@mydomain.com` | **not** a member | fine-grained, public repositories, no permission | webapp tests of untrusted SUTs |
+| `free` | `config_reader` | `csi-e2e-free-config-reader` | `csi-bot+otterdog-e2e-free-config-reader@mydomain.com` | **not** a member | classic without any scope, or fine-grained: public repositories, no permission | webapp tests of untrusted SUTs |
 | `enterprise` | `admin` | `csi-e2e-enterprise-admin` | `csi-bot+otterdog-e2e-enterprise-admin@mydomain.com` | owner, team `otterdog-admins` | classic or fine-grained (fine-grained where the enterprise forbids classic PATs) | always |
 | `enterprise` | `oracle` | `csi-e2e-enterprise-oracle` | `csi-bot+otterdog-e2e-enterprise-oracle@mydomain.com` | owner | classic or fine-grained | optional: the admin serves as oracle without it |
 | `enterprise` | `author` | `csi-e2e-enterprise-author` | `csi-bot+otterdog-e2e-enterprise-author@mydomain.com` | public member, team `e2e-contributors` | classic, or fine-grained once a member | webapp flows |
 | `enterprise` | `approver` | `csi-e2e-enterprise-approver` | `csi-bot+otterdog-e2e-enterprise-approver@mydomain.com` | public member, team `project-leads` | classic, or fine-grained once a member | approval and auto-merge flows |
 | `enterprise` | `outsider` | `csi-e2e-enterprise-outsider` | `csi-bot+otterdog-e2e-enterprise-outsider@mydomain.com` | **not** a member, never invited | classic only: leave it unset where the enterprise forbids classic PATs | negative tests |
-| `enterprise` | `config_reader` | `csi-e2e-enterprise-config-reader` | `csi-bot+otterdog-e2e-enterprise-config-reader@mydomain.com` | **not** a member | fine-grained, public repositories, no permission | webapp tests of untrusted SUTs |
+| `enterprise` | `config_reader` | `csi-e2e-enterprise-config-reader` | `csi-bot+otterdog-e2e-enterprise-config-reader@mydomain.com` | **not** a member | classic without any scope, or fine-grained: public repositories, no permission | webapp tests of untrusted SUTs |
 
 - A Team instance (`targets/team.yaml`) adds the same six rows with `team`; another organization of a profile, the
   same six rows with its instance name (`acme-a`: `csi-e2e-acme-a-admin`, `csi-bot+otterdog-e2e-acme-a-admin@...`).
@@ -138,10 +138,11 @@ set an expiry and a reminder to rotate them. `setup` prints a creation URL per r
 | admin | classic | `repo`, `workflow`, `admin:org`, `admin:org_hook`, `delete_repo` (nothing else; `read:user` and `user:email` are tolerated) |
 | oracle | classic | `repo`, `admin:org`, `admin:org_hook` |
 | author, approver, outsider | classic | `public_repo`, `read:org` |
-| config_reader | fine-grained | resource owner: the config_reader account itself; repository access: "Public repositories"; no permissions |
+| config_reader | classic | none (select no scope; or a fine-grained token: resource owner the config_reader account itself, repository access "Public repositories", no permission) |
 
-Every classic token needs `read:org`, given directly or through `admin:org`: the isolation check lists
-`GET /user/orgs`, which answers 403 without it. Any scope outside the role's allowlist fails the session (see
+Every classic token but the config_reader's needs `read:org`, given directly or through `admin:org`: the isolation
+check lists `GET /user/orgs`, which answers 403 without it. The config_reader only reads public data: its token has no
+scope, and its isolation check tolerates the 403 and checks the memberships it can see. Any scope outside the role's allowlist fails the session (see
 [security.md](security.md#dedicated-machine-accounts-t1-t2)).
 
 Organizations or enterprises that forbid classic PATs can use fine-grained personal access tokens for every role
@@ -553,8 +554,8 @@ records them as unavailable, so the checks that need them cannot pass.
 **`outsider`**: a fine-grained token is not possible (below); keep a classic PAT with `public_repo` and `read:org`,
 or leave the role unset (its negative tests are skipped).
 
-**`config_reader`**: unchanged, a fine-grained token whose resource owner is the config_reader account itself,
-repository access "Public repositories", no permission (step [3. Tokens](#3-tokens)).
+**`config_reader`**: a fine-grained token whose resource owner is the config_reader account itself, repository
+access "Public repositories", no permission, or a classic PAT without any scope (step [3. Tokens](#3-tokens)).
 
 ### Limitations of fine-grained tokens
 

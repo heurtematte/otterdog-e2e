@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-PRUNABLE_CACHE_DIRS = ("run", "build", "src", "http-cache")
+PRUNABLE_CACHE_DIRS = ("run", "build", "src", "http-cache", "pycache")
 # private exports of untrusted SUTs (removed by their session): cache prune only removes their unheld image locks
 UNTRUSTED_CACHE_DIR = "untrusted"
 
@@ -132,7 +132,7 @@ def cache_sidecars(base: Path, name: str) -> list[Path]:
 
 
 def prune_cache_dirs(cache_dir: Path, *, keep: int) -> list[Path]:
-    """Keep the ``keep`` newest entries of run/, build/, src/ and http-cache/ (their exact sidecar files,
+    """Keep the ``keep`` newest entries of run/, build/, src/, http-cache/ and pycache/ (their exact sidecar files,
     cache_sidecars, go too); an entry whose ``<name>.lock`` or ``<name>.image.lock`` is held right now (a running
     session, an export, an install or an image build) is never removed. The image build locks of untrusted SUTs
     (``untrusted/<label>.image.lock``) that nobody holds are removed as well."""

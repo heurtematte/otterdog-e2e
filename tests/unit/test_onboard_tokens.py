@@ -61,10 +61,9 @@ def test_classic_urls_carry_exactly_the_role_scopes(role: str, scopes: str) -> N
     assert role in params["description"] and "my-org" in params["description"] and "free2" in params["description"]
 
 
-def test_the_config_reader_has_no_classic_url() -> None:
-    """The webapp's read-only token must be fine-grained."""
-    with pytest.raises(ValueError, match="no classic PAT"):
-        classic_token_url("config_reader", description="x")
+def test_the_config_reader_classic_url_has_no_scope() -> None:
+    """The webapp's read-only token may be a classic PAT without any scope: the URL preselects none."""
+    assert query(classic_token_url("config_reader", description="x")) == {"description": "x"}
 
 
 # --- fine-grained ---------------------------------------------------------------------------------------------------
@@ -114,7 +113,8 @@ def test_the_outsider_has_no_fine_grained_url() -> None:
     """A fine-grained token cannot write to an org its account does not belong to."""
     with pytest.raises(ValueError, match="no fine-grained PAT"):
         token_url("outsider", "fine-grained", instance="free2", org="my-org")
-    assert ROLE_TOKENS["outsider"].kinds == ("classic",) and ROLE_TOKENS["config_reader"].kinds == ("fine-grained",)
+    assert ROLE_TOKENS["outsider"].kinds == ("classic",)
+    assert ROLE_TOKENS["config_reader"].kinds == ("classic", "fine-grained")
 
 
 @pytest.mark.parametrize("days", [1, 90, 366])
@@ -165,6 +165,7 @@ def test_token_steps_name_what_urls_cannot_preselect() -> None:
     """Repository access and the classic expiration are selected by hand; members need membership and approval."""
     assert any("All repositories" in step for step in token_steps("admin", "fine-grained", "my-org"))
     assert any("Public repositories" in step for step in token_steps("config_reader", "fine-grained", "my-org"))
+    assert any("Scopes: none" in step for step in token_steps("config_reader", "classic", "my-org"))
     assert any("Expiration" in step for step in token_steps("outsider", "classic", "my-org"))
     member = " ".join(token_steps("author", "fine-grained", "my-org"))
     assert "active member" in member and "/organizations/my-org/settings/personal-access-token-requests" in member
@@ -175,8 +176,10 @@ def test_classic_scopes_are_allowed_by_the_isolation_rules() -> None:
     """Every scope a URL asks for passes safety's allowlist of the role; the admin's are otterdog's requirement."""
     for role, spec in ROLE_TOKENS.items():
         allowed = safety.ALLOWED_SCOPES["admin" if role in safety.OWNER_ROLES else "other"]
-        assert set(spec.classic_scopes) <= allowed, role
-        assert "read:org" in spec.classic_scopes or "admin:org" in spec.classic_scopes or not spec.classic_scopes
+        scopes = spec.classic_scopes or ()
+        assert set(scopes) <= allowed, role
+        # read:org lists the orgs of the account for the isolation check, except for a token without any scope
+        assert "read:org" in scopes or "admin:org" in scopes or not scopes
     assert set(ROLE_TOKENS["admin"].classic_scopes) == set(cli_doctor.REQUIRED_ADMIN_SCOPES)
 
 
@@ -270,8 +273,10 @@ def test_the_docs_outsider_and_config_reader_rules_match_the_code() -> None:
     assert "classic PAT" in outsider and "`public_repo`" in outsider and "`read:org`" in outsider
     assert ROLE_TOKENS["outsider"].fine_grained is None
     assert "config_reader account itself" in reader and "Public repositories" in reader and "no permission" in reader
+    assert "classic PAT without any scope" in reader
     spec = ROLE_TOKENS["config_reader"]
     assert spec.own_owner and spec.repository_access == "Public repositories" and spec.fine_grained == {}
+    assert spec.classic_scopes == ()
 
 
 def test_the_docs_classic_scope_table_matches_the_code() -> None:
@@ -283,7 +288,7 @@ def test_the_docs_classic_scope_table_matches_the_code() -> None:
             documented[role] = (kind, tuple(re.findall(r"`([^`]+)`", scopes.split("(", 1)[0])))
     for role, spec in ROLE_TOKENS.items():
         kind, scopes = documented[role]
-        if spec.classic_scopes:
+        if spec.classic_scopes is not None:
             assert (kind, scopes) == ("classic", spec.classic_scopes), role
         else:
             assert kind == "fine-grained", role

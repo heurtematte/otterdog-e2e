@@ -7,8 +7,10 @@ description: >-
   include/exclude ref pattern against the target (refs/heads/*, ~DEFAULT_BRANCH or ~ALL for branches and pushes,
   refs/tags/* or ~ALL for tags), requires a repository environment per required deployment environment and warns
   about deployment environments without requires_deployments. Every rule is asserted with the ruleset header, then
-  valid rulesets of every target validate and are planned. An unknown role in bypass_actors passes validation and
-  crashes the apply (KB-039): that step expects a validation error.
+  valid rulesets of every target validate and are planned (the push ruleset without the branch rules push rulesets
+  do not support). A push ruleset keeping the branch rules of the template validates, with a warning per rule since
+  eclipse-csi/otterdog#900. An unknown role in bypass_actors passes validation and crashes the apply (KB-039): that
+  step expects a validation error.
 priority: P1
 tags: [offline, rulesets, environments]
 observe: true
@@ -135,7 +137,14 @@ steps:
                 bypass_actors: ['#RepositoryAdmin', '#Maintain:pull_request', '@{{ org }}/{{ p }}-maintainers', '{{ app_slug }}'],
               },
               orgs.newRepoRuleset('{{ p }}-tag') { target: 'tag', include_refs: ['refs/tags/v*', '~ALL'] },
-              orgs.newRepoRuleset('{{ p }}-push') { target: 'push', include_refs: ['~ALL'] },
+              orgs.newRepoRuleset('{{ p }}-push') {
+                target: 'push',
+                allows_creations: true,
+                allows_deletions: true,
+                allows_force_pushes: true,
+                required_pull_request: null,
+                required_status_checks: null,
+              },
               orgs.newRepoRuleset('{{ p }}-deploy') {
                 include_refs: ['~DEFAULT_BRANCH'],
                 requires_deployments: true,
@@ -158,6 +167,16 @@ steps:
         - '+ add repo_ruleset[name="{{ p }}-push", repository={{ p }}-rs]'
         - '+ add repo_ruleset[name="{{ p }}-deploy", repository={{ p }}-rs]'
         - '+ "#Maintain:pull_request"'
+  - name: push-with-branch-rules
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-rs') {
+            rulesets: [orgs.newRepoRuleset('{{ p }}-push') { target: 'push', include_refs: ['~ALL'] }],
+          }
+    # since #900 a warning per template branch rule (creation, deletion, non_fast_forward, pull request, status
+    # checks) and for include_refs, which push rulesets ignore; never an error
+    validate: {ok: true, errors: 0, exit_code: 0}
   - name: unknown-bypass-role
     known_bug: KB-039
     fragments:

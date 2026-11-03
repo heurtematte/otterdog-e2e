@@ -1,0 +1,134 @@
+# Offline tier (battery, validation): the file rules of push rulesets.
+id: O-VAL-RULESET-PUSH-RULES
+tier: offline
+title: Push ruleset file rules are validated against their limits and their target
+description: >-
+  Rulesets with target 'push' restrict the files a push may contain: restricted_file_paths (with
+  restricted_file_paths_exceptions), max_file_path_length, restricted_file_extensions and max_file_size (with
+  max_file_size_exceptions). Ruleset.validate refuses values outside the limits of GitHub (a file size in [0, 100] MB,
+  a path length in [0, 32767], at most 200 entries of at most 200 characters per list), refuses the push rules on a
+  branch or tag ruleset and the pull request rules (Copilot review, code scanning) on a push ruleset, warns about
+  exceptions without their rule and about ref conditions, which push rulesets ignore (also in the plan). The push
+  rules are modelled by eclipse-csi/otterdog#900: SUTs without them refuse the new keys when loading the
+  configuration, so the negative steps only expect a failed validation, the steps that validate with #900 record
+  their outcome and the reference declares the deltas. The step refs-ignored uses keys every SUT knows.
+priority: P1
+tags: [offline, rulesets]
+observe: true
+variables: {plan: team}
+libraries:
+  e2e: ../../lib/e2e.libsonnet
+steps:
+  - name: limits
+    fragments:
+      repositories:
+        - |-
+          e2e.privateRepo('{{ p }}-push') {
+            rulesets: [
+              e2e.pushRuleset('{{ p }}-size') { max_file_size: 101 },
+              e2e.pushRuleset('{{ p }}-negative-size') { max_file_size: -1 },
+              e2e.pushRuleset('{{ p }}-path-length') { max_file_path_length: 32768 },
+            ],
+          }
+    validate: {ok: false}  # with #900: one range error per ruleset; before: the keys fail to load
+  - name: list-entries
+    fragments:
+      repositories:
+        - |-
+          e2e.privateRepo('{{ p }}-push') {
+            rulesets: [
+              e2e.pushRuleset('{{ p }}-extensions') { restricted_file_extensions: ['*.%d' % x for x in std.range(1, 201)] },
+              e2e.pushRuleset('{{ p }}-long-path') { restricted_file_paths: [std.join('', std.repeat(['a'], 201))] },
+            ],
+          }
+    validate: {ok: false}  # with #900: 201 entries, an entry of 201 characters; before: the keys fail to load
+  - name: rules-outside-push
+    fragments:
+      repositories:
+        - |-
+          e2e.privateRepo('{{ p }}-push') {
+            rulesets: [
+              e2e.defaultBranchRuleset('{{ p }}-branch') { restricted_file_paths: ['secrets/**'], max_file_size: 10 },
+              orgs.newRepoRuleset('{{ p }}-tag') {
+                target: 'tag',
+                include_refs: ['~ALL'],
+                required_pull_request: null,
+                required_status_checks: null,
+                max_file_path_length: 255,
+              },
+            ],
+          }
+    validate: {ok: false}  # with #900: push rules on a branch and a tag ruleset; before: the keys fail to load
+  - name: pull-request-rules-on-push
+    fragments:
+      repositories:
+        - |-
+          e2e.privateRepo('{{ p }}-push') {
+            rulesets: [
+              e2e.pushRuleset('{{ p }}-push') {
+                max_file_size: 10,
+                allows_updates: false,
+                copilot_code_review: orgs.newCopilotCodeReview(),
+                required_code_scanning: orgs.newCodeScanning() { code_scanning_tools+: ['CodeQL:all:all'] },
+              },
+            ],
+          }
+    validate: {ok: false}  # with #900: Copilot and code scanning refused, update a warning; before: load error
+  - name: exceptions-without-rule
+    base_fragments:
+      repositories:
+        - |-
+          e2e.privateRepo('{{ p }}-push') {
+            rulesets: [e2e.pushRuleset('{{ p }}-push') { restricted_file_extensions: ['*.exe'] }],
+          }
+    fragments:
+      repositories:
+        - |-
+          e2e.privateRepo('{{ p }}-push') {
+            rulesets: [
+              e2e.pushRuleset('{{ p }}-push') {
+                restricted_file_extensions: ['*.exe'],
+                restricted_file_paths_exceptions: ['docs/**'],
+                max_file_size_exceptions: ['assets/**'],
+              },
+            ],
+          }
+    # with #900: two warnings and no change planned (exceptions without their rule are ignored); before: load error
+    plan: {expect: any}
+    commands: {show: {exit_code: null}}
+  - name: refs-ignored
+    base_fragments:
+      repositories:
+        - |-
+          e2e.privateRepo('{{ p }}-push') {
+            rulesets: [e2e.pushRuleset('{{ p }}-push')],
+          }
+    fragments:
+      repositories:
+        - |-
+          e2e.privateRepo('{{ p }}-push') {
+            rulesets: [e2e.pushRuleset('{{ p }}-push') { include_refs: ['~ALL'] }],
+          }
+    # with #900: a warning, include_refs ignored by the plan; before: no warning, include_refs planned as a change
+    validate: {ok: true, errors: 0, exit_code: 0}
+    plan: {expect: any}
+  - name: valid-push-ruleset
+    base_fragments: {}
+    fragments:
+      repositories:
+        - |-
+          e2e.privateRepo('{{ p }}-push') {
+            rulesets: [
+              e2e.pushRuleset('{{ p }}-files') {
+                restricted_file_paths: ['secrets/**'],
+                restricted_file_paths_exceptions: ['secrets/README.md'],
+                max_file_path_length: 255,
+                restricted_file_extensions: ['*.exe', '*.jar'],
+                max_file_size: 10,
+                max_file_size_exceptions: ['docs/assets/**'],
+              },
+            ],
+          }
+    # with #900: validates without warning on the team plan, plans the repository and its ruleset; before: load error
+    plan: {expect: any}
+    commands: {show: {exit_code: null}}

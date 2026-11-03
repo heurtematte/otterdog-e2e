@@ -1,0 +1,122 @@
+# Offline tier (battery, validation): the code analysis and review rules of rulesets.
+id: O-VAL-RULESET-CODE-ANALYSIS
+tier: offline
+title: Ruleset code scanning, code quality, code coverage and Copilot review rules are validated
+description: >-
+  Rulesets can require code scanning results (required_code_scanning, tools written
+  'tool:security_alerts_threshold:alerts_threshold'), code quality results (required_code_quality, severity errors |
+  warnings | notes | all), a code coverage (required_code_coverage, minimum_coverage and max_coverage_drop in [0, 100]),
+  license compliance results (requires_license_compliance_scanning) and an automatic Copilot code review
+  (copilot_code_review). The embedded settings refuse a missing, empty or malformed tool list, unknown thresholds and
+  out-of-range coverages, the JSON schema refuses an unknown severity when loading the configuration, and a coverage
+  without threshold is a warning; changing the settings plans a change of the ruleset. The rules are modelled by
+  eclipse-csi/otterdog#900: SUTs without them refuse the new keys and template functions, so the negative steps only
+  expect a failed validation, the other steps record their outcome and the reference declares the deltas.
+priority: P1
+tags: [offline, rulesets]
+observe: true
+variables: {plan: enterprise}
+libraries:
+  e2e: ../../lib/e2e.libsonnet
+steps:
+  - name: code-scanning-tools
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-analysis') {
+            rulesets: [
+              e2e.defaultBranchRuleset('{{ p }}-missing') { required_code_scanning: {} },
+              e2e.defaultBranchRuleset('{{ p }}-empty') { required_code_scanning: orgs.newCodeScanning() },
+              e2e.defaultBranchRuleset('{{ p }}-format') {
+                required_code_scanning: orgs.newCodeScanning() { code_scanning_tools+: ['CodeQL'] },
+              },
+              e2e.defaultBranchRuleset('{{ p }}-security-threshold') {
+                required_code_scanning: orgs.newCodeScanning() { code_scanning_tools+: ['CodeQL:errors:errors'] },
+              },
+              e2e.defaultBranchRuleset('{{ p }}-alerts-threshold') {
+                required_code_scanning: orgs.newCodeScanning() { code_scanning_tools+: ['CodeQL:all:critical'] },
+              },
+            ],
+          }
+    validate: {ok: false}  # with #900: one error per ruleset; before: the keys fail to load
+  - name: code-quality-severity
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-analysis') {
+            rulesets: [
+              e2e.defaultBranchRuleset('{{ p }}-quality') { required_code_quality: orgs.newCodeQuality() { severity: 'critical' } },
+            ],
+          }
+    validate: {ok: false}  # with #900: the schema enumerates the severities (load error); before: unknown key
+  - name: code-coverage-range
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-analysis') {
+            rulesets: [
+              e2e.defaultBranchRuleset('{{ p }}-coverage') {
+                required_code_coverage: orgs.newCodeCoverage() { minimum_coverage: 101, max_coverage_drop: -1 },
+              },
+            ],
+          }
+    validate: {ok: false}  # with #900: both percentages out of range; before: the keys fail to load
+  - name: code-coverage-without-threshold
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-analysis') {
+            rulesets: [e2e.defaultBranchRuleset('{{ p }}-coverage') { required_code_coverage: orgs.newCodeCoverage() }],
+          }
+    # with #900: validates with the warning "the rule has no effect"; before: the template has no newCodeCoverage()
+    commands: {show: {exit_code: null}}
+  - name: valid-code-analysis
+    base_fragments: {}
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-analysis') {
+            rulesets: [
+              e2e.defaultBranchRuleset('{{ p }}-analysis') {
+                required_code_scanning: orgs.newCodeScanning() {
+                  code_scanning_tools+: ['CodeQL:high_or_higher:errors', 'acme:scanner:none:all'],
+                },
+                required_code_quality: orgs.newCodeQuality() { severity: 'warnings' },
+                required_code_coverage: orgs.newCodeCoverage() { minimum_coverage: 80, max_coverage_drop: 1.5 },
+                requires_license_compliance_scanning: true,
+                copilot_code_review: orgs.newCopilotCodeReview() { review_on_push: true, review_draft_pull_requests: true },
+              },
+            ],
+          }
+    # with #900: validates without warning on the enterprise plan (a tool name may contain ':'), plans the repository
+    # and its ruleset; before: the keys fail to load
+    plan: {expect: any}
+    commands: {show: {exit_code: null}}
+  - name: change-settings
+    base_fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-analysis') {
+            rulesets: [
+              e2e.defaultBranchRuleset('{{ p }}-analysis') {
+                required_code_scanning: orgs.newCodeScanning() { code_scanning_tools+: ['CodeQL:high_or_higher:errors'] },
+                copilot_code_review: orgs.newCopilotCodeReview(),
+              },
+            ],
+          }
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-analysis') {
+            rulesets: [
+              e2e.defaultBranchRuleset('{{ p }}-analysis') {
+                required_code_scanning: orgs.newCodeScanning() { code_scanning_tools+: ['CodeQL:critical:errors'] },
+                copilot_code_review: null,
+                required_code_quality: orgs.newCodeQuality(),
+              },
+            ],
+          }
+    # with #900: one change of the ruleset (tool threshold, Copilot review removed, code quality added); before: load
+    # error of both configurations
+    plan: {expect: any}
+    commands: {show: {exit_code: null}}

@@ -500,17 +500,30 @@ def test_a_foreign_membership_fails_the_isolation_check(world: World) -> None:
     ("role", "account", "message"),
     [
         ("outsider", Account("e2e-outsider", None), "the outsider needs a classic PAT, got a fine-grained PAT"),
-        ("config_reader", Account("e2e-reader", set(MEMBER_SCOPES)), "needs a fine-grained PAT, got a classic PAT"),
+        ("config_reader", Account("e2e-reader", set(MEMBER_SCOPES)), "a classic PAT must have no scope"),
     ],
 )
 def test_token_kinds_per_role(world: World, role: str, account: Account, message: str) -> None:
-    """The outsider is classic only, the config_reader fine-grained only."""
+    """The outsider is classic only, the config_reader a classic PAT without any scope or a fine-grained token."""
     world.accounts["tokwrongkind_000000000000"] = account
     script = Script(
         secrets=[TOKENS["admin"], "tokwrongkind_000000000000", ""], confirms={f"Set up the {role} token": True}
     )
     run_wizard(world, script)
     assert message in script.output
+
+
+def test_a_classic_config_reader_token_without_scope(world: World) -> None:
+    """The config_reader accepts a classic PAT without any scope: its prefilled URL preselects none."""
+    world.accounts["tokreaderclassic_00000000"] = Account("e2e-reader", set())
+    script = Script(
+        secrets=[TOKENS["admin"], "tokreaderclassic_00000000"], confirms={"Set up the config_reader token": True}
+    )
+    run_wizard(world, script)
+    env = world.env()
+    assert env["E2E_CONFIG_READER_TOKEN"] == "tokreaderclassic_00000000"
+    assert env["E2E_CONFIG_READER_TOKEN_TYPE"] == "classic"
+    assert "settings/tokens/new?description=" in script.output and "Scopes: none" in script.output
 
 
 def test_a_fine_grained_member_token_needs_the_membership(world: World) -> None:

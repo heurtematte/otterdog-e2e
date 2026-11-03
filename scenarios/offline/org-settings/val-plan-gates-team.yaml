@@ -71,3 +71,30 @@ steps:
       ok: true
       errors: 0
       not_contains: ["use of organization rulesets requires an 'enterprise' plan"]
+  - name: ruleset-rule-plans
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-rules') {
+            rulesets: [
+              orgs.newRepoRuleset('{{ p }}-branch') {
+                include_refs+: ['~DEFAULT_BRANCH'],
+                required_code_quality: orgs.newCodeQuality(),
+                required_code_coverage: orgs.newCodeCoverage() { minimum_coverage: 50 },
+                commit_message_pattern: orgs.newPattern() { pattern: 'e2e' },
+                requires_license_compliance_scanning: true,
+              },
+              orgs.newRepoRuleset('{{ p }}-push') {
+                target: 'push',
+                allows_creations: true,
+                allows_deletions: true,
+                allows_force_pushes: true,
+                required_pull_request: null,
+                required_status_checks: null,
+                max_file_size: 10,
+              },
+            ],
+          }
+    # with #900: a warning each for the commit message pattern and license compliance (enterprise plan),
+    # none for the team rules; before: the keys fail to load
+    commands: {show: {exit_code: null}}

@@ -66,7 +66,7 @@ file (not `.env.e2e.<instance>` nor `.env.e2e`), and is refused when `CI` or `GI
 | 1. organization | the login (`--org`, the stored `E2E_ORG`, else asked), read with `GET /orgs/{org}`: exact-case login and id. A missing organization gets the creation hint of the profile's plan and a "Check again?" prompt; while the profile is not known yet (no `--profile`, no stored `E2E_PROFILE`, an instance not named after a profile), the hint shows the Free URL (`?plan=free`, and the Team one), the Enterprise Cloud note (`createEnterpriseOrganization`, not automated by setup) and suggests `--profile` | `E2E_ORG`, `E2E_ORG_ID` |
 | 2. admin token (required) | the prefilled URL, a hidden prompt, then the checks below; the admin must be an active owner | `E2E_ADMIN_LOGIN`, `E2E_ADMIN_TOKEN`, `E2E_ADMIN_TOKEN_TYPE` |
 | 3. profile | an instance named after a profile uses it; else `--profile`, the stored `E2E_PROFILE`, else the organization's plan; the profile's `expected_plan` must be the live plan | `E2E_PROFILE` |
-| 4. the other roles (optional) | in order oracle (skipped by default: the admin token serves as oracle), author, approver, outsider (classic PAT only), config_reader (fine-grained only); answer no, or enter no token, to skip a role | `E2E_<ROLE>_LOGIN`, `E2E_<ROLE>_TOKEN`, `E2E_<ROLE>_TOKEN_TYPE` (config_reader: `E2E_CONFIG_READER_LOGIN`, `E2E_CONFIG_READER_TOKEN`, `E2E_CONFIG_READER_TOKEN_TYPE`) |
+| 4. the other roles (optional) | in order oracle (skipped by default: the admin token serves as oracle), author, approver, outsider (classic PAT only), config_reader (a classic PAT without any scope, or a fine-grained token); answer no, or enter no token, to skip a role | `E2E_<ROLE>_LOGIN`, `E2E_<ROLE>_TOKEN`, `E2E_<ROLE>_TOKEN_TYPE` (config_reader: `E2E_CONFIG_READER_LOGIN`, `E2E_CONFIG_READER_TOKEN`, `E2E_CONFIG_READER_TOKEN_TYPE`) |
 | 5. web-UI login (optional, default no) | [The web login step](#the-web-login-step) | `E2E_ADMIN_PASSWORD`, `E2E_ADMIN_TOTP_SEED` |
 | 6. GitHub App (optional, default yes) | [The App step](#the-app-step) | `E2E_APP_WEBHOOK_URL`, `E2E_APP_ID`, `E2E_APP_SLUG`, `E2E_APP_PRIVATE_KEY_FILE`, `E2E_APP_WEBHOOK_SECRET` |
 | 7. bootstrap and doctor (offered) | `bootstrap --apply --wait` (you type the organization login for the safety marker; it waits for the invitations and the App installation, up to `--wait-timeout`), the App and a second bootstrap when the App waited for the marker, then `doctor` | - |
@@ -89,12 +89,12 @@ paste the token into the hidden prompt.
 
 | Kind | Prefilled URL | Still selected by hand |
 |---|---|---|
-| classic | `https://github.com/settings/tokens/new?scopes=<the role's scopes>&description=<role, org, instance>` | the expiration (no URL parameter exists for it) |
+| classic | `https://github.com/settings/tokens/new?scopes=<the role's scopes>&description=<role, org, instance>` (config_reader: no `scopes`) | the expiration (no URL parameter exists for it) |
 | fine-grained | `https://github.com/settings/personal-access-tokens/new?name=otterdog-e2e-<instance>-<role>&description=...&target_name=<org>&expires_in=<days>&<permission>=<access>...` | Repository access: **All repositories** (config_reader: **Public repositories**); no URL parameter exists for it |
 
 The scopes and permissions are those of [setup-free-org.md](setup-free-org.md#3-tokens) and
 [Permissions per role](setup-free-org.md#permissions-per-role) (a unit test keeps the page and the URLs equal). The
-config_reader's fine-grained token has its own account as resource owner and no permission.
+config_reader's classic PAT has no scope, its fine-grained token its own account as resource owner and no permission.
 
 A token kept in an external vault is entered as its reference (`vault:<path>/<field>`, `pass:<path>`,
 `bitwarden:<item id>@<field>`), at this prompt as at the web password and TOTP prompts: setup reads it with your own

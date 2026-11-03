@@ -4,16 +4,17 @@
 GitHub has no API to create a personal access token: the wizard prints a creation URL that preselects everything URL
 parameters can carry, and the operator clicks "Generate token".
 
-* classic: ``https://github.com/settings/tokens/new?scopes=<a,b>&description=<note>``; there is no expiration
-  parameter (the operator picks one);
+* classic: ``https://github.com/settings/tokens/new?scopes=<a,b>&description=<note>`` (no ``scopes`` for a token
+  without scope); there is no expiration parameter (the operator picks one);
 * fine-grained: ``https://github.com/settings/personal-access-tokens/new?name=&description=&target_name=<owner>&
   expires_in=<1..366>&<permission>=<read|write|admin>...`` (GitHub docs, managing-your-personal-access-tokens,
   "Pre-filling fine-grained personal access token details using URL parameters"); ``name`` is at most 40 characters,
   ``description`` at most 1024, ``workflows`` only exists as write; repository access ("All repositories", "Public
   repositories") has NO parameter: the operator selects it.
 
-The outsider has no fine-grained form (a fine-grained token cannot write to an org its account does not belong to),
-the config_reader no classic form (the webapp's OTTERDOG_CONFIG_TOKEN must be a fine-grained public read-only token).
+The outsider has no fine-grained form (a fine-grained token cannot write to an org its account does not belong to);
+the config_reader takes a classic token without any scope or a fine-grained token with no permission (the webapp's
+OTTERDOG_CONFIG_TOKEN must only read public repositories).
 """
 
 from __future__ import annotations
@@ -145,8 +146,9 @@ PUBLIC_REPOSITORIES = "Public repositories"
 class RoleTokens:
     """What one role's token must be: env names, classic scopes, fine-grained permissions and repository access.
 
-    ``classic_scopes`` empty: no classic PAT accepted; ``fine_grained`` None: no fine-grained PAT accepted;
-    ``own_owner``: the token's resource owner is its own account (config_reader), else the test org.
+    ``classic_scopes`` None: no classic PAT accepted, empty: a classic PAT without any scope; ``fine_grained`` None: no
+    fine-grained PAT accepted; ``own_owner``: the token's resource owner is its own account (config_reader), else the
+    test org.
     """
 
     role: str
@@ -155,7 +157,7 @@ class RoleTokens:
     type_env: str
     required: bool
     purpose: str
-    classic_scopes: tuple[str, ...] = ()
+    classic_scopes: tuple[str, ...] | None = None
     fine_grained: Mapping[str, str] | None = field(default=None, repr=False)
     own_owner: bool = False
     repository_access: str = ALL_REPOSITORIES
@@ -165,7 +167,10 @@ class RoleTokens:
         """Token kinds accepted for the role (CLASSIC, FINE_GRAINED)."""
         return tuple(
             kind
-            for kind, accepted in ((CLASSIC, bool(self.classic_scopes)), (FINE_GRAINED, self.fine_grained is not None))
+            for kind, accepted in (
+                (CLASSIC, self.classic_scopes is not None),
+                (FINE_GRAINED, self.fine_grained is not None),
+            )
             if accepted
         )
 
@@ -176,7 +181,7 @@ def _role(
     *,
     required: bool,
     purpose: str,
-    classic_scopes: tuple[str, ...] = (),
+    classic_scopes: tuple[str, ...] | None = None,
     fine_grained: Mapping[str, str] | None = None,
     own_owner: bool = False,
     repository_access: str = ALL_REPOSITORIES,
@@ -242,6 +247,7 @@ ROLE_TOKENS: Mapping[str, RoleTokens] = {
         "CONFIG_READER",
         required=False,
         purpose="powerless token given to the webapp under test (OTTERDOG_CONFIG_TOKEN), needed for untrusted SUTs",
+        classic_scopes=(),
         fine_grained={},
         own_owner=True,
         repository_access=PUBLIC_REPOSITORIES,
@@ -255,7 +261,7 @@ def missing_scopes(role: str, scopes: Collection[str]) -> list[str]:
     granted = set(scopes)
     return [
         scope
-        for scope in ROLE_TOKENS[role].classic_scopes
+        for scope in ROLE_TOKENS[role].classic_scopes or ()
         if scope not in granted and not (IMPLIED_SCOPES.get(scope, frozenset()) & granted)
     ]
 
@@ -284,9 +290,10 @@ def _query(params: Mapping[str, str]) -> str:
 def classic_token_url(role: str, *, description: str) -> str:
     """Prefilled creation URL of a classic PAT with the role's scopes (no expiration parameter exists)."""
     spec = ROLE_TOKENS[role]
-    if not spec.classic_scopes:
+    if spec.classic_scopes is None:
         raise ValueError(f"{role}: no classic PAT is accepted for this role")
-    return f"{CLASSIC_TOKEN_URL}?{_query({'scopes': ','.join(spec.classic_scopes), 'description': description})}"
+    params = {"scopes": ",".join(spec.classic_scopes)} if spec.classic_scopes else {}
+    return f"{CLASSIC_TOKEN_URL}?{_query({**params, 'description': description})}"
 
 
 def fine_grained_token_url(
@@ -341,7 +348,12 @@ def token_steps(role: str, kind: str, org: str) -> list[str]:
     spec = ROLE_TOKENS[role]
     if kind == CLASSIC:
         return [
-            f"scopes preselected: {', '.join(spec.classic_scopes)} (select nothing else)",
+            *(["signed in as the config_reader: the token belongs to the account itself"] if spec.own_owner else []),
+            (
+                f"scopes preselected: {', '.join(spec.classic_scopes)} (select nothing else)"
+                if spec.classic_scopes
+                else "Scopes: none (select no scope: the token only reads public data)"
+            ),
             "Expiration: choose one (no URL parameter), e.g. 90 days, and plan the rotation",
         ]
     owner = "the account itself (signed in as the config_reader)" if spec.own_owner else f"{org}"

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import re
+import stat
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -17,6 +18,7 @@ from otterdog_e2e.otterdog.runtime import (
     HostRuntime,
     container_name,
     container_scope,
+    pycache_dir,
     rewrite_path,
     runtime_for,
 )
@@ -73,6 +75,7 @@ def test_docker_runtime_argv(offline: bool) -> None:
         "--init",
         "--name",
         "otterdog-e2e-t3c7z8a5-0001",
+        "-i",
         "--read-only",
         "--tmpfs",
         "/tmp",
@@ -111,6 +114,38 @@ def test_docker_runtime_argv(offline: bool) -> None:
     assert argv == expected
     assert runtime.env({"E2E_OTTERDOG_API_TOKEN": "t"}) == {} and runtime.in_container
     assert not any("E2E_OTTERDOG_API_TOKEN" in arg for arg in argv)
+
+
+IMAGE_ID = "sha256:" + "ab" * 32
+
+
+@pytest.mark.parametrize(
+    ("image", "offline", "mounted"),
+    [(IMAGE_ID, True, True), (IMAGE_ID, False, False), ("otterdog-e2e/untrusted:pr792-ddddddd", True, False)],
+    ids=["offline-image-id", "live", "tag"],
+)
+def test_docker_runtime_pycache(tmp_path: Path, image: str, offline: bool, mounted: bool) -> None:
+    """Offline commands of an image given by its id write and read their bytecode in <root>/sha256-<id> (created
+    0700, mounted at /pycache); live commands and mutable tags never get it."""
+    runtime = DockerRuntime(installed("docker", image=image), offline=offline, pycache_root=tmp_path / "pycache")
+    argv = runtime.command(["--version"], workdir=Path("/w"), env_file=Path("/e"))
+    directory = tmp_path / "pycache" / ("sha256-" + "ab" * 32)
+    flags = ["-e", "PYTHONDONTWRITEBYTECODE=", "-e", "PYTHONPYCACHEPREFIX=/pycache", "-v", f"{directory}:/pycache"]
+    window = [argv[index : index + len(flags)] for index in range(len(argv))]
+    assert (flags in window) is mounted
+    assert directory.is_dir() is mounted
+    if mounted:
+        assert stat.S_IMODE(directory.stat().st_mode) == 0o700
+        assert argv.index("-v") < argv.index("--entrypoint")
+    assert not any("PYCACHE" in arg for arg in argv) or mounted
+
+
+def test_pycache_dir() -> None:
+    """Only an image id gives a directory (a tag may move to other code)."""
+    assert pycache_dir(Path("/c"), IMAGE_ID) == Path("/c") / ("sha256-" + "ab" * 32)
+    assert pycache_dir(Path("/c"), "otterdog-e2e/untrusted:pr792-ddddddd") is None
+    assert pycache_dir(Path("/c"), "sha256:abc") is None
+    assert pycache_dir(Path("/c"), None) is None
 
 
 @pytest.fixture
@@ -189,6 +224,8 @@ def test_runtime_for() -> None:
     """Dispatch on InstalledCli.runtime; offline only matters for docker."""
     assert isinstance(runtime_for(installed("host", binary=Path("/b"))), HostRuntime)
     docker = runtime_for(installed("docker", image="i"), offline=True)
-    assert isinstance(docker, DockerRuntime) and docker.offline
+    assert isinstance(docker, DockerRuntime) and docker.offline and docker.pycache is None
+    with_cache = runtime_for(installed("docker", image=IMAGE_ID), offline=True, pycache_root=Path("/c"))
+    assert isinstance(with_cache, DockerRuntime) and with_cache.pycache == Path("/c") / ("sha256-" + "ab" * 32)
     with pytest.raises(ValueError, match="unknown CLI runtime"):
         runtime_for(installed("podman"))

@@ -122,3 +122,30 @@ steps:
           repo_ruleset[name="{{ p }}-eval", repository={{ p }}-priv] has 'enforcement' of value 'evaluate' which is
           only available for an 'enterprise' plan.
         - "private repository[name=\"{{ p }}-priv\"] has 'has_wiki' enabled"
+  - name: ruleset-rule-plans
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-rules') {
+            rulesets: [
+              orgs.newRepoRuleset('{{ p }}-branch') {
+                include_refs+: ['~DEFAULT_BRANCH'],
+                required_code_quality: orgs.newCodeQuality(),
+                required_code_coverage: orgs.newCodeCoverage() { minimum_coverage: 50 },
+                commit_message_pattern: orgs.newPattern() { pattern: 'e2e' },
+                requires_license_compliance_scanning: true,
+              },
+              orgs.newRepoRuleset('{{ p }}-push') {
+                target: 'push',
+                allows_creations: true,
+                allows_deletions: true,
+                allows_force_pushes: true,
+                required_pull_request: null,
+                required_status_checks: null,
+                max_file_size: 10,
+              },
+            ],
+          }
+    # with #900: a warning per rule (code quality, code coverage, max_file_size need GitHub Team; the
+    # commit message pattern and license compliance an enterprise plan), never an error; before: the keys fail to load
+    commands: {show: {exit_code: null}}

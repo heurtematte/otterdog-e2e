@@ -397,6 +397,7 @@ UNRELEASED_FIXES = {  # scenario -> first otterdog version with the change it as
     "cli.repo.immutable-releases": "1.7.0.dev58",  # #665
     "cli.secrets.dependabot-codespaces": "1.8.0.dev5",  # #890, main after v1.7.1
     "cli.code-security.configuration": "1.8.0.dev7",  # #892, main after v1.7.1
+    "cli.ruleset.copilot-code-scanning": "1.8.0.dev21",  # #900 not merged: version of its head, until the merge
 }
 LATEST_RELEASE = "1.7.1"  # release:latest; its fixed_in scenarios run there, the 1.8.0.dev ones skip
 
@@ -413,7 +414,7 @@ def test_unreleased_regressions_skip_on_older_suts() -> None:
         released = not version.startswith("1.8.0")
         assert (fixed_in_skip_reason(scenario, LATEST_RELEASE) is None) is released, scenario_id
         assert fixed_in_skip_reason(scenario, f"{version}+e2e.gd9dac78") is None, scenario_id
-        assert fixed_in_skip_reason(scenario, "1.8.0.dev7+e2e.gd9dac78.dirty.1a2b3c4d") is None, scenario_id
+        assert fixed_in_skip_reason(scenario, f"{version}+e2e.gd9dac78.dirty.1a2b3c4d") is None, scenario_id
         assert fixed_in_skip_reason(scenario, "1.8.0") is None, scenario_id
         assert fixed_in_skip_reason(scenario, None) is None, scenario_id  # unknown version: run it
     others = [s for s in live_scenarios() if s.id not in UNRELEASED_FIXES]

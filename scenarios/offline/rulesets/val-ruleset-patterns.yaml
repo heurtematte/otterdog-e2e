@@ -1,0 +1,103 @@
+# Offline tier (battery, validation): the rules restricting commit metadata and ref names.
+id: O-VAL-RULESET-PATTERNS
+tier: offline
+title: Ruleset commit metadata and ref name patterns are validated
+description: >-
+  The pattern rules of rulesets restrict commit messages, commit author and committer emails (commit_message_pattern,
+  commit_author_email_pattern, committer_email_pattern), branch names and tag names (branch_name_pattern,
+  tag_name_pattern), each with orgs.newPattern() settings: operator starts_with | ends_with | contains | regex, a
+  non-empty pattern, an optional name and negate. Ruleset.validate refuses a missing or empty pattern, the JSON schema
+  refuses an unknown operator when loading the configuration, and the branch and tag name patterns are refused on a
+  ruleset of another target. The rules are modelled by eclipse-csi/otterdog#900 (enterprise plan, a warning below):
+  SUTs without them refuse the new keys and template functions, so the negative steps only expect a failed
+  validation, the valid step records its outcome and the reference declares the deltas.
+priority: P1
+tags: [offline, rulesets]
+observe: true
+variables: {plan: enterprise}
+libraries:
+  e2e: ../../lib/e2e.libsonnet
+steps:
+  - name: missing-and-empty-pattern
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-patterns') {
+            rulesets: [
+              e2e.defaultBranchRuleset('{{ p }}-commits') {
+                commit_message_pattern: orgs.newPattern(),
+                committer_email_pattern: { operator: 'ends_with' },
+              },
+            ],
+          }
+    validate: {ok: false}  # with #900: empty and missing 'pattern'; before: the keys fail to load
+  - name: operator-not-allowed
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-patterns') {
+            rulesets: [
+              e2e.defaultBranchRuleset('{{ p }}-commits') {
+                commit_message_pattern: orgs.newPattern() { operator: 'matches', pattern: 'x' },
+              },
+            ],
+          }
+    validate: {ok: false}  # with #900: the schema enumerates the operators (load error); before: unknown key
+  - name: name-patterns-outside-their-target
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-patterns') {
+            rulesets: [
+              e2e.defaultBranchRuleset('{{ p }}-branch') { tag_name_pattern: orgs.newPattern() { pattern: 'v' } },
+              orgs.newRepoRuleset('{{ p }}-tag') {
+                target: 'tag',
+                include_refs: ['~ALL'],
+                required_pull_request: null,
+                required_status_checks: null,
+                branch_name_pattern: orgs.newPattern() { pattern: 'release-' },
+              },
+              e2e.pushRuleset('{{ p }}-push') { branch_name_pattern: orgs.newPattern() { pattern: 'release-' } },
+            ],
+          }
+    validate: {ok: false}  # with #900: a tag name pattern needs target tag, a branch name pattern target branch
+  - name: valid-patterns
+    base_fragments: {}
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-patterns') {
+            rulesets: [
+              e2e.defaultBranchRuleset('{{ p }}-commits') {
+                commit_message_pattern: orgs.newPattern() {
+                  name: 'Conventional Commits',
+                  operator: 'regex',
+                  pattern: '^(feat|fix|docs|chore|refactor|test|ci|build): ',
+                },
+                commit_author_email_pattern: orgs.newPattern() { operator: 'ends_with', pattern: '@example.org' },
+                committer_email_pattern: orgs.newPattern() { operator: 'contains', pattern: 'noreply', negate: true },
+              },
+              orgs.newRepoRuleset('{{ p }}-branches') {
+                include_refs: ['~ALL'],
+                exclude_refs: ['~DEFAULT_BRANCH'],
+                allows_creations: true,
+                allows_deletions: true,
+                allows_force_pushes: true,
+                required_pull_request: null,
+                required_status_checks: null,
+                branch_name_pattern: orgs.newPattern() { name: 'Branch prefix', pattern: 'feature/' },
+              },
+              orgs.newRepoRuleset('{{ p }}-tags') {
+                target: 'tag',
+                include_refs: ['~ALL'],
+                allows_creations: true,
+                required_pull_request: null,
+                required_status_checks: null,
+                tag_name_pattern: orgs.newPattern() { operator: 'regex', pattern: '^v[0-9]+[.][0-9]+[.][0-9]+$' },
+              },
+            ],
+          }
+    # with #900: validates without warning on the enterprise plan, plans the repository and 3 rulesets; before: the
+    # template has no newPattern()
+    plan: {expect: any}
+    commands: {show: {exit_code: null}}

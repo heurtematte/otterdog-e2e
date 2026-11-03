@@ -1,9 +1,16 @@
 """How an installed otterdog CLI is executed: on the host or inside the SUT docker image (SPEC 10.7, 5.5).
 
-DockerRuntime confines untrusted SUTs: ``docker run --rm --read-only --tmpfs /tmp --user uid:gid -e HOME=/tmp``, the
-workspace bind-mounted at /ws, an 0600 env-file holding ONLY the E2E_OTTERDOG_* credentials, ``--network none`` when
-offline, entrypoint /app/.venv/bin/otterdog; paths inside args are rewritten from the workdir to /ws. On top of the
-SPEC flags it drops every capability and forbids privilege escalation (the CLI needs neither).
+DockerRuntime confines untrusted SUTs: ``docker run --rm -i --read-only --tmpfs /tmp --user uid:gid -e HOME=/tmp``,
+the workspace bind-mounted at /ws, an 0600 env-file holding ONLY the E2E_OTTERDOG_* credentials, ``--network none``
+when offline, entrypoint /app/.venv/bin/otterdog; paths inside args are rewritten from the workdir to /ws. On top of
+the SPEC flags it drops every capability and forbids privilege escalation (the CLI needs neither). ``-i`` forwards
+stdin (the answer to a prompt; /dev/null when the command gets no input), without a TTY.
+
+The images ship no bytecode and set PYTHONDONTWRITEBYTECODE, so on the read-only root every command compiled all the
+modules it imports (about 1.2 s of the 2 s of an offline validate). Offline commands of an image identified by its id
+therefore write and read their bytecode in a host directory of that image only (``<cache>/pycache/sha256-<id>``,
+mounted at /pycache, PYTHONPYCACHEPREFIX): shared by the offline commands of the same code, never mounted into a live
+command (network, credentials), another image or the host's own Python.
 
 Every container runs with ``--init`` and a unique ``--name otterdog-e2e-<run>-<seq>``: otterdog as PID 1 would ignore
 the SIGTERM the docker CLI proxies on a timeout, so a timed-out untrusted ``apply`` could keep mutating GitHub. The
@@ -19,6 +26,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import secrets
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -37,6 +45,9 @@ CONTAINER_ENV = {"HOME": "/tmp", "COLUMNS": "4096", "NO_COLOR": "1", "PYTHON_DOT
 HARDENING = ("--cap-drop", "ALL", "--security-opt", "no-new-privileges")
 CONTAINER_PREFIX = "otterdog-e2e"  # container names: otterdog-e2e-<run>-<seq>
 REMOVE_TIMEOUT = 60.0  # seconds allowed for ``docker rm -f``
+PYCACHE_DIR = "pycache"  # bytecode of offline docker commands: <cache>/pycache/sha256-<image id>
+CONTAINER_PYCACHE = "/pycache"
+_IMAGE_ID_RE = re.compile(r"sha256:([0-9a-f]{64})")
 
 log = logging.getLogger(__name__)
 
@@ -59,6 +70,13 @@ def container_name(seq: int | str) -> str:
     """``otterdog-e2e-<run>-<seq>``: unique per invocation (run id + the runner's process-wide command number)."""
     suffix = f"{seq:04d}" if isinstance(seq, int) else seq
     return f"{CONTAINER_PREFIX}-{container_scope()}-{suffix}"
+
+
+def pycache_dir(root: Path, image: str | None) -> Path | None:
+    """``root/sha256-<id>``: the bytecode directory of an image given by its id; None for a tag, which may move to
+    other code."""
+    match = _IMAGE_ID_RE.fullmatch(image or "")
+    return root / f"sha256-{match.group(1)}" if match else None
 
 
 class CliRuntime(Protocol):
@@ -101,23 +119,26 @@ class DockerRuntime:
 
     in_container = True
 
-    def __init__(self, installed: InstalledCli, *, offline: bool = False) -> None:
-        """Bind to an image CLI (runtime "docker"); offline adds ``--network none``."""
+    def __init__(self, installed: InstalledCli, *, offline: bool = False, pycache_root: Path | None = None) -> None:
+        """Bind to an image CLI (runtime "docker"); offline adds ``--network none`` and, with ``pycache_root`` and an
+        image id, the bytecode directory of that image (module docstring)."""
         self.installed = installed
         self.offline = offline
+        self.pycache = pycache_dir(pycache_root, installed.image) if offline and pycache_root is not None else None
         self.label = f"docker:{installed.sut.label}"
 
     def command(
         self, args: Sequence[str], *, workdir: Path, env_file: Path | None, name: str | None = None
     ) -> list[str]:
-        """docker run --rm --init --name <name> ... --entrypoint /app/.venv/bin/otterdog <image> *args (workdir paths
-        rewritten to /ws); ``name`` defaults to a fresh random ``otterdog-e2e-<run>-<token>``."""
+        """docker run --rm --init --name <name> -i ... --entrypoint /app/.venv/bin/otterdog <image> *args (workdir
+        paths rewritten to /ws); ``name`` defaults to a fresh random ``otterdog-e2e-<run>-<token>``. The bytecode
+        directory is created here (0700): docker would create a missing mount source as root."""
         if not self.installed.image:
             raise ValueError(f"installed CLI {self.installed.sut.label!r} has no image")
         if env_file is None:
             raise ValueError("DockerRuntime needs an env-file with the E2E_OTTERDOG_* credentials")
         name = name or container_name(secrets.token_hex(4))
-        argv = ["docker", "run", "--rm", "--init", "--name", name]
+        argv = ["docker", "run", "--rm", "--init", "--name", name, "-i"]
         argv += ["--read-only", "--tmpfs", "/tmp", "--user", f"{os.getuid()}:{os.getgid()}"]  # noqa: S108
         argv += HARDENING
         for key, value in CONTAINER_ENV.items():
@@ -125,6 +146,10 @@ class DockerRuntime:
         argv += ["--env-file", str(env_file), "-v", f"{workdir}:{CONTAINER_WORKDIR}", "-w", CONTAINER_CWD]
         if self.offline:
             argv += ["--network", "none"]
+        if self.pycache is not None:
+            self.pycache.mkdir(mode=0o700, parents=True, exist_ok=True)
+            argv += ["-e", "PYTHONDONTWRITEBYTECODE=", "-e", f"PYTHONPYCACHEPREFIX={CONTAINER_PYCACHE}"]
+            argv += ["-v", f"{self.pycache}:{CONTAINER_PYCACHE}"]
         argv += ["--entrypoint", IMAGE_OTTERDOG_BIN, self.installed.image]
         return argv + [rewrite_path(str(arg), workdir) for arg in args]
 
@@ -157,10 +182,10 @@ def rewrite_path(arg: str, workdir: Path) -> str:
     return arg
 
 
-def runtime_for(installed: InstalledCli, *, offline: bool = False) -> CliRuntime:
-    """HostRuntime for runtime "host", DockerRuntime for runtime "docker"."""
+def runtime_for(installed: InstalledCli, *, offline: bool = False, pycache_root: Path | None = None) -> CliRuntime:
+    """HostRuntime for runtime "host", DockerRuntime for runtime "docker" (``pycache_root``: offline docker only)."""
     if installed.runtime == "host":
         return HostRuntime(installed)
     if installed.runtime == "docker":
-        return DockerRuntime(installed, offline=offline)
+        return DockerRuntime(installed, offline=offline, pycache_root=pycache_root)
     raise ValueError(f"unknown CLI runtime {installed.runtime!r} (expected 'host' or 'docker')")

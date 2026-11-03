@@ -1,0 +1,110 @@
+# Offline tier (battery, validation): the required workflows of organization rulesets.
+id: O-VAL-RULESET-REQUIRED-WORKFLOWS
+tier: offline
+title: Organization ruleset required workflows are validated and compared case-insensitively
+description: >-
+  An organization ruleset can require workflows to pass before merging (required_workflows, orgs.newWorkflows()):
+  each workflow is written 'owner/repository:path[@ref]', the ref being a branch, a tag or a commit sha, and otterdog
+  resolves the repository id only when it talks to GitHub. Validation refuses an empty list, a value without owner
+  and a numeric repository id (shown for a repository that could not be resolved), and refuses required workflows in
+  a repository ruleset; repository names compare case-insensitively in the plan, unlike paths. The rule is modelled
+  by eclipse-csi/otterdog#900: SUTs without it refuse the new keys and template functions, so the negative steps only
+  expect a failed validation, the other steps record their outcome and the reference declares the deltas.
+priority: P2
+tags: [offline, rulesets]
+observe: true
+variables: {plan: enterprise}
+libraries:
+  e2e: ../../lib/e2e.libsonnet
+steps:
+  - name: workflow-values
+    fragments:
+      rulesets:
+        - |-
+          orgs.newOrgRuleset('{{ p }}-empty') {
+            include_repo_names: ['~ALL'],
+            include_refs+: ['~DEFAULT_BRANCH'],
+            required_workflows: orgs.newWorkflows(),
+          }
+        - |-
+          orgs.newOrgRuleset('{{ p }}-no-owner') {
+            include_repo_names: ['~ALL'],
+            include_refs+: ['~DEFAULT_BRANCH'],
+            required_workflows: orgs.newWorkflows() { workflows+: ['{{ p }}-ci:.github/workflows/ci.yml'] },
+          }
+        - |-
+          orgs.newOrgRuleset('{{ p }}-repository-id') {
+            include_repo_names: ['~ALL'],
+            include_refs+: ['~DEFAULT_BRANCH'],
+            required_workflows: orgs.newWorkflows() { workflows+: ['42:.github/workflows/ci.yml'] },
+          }
+      repositories: ["orgs.newRepo('{{ p }}-ci')"]
+    validate: {ok: false}  # with #900: empty list, value without owner, unresolved id; before: the keys fail to load
+  - name: repository-ruleset
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-ci') {
+            rulesets: [
+              e2e.defaultBranchRuleset('{{ p }}-workflows') {
+                required_workflows: orgs.newWorkflows() { workflows+: ['{{ org }}/{{ p }}-ci:.github/workflows/ci.yml'] },
+              },
+            ],
+          }
+    validate: {ok: false}  # with #900: only organization rulesets support required workflows; before: load error
+  - name: valid-workflows
+    base_fragments: {}
+    fragments:
+      rulesets:
+        - |-
+          orgs.newOrgRuleset('{{ p }}-workflows') {
+            include_repo_names: ['{{ p }}-*'],
+            include_refs+: ['~DEFAULT_BRANCH'],
+            required_pull_request: null,
+            required_status_checks: null,
+            required_workflows: orgs.newWorkflows() {
+              do_not_enforce_on_create: true,
+              workflows+: [
+                '{{ org }}/{{ p }}-ci:.github/workflows/build.yml',
+                '{{ org }}/{{ p }}-ci:.github/workflows/lint.yml@refs/heads/main',
+                '{{ org }}/{{ p }}-ci:.github/workflows/license.yml@0123456789abcdef0123456789abcdef01234567',
+              ],
+            },
+            required_code_scanning: orgs.newCodeScanning() { code_scanning_tools+: ['CodeQL:all:all'] },
+            copilot_code_review: orgs.newCopilotCodeReview(),
+          }
+      repositories: ["orgs.newRepo('{{ p }}-ci')"]
+    # with #900: validates without warning (the other rules are supported by organization rulesets), plans the
+    # repository and the ruleset; before: the keys fail to load
+    plan: {expect: any}
+    commands: {show: {exit_code: null}}
+  - name: repository-name-case
+    base_fragments:
+      rulesets:
+        - |-
+          orgs.newOrgRuleset('{{ p }}-workflows') {
+            include_repo_names: ['{{ p }}-*'],
+            include_refs+: ['~DEFAULT_BRANCH'],
+            required_pull_request: null,
+            required_status_checks: null,
+            required_workflows: orgs.newWorkflows() {
+              workflows+: ['{{ org | upper }}/{{ p | upper }}-CI:.github/workflows/build.yml'],
+            },
+          }
+      repositories: ["orgs.newRepo('{{ p }}-ci')"]
+    fragments:
+      rulesets:
+        - |-
+          orgs.newOrgRuleset('{{ p }}-workflows') {
+            include_repo_names: ['{{ p }}-*'],
+            include_refs+: ['~DEFAULT_BRANCH'],
+            required_pull_request: null,
+            required_status_checks: null,
+            required_workflows: orgs.newWorkflows() {
+              workflows+: ['{{ org }}/{{ p }}-ci:.github/workflows/build.yml'],
+            },
+          }
+      repositories: ["orgs.newRepo('{{ p }}-ci')"]
+    # with #900: no change planned (repository names are case-insensitive); before: load error of both configurations
+    plan: {expect: any}
+    commands: {show: {exit_code: null}}

@@ -992,7 +992,7 @@ SIGNATURES: dict[str, list[str]] = {
     "otterdog_e2e.sut.template.hide_template_functions": ["org_dir", "ref", "names"],
     "otterdog_e2e.otterdog.runtime.CliRuntime.command": ["self", "args", "workdir", "env_file"],
     "otterdog_e2e.otterdog.runtime.CliRuntime.env": ["self", "credentials"],
-    "otterdog_e2e.otterdog.runtime.runtime_for": ["installed", "offline"],
+    "otterdog_e2e.otterdog.runtime.runtime_for": ["installed", "offline", "pycache_root"],
     "otterdog_e2e.otterdog.workspace.credentials_env": ["identity"],
     "otterdog_e2e.otterdog.workspace.ConfigWorkspace.__init__": [
         "self",

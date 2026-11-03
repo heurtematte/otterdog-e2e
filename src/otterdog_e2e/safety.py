@@ -71,7 +71,7 @@ ALLOWED_SCOPES: Mapping[str, frozenset[str]] = {
 # owner reads (admin:org, admin:org_hook) for org-level ground truth (GH-10)
 OWNER_ROLES = frozenset({"admin", "oracle"})
 MEMBER_ROLES = frozenset({"author", "approver"})  # active members of the test org (no owner rights)
-READ_ONLY_ROLES = frozenset({"config_reader"})  # reads public data only: any non-classic token accepted
+READ_ONLY_ROLES = frozenset({"config_reader"})  # reads public data only: a scope-less classic PAT or any other token
 OUTSIDER_ROLE = "outsider"  # must NOT belong to (or be invited by) the test org
 # roles allowed to use fine-grained PATs: every role but the outsider (see CLASSIC_ONLY_ROLES of settings)
 FINE_GRAINED_ROLES = OWNER_ROLES | MEMBER_ROLES | READ_ONLY_ROLES
@@ -398,7 +398,7 @@ def _list_orgs(
     except Exception as exc:
         status = getattr(exc, "status", None)
         if tolerate and status in (403, 404):
-            _logger.info("%s: %s not available for this fine-grained token (%s)", role, path, status)
+            _logger.info("%s: %s not available for this token (%s)", role, path, status)
             return {}
         raise SafetyError(
             f"{role}: cannot list {path} ({_describe(exc)}); classic tokens need the read:org scope"
@@ -633,8 +633,9 @@ def check_identity_isolation(
     The declared ``token_type`` (auto, classic, fine-grained) must match the kind GET /rate_limit reveals.
     Classic PAT: its scopes (X-OAuth-Scopes) must be a subset of ALLOWED_SCOPES["admin"] (OWNER_ROLES) or
     ALLOWED_SCOPES["other"], and GET /user/orgs + GET /user/memberships/orgs?state=pending may only list
-    allowed_org_ids (role "outsider": test_org_id must not be present); the config_reader refuses classic PATs (it only
-    reads public repositories: a fine-grained token with no permission, docs/security.md).
+    allowed_org_ids (role "outsider": test_org_id must not be present); the config_reader only accepts a classic PAT
+    without any scope (it only reads public repositories, docs/security.md), whose membership listings may answer
+    403/404 without read:org, which is tolerated, and visible memberships are still checked.
     Fine-grained PAT (no X-OAuth-Scopes; GitHub lists no orgs for it): owner roles must read FINE_GRAINED_OWNER_PROBES
     of ``org`` (the test org login), author/approver their active membership of it (FINE_GRAINED_MEMBER_PROBE); the
     outsider is refused; the config_reader accepts any non-classic token (their membership listings may answer
@@ -643,15 +644,17 @@ def check_identity_isolation(
     info = read_token_info(http, role)
     _check_token_type(role, info, token_type)
     if info.kind == CLASSIC:
-        if role in READ_ONLY_ROLES:
-            raise SafetyError(
-                f"{role}: needs a fine-grained PAT of its own account (repository access: public repositories, no "
-                "permission), not a classic PAT: it only reads public repositories (docs/security.md)"
-            )
         scopes = set(info.scopes or ())
+        read_only = role in READ_ONLY_ROLES
+        if read_only and scopes:
+            raise SafetyError(
+                f"{role}: a classic PAT must have no scope, got {', '.join(sorted(scopes))}: it only reads public "
+                "repositories (docs/security.md); create one without any scope, or a fine-grained PAT of its own "
+                "account (repository access: public repositories, no permission)"
+            )
         _check_scopes(role, scopes)
-        active = _list_orgs(http, "/user/orgs", None, role, tolerate=False)
-        pending = _list_orgs(http, "/user/memberships/orgs", {"state": "pending"}, role, tolerate=False)
+        active = _list_orgs(http, "/user/orgs", None, role, tolerate=read_only)
+        pending = _list_orgs(http, "/user/memberships/orgs", {"state": "pending"}, role, tolerate=read_only)
         _check_memberships(role, active, pending, {int(oid) for oid in allowed_org_ids}, test_org_id)
         _logger.info(
             "identity %s isolated: classic PAT, scopes %s; %d organization(s), %d pending invitation(s)",

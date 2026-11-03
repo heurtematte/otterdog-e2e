@@ -245,7 +245,7 @@ Details:
     - Source: `otterdog/cli.py:935-950`, `otterdog/operations/check_token_permissions.py:26-78`
     - Operations: run, exit-code, permission
     - Known bugs: KB-078
-    - Notes: -l: 'Granted scopes:' == the token's X-OAuth-Scopes; config_reader (fine-grained): 'Missing scopes:' == the five required minus granted (order-insensitive: printed from a frozenset), exit 1. A fine-grained ADMIN token is reported the same way (KB-078: the command only knows classic scopes); its test is skipped with a classic admin token.
+    - Notes: -l: 'Granted scopes:' == the token's X-OAuth-Scopes; config_reader (no scope): 'Missing scopes:' == the five required minus granted (order-insensitive: printed from a frozenset), exit 1. A fine-grained ADMIN token is reported the same way (KB-078: the command only knows classic scopes); its test is skipped with a classic admin token.
 - **`cli.list-members`** (covered, P2, `cli`): list-members [--two-factor-disabled]: 'Found &lt;n&gt; members.' / 'Found &lt;x&gt; / &lt;total&gt; members with 2FA disabled. Organization has 2FA ...'
     - Source: `otterdog/cli.py:357-365`, `otterdog/operations/list_members.py:40-99`
     - Operations: run

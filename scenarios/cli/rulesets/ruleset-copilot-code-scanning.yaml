@@ -1,0 +1,133 @@
+# Copilot code review and code scanning rules of a repository ruleset (eclipse-csi/otterdog#900, not merged yet).
+id: cli.ruleset.copilot-code-scanning
+tier: cli
+title: Ruleset Copilot code review and code scanning rules are applied, read back and removed
+description: |
+  copilot_code_review (review_on_push, review_draft_pull_requests) becomes the copilot_code_review rule and
+  required_code_scanning (code_scanning_tools written 'tool:security_alerts_threshold:alerts_threshold') the
+  code_scanning rule with one {tool, security_alerts_threshold, alerts_threshold} object per tool. The settings are
+  complete objects instead of orgs.newCopilotCodeReview() and orgs.newCodeScanning() (tested offline by
+  O-VAL-RULESET-CODE-ANALYSIS), so every step also renders with the template of otterdog main. The PR that models them,
+  https://github.com/eclipse-csi/otterdog/pull/900, also fixes the rule type of the original commit (#639 sent
+  'copilot_review' with 'review_new_pushes', which GitHub rejected and never read back). A public run repository
+  gets a default-branch ruleset with both rules: the oracle matches the exact rules and their parameters, and the
+  plan after each apply must be empty (the rules are read back as written). The change step flips both Copilot
+  flags and narrows the tools to another threshold; the last step sets both rules to null, which removes them from
+  the ruleset. The pull request and status check rules are left out (KB-021). Not verified live yet: whether GitHub
+  accepts the Copilot rule on an organization without Copilot. fixed_in is provisional (1.8.0.dev21 is the version
+  of the PR head ec401aa): set it to the version of the merge commit once #900 is merged.
+priority: P1
+min_plan: free
+fixed_in: "1.8.0.dev21"
+tags: [rulesets, repo]
+references:
+  - pr: 900
+    note: >-
+      "Feat/ruleset additional rule types" (head ec401aa, open): models the copilot_code_review and code_scanning
+      rules (and the other rule types, tested offline by O-VAL-RULESET-CODE-ANALYSIS, O-VAL-RULESET-PATTERNS,
+      O-VAL-RULESET-PUSH-RULES and O-VAL-RULESET-REQUIRED-WORKFLOWS); SUTs without it refuse the keys when loading
+      the configuration
+steps:
+  - name: create
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-rs-code') {
+            description: "otterdog e2e: ruleset Copilot review and code scanning",
+            rulesets: [
+              orgs.newRepoRuleset('{{ p }}-rs-code') {
+                include_refs+: ["~DEFAULT_BRANCH"],
+                required_pull_request: null,
+                required_status_checks: null,
+                copilot_code_review: {review_on_push: true, review_draft_pull_requests: false},
+                required_code_scanning: {code_scanning_tools: ["CodeQL:high_or_higher:errors"]},
+              },
+            ],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '+ add repo_ruleset[name="{{ p }}-rs-code", repository={{ p }}-rs-code]'
+      counts: {add: 2, change: 0, delete: 0}
+    state:
+      - kind: repo_ruleset
+        repo: "{{ p }}-rs-code"
+        name: "{{ p }}-rs-code"
+        match:
+          target: branch
+          enforcement: active
+          rules:
+            $unordered:
+              - {type: creation}
+              - {type: deletion}
+              - {type: non_fast_forward}
+              - type: copilot_code_review
+                parameters: {review_on_push: true, review_draft_pull_requests: false}
+              - type: code_scanning
+                parameters:
+                  code_scanning_tools:
+                    - {tool: CodeQL, security_alerts_threshold: high_or_higher, alerts_threshold: errors}
+
+  - name: change
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-rs-code') {
+            description: "otterdog e2e: ruleset Copilot review and code scanning",
+            rulesets: [
+              orgs.newRepoRuleset('{{ p }}-rs-code') {
+                include_refs+: ["~DEFAULT_BRANCH"],
+                required_pull_request: null,
+                required_status_checks: null,
+                copilot_code_review: {review_on_push: false, review_draft_pull_requests: true},
+                required_code_scanning: {code_scanning_tools: ["CodeQL:all:none"]},
+              },
+            ],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ repo_ruleset[name="{{ p }}-rs-code", repository={{ p }}-rs-code]'
+    state:
+      - kind: repo_ruleset
+        repo: "{{ p }}-rs-code"
+        name: "{{ p }}-rs-code"
+        match:
+          rules:
+            $unordered:
+              - {type: creation}
+              - {type: deletion}
+              - {type: non_fast_forward}
+              - type: copilot_code_review
+                parameters: {review_on_push: false, review_draft_pull_requests: true}
+              - type: code_scanning
+                parameters:
+                  code_scanning_tools:
+                    - {tool: CodeQL, security_alerts_threshold: all, alerts_threshold: none}
+
+  - name: remove-rules
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-rs-code') {
+            description: "otterdog e2e: ruleset Copilot review and code scanning",
+            rulesets: [
+              orgs.newRepoRuleset('{{ p }}-rs-code') {
+                include_refs+: ["~DEFAULT_BRANCH"],
+                required_pull_request: null,
+                required_status_checks: null,
+                copilot_code_review: null,
+                required_code_scanning: null,
+              },
+            ],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ repo_ruleset[name="{{ p }}-rs-code", repository={{ p }}-rs-code]'
+    state:
+      - kind: repo_ruleset
+        repo: "{{ p }}-rs-code"
+        name: "{{ p }}-rs-code"
+        match:
+          rules: {$unordered: [{type: creation}, {type: deletion}, {type: non_fast_forward}]}

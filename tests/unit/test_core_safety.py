@@ -333,11 +333,18 @@ def test_isolation_refuses_excess_scopes(role: str, scopes: set[str], message: s
         isolate(member_http(scopes=scopes, orgs=[]), role)
 
 
-def test_isolation_refuses_a_classic_config_reader_token() -> None:
-    """The config_reader only reads public repositories: a classic PAT, whatever its scopes, is refused."""
-    for scopes in (set(), {"public_repo"}):
-        with pytest.raises(SafetyError, match="config_reader: needs a fine-grained PAT"):
-            isolate(member_http(scopes=scopes, orgs=[]), "config_reader")
+def test_isolation_accepts_a_classic_config_reader_token_without_scope() -> None:
+    """The config_reader only reads public repositories: a classic PAT without any scope is accepted, its listings
+    answering 403 without read:org are tolerated, visible memberships still checked; any scope is refused."""
+    reader = FakeGitHubHttp(identity="config_reader", scopes=set())
+    reader.add("GET", "/user/orgs", status=403, json={"message": "Must have admin rights"})
+    reader.add("GET", "/user/memberships/orgs", status=403, json={"message": "Must have admin rights"})
+    isolate(reader, "config_reader")
+    isolate(member_http(scopes=set(), orgs=[]), "config_reader")
+    with pytest.raises(SafetyError, match="acme-production"):
+        isolate(member_http(scopes=set(), orgs=[FOREIGN_ORG]), "config_reader")
+    with pytest.raises(SafetyError, match="config_reader: a classic PAT must have no scope, got public_repo"):
+        isolate(member_http(scopes={"public_repo"}, orgs=[]), "config_reader")
 
 
 # --- fine-grained tokens: isolation proven on the token ---------------------------------------------------------------
