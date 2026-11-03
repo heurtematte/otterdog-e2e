@@ -1,7 +1,10 @@
-"""The documentation site (mkdocs.yml, docs_hooks.py, docs/requirements.txt, .github/workflows/docs.yml).
+"""The documentation site (mkdocs.yml read by Zensical, docs_site.py, docs-theme/, docs/requirements.txt,
+.github/workflows/docs.yml).
 
-* mkdocs.yml: the nav lists every page of docs/ (and the home page the hooks generate from README.md), the hooks are
-  loaded, broken links, anchors and pages missing from the nav are warnings (errors with ``mkdocs build --strict``);
+* mkdocs.yml: the nav lists every page of docs/ (and the home page docs_site.py generates from README.md), no MkDocs
+  hook (Zensical runs none) and the theme override of the edit button;
+* docs_site.py stages the site: the generated pages with the edit URL of their source, every page rendered for
+  Python-Markdown, the staged configuration (the explorer's nav, the paths below .docs-site/), problems failing --strict;
 * docs/requirements.txt, installed by the docs workflow, is exactly the ``docs`` group of poetry.lock: pinned versions
   and the hashes of every file (``pip install --require-hashes``). After ``poetry lock``, regenerate it:
 
@@ -10,6 +13,7 @@
 
 from __future__ import annotations
 
+import importlib
 import re
 import sys
 import tomllib
@@ -18,6 +22,7 @@ from functools import cache
 from pathlib import Path
 from typing import Any
 
+import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -28,7 +33,7 @@ PYPROJECT = ROOT / "pyproject.toml"
 REQUIREMENTS = DOCS / "requirements.txt"
 GROUP = "docs"
 REGENERATE = ".venv/bin/python tests/unit/test_docs_site.py --write"
-DIRECT = ("mkdocs", "mkdocs-material", "pymdown-extensions")
+DIRECT = ("zensical", "pymdown-extensions")
 SITE_URL = "https://heurtematte.github.io/otterdog-e2e/"
 # name==version, an optional environment marker, then the sha256 hashes of its files
 PINNED_RE = re.compile(r"^[a-z0-9][a-z0-9._-]*==[0-9][^ ;]*( ; [^-]+)?( --hash=sha256:[0-9a-f]{64})+$")
@@ -108,19 +113,18 @@ def test_nav_lists_every_page() -> None:
 
 
 def test_site_settings() -> None:
-    """Site and repository URLs, the hooks, the edit links on main and strict link and anchor validation."""
+    """Site and repository URLs, the edit links on main, the theme override; nothing Zensical ignores or docs_site.py
+    sets (hooks, watch, MkDocs validation, docs_dir, site_dir)."""
     config = mkdocs_config()
     assert config["site_url"] == SITE_URL
     assert config["repo_url"] == REPO_URL
     assert config["edit_uri"] == "edit/main/docs/"
-    assert config["hooks"] == ["docs_hooks.py", "docs_scenarios.py"]
     assert config["extra_javascript"] == ["assets/explorer.js"]
     assert config["extra_css"] == ["assets/explorer.css"]
-    assert config["validation"] == dict.fromkeys(
-        ("omitted_files", "absolute_links", "unrecognized_links", "anchors"), "warn"
-    ), "with --strict, broken links and anchors and pages missing from the nav must fail the build"
-    assert {"README.md", "scenarios", "tests"} <= set(config["watch"])
-    assert config["theme"]["name"] == "material"
+    assert config["theme"]["name"] == "material" and config["theme"]["custom_dir"] == "docs-theme"
+    assert not {"hooks", "watch", "validation", "docs_dir", "site_dir"} & set(config)
+    override = (ROOT / "docs-theme" / "partials" / "actions.html").read_text(encoding="utf-8")
+    assert "{% set edit_url = page.meta.edit_url or page.edit_url %}" in override
 
 
 def test_markdown_extensions() -> None:
@@ -160,6 +164,114 @@ def test_requirements_pin_every_package_with_hashes() -> None:
     assert len(requirements) >= len(DIRECT)
     for requirement in requirements:
         assert PINNED_RE.match(requirement), requirement
+
+
+# --- docs_site.py ----------------------------------------------------------------------------------------------------
+@pytest.fixture(scope="module")
+def site_module() -> Iterator[Any]:
+    """docs_site.py (it imports docs_hooks and docs_scenarios, its neighbours at the root of the repository)."""
+    sys.path.insert(0, str(ROOT))
+    try:
+        yield importlib.import_module("docs_site")
+    finally:
+        sys.path.remove(str(ROOT))
+
+
+def slugify(value: str, separator: str) -> str:
+    """The anchors of the site (pymdownx.slugs.slugify(case='lower')), close enough without the docs group."""
+    value = re.sub(r"[^\w\s-]", "", value).strip().lower()
+    return re.sub(r"\s+", separator, value)
+
+
+@pytest.fixture(scope="module")
+def staged(site_module: Any) -> Any:
+    """The staging of this repository (in memory)."""
+    return site_module.stage(ROOT, slugify)
+
+
+def test_stage_generates_the_pages_with_their_sources(staged: Any) -> None:
+    """The home page from README.md and the explorer, each with the edit URL of its source; every page of docs/;
+    the theme override; no problem."""
+    files = {name: content.decode() for name, content in staged.files.items() if not name.endswith((".png", ".svg"))}
+    edit = f"{REPO_URL}/edit/main/"
+    assert files["docs/index.md"].startswith(f"---\nedit_url: {edit}README.md\n---\n\n")
+    assert files["docs/scenarios/index.md"].startswith(f"---\nedit_url: {edit}docs_scenarios.py\nhide:\n")
+    page = files["docs/scenarios/offline/rulesets/val-rulesets.md"]
+    assert page.startswith(f"---\nedit_url: {edit}scenarios/offline/rulesets/val-rulesets.yaml\n---\n")
+    assert {f"docs/{path.relative_to(DOCS).as_posix()}" for path in DOCS.rglob("*") if path.is_file()} <= set(files)
+    assert "theme/partials/actions.html" in files and "edit_url: " not in files["docs/security.md"]
+    assert "> [!" not in files["docs/index.md"], "GitHub callouts of README.md become admonitions"
+    assert staged.problems == []
+
+
+def test_the_staged_configuration(staged: Any, site_module: Any) -> None:
+    """mkdocs.yml with the explorer's section in the nav, the staged paths below .docs-site/ and no hook."""
+    config = site_module.read_config(staged.files["mkdocs.yml"].decode())
+    assert (config["docs_dir"], config["site_dir"], config["theme"]["custom_dir"]) == ("docs", "site", "theme")
+    assert "hooks" not in config and config["markdown_extensions"] == mkdocs_config()["markdown_extensions"]
+    pages = list(nav_pages(config["nav"]))
+    assert len(pages) == len(set(pages)) and "scenarios/offline/rulesets/val-rulesets.md" in pages
+    assert {name.removeprefix("docs/") for name in staged.files if name.endswith(".md")} == set(pages)
+
+
+@pytest.mark.parametrize(
+    ("text", "message"),
+    [
+        ("hooks: [x.py]\ntheme: {custom_dir: docs-theme}\nnav: []\n", "hooks must not be set"),
+        ("site_dir: out\ntheme: {custom_dir: docs-theme}\n", "site_dir must not be set"),
+        ("theme: {name: material}\n", "theme.custom_dir must be docs-theme"),
+    ],
+)
+def test_staged_configuration_refusals(site_module: Any, text: str, message: str) -> None:
+    """mkdocs.yml leaves the staged settings to docs_site.py and keeps the theme override."""
+    with pytest.raises(site_module.SiteError, match=message):
+        site_module.staged_config(text, [])
+
+
+def test_edit_url_front_matter(site_module: Any) -> None:
+    """Added, or put in an existing front matter."""
+    assert site_module.with_edit_url("# Title\n", "u") == "---\nedit_url: u\n---\n\n# Title\n"
+    assert site_module.with_edit_url("---\nhide: [toc]\n---\nx", "u") == "---\nedit_url: u\nhide: [toc]\n---\nx"
+
+
+def test_write_keeps_unchanged_files_and_the_cache(site_module: Any, tmp_path: Path) -> None:
+    """Only the files that differ are written, staged files no longer produced are removed, the cache stays."""
+    assert sorted(site_module.write(tmp_path, {"docs/a.md": b"a", "docs/b/c.md": b"c", "mkdocs.yml": b"m"})) == [
+        "docs/a.md",
+        "docs/b/c.md",
+        "mkdocs.yml",
+    ]
+    (tmp_path / ".cache").mkdir()
+    (tmp_path / ".cache" / "x").write_text("kept")
+    assert site_module.write(tmp_path, {"docs/a.md": b"A", "mkdocs.yml": b"m"}) == ["docs/a.md", "docs/b/c.md"]
+    assert not (tmp_path / "docs" / "b").exists() and (tmp_path / ".cache" / "x").read_text() == "kept"
+
+
+def test_strict_staging_fails_before_writing(site_module: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A link to a file missing from the repository is a problem: --strict stops before anything is staged."""
+    render = site_module.docs_hooks.render_page
+
+    def broken(markdown: str, page: str, repo_url: str, root: Path) -> tuple[str, list[str]]:
+        """roles.md links a missing file."""
+        rendered, missing = render(markdown, page, repo_url, root)
+        return rendered, [*missing, "../nowhere.yaml"] if page == "roles.md" else missing
+
+    monkeypatch.setattr(site_module.docs_hooks, "render_page", broken)
+    with pytest.raises(SystemExit, match="1 problem"):
+        site_module.prepare(ROOT, strict=True, staging=tmp_path, slugify=slugify)
+    assert not any(tmp_path.iterdir())
+
+
+def test_signature_follows_the_watched_files(site_module: Any, tmp_path: Path) -> None:
+    """A file added or changed under a watched path changes the signature; caches do not."""
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "a.md").write_text("a")
+    before = site_module.signature(tmp_path, ("docs", "README.md"))
+    (tmp_path / "docs" / "__pycache__").mkdir()
+    (tmp_path / "docs" / "__pycache__" / "x.pyc").write_bytes(b"x")
+    assert site_module.signature(tmp_path, ("docs", "README.md")) == before
+    (tmp_path / "README.md").write_text("r")
+    assert site_module.signature(tmp_path, ("docs", "README.md")) != before
 
 
 def main(argv: Sequence[str]) -> int:

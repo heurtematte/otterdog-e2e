@@ -127,6 +127,8 @@ DOCS_PATHS = [
     "docs/**",
     "README.md",
     "mkdocs.yml",
+    "docs-theme/**",
+    "docs_site.py",
     "docs_hooks.py",
     "docs_scenarios.py",
     "scenarios/**",
@@ -899,7 +901,7 @@ def test_docs_workflow_contract() -> None:
     assert steps(build)[1]["with"] == {"python-version": "3.12"}, "no setup-python cache"
     install, run = steps(build)[2]["run"], steps(build)[3]["run"]
     assert "--require-hashes" in install and "--only-binary=:all:" in install and "-r docs/requirements.txt" in install
-    assert run == "mkdocs build --strict"
+    assert run == "python docs_site.py build --strict"
     configure, upload = steps(build)[4], steps(build)[5]
     assert configure["uses"].startswith("actions/configure-pages@")
     assert upload["uses"].startswith("actions/upload-pages-artifact@") and upload["with"] == {"path": "site/"}

@@ -240,7 +240,7 @@ scratch directory below `E2E_CACHE_DIR`, which is deleted at session end (unless
 | `e2e-webui.yml` | dispatch, reusable | the web-UI tier of a trusted SUT on one or several instances (one at a time), in the `e2e-<instance>-webui` environment (the only one holding the bot's password and TOTP seed) |
 | `nightly.yml` | schedule | per enabled instance (`E2E_TARGETS`): `release:latest`, then `branch:main` with a differential against `release:latest`; the web-UI lane when `E2E_WEB_UI_ENABLED` is `true` (one instance at a time) |
 | `janitor.yml` | every 6 hours | a `check` job (no environment, no secrets) refuses `E2E_ORG`, `E2E_ORG_ID` and `E2E_PROFILE` as repository or organization variables, then sweeps leftovers of old runs on every enabled instance |
-| `docs.yml` | push to main and pull requests changing the documentation, dispatch | strict MkDocs build of the documentation site; on main, deploys it to GitHub Pages (no secrets) |
+| `docs.yml` | push to main and pull requests changing the documentation, dispatch | strict Zensical build of the documentation site (staged by `docs_site.py`); on main, deploys it to GitHub Pages (no secrets) |
 
 The required repository setup (environments, variables, secrets) is described in
 [docs/security.md](docs/security.md#ci-environments) and [docs/setup-free-org.md](docs/setup-free-org.md#ci);
@@ -248,7 +248,7 @@ The required repository setup (environments, variables, secrets) is described in
 
 ## Documentation
 
-The documentation is published at https://heurtematte.github.io/otterdog-e2e/ (MkDocs, built and deployed by
+The documentation is published at https://heurtematte.github.io/otterdog-e2e/ (Zensical, built and deployed by
 `docs.yml`; `make docs` builds it locally, see [local-development.md](docs/local-development.md#documentation-site)).
 
 | Document | Content |

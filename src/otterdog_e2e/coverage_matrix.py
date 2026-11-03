@@ -1089,7 +1089,7 @@ def md_table(header: Sequence[str], rows: Iterable[Sequence[str]], align: str | 
     return lines
 
 
-# nested bullets are indented by 4 spaces per level: GitHub accepts 2, but Python-Markdown (MkDocs, the documentation
+# nested bullets are indented by 4 spaces per level: GitHub accepts 2, but Python-Markdown (Zensical, the documentation
 # site) only nests a list indented by 4 and would flatten the details
 LIST_INDENT = " " * 4
 

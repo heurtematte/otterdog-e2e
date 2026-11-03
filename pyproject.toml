@@ -40,14 +40,14 @@ responses = ">=0.25"
 types-requests = ">=2.32"
 types-pyyaml = ">=6.0"
 
-# the documentation site (mkdocs.yml, `make docs`): `poetry install --with docs`. The docs workflow installs the same
-# locked versions from docs/requirements.txt (.venv/bin/python tests/unit/test_docs_site.py --write regenerates it).
+# the documentation site (mkdocs.yml read by Zensical, docs_site.py, `make docs`): `poetry install --with docs`. The docs
+# workflow installs the same locked versions from docs/requirements.txt (.venv/bin/python tests/unit/test_docs_site.py
+# --write regenerates it).
 [tool.poetry.group.docs]
 optional = true
 
 [tool.poetry.group.docs.dependencies]
-mkdocs = ">=1.6,<2" # MkDocs 2 drops plugins and themes (Material requires mkdocs<2)
-mkdocs-material = ">=9.7,<10"
+zensical = ">=0.0.74" # pre-1.0: the lock pins it, docs-theme/ overrides one of its templates
 pymdown-extensions = ">=12.0"
 
 [build-system]

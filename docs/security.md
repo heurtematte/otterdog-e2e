@@ -613,7 +613,7 @@ What the workflows enforce (and `tests/unit/test_workflows_static.py` checks):
   the PR targets eclipse-csi/otterdog and that the pinned sha is reachable from the PR head; it calls `e2e.yml` once
   with the comma separated instances;
 - `docs.yml` (the documentation site) uses no secret. Its build job runs for pull requests too, with `contents: read`
-  plus `pages: read` (`actions/configure-pages`, on main only), and installs MkDocs from `docs/requirements.txt`
+  plus `pages: read` (`actions/configure-pages`, on main only), and installs Zensical from `docs/requirements.txt`
   (exact versions, `--require-hashes`, wheels only). Its deploy job, the only job of the repository allowed to write,
   holds just `pages: write` and `id-token: write`, runs only on `main` (never for a pull request) in the
   `github-pages` environment, and only publishes the artifact of the build job.

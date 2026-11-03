@@ -1,6 +1,6 @@
-# Documentation site (GitHub Pages): a strict MkDocs build of docs/ and README.md (the home page), with the scenario
-# explorer generated from scenarios/ and tests/ (docs_scenarios.py), for every change of the documentation, deployed
-# from main. It uses no secret: the build job only reads the repository (and, on main, the Pages settings); the deploy
+# Documentation site (GitHub Pages): a strict Zensical build of docs/ and README.md (the home page), with the scenario
+# explorer generated from scenarios/ and tests/ (docs_scenarios.py), both staged by docs_site.py, for every change of the
+# documentation, deployed from main. It uses no secret: the build job only reads the repository (and, on main, the Pages settings); the deploy
 # job alone may publish the site, in the github-pages environment.
 #
 # Repository setup, once: Settings > Pages > Build and deployment > Source: "GitHub Actions" (docs/local-development.md).
@@ -13,6 +13,8 @@ on:
       - "docs/**"
       - "README.md"
       - "mkdocs.yml"
+      - "docs-theme/**"
+      - "docs_site.py"
       - "docs_hooks.py"
       # the scenario explorer is generated from these (docs_scenarios.py)
       - "docs_scenarios.py"
@@ -26,6 +28,8 @@ on:
       - "docs/**"
       - "README.md"
       - "mkdocs.yml"
+      - "docs-theme/**"
+      - "docs_site.py"
       - "docs_hooks.py"
       # the scenario explorer is generated from these (docs_scenarios.py)
       - "docs_scenarios.py"
@@ -66,15 +70,12 @@ jobs:
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
-      - name: Install MkDocs (pinned versions, hash-checked wheels)
+      - name: Install Zensical (pinned versions, hash-checked wheels)
         run: >-
           python -m pip install --disable-pip-version-check --no-input --require-hashes --only-binary=:all:
           -r docs/requirements.txt
-      - name: Build the site (strict, broken links and anchors fail)
-        env:
-          # Material's banner about MkDocs 2: the pins keep mkdocs<2
-          NO_MKDOCS_2_WARNING: "true"
-        run: mkdocs build --strict
+      - name: Build the site (staged by docs_site.py; strict, broken links and anchors fail)
+        run: python docs_site.py build --strict
       - name: Configure GitHub Pages
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0

@@ -27,7 +27,7 @@ E2E := $(VENV)/bin/otterdog-e2e
 PYTHON := $(VENV)/bin/python
 POETRY ?= poetry
 # Python files outside the package: the MkDocs hooks of the documentation site
-HOOKS := docs_hooks.py docs_scenarios.py
+HOOKS := docs_hooks.py docs_scenarios.py docs_site.py
 
 # one target instance, or several for the run-based targets, pr, doctor and janitor: a comma list, @all, @<list>
 TARGET ?= $(E2E_TARGET)
@@ -158,12 +158,12 @@ cache-prune: ## Keep only the KEEP newest builds, sources, runs and images in th
 sut: ## Resolve SUT and print it as JSON (label, sha, version, trust)
 	$(E2E) sut resolve "$(SUT)"
 
-# Material for MkDocs prints a banner about MkDocs 2 on every build: the docs group pins mkdocs<2
+# Zensical runs no MkDocs hooks: docs_site.py stages the pages (.docs-site/), then runs it
 docs: require-docs ## Strict build of the documentation site into site/ (broken links and anchors fail)
-	NO_MKDOCS_2_WARNING=true $(VENV)/bin/mkdocs build --strict
+	$(PYTHON) docs_site.py build --strict
 
-docs-serve: require-docs ## Live preview of the documentation site on http://127.0.0.1:8000/otterdog-e2e/
-	NO_MKDOCS_2_WARNING=true $(VENV)/bin/mkdocs serve
+docs-serve: require-docs ## Live preview of the documentation site on http://localhost:8000/otterdog-e2e/ (sources staged again on change)
+	$(PYTHON) docs_site.py serve
 
 clean: ## Remove Python caches (never the artifacts nor the harness cache)
 	find src tests -name __pycache__ -type d -prune -exec rm -rf {} +
@@ -179,7 +179,7 @@ require-scenario:
 	@test -n "$(SCENARIO)" || { echo "set SCENARIO=<scenario id glob>" >&2; exit 2; }
 
 require-docs:
-	@test -x "$(VENV)/bin/mkdocs" || { echo "install the documentation tools first: $(POETRY) install --with docs" >&2; exit 2; }
+	@test -x "$(VENV)/bin/zensical" || { echo "install the documentation tools first: $(POETRY) install --with docs" >&2; exit 2; }
 
 require-pr:
 	@[[ "$(PR)" =~ ^[0-9]+$$ && "$(SHA)" =~ ^[0-9a-f]{40}$$ ]] || { echo "set PR=<number> SHA=<40-hex head commit>" >&2; exit 2; }

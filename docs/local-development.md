@@ -389,24 +389,32 @@ Renaming a test or a scenario id listed in `covered_by` fails that test until th
 
 ## Documentation site
 
-The site (https://heurtematte.github.io/otterdog-e2e/) is built with MkDocs and Material for MkDocs from `docs/` and
-`README.md`, its home page. `.github/workflows/docs.yml` runs the strict build for every pull request that changes the
+The site (https://heurtematte.github.io/otterdog-e2e/) is built with [Zensical](https://zensical.org/) (the successor
+of Material for MkDocs, which reads `mkdocs.yml`) from `docs/` and `README.md`, its home page. `.github/workflows/docs.yml` runs the strict build for every pull request that changes the
 documentation, and deploys the site to GitHub Pages from `main`. Publishing needs one repository setting: Settings,
 Pages, Build and deployment, Source **GitHub Actions** (GitHub then creates the `github-pages` environment, which only
 accepts deployments from `main`).
 
 ```bash
-poetry install --with docs     # MkDocs, Material for MkDocs, pymdown-extensions (the docs group of poetry.lock)
-make docs                      # strict build into site/: a broken link or anchor, a page missing from the nav fails
-make docs-serve                # live preview on http://127.0.0.1:8000/otterdog-e2e/
+poetry install --with docs     # Zensical, pymdown-extensions (the docs group of poetry.lock)
+make docs                      # docs_site.py build --strict into site/: a broken link or anchor fails
+make docs-serve                # docs_site.py serve: live preview on http://localhost:8000/otterdog-e2e/
 ```
+
+Zensical runs no MkDocs hooks, so `docs_site.py` prepares the site first, in `.docs-site/` (git-ignored): the pages of
+`docs/`, the generated ones below, every page adapted as described next, the theme override `docs-theme/` and a copy
+of `mkdocs.yml` pointing at them, with the explorer's nav. `build` then runs `zensical build` and copies its output to
+`site/`; `serve` runs `zensical serve` and stages the sources again whenever `docs/`, `README.md`, `mkdocs.yml`,
+`docs-theme/`, `scenarios/` or `tests/` change. The edit button of a generated page opens its source (README.md, the
+scenario or test module): `docs-theme/partials/actions.html` overrides Zensical's template so that a page's front
+matter `edit_url` wins (compare it with the upstream template when Zensical is upgraded).
 
 The pages stay GitHub-flavored Markdown that renders on github.com; `docs_hooks.py` adapts them for the site:
 
 - the home page is `README.md`, with its links rebased on `docs/` and without the blocks between
   `<!-- github-only -->` and `<!-- /github-only -->` (the badge, the link to the site): there is no `docs/index.md`;
 - a link that leaves `docs/` (`../scenarios/coverage.yaml`) points to the file on GitHub (`blob/main`, `tree/main`
-  for a directory), and its target must exist;
+  for a directory), and its target must exist (`--strict` fails otherwise);
 - GitHub callouts (`> [!WARNING]`) become admonitions;
 - `\|` in a code span of a table row (GitHub needs it to keep the pipe in its cell) loses its backslash.
 
@@ -416,18 +424,18 @@ features with their otterdog sources, each step's jsonnet, commands and expectat
 scenario id, the YAML source) and one page per `tests/<tier>/test_*.py` module (docstring, marks and source of every
 test), with overview tables that filter and sort in the browser (`docs/assets/explorer.js`; the query string holds the
 filter, so `scenarios/?Tags=regression` can be linked). The nav entry `Scenario explorer: scenarios/index.md` of
-`mkdocs.yml` becomes the section, and `docs/scenarios/` must not exist. Nothing is written by hand there: a change of a
+`mkdocs.yml` becomes the section in the staged configuration, and `docs/scenarios/` must not exist. Nothing is written by hand there: a change of a
 scenario or a test shows on the site at the next build of `main` (the docs workflow also runs for `scenarios/**` and
 `tests/**`).
 
 Python-Markdown is stricter than GitHub in a few places. Both render the page as written when you:
 
 - indent everything nested in a list item by 4 spaces per level: sub-lists, code blocks and paragraphs (GitHub also
-  accepts 2 or 3, MkDocs then flattens or splits the list), and leave a blank line before a list;
+  accepts 2 or 3, Python-Markdown then flattens or splits the list), and leave a blank line before a list;
 - leave a blank line between a nested paragraph or code block and the next item of the list;
 - never start a line of text with `#` (`#790` becomes a heading) and write masked values in a code span (`********`);
 - write a placeholder in a code span (`orgs/<org>`) or as `&lt;org&gt;`: anywhere else `<org>` is an HTML tag, which
-  GitHub and MkDocs both drop (`tests/unit/test_docs_hooks.py` checks every page);
+  GitHub and the site both drop (`tests/unit/test_docs_hooks.py` checks every page);
 - link pages relatively (`security.md#ci-environments`): anchors are GitHub's (lower case, punctuation dropped, spaces
   as dashes), and `make docs` checks every link and anchor.
 

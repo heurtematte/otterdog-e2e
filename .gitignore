@@ -15,8 +15,10 @@ secrets/
 # run artifacts (redacted text only, but still per-run data) and any local harness cache
 artifacts/
 .cache/
-# the documentation site built by `make docs` (MkDocs)
+# the documentation site built by `make docs` (Zensical)
 site/
+# docs_site.py: the pages staged for Zensical
+.docs-site/
 
 # --- agents: local Claude Code settings and agent worktrees (the skills of .claude/skills/ are tracked) ---
 .claude/settings.local.json

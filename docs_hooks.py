@@ -1,7 +1,7 @@
-"""MkDocs hooks of the documentation site (``hooks:`` in mkdocs.yml).
+"""The rendering of the pages of the documentation site (docs_site.py, which stages them for Zensical).
 
-The pages stay GitHub-flavored Markdown that renders on github.com. These hooks bridge what Python-Markdown (MkDocs)
-does differently, without changing the sources:
+The pages stay GitHub-flavored Markdown that renders on github.com. These functions bridge what Python-Markdown (the
+Markdown of Zensical) does differently, without changing the sources:
 
 * the home page (``index.md``) is generated from README.md: the blocks between ``<!-- github-only -->`` and
   ``<!-- /github-only -->`` are dropped and the links are rebased from the repository root to docs/;
@@ -9,28 +9,19 @@ does differently, without changing the sources:
 * in table rows, ``\\|`` inside a code span becomes ``|``: GitHub needs the escape to keep the pipe in its cell, while
   Python-Markdown already ignores the pipes of code spans and would print the backslash;
 * links that leave docs/ (``../scenarios/coverage.yaml``) point to the file on GitHub (``blob/main/...``, or
-  ``tree/main/...`` for a directory); a target missing from the repository is a warning, so an error with ``--strict``.
+  ``tree/main/...`` for a directory); a target missing from the repository is a problem (an error with ``--strict``).
 
-Only the standard library is needed at import time: tests/unit/test_docs_hooks.py imports this file without MkDocs.
+Only the standard library is needed at import time: tests/unit/test_docs_hooks.py imports this file without the docs
+group.
 """
 
 from __future__ import annotations
 
-import logging
 import posixpath
 import re
 from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING
 from urllib.parse import quote, unquote, urlsplit, urlunsplit
-
-if TYPE_CHECKING:
-    from mkdocs.config.defaults import MkDocsConfig
-    from mkdocs.structure.files import Files
-    from mkdocs.structure.pages import Page
-
-# below the "mkdocs" logger, so its warnings count for `mkdocs build --strict`
-log = logging.getLogger("mkdocs.plugins.docs_hooks")
 
 HOME = "index.md"
 README = "README.md"
@@ -223,7 +214,7 @@ def _unescape_code_pipes(row: str) -> str:
 def github_url(dest: str, page: str, repo_url: str, root: Path) -> tuple[str, bool] | None:
     """For a link of docs/``page`` whose target leaves docs/: its URL on GitHub (``blob`` for a file, ``tree`` for a
     directory) and whether the target exists. None for every other link (external, anchor only, absolute, inside
-    docs/, or outside the repository: MkDocs validates those)."""
+    docs/, or outside the repository: Zensical validates those)."""
     parts = urlsplit(dest)
     if parts.scheme or parts.netloc or not parts.path or parts.path.startswith("/"):
         return None
@@ -254,40 +245,20 @@ def _rebase_on_docs(dest: str) -> str | None:
     return urlunsplit(("", "", path, parts.query, parts.fragment))
 
 
-# --- MkDocs hooks ------------------------------------------------------------------------------------------------------
-def on_files(files: Files, *, config: MkDocsConfig) -> Files:
-    """Add the home page, generated from README.md."""
-    from mkdocs.exceptions import PluginError
-    from mkdocs.structure.files import File
-
-    if files.get_file_from_path(HOME) is not None:
-        raise PluginError(f"{DOCS_DIR}/{HOME} must not exist: the home page is generated from {README}")
-    readme = (Path(config.docs_dir).parent / README).read_text(encoding="utf-8")
-    files.append(File.generated(config, HOME, content=readme_to_home(readme)))
-    return files
-
-
-def on_pre_page(page: Page, *, config: MkDocsConfig, files: Files) -> Page:
-    """The edit button of the generated home page opens README.md."""
-    if page.file.src_uri == HOME and config.repo_url:
-        page.edit_url = f"{config.repo_url.rstrip('/')}/edit/{BRANCH}/{README}"
-    return page
-
-
-def on_page_markdown(markdown: str, *, page: Page, config: MkDocsConfig, files: Files) -> str:
-    """GitHub callouts as admonitions, unescaped pipes in table code spans, links leaving docs/ to GitHub."""
-    root = Path(config.docs_dir).parent
-    repo_url = config.repo_url
-    source = page.file.src_uri
+# --- the rendering of a page (docs_site.py) -------------------------------------------------------------------------
+def render_page(markdown: str, page: str, repo_url: str, root: Path) -> tuple[str, list[str]]:
+    """A page of the site as Python-Markdown needs it: GitHub callouts as admonitions, unescaped pipes in table code
+    spans, links leaving docs/ to GitHub; also the links whose target is missing from the repository."""
+    missing: list[str] = []
 
     def to_github(dest: str) -> str | None:
         """The GitHub URL of a link leaving docs/ (a missing target is reported)."""
-        found = github_url(dest, source, repo_url, root) if repo_url else None
+        found = github_url(dest, page, repo_url, root) if repo_url else None
         if found is None:
             return None
         url, exists = found
         if not exists:
-            log.warning("Doc file '%s' contains a link '%s', but its target is not in the repository.", source, dest)
+            missing.append(dest)
         return url
 
-    return rewrite_links(unescape_table_code_pipes(convert_callouts(markdown)), to_github)
+    return rewrite_links(unescape_table_code_pipes(convert_callouts(markdown)), to_github), missing
