@@ -80,7 +80,9 @@ services:
     stop_grace_period: 5s
 
   mongodb:
-    image: mongo:8.3.4
+    # not the 8.3.4 of otterdog's docker-compose.base.yml: 8.3.0-8.3.8 exit at startup on Linux >= 6.19 (the ubuntu-24.04
+    # runners boot 7.0.0-*-azure since 2026-11), the 7.0 line runs on every kernel (SERVER-125742; 8.3.14+ is fixed)
+    image: mongo:7.0.45
     command: ["mongod", "--quiet", "--bind_ip_all"]
     tmpfs:
       - /data/db

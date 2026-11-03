@@ -215,7 +215,7 @@ def test_compose_services_and_exposure(compose: dict[str, Any]) -> None:
     assert all(service.get("restart") == "no" for service in services.values())
     assert not any("env_file" in service for service in services.values())
     assert [name for name, service in services.items() if "profiles" in service] == ["dtrack-mock"]
-    assert services["mongodb"]["image"] == "mongo:8.3.4"
+    assert services["mongodb"]["image"] == "mongo:7.0.45"
     assert services["redis"]["image"] == "valkey/valkey:9.1.0-alpine3.23"
     assert services["mongodb"]["tmpfs"] == ["/data/db"]
     assert services["redis"]["command"] == ["valkey-server", "--save", "", "--appendonly", "no"]
