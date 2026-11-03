@@ -126,7 +126,7 @@ DEPLOY_CONDITION = "github.event_name != 'pull_request' && github.ref == 'refs/h
 DOCS_PATHS = [
     "docs/**",
     "README.md",
-    "mkdocs.yml",
+    "zensical.toml",
     "docs-theme/**",
     "docs_site.py",
     "docs_hooks.py",

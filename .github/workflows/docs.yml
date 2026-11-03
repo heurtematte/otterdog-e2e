@@ -12,7 +12,7 @@ on:
     paths:
       - "docs/**"
       - "README.md"
-      - "mkdocs.yml"
+      - "zensical.toml"
       - "docs-theme/**"
       - "docs_site.py"
       - "docs_hooks.py"
@@ -27,7 +27,7 @@ on:
     paths:
       - "docs/**"
       - "README.md"
-      - "mkdocs.yml"
+      - "zensical.toml"
       - "docs-theme/**"
       - "docs_site.py"
       - "docs_hooks.py"

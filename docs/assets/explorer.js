@@ -27,6 +27,8 @@
   }
 
   function setup(marker) {
+    if (marker.dataset.e2eReady) return;
+    marker.dataset.e2eReady = "true";
     const table = nextTable(marker);
     if (!table || !table.tHead || !table.tBodies.length) return;
     const headers = Array.from(table.tHead.rows[0].cells).map((cell) => cell.textContent.trim());
@@ -110,6 +112,8 @@
     document.querySelectorAll(".e2e-filter").forEach(setup);
   }
 
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+  // navigation.instant replaces the content without reloading the page: document$ emits every page, the first one too
+  if (window.document$) window.document$.subscribe(init);
+  else if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
   else init();
 })();

@@ -10,7 +10,7 @@ built, so it never drifts from them:
 * one page per Python test module of a tier (``tests/<tier>/test_*.py`` -> ``scenarios/python-tests/<tier>/...``):
   every test with its markers, docstring, covered features and source;
 * overview pages whose tables filter and sort in the browser (docs/assets/explorer.js), and their place in the
-  navigation: the nav entry ``scenarios/index.md`` of mkdocs.yml becomes a section holding them all (expand_nav).
+  navigation: the nav entry ``scenarios/index.md`` of zensical.toml becomes a section holding them all (expand_nav).
 
 Links to code point to GitHub: the harness at ``main`` (the branch the site is built from), otterdog at the commit of
 the coverage matrix (``otterdog.ref`` of scenarios/coverage.yaml). The edit button of a generated page opens its source
@@ -42,7 +42,7 @@ EXPLORER = "scenarios"
 INDEX = f"{EXPLORER}/index.md"
 PYTHON_DIR = f"{EXPLORER}/python-tests"
 PYTHON_INDEX = f"{PYTHON_DIR}/index.md"
-# the branch the site is built from (also in docs_hooks.py and the edit_uri of mkdocs.yml)
+# the branch the site is built from (also in docs_hooks.py and the edit_uri of zensical.toml)
 BRANCH = "main"
 UPSTREAM = "https://github.com/eclipse-csi/otterdog"
 SCENARIOS_DIR = "scenarios"

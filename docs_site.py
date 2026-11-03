@@ -1,35 +1,36 @@
 """The documentation site (GitHub Pages), built by Zensical: ``python docs_site.py build|serve [--strict]``.
 
-Zensical reads mkdocs.yml but runs no MkDocs hooks, so what they did happens before it builds, in the staging directory
-``.docs-site/`` (git-ignored), from the sources of the commit being built:
+Zensical runs no MkDocs hooks, so what they did happens before it builds, in the staging directory ``.docs-site/``
+(git-ignored), from the sources of the commit being built:
 
 * the pages of docs/, the home page generated from README.md (docs_hooks.readme_to_home) and the pages of the
   scenario explorer (docs_scenarios.pages); a generated page names its source in the front matter ``edit_url``, which
   the theme override docs-theme/partials/actions.html gives its edit button;
 * every page as Python-Markdown needs it (docs_hooks.render_page): GitHub callouts as admonitions, unescaped pipes in
   table code spans, links leaving docs/ to GitHub; a link to a file missing from the repository is a problem;
-* ``.docs-site/mkdocs.yml``: mkdocs.yml with the staged pages (docs_dir), the theme override copied next to them
+* ``.docs-site/zensical.toml``: zensical.toml with the staged pages (docs_dir), the theme override copied next to them
   (custom_dir) and the nav entry of the explorer expanded into its section (docs_scenarios.expand_nav). Zensical keeps
   every path of a project below the directory of its configuration (its cache .docs-site/.cache/ too).
 
 ``build`` stages, runs ``zensical build`` into .docs-site/site/ and copies it to site/ (what the docs workflow
 uploads); ``--strict`` fails on any problem of the staging and on Zensical's warnings (broken links and anchors). ``serve`` stages, runs ``zensical serve`` and stages again whenever
-docs/, README.md, mkdocs.yml, docs-theme/, scenarios/ or tests/ change (only the files that differ are written, so the
-preview reloads what changed). ``make docs`` and ``make docs-serve`` run them; the docs workflow runs ``build --strict``.
+docs/, README.md, zensical.toml, docs-theme/, scenarios/ or tests/ change (only the files that differ are written, so
+the preview reloads what changed). ``make docs`` and ``make docs-serve`` run them; the docs workflow runs ``build --strict``.
 
-Only the standard library and PyYAML are needed at import time (pymdownx, a dependency of Zensical, is imported by
-stage): tests/unit/test_docs_site.py imports this file without the docs group.
+Only the standard library and PyYAML (docs_scenarios) are needed at import time (pymdownx, a dependency of Zensical, is
+imported by stage): tests/unit/test_docs_site.py imports this file without the docs group.
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import logging
-import re
 import shutil
 import subprocess
 import sys
 import time
+import tomllib
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -37,10 +38,9 @@ from typing import Any
 
 import docs_hooks
 import docs_scenarios
-import yaml
 
 ROOT = Path(__file__).resolve().parent
-CONFIG = "mkdocs.yml"
+CONFIG = "zensical.toml"
 STAGING = ".docs-site"
 THEME = "docs-theme"
 SITE = "site"
@@ -48,74 +48,57 @@ DOCS = "docs"
 # the sources a preview watches (their changes are staged again)
 WATCHED = (DOCS, "README.md", CONFIG, THEME, "scenarios", "tests")
 POLL_INTERVAL = 1.0
-# the settings docs_site.py sets in the staged configuration, never in mkdocs.yml
+# the settings docs_site.py sets in the staged configuration, never in zensical.toml
 STAGED_KEYS = ("docs_dir", "site_dir", "hooks")
 STAGED_THEME = "theme"  # docs-theme/ copied below .docs-site/
-_TOP_LEVEL_KEY_RE = re.compile(r"^(?P<key>[A-Za-z_][A-Za-z0-9_]*):", re.MULTILINE)
 
 log = logging.getLogger("docs_site")
 
 
 class SiteError(RuntimeError):
-    """The site cannot be staged (an invalid mkdocs.yml, a page where a generated one goes)."""
-
-
-class _MkDocsLoader(yaml.SafeLoader):
-    """SafeLoader reading the ``!!python/...`` tags of mkdocs.yml as plain data (nothing is imported)."""
-
-
-def _python_tag(loader: yaml.SafeLoader, suffix: str, node: yaml.Node) -> Any:
-    """The value under a python tag, as data."""
-    if isinstance(node, yaml.MappingNode):
-        return loader.construct_mapping(node, deep=True)
-    if isinstance(node, yaml.SequenceNode):
-        return loader.construct_sequence(node, deep=True)
-    assert isinstance(node, yaml.ScalarNode)
-    return loader.construct_scalar(node)
-
-
-_MkDocsLoader.add_multi_constructor("tag:yaml.org,2002:python/", _python_tag)
+    """The site cannot be staged (an invalid zensical.toml, a page where a generated one goes)."""
 
 
 def read_config(text: str) -> dict[str, Any]:
-    """mkdocs.yml as data (the python tags as plain values)."""
-    # _MkDocsLoader is a SafeLoader: the python tags are read as data, nothing is constructed
-    data = yaml.load(text, Loader=_MkDocsLoader)  # noqa: S506
-    if not isinstance(data, dict):
-        raise SiteError(f"{CONFIG}: expected a mapping")
-    return data
+    """The ``[project]`` table of zensical.toml."""
+    try:
+        project = tomllib.loads(text).get("project")
+    except tomllib.TOMLDecodeError as exc:
+        raise SiteError(f"{CONFIG}: {exc}") from None
+    if not isinstance(project, dict):
+        raise SiteError(f"{CONFIG}: expected a [project] table")
+    return project
 
 
-def _drop_top_level(text: str, key: str) -> str:
-    """``text`` without the top-level ``key:`` block (up to the next top-level key)."""
-    matches = list(_TOP_LEVEL_KEY_RE.finditer(text))
-    for index, match in enumerate(matches):
-        if match.group("key") == key:
-            end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
-            return text[: match.start()] + text[end:]
-    return text
+def toml_value(value: Any) -> str:
+    """``value`` as an inline TOML value (strings, numbers, booleans, arrays and tables: what tomllib reads from
+    zensical.toml)."""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, int | float):
+        return repr(value)
+    if isinstance(value, str):
+        return json.dumps(value, ensure_ascii=False)  # a JSON string is a TOML basic string
+    if isinstance(value, list):
+        return "[" + ", ".join(toml_value(item) for item in value) + "]"
+    if isinstance(value, dict):
+        return "{" + ", ".join(f"{toml_value(str(key))} = {toml_value(item)}" for key, item in value.items()) + "}"
+    raise SiteError(f"{CONFIG}: cannot write a {type(value).__name__} value")
 
 
 def staged_config(text: str, nav: list[Any]) -> str:
-    """mkdocs.yml for Zensical in .docs-site/: the expanded ``nav``, the staged pages, site and theme override (paths
+    """zensical.toml for Zensical in .docs-site/: the expanded ``nav``, the staged pages, site and theme override (paths
     below .docs-site/, where Zensical wants them)."""
     config = read_config(text)
     present = [key for key in STAGED_KEYS if key in config]
     if present:
         raise SiteError(f"{CONFIG}: {', '.join(present)} must not be set (docs_site.py sets the staged ones)")
-    custom_dir = (config.get("theme") or {}).get("custom_dir")
-    if custom_dir != THEME:
+    theme = config.get("theme") or {}
+    if theme.get("custom_dir") != THEME:
         raise SiteError(f"{CONFIG}: theme.custom_dir must be {THEME} (the edit button of generated pages)")
-    text = _drop_top_level(text, "nav").rstrip("\n")
-    text, count = re.subn(rf"(?m)^(\s+custom_dir:\s*){re.escape(THEME)}\s*$", rf"\g<1>{STAGED_THEME}", text)
-    assert count == 1
-    staged = {"docs_dir": DOCS, "site_dir": SITE}
-    return (
-        text
-        + "\n\n# set by docs_site.py\n"
-        + yaml.safe_dump(staged, sort_keys=False)
-        + yaml.safe_dump({"nav": nav}, sort_keys=False, allow_unicode=True)
-    )
+    staged = {**config, "theme": {**theme, "custom_dir": STAGED_THEME}, "docs_dir": DOCS, "site_dir": SITE, "nav": nav}
+    lines = [f"# generated by docs_site.py from {CONFIG}", "[project]"]
+    return "\n".join([*lines, *(f"{toml_value(key)} = {toml_value(value)}" for key, value in staged.items())]) + "\n"
 
 
 def with_edit_url(markdown: str, url: str) -> str:
@@ -149,7 +132,7 @@ class _Problems(logging.Handler):
 
 def stage(root: Path, slugify: docs_scenarios.Slugify | None = None) -> Staging:
     """Every file of the staged site (module docstring), in memory; ``slugify``: the anchors of the toc extension
-    (default pymdownx.slugs.slugify(case='lower'), as in mkdocs.yml)."""
+    (default pymdownx.slugs.slugify(case='lower'), as in zensical.toml)."""
     if slugify is None:
         from pymdownx.slugs import slugify as pymdownx_slugify  # a dependency of Zensical (docs group)
 
@@ -169,7 +152,7 @@ def stage(root: Path, slugify: docs_scenarios.Slugify | None = None) -> Staging:
     nav = config.get("nav")
     if not isinstance(nav, list) or not docs_scenarios.expand_nav(nav, docs_scenarios.nav(site)):
         raise SiteError(
-            f"{CONFIG}: the nav must hold an entry '<title>: {docs_scenarios.INDEX}' (the scenario explorer)"
+            f'{CONFIG}: the nav must hold an entry {{ "<title>" = "{docs_scenarios.INDEX}" }} (the scenario explorer)'
         )
     result.files[CONFIG] = staged_config(text, nav).encode()
     theme = root / THEME

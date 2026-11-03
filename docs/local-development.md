@@ -390,7 +390,7 @@ Renaming a test or a scenario id listed in `covered_by` fails that test until th
 ## Documentation site
 
 The site (https://heurtematte.github.io/otterdog-e2e/) is built with [Zensical](https://zensical.org/) (the successor
-of Material for MkDocs, which reads `mkdocs.yml`) from `docs/` and `README.md`, its home page. `.github/workflows/docs.yml` runs the strict build for every pull request that changes the
+of Material for MkDocs, configured by `zensical.toml`) from `docs/` and `README.md`, its home page. `.github/workflows/docs.yml` runs the strict build for every pull request that changes the
 documentation, and deploys the site to GitHub Pages from `main`. Publishing needs one repository setting: Settings,
 Pages, Build and deployment, Source **GitHub Actions** (GitHub then creates the `github-pages` environment, which only
 accepts deployments from `main`).
@@ -403,8 +403,8 @@ make docs-serve                # docs_site.py serve: live preview on http://loca
 
 Zensical runs no MkDocs hooks, so `docs_site.py` prepares the site first, in `.docs-site/` (git-ignored): the pages of
 `docs/`, the generated ones below, every page adapted as described next, the theme override `docs-theme/` and a copy
-of `mkdocs.yml` pointing at them, with the explorer's nav. `build` then runs `zensical build` and copies its output to
-`site/`; `serve` runs `zensical serve` and stages the sources again whenever `docs/`, `README.md`, `mkdocs.yml`,
+of `zensical.toml` pointing at them, with the explorer's nav. `build` then runs `zensical build` and copies its output to
+`site/`; `serve` runs `zensical serve` and stages the sources again whenever `docs/`, `README.md`, `zensical.toml`,
 `docs-theme/`, `scenarios/` or `tests/` change. The edit button of a generated page opens its source (README.md, the
 scenario or test module): `docs-theme/partials/actions.html` overrides Zensical's template so that a page's front
 matter `edit_url` wins (compare it with the upstream template when Zensical is upgraded).
@@ -423,8 +423,8 @@ one page per YAML scenario of `scenarios/<tier>/<domain>/` (description, context
 features with their otterdog sources, each step's jsonnet, commands and expectations, the Python code quoting the
 scenario id, the YAML source) and one page per `tests/<tier>/test_*.py` module (docstring, marks and source of every
 test), with overview tables that filter and sort in the browser (`docs/assets/explorer.js`; the query string holds the
-filter, so `scenarios/?Tags=regression` can be linked). The nav entry `Scenario explorer: scenarios/index.md` of
-`mkdocs.yml` becomes the section in the staged configuration, and `docs/scenarios/` must not exist. Nothing is written by hand there: a change of a
+filter, so `scenarios/?Tags=regression` can be linked). The nav entry `{ "Scenario explorer" = "scenarios/index.md" }` of
+`zensical.toml` becomes the section in the staged configuration, and `docs/scenarios/` must not exist. Nothing is written by hand there: a change of a
 scenario or a test shows on the site at the next build of `main` (the docs workflow also runs for `scenarios/**` and
 `tests/**`).
 

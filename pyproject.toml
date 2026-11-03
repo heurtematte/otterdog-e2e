@@ -40,7 +40,7 @@ responses = ">=0.25"
 types-requests = ">=2.32"
 types-pyyaml = ">=6.0"
 
-# the documentation site (mkdocs.yml read by Zensical, docs_site.py, `make docs`): `poetry install --with docs`. The docs
+# the documentation site (zensical.toml, docs_site.py, `make docs`): `poetry install --with docs`. The docs
 # workflow installs the same locked versions from docs/requirements.txt (.venv/bin/python tests/unit/test_docs_site.py
 # --write regenerates it).
 [tool.poetry.group.docs]

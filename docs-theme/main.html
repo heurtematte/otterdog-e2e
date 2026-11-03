@@ -1,0 +1,31 @@
+{#-
+  Theme override of the documentation site (theme.custom_dir in zensical.toml): main.html of zensical-ui 0.0.41
+  (Zensical 0.0.74) only extends base.html; this one also fills two of its blocks, styled by docs/assets/theme.css:
+  the announcement bar (theme feature announce.dismiss) and, below the tabs, the hero of the home page, whose buttons
+  open pages of the nav (tests/unit/test_docs_site.py checks them).
+-#}
+{% extends "base.html" %}
+
+{% block announce %}
+  This site documents the end-to-end test harness of otterdog: otterdog itself is documented at
+  <a href="https://otterdog.readthedocs.io/">otterdog.readthedocs.io</a>.
+{% endblock %}
+
+{% block tabs %}
+  {{ super() }}
+  {#- Zensical 0.0.74 sets no page.is_homepage: the home page is the one at the root of the site #}
+  {% if page.url in ["", "./"] %}
+    <section class="e2e-hero">
+      <div class="e2e-hero__inner md-grid md-typeset">
+        <img class="e2e-hero__logo" src="{{ config.theme.logo | url }}" alt="">
+        <div>
+          <h1 class="e2e-hero__title">{{ config.site_name }}</h1>
+          <p class="e2e-hero__text">{{ config.site_description }}</p>
+          <a class="md-button md-button--primary" href="{{ 'onboarding/' | url }}">Get started</a>
+          <a class="md-button" href="{{ 'writing-scenarios/' | url }}">Write a scenario</a>
+          <a class="md-button" href="{{ 'scenarios/' | url }}">Scenario explorer</a>
+        </div>
+      </div>
+    </section>
+  {% endif %}
+{% endblock %}

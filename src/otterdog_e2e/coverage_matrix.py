@@ -1066,7 +1066,7 @@ def md_text(value: Any) -> str:
 
 
 def heading_anchor(title: str) -> str:
-    """The anchor GitHub gives a heading, and the documentation site too (toc slugify of mkdocs.yml): lower case,
+    """The anchor GitHub gives a heading, and the documentation site too (toc slugify of zensical.toml): lower case,
     punctuation dropped, spaces as dashes."""
     return re.sub(r"[^\w\- ]", "", title.lower()).replace(" ", "-")
 

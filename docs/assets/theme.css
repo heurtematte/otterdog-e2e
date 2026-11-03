@@ -1,0 +1,118 @@
+/* Theme of the documentation site: the Eclipse Foundation colors (palette primary and accent "custom" in
+   zensical.toml) and the hero of the home page (docs-theme/main.html). */
+:root {
+  --e2e-eclipse-purple: #2c2255;
+  --e2e-eclipse-orange: #f7941e;
+}
+
+[data-md-color-scheme="default"] {
+  --md-primary-fg-color: var(--e2e-eclipse-purple);
+  --md-primary-fg-color--light: #4b3f80;
+  --md-primary-fg-color--dark: #1d163a;
+  --md-accent-fg-color: #d9770a;
+  --md-accent-fg-color--transparent: rgba(247, 148, 30, 0.1);
+  /* the purple of the header is too dark for links in the text */
+  --md-typeset-a-color: #4b3f9e;
+}
+
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: var(--e2e-eclipse-purple);
+  --md-primary-fg-color--light: #4b3f80;
+  --md-primary-fg-color--dark: #1d163a;
+  --md-accent-fg-color: #ffb459;
+  --md-accent-fg-color--transparent: rgba(247, 148, 30, 0.1);
+  --md-typeset-a-color: var(--e2e-eclipse-orange);
+}
+
+/* the header and the tabs in the purple of the Eclipse Foundation (the modern variant draws them on the page color) */
+.md-header,
+.md-tabs {
+  color: #fff;
+  background-color: var(--md-primary-fg-color);
+}
+
+.md-tabs__link--active,
+.md-tabs__item--active .md-tabs__link,
+.md-tabs__link:hover {
+  color: var(--e2e-eclipse-orange);
+}
+
+@media screen and (min-width: 45em) {
+  .md-header .md-search__button,
+  .md-header .md-search__button:focus,
+  .md-header .md-search__button:hover {
+    color: #fff;
+    background-color: rgba(255, 255, 255, 0.14);
+  }
+}
+
+/* the announcement bar (block announce of docs-theme/main.html) */
+.md-banner {
+  color: #fff;
+  background-color: var(--md-primary-fg-color--dark);
+}
+
+.md-banner a {
+  color: var(--e2e-eclipse-orange);
+}
+
+/* the hero of the home page */
+.e2e-hero {
+  background: linear-gradient(135deg, var(--md-primary-fg-color--dark), var(--e2e-eclipse-purple) 60%, #4b3f80);
+  color: #fff;
+}
+
+.e2e-hero__inner {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  padding: 2.4rem 0.8rem;
+}
+
+.e2e-hero__logo {
+  flex: none;
+  width: 6rem;
+  height: 6rem;
+}
+
+.md-typeset .e2e-hero__title {
+  margin: 0 0 0.4rem;
+  color: inherit;
+  font-weight: 700;
+}
+
+.e2e-hero__text {
+  max-width: 36rem;
+  margin: 0 0 1.2rem;
+  opacity: 0.9;
+}
+
+.e2e-hero .md-typeset .md-button {
+  margin: 0 0.4rem 0.4rem 0;
+  color: #fff;
+  background-color: rgba(255, 255, 255, 0.14);
+}
+
+.e2e-hero .md-typeset .md-button--primary {
+  color: var(--md-primary-fg-color--dark);
+  background-color: var(--e2e-eclipse-orange);
+}
+
+.e2e-hero .md-typeset .md-button:focus,
+.e2e-hero .md-typeset .md-button:hover {
+  color: var(--md-primary-fg-color--dark);
+  background-color: #ffb459;
+  opacity: 1;
+}
+
+@media screen and (max-width: 44.9375em) {
+  .e2e-hero__inner {
+    flex-direction: column;
+    text-align: center;
+  }
+}
+
+/* the hero shows the site's name: the title of README.md is not repeated below it */
+.md-container:has(.e2e-hero) .md-content__inner > h1:first-of-type {
+  display: none;
+}

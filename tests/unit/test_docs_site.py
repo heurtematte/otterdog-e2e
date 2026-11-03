@@ -1,8 +1,7 @@
-"""The documentation site (mkdocs.yml read by Zensical, docs_site.py, docs-theme/, docs/requirements.txt,
-.github/workflows/docs.yml).
+"""The documentation site (zensical.toml, docs_site.py, docs-theme/, docs/requirements.txt, .github/workflows/docs.yml).
 
-* mkdocs.yml: the nav lists every page of docs/ (and the home page docs_site.py generates from README.md), no MkDocs
-  hook (Zensical runs none) and the theme override of the edit button;
+* zensical.toml: the nav lists every page of docs/ (and the home page docs_site.py generates from README.md), no MkDocs
+  hook (Zensical runs none), the theme override of the edit button and otterdog's logo;
 * docs_site.py stages the site: the generated pages with the edit URL of their source, every page rendered for
   Python-Markdown, the staged configuration (the explorer's nav, the paths below .docs-site/), problems failing --strict;
 * docs/requirements.txt, installed by the docs workflow, is exactly the ``docs`` group of poetry.lock: pinned versions
@@ -23,11 +22,10 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 DOCS = ROOT / "docs"
-MKDOCS = ROOT / "mkdocs.yml"
+ZENSICAL = ROOT / "zensical.toml"
 LOCK = ROOT / "poetry.lock"
 PYPROJECT = ROOT / "pyproject.toml"
 REQUIREMENTS = DOCS / "requirements.txt"
@@ -40,28 +38,10 @@ PINNED_RE = re.compile(r"^[a-z0-9][a-z0-9._-]*==[0-9][^ ;]*( ; [^-]+)?( --hash=s
 REPO_URL = "https://github.com/heurtematte/otterdog-e2e"
 
 
-class _MkDocsLoader(yaml.SafeLoader):
-    """SafeLoader reading the ``!!python/...`` tags of mkdocs.yml as plain data (nothing is imported)."""
-
-
-def _python_tag(loader: yaml.SafeLoader, suffix: str, node: yaml.Node) -> Any:
-    """The value under a python tag, as data."""
-    if isinstance(node, yaml.MappingNode):
-        return loader.construct_mapping(node, deep=True)
-    if isinstance(node, yaml.SequenceNode):
-        return loader.construct_sequence(node, deep=True)
-    assert isinstance(node, yaml.ScalarNode)
-    return loader.construct_scalar(node)
-
-
-_MkDocsLoader.add_multi_constructor("tag:yaml.org,2002:python/", _python_tag)
-
-
 @cache
-def mkdocs_config() -> dict[str, Any]:
-    """mkdocs.yml."""
-    # _MkDocsLoader is a SafeLoader: the python tags are read as data, nothing is constructed
-    data = yaml.load(MKDOCS.read_text(encoding="utf-8"), Loader=_MkDocsLoader)  # noqa: S506
+def project_config() -> dict[str, Any]:
+    """The [project] table of zensical.toml."""
+    data = tomllib.loads(ZENSICAL.read_text(encoding="utf-8"))["project"]
     assert isinstance(data, dict)
     return data
 
@@ -101,11 +81,11 @@ def render_requirements(data: Mapping[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
-# --- mkdocs.yml --------------------------------------------------------------------------------------------------------
+# --- zensical.toml ----------------------------------------------------------------------------------------------------
 def test_nav_lists_every_page() -> None:
     """Every docs/*.md page is in the nav exactly once, with the home page (index.md, generated from README.md) and
     the entry of the scenario explorer (scenarios/index.md, which docs_scenarios.py turns into a generated section)."""
-    pages = list(nav_pages(mkdocs_config()["nav"]))
+    pages = list(nav_pages(project_config()["nav"]))
     assert len(pages) == len(set(pages)), "a page is listed twice"
     assert set(pages) == {path.name for path in DOCS.glob("*.md")} | {"index.md", "scenarios/index.md"}
     assert not (DOCS / "index.md").exists(), "the home page is generated from README.md by docs_hooks.py"
@@ -113,32 +93,42 @@ def test_nav_lists_every_page() -> None:
 
 
 def test_site_settings() -> None:
-    """Site and repository URLs, the edit links on main, the theme override; nothing Zensical ignores or docs_site.py
-    sets (hooks, watch, MkDocs validation, docs_dir, site_dir)."""
-    config = mkdocs_config()
+    """Site and repository URLs, the edit links on main, the theme override, otterdog's logo and favicon; nothing
+    Zensical ignores or docs_site.py sets (hooks, watch, MkDocs validation, docs_dir, site_dir)."""
+    config = project_config()
     assert config["site_url"] == SITE_URL
     assert config["repo_url"] == REPO_URL
     assert config["edit_uri"] == "edit/main/docs/"
     assert config["extra_javascript"] == ["assets/explorer.js"]
-    assert config["extra_css"] == ["assets/explorer.css"]
-    assert config["theme"]["name"] == "material" and config["theme"]["custom_dir"] == "docs-theme"
+    assert config["extra_css"] == ["assets/explorer.css", "assets/theme.css"]
+    assert config["theme"]["custom_dir"] == "docs-theme" and config["theme"].get("name", "material") == "material"
+    assert (config["theme"]["logo"], config["theme"]["favicon"]) == ("assets/otterdog.png", "assets/favicon.png")
+    assert (DOCS / config["theme"]["logo"]).is_file() and (DOCS / config["theme"]["favicon"]).is_file()
     assert not {"hooks", "watch", "validation", "docs_dir", "site_dir"} & set(config)
     override = (ROOT / "docs-theme" / "partials" / "actions.html").read_text(encoding="utf-8")
     assert "{% set edit_url = page.meta.edit_url or page.edit_url %}" in override
 
 
+def test_hero_buttons_open_pages_of_the_nav() -> None:
+    """The buttons of the home page's hero (docs-theme/main.html) open pages of the nav: a renamed page breaks no
+    link that the strict build does not check."""
+    hero = (ROOT / "docs-theme" / "main.html").read_text(encoding="utf-8")
+    targets = re.findall(r"\{\{ '([^']*)' \| url \}\}", hero)
+    pages = {page.removesuffix("index.md").removesuffix(".md") + "/" for page in nav_pages(project_config()["nav"])}
+    assert targets and set(targets) <= {page.replace("//", "/") for page in pages}, targets
+
+
 def test_markdown_extensions() -> None:
     """GitHub-compatible anchors, mermaid fences, no attr_list (it drops a trailing '{...}' of table cells)."""
-    extensions: dict[str, Any] = {}
-    for entry in mkdocs_config()["markdown_extensions"]:
-        extensions.update(entry if isinstance(entry, dict) else {entry: None})
+    extensions = project_config()["markdown_extensions"]
     assert extensions["toc"]["permalink"] is True
-    assert extensions["toc"]["slugify"] == {"kwds": {"case": "lower"}}
-    assert extensions["pymdownx.superfences"]["custom_fences"] == [
-        {"name": "mermaid", "class": "mermaid", "format": ""}
+    assert extensions["toc"]["slugify"] == {"object": "pymdownx.slugs.slugify", "kwds": {"case": "lower"}}
+    pymdownx = extensions["pymdownx"]
+    assert pymdownx["superfences"]["custom_fences"] == [
+        {"name": "mermaid", "class": "mermaid", "format": "pymdownx.superfences.fence_code_format"}
     ]
     assert "attr_list" not in extensions
-    assert {"tables", "admonition", "pymdownx.magiclink", "pymdownx.tilde", "pymdownx.tasklist"} <= set(extensions)
+    assert {"tables", "admonition"} <= set(extensions) and {"magiclink", "tilde", "tasklist"} <= set(pymdownx)
 
 
 # --- dependencies ------------------------------------------------------------------------------------------------------
@@ -198,17 +188,22 @@ def test_stage_generates_the_pages_with_their_sources(staged: Any) -> None:
     assert files["docs/scenarios/index.md"].startswith(f"---\nedit_url: {edit}docs_scenarios.py\nhide:\n")
     page = files["docs/scenarios/offline/rulesets/val-rulesets.md"]
     assert page.startswith(f"---\nedit_url: {edit}scenarios/offline/rulesets/val-rulesets.yaml\n---\n")
-    assert {f"docs/{path.relative_to(DOCS).as_posix()}" for path in DOCS.rglob("*") if path.is_file()} <= set(files)
+    assert {f"docs/{path.relative_to(DOCS).as_posix()}" for path in DOCS.rglob("*") if path.is_file()} <= set(
+        staged.files
+    )
     assert "theme/partials/actions.html" in files and "edit_url: " not in files["docs/security.md"]
     assert "> [!" not in files["docs/index.md"], "GitHub callouts of README.md become admonitions"
     assert staged.problems == []
 
 
 def test_the_staged_configuration(staged: Any, site_module: Any) -> None:
-    """mkdocs.yml with the explorer's section in the nav, the staged paths below .docs-site/ and no hook."""
-    config = site_module.read_config(staged.files["mkdocs.yml"].decode())
+    """zensical.toml with the explorer's section in the nav, the staged paths below .docs-site/ and no hook."""
+    config = site_module.read_config(staged.files["zensical.toml"].decode())
     assert (config["docs_dir"], config["site_dir"], config["theme"]["custom_dir"]) == ("docs", "site", "theme")
-    assert "hooks" not in config and config["markdown_extensions"] == mkdocs_config()["markdown_extensions"]
+    assert "hooks" not in config and config["markdown_extensions"] == project_config()["markdown_extensions"]
+    assert {key: value for key, value in config.items() if key not in ("nav", "theme", "docs_dir", "site_dir")} == {
+        key: value for key, value in project_config().items() if key not in ("nav", "theme")
+    }
     pages = list(nav_pages(config["nav"]))
     assert len(pages) == len(set(pages)) and "scenarios/offline/rulesets/val-rulesets.md" in pages
     assert {name.removeprefix("docs/") for name in staged.files if name.endswith(".md")} == set(pages)
@@ -217,13 +212,16 @@ def test_the_staged_configuration(staged: Any, site_module: Any) -> None:
 @pytest.mark.parametrize(
     ("text", "message"),
     [
-        ("hooks: [x.py]\ntheme: {custom_dir: docs-theme}\nnav: []\n", "hooks must not be set"),
-        ("site_dir: out\ntheme: {custom_dir: docs-theme}\n", "site_dir must not be set"),
-        ("theme: {name: material}\n", "theme.custom_dir must be docs-theme"),
+        ('[project]\nhooks = ["x.py"]\ntheme.custom_dir = "docs-theme"\nnav = []\n', "hooks must not be set"),
+        ('[project]\nsite_dir = "out"\ntheme.custom_dir = "docs-theme"\n', "site_dir must not be set"),
+        ('[project]\ntheme.name = "material"\n', "theme.custom_dir must be docs-theme"),
+        ('site_name = "x"\n', r"expected a \[project\] table"),
+        ("[project\n", "zensical.toml: "),
     ],
 )
 def test_staged_configuration_refusals(site_module: Any, text: str, message: str) -> None:
-    """mkdocs.yml leaves the staged settings to docs_site.py and keeps the theme override."""
+    """zensical.toml holds a [project] table, leaves the staged settings to docs_site.py and keeps the theme
+    override."""
     with pytest.raises(site_module.SiteError, match=message):
         site_module.staged_config(text, [])
 
@@ -236,14 +234,14 @@ def test_edit_url_front_matter(site_module: Any) -> None:
 
 def test_write_keeps_unchanged_files_and_the_cache(site_module: Any, tmp_path: Path) -> None:
     """Only the files that differ are written, staged files no longer produced are removed, the cache stays."""
-    assert sorted(site_module.write(tmp_path, {"docs/a.md": b"a", "docs/b/c.md": b"c", "mkdocs.yml": b"m"})) == [
+    assert sorted(site_module.write(tmp_path, {"docs/a.md": b"a", "docs/b/c.md": b"c", "zensical.toml": b"m"})) == [
         "docs/a.md",
         "docs/b/c.md",
-        "mkdocs.yml",
+        "zensical.toml",
     ]
     (tmp_path / ".cache").mkdir()
     (tmp_path / ".cache" / "x").write_text("kept")
-    assert site_module.write(tmp_path, {"docs/a.md": b"A", "mkdocs.yml": b"m"}) == ["docs/a.md", "docs/b/c.md"]
+    assert site_module.write(tmp_path, {"docs/a.md": b"A", "zensical.toml": b"m"}) == ["docs/a.md", "docs/b/c.md"]
     assert not (tmp_path / "docs" / "b").exists() and (tmp_path / ".cache" / "x").read_text() == "kept"
 
 

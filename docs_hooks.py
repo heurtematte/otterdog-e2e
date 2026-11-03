@@ -26,7 +26,7 @@ from urllib.parse import quote, unquote, urlsplit, urlunsplit
 HOME = "index.md"
 README = "README.md"
 DOCS_DIR = "docs"
-# the branch the site is built from (also in the edit_uri of mkdocs.yml)
+# the branch the site is built from (also in the edit_uri of zensical.toml)
 BRANCH = "main"
 
 GITHUB_ONLY_RE = re.compile(
