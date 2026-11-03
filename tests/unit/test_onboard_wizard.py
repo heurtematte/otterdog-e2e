@@ -1391,28 +1391,50 @@ def test_an_invalid_store_is_refused(world: World, secret_store: dict[str, str])
         run_wizard(world, Script(secrets=[]), store="bitwarden:x")
 
 
-# --- machine accounts in pass (onboard/accounts.py: `otterdog-e2e accounts`, setup --browser) -----------------------
-ADMIN_PASS_DIR = "bots/technology.e2e-admin/github.com"
-ADMIN_ACCOUNT_TOKEN = f"pass:{ADMIN_PASS_DIR}/otterdog-e2e-org2-token"
+# --- machine accounts (onboard/accounts.py: the accounts section of setup.yaml, `otterdog-e2e accounts`, --browser) ---
+ACCOUNTS_STORE = "pass:bots/technology.csi/github.com"
+ADMIN_ACCOUNT = f"{ACCOUNTS_STORE}/otterdog-e2e-org2-admin"
+ADMIN_ACCOUNT_TOKEN = f"{ADMIN_ACCOUNT}-api-token"
 
 
-def test_setup_finds_the_token_of_the_account_entries(world: World, secret_store: dict[str, str]) -> None:
-    """E2E_ADMIN_PASS_DIR (written by `accounts`) and the instance's token in that directory: setup takes it without
-    a prompt, checks it like a typed one and writes its reference."""
-    world.write_env("org2", f"E2E_ADMIN_PASS_DIR={ADMIN_PASS_DIR}\n")
+def write_setup_config(world: World, store: str = ACCOUNTS_STORE) -> None:
+    """~/.config/otterdog-e2e/setup.yaml with an accounts store (the default entry and item names)."""
+    path = world.config_dir / "setup.yaml"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(f"accounts:\n  store: {store}\n")
+
+
+def test_setup_finds_the_token_of_the_accounts_store(world: World, secret_store: dict[str, str]) -> None:
+    """The role's token in the accounts store (written by `accounts`): setup takes it without a prompt, checks it like
+    a typed one and writes its pass reference."""
+    write_setup_config(world)
     secret_store[ADMIN_ACCOUNT_TOKEN] = TOKENS["admin"]
     script = Script(secrets=[])
     run_wizard(world, script)
     env = world.env()
     assert env["E2E_ADMIN_TOKEN"] == ADMIN_ACCOUNT_TOKEN and env["E2E_ADMIN_LOGIN"] == "e2e-admin"
-    assert f"admin: found in the machine account's pass entries at {ADMIN_ACCOUNT_TOKEN}" in script.output
+    assert f"admin: found in the accounts store at {ADMIN_ACCOUNT_TOKEN}" in script.output
     assert "PASSWORD_STORE_DIR" not in env  # set by neither the environment nor ~/.cbi/config
     assert_no_secret(script.output)
 
 
+def test_a_vault_accounts_store_gives_values_never_references(world: World, secret_store: dict[str, str]) -> None:
+    """A Vault policy grants a whole secret: the env file never refers to the accounts secret (it holds every password
+    and 2FA key); the token goes to the instance store when there is one, else as its value."""
+    store = "vault:otterdog-e2e/technology.csi/github"
+    write_setup_config(world, store)
+    secret_store[f"{store}/otterdog-e2e-org2-admin-api-token"] = TOKENS["admin"]
+    run_wizard(world, Script(secrets=[]))
+    assert world.env()["E2E_ADMIN_TOKEN"] == TOKENS["admin"]
+    secret_store[f"{store}/otterdog-e2e-org3-admin-api-token"] = TOKENS["admin"]
+    run_wizard(world, Script(secrets=[], answers=["https://vault.example.org"]), instance="org3", store="vault:e2e")
+    assert world.env("org3")["E2E_ADMIN_TOKEN"] == "vault:e2e/org3/admin/token"
+    assert secret_store["vault:e2e/org3/admin/token"] == TOKENS["admin"]
+
+
 def test_a_refused_account_token_is_not_written(world: World, secret_store: dict[str, str]) -> None:
     """The account's token fails the checks (another role's account): the prompt follows, nothing of it is written."""
-    world.write_env("org2", f"E2E_ADMIN_PASS_DIR={ADMIN_PASS_DIR}\n")
+    write_setup_config(world)
     secret_store[ADMIN_ACCOUNT_TOKEN] = TOKENS["author"]
     script = Script(secrets=[TOKENS["admin"]])
     run_wizard(world, script)
@@ -1426,12 +1448,18 @@ def test_the_cbi_password_store_is_written_with_the_references(world: World, sec
     home = Path(world.environ["HOME"])
     (home / ".cbi").mkdir(parents=True)
     (home / ".cbi" / "config").write_text('{"password-store": {"cbi-dir": "/srv/cbi-pass"}}')
-    world.write_env("org2", f"E2E_ADMIN_PASS_DIR={ADMIN_PASS_DIR}\n")
+    write_setup_config(world)
     secret_store[ADMIN_ACCOUNT_TOKEN] = TOKENS["admin"]
-    script = Script(secrets=[])
-    run_wizard(world, script)
+    run_wizard(world, Script(secrets=[]))
     assert world.env()["PASSWORD_STORE_DIR"] == "/srv/cbi-pass"
     assert world.env()["E2E_ADMIN_TOKEN"] == ADMIN_ACCOUNT_TOKEN
+
+
+def test_an_invalid_setup_configuration_stops_setup(world: World, secret_store: dict[str, str]) -> None:
+    """A setup.yaml whose accounts section is invalid is an error naming the file, not a silent prompt."""
+    write_setup_config(world, "bitwarden:x")
+    with pytest.raises(SetupError, match=r"setup\.yaml: accounts\.store must be pass:"):
+        run_wizard(world, Script(secrets=[TOKENS["admin"]]))
 
 
 def run_browser_wizard(
@@ -1457,56 +1485,71 @@ def run_browser_wizard(
 
 
 def test_setup_browser_sets_up_the_account_then_checks_its_token(world: World, secret_store: dict[str, str]) -> None:
-    """--browser: the pass directory asked once and written, the account set up in the browser, its token checked
-    and its reference written; skipped optional roles never open the browser."""
+    """--browser: the account of the accounts store set up in the browser, its token checked and its reference
+    written; skipped optional roles never open the browser."""
+    write_setup_config(world)
     calls: list[tuple[MachineAccount, str, bool]] = []
 
     def run_account(account: MachineAccount, *, org: str, rotate: bool, environ: Any) -> AccountResult:
         """Store the token like AccountSetup does."""
         calls.append((account, org, rotate))
-        secret_store[ADMIN_ACCOUNT_TOKEN] = TOKENS["admin"]
-        return AccountResult("admin", "e2e-admin", ADMIN_ACCOUNT_TOKEN, token_created=True, enrolled=True)
+        secret_store[account.ref("token")] = TOKENS["admin"]
+        return AccountResult("admin", "e2e-admin", account.ref("token"), token_created=True, enrolled=True)
 
-    script = Script(answers=[ADMIN_PASS_DIR])
+    script = Script()
     run_browser_wizard(world, script, run_account)
-    env = world.env()
-    assert calls == [(MachineAccount("admin", ADMIN_PASS_DIR), ORG, False)]
-    assert env["E2E_ADMIN_PASS_DIR"] == ADMIN_PASS_DIR and env["E2E_ADMIN_TOKEN"] == ADMIN_ACCOUNT_TOKEN
-    assert "otterdog-e2e accounts" not in script.output
+    assert [(account.role, account.instance, org, rotate) for account, org, rotate in calls] == [
+        ("admin", "org2", ORG, False)
+    ]
+    assert world.env()["E2E_ADMIN_TOKEN"] == ADMIN_ACCOUNT_TOKEN
     assert_no_secret(script.output)
+
+
+def test_setup_browser_needs_the_accounts_section(world: World, secret_store: dict[str, str]) -> None:
+    """--browser without an accounts store: the prompt follows, with the file to write."""
+
+    def run_account(account: MachineAccount, **kwargs: Any) -> AccountResult:
+        """Never called."""
+        raise AssertionError("no account without a store")
+
+    script = Script(secrets=[TOKENS["admin"]])
+    run_browser_wizard(world, script, run_account)
+    assert "admin: --browser needs the accounts section of" in script.output and "setup.yaml" in script.output
 
 
 def test_setup_browser_failure_falls_back_to_the_prompt(world: World, secret_store: dict[str, str]) -> None:
     """An AccountError of the browser is reported and the token prompt follows."""
+    write_setup_config(world)
 
     def run_account(account: MachineAccount, **kwargs: Any) -> AccountResult:
         """GitHub changed its page."""
         raise AccountError("2FA setup key: no such button")
 
-    script = Script(secrets=[TOKENS["admin"]], answers=[ADMIN_PASS_DIR])
+    script = Script(secrets=[TOKENS["admin"]])
     run_browser_wizard(world, script, run_account)
     assert "admin: browser: 2FA setup key: no such button" in script.output
     assert world.env()["E2E_ADMIN_TOKEN"] == TOKENS["admin"]
 
 
-def test_web_login_from_the_admin_account_entries(world: World, secret_store: dict[str, str]) -> None:
-    """Accepted (opt-in) question: E2E_ADMIN_PASSWORD and E2E_ADMIN_TOTP_SEED refer to the account's pass entries."""
-    world.write_env("org2", f"E2E_ADMIN_PASS_DIR={ADMIN_PASS_DIR}\n")
+def test_web_login_from_the_admin_account(world: World, secret_store: dict[str, str]) -> None:
+    """Accepted (opt-in) question: E2E_ADMIN_PASSWORD and E2E_ADMIN_TOTP_SEED refer to the account's items; declined
+    by default."""
+    write_setup_config(world)
     secret_store.update(
         {
             ADMIN_ACCOUNT_TOKEN: TOKENS["admin"],
-            f"pass:{ADMIN_PASS_DIR}/password": PASSWORD,
-            f"pass:{ADMIN_PASS_DIR}/2FA-seed": SEED,
+            f"{ADMIN_ACCOUNT}-password": PASSWORD,
+            f"{ADMIN_ACCOUNT}-2FA-seed": SEED,
         }
     )
-    script = Script(confirms={"Use the admin account's pass entries": True})
+    script = Script(confirms={"Use the admin account's": True})
     run_wizard(world, script)
     env = world.env()
-    assert env["E2E_ADMIN_PASSWORD"] == f"pass:{ADMIN_PASS_DIR}/password"
-    assert env["E2E_ADMIN_TOTP_SEED"] == f"pass:{ADMIN_PASS_DIR}/2FA-seed"
+    assert env["E2E_ADMIN_PASSWORD"] == f"{ADMIN_ACCOUNT}-password"
+    assert env["E2E_ADMIN_TOTP_SEED"] == f"{ADMIN_ACCOUNT}-2FA-seed"
+    org3 = f"{ACCOUNTS_STORE}/otterdog-e2e-org3-admin"
+    secret_store.update({f"{org3}-api-token": TOKENS["admin"], f"{org3}-password": PASSWORD, f"{org3}-2FA-seed": SEED})
     declined = Script()
-    world.write_env("org3", f"E2E_ADMIN_PASS_DIR={ADMIN_PASS_DIR}\n")
-    secret_store[f"pass:{ADMIN_PASS_DIR}/otterdog-e2e-org3-token"] = TOKENS["admin"]  # one token entry per instance
     run_wizard(world, declined, instance="org3")
     assert "E2E_ADMIN_PASSWORD" not in world.env("org3")  # the question defaults to no
     assert_no_secret(script.output + declined.output)

@@ -105,37 +105,64 @@ vault access, checks the value like a typed token and writes the reference, neve
 
 Instead of clicking each token yourself, `otterdog-e2e accounts` signs in to github.com as each machine account in a
 visible Firefox window, enrolls two-factor authentication (authenticator app) when the account has none and creates
-the role's **classic** token (its scopes, the note of the prefilled URL, an expiration of 7, 30, 60 or 90 days). It
-follows the scripts of [eclipse-cbi/ci-admin](https://github.com/eclipse-cbi/ci-admin/tree/master/github/playwright)
-and their `pass` layout: each account has a directory, e.g. `bots/<project>/github.com`, given once with `--pass-dir`
-and kept as `E2E_<ROLE>_PASS_DIR` in the env file:
+the role's **classic** token (its scopes, the note of the prefilled URL, an expiration of 7, 30, 60 or 90 days), in the
+way of the scripts of [eclipse-cbi/ci-admin](https://github.com/eclipse-cbi/ci-admin/tree/master/github/playwright).
 
-| Entry | Read or written |
+Where the secrets of the accounts are is the `accounts` section of the setup configuration file
+`~/.config/otterdog-e2e/setup.yaml` (another file: `E2E_SETUP_CONFIG` or `accounts --config`), one file for every
+instance:
+
+```yaml
+accounts:
+  # pass:<directory>, or vault:<secret path> (a KV v2 secret, mount E2E_VAULT_MOUNT, default secret)
+  store: pass:bots/technology.csi/github.com
+  # name of an entry (pass) or of a field of the secret (Vault): {instance}, {role} (config-reader), {item}
+  entry: otterdog-e2e-{instance}-{role}-{item}       # the default
+  items:                                             # the defaults: ci-admin's names
+    username: username
+    email: email
+    password: password
+    totp_seed: 2FA-seed
+    recovery_codes: 2FA-recovery-codes
+    token: api-token
+```
+
+The reference of an item is `<store>/<entry>`, the same names in both stores: with the file above the admin of
+instance `free` has `pass:bots/technology.csi/github.com/otterdog-e2e-free-admin-password`; with
+`store: vault:otterdog-e2e/technology.csi/github` the same name is a field of the secret
+`otterdog-e2e/technology.csi/github`. A `/` in `entry` makes directories (pass) or secrets (Vault), e.g.
+`{instance}-{role}/github.com/{item}` for one directory per account.
+
+| Item | Read or written |
 |---|---|
-| `<dir>/username` | read (else `E2E_<ROLE>_LOGIN`) |
-| `<dir>/password` | read; asked once (hidden) and stored when missing |
-| `<dir>/2FA-seed` | read for the sign-in codes; written by the enrollment (base32, as `oathtool -b` reads it) |
-| `<dir>/2FA-recovery-codes` | written by the enrollment, one code per line |
-| `<dir>/otterdog-e2e-<instance>-token` | the instance's classic token (an account may serve several instances) |
+| `username` | the sign-in name and the login GitHub must show; else `E2E_<ROLE>_LOGIN`; else the account signs in with its `email` and the login GitHub shows is used |
+| `password` | read; asked once (hidden) and stored when missing |
+| `totp_seed` | read for the sign-in codes; written by the enrollment (base32, as `oathtool -b` reads it) |
+| `recovery_codes` | written by the enrollment, one code per line |
+| `token` | the role's classic token, written as soon as GitHub shows it |
 
 ```bash
 poetry install -E browser                                   # once: Playwright (optional extra)
 PLAYWRIGHT_BROWSERS_PATH=~/.cache/otterdog-e2e/ms-playwright .venv/bin/python -m playwright install firefox
-.venv/bin/otterdog-e2e accounts --target free --pass-dir admin=bots/<project>/github.com \
-  --pass-dir author=bots/<project-author>/github.com          # --role, --rotate, --expires-in 90
-.venv/bin/otterdog-e2e setup --target free                  # finds the tokens in pass and checks them
+.venv/bin/otterdog-e2e accounts --target free               # every role whose account is in the store
+.venv/bin/otterdog-e2e accounts --target free --role admin --rotate --expires-in 90
+.venv/bin/otterdog-e2e setup --target free                  # finds the tokens in the store and checks them
 ```
 
 `pass` runs with `PASSWORD_STORE_DIR`, else the `password-store.cbi-dir` of ci-admin's `~/.cbi/config`; in that case
-`PASSWORD_STORE_DIR` is written to the env file too, so that runs, doctor and ci-sync resolve the same references.
-`accounts` never writes a token to the env file: setup finds `<dir>/otterdog-e2e-<instance>-token` without a prompt,
-applies its checks (kind and scopes, isolation, owner membership) and only then writes the `pass:` reference. A
-stored valid token and a stored key mean nothing to do (no window opens); `--rotate` regenerates the token.
+`PASSWORD_STORE_DIR` is written to the env file too, so that runs, doctor and ci-sync resolve the same references
+(export it, or write it to the env file yourself, when it comes from your shell). Vault uses `E2E_VAULT_ADDR` and
+your Vault login ([Secrets in an external vault](security.md#secrets-in-an-external-vault-t1-t3)).
 
-`setup --browser` does the same inline: for each role without a valid token it asks the pass directory (empty: the
-usual prompt) and sets the account up before its checks; a failure in the browser falls back to the prompt. With the
-admin account in pass, the web login step also offers its `password` and `2FA-seed` entries (default no, like the
-web-UI tier itself).
+`accounts` never writes a token to the env file: setup finds the role's token in the store without a prompt, applies
+its checks (kind and scopes, isolation, owner membership) and only then writes it: the `pass:` reference, or for a
+Vault store the **value** (into the instance store of `--store` when there is one), never a reference into the
+accounts secret, because a Vault policy grants a whole secret and that one holds every password and 2FA key. A stored
+valid token and a stored key mean nothing to do (no window opens); `--rotate` regenerates the token.
+
+`setup --browser` does the same inline: each role without a valid token is set up in the browser before its checks;
+without an accounts section, or when the browser fails, the usual prompt follows. With the admin account in the
+store, the web login step also offers its password and 2FA key (default no, like the web-UI tier itself).
 
 What stays yours: creating the accounts (GitHub's terms), a captcha, and the verification code GitHub e-mails when
 an account signs in from a new device (typed in the terminal, or in the window). When a page is not what the

@@ -132,7 +132,7 @@ organizations. The price: a leaked classic token of a shared account reaches bot
 Classic PATs are created in each account's settings (Developer settings, Personal access tokens, Tokens (classic));
 set an expiry and a reminder to rotate them. `setup` prints a creation URL per role with these scopes preselected
 (`https://github.com/settings/tokens/new?scopes=...`), see [onboarding.md](onboarding.md#tokens); `otterdog-e2e
-accounts` creates them in a browser window instead, enrolling 2FA when missing, with the secrets in `pass`
+accounts` creates them in a browser window instead, enrolling 2FA when missing, with the secrets in pass or Vault
 ([machine accounts in the browser](onboarding.md#machine-accounts-in-the-browser)).
 
 | Identity | Token | Scopes |

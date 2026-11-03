@@ -424,9 +424,12 @@ command.
 - **Machine accounts in the browser** (`otterdog-e2e accounts`, `setup --browser`, [onboarding.md](onboarding.md#machine-accounts-in-the-browser)):
   the only place the harness drives a browser itself, at onboarding on your machine (refused in CI), in a visible
   Firefox with one fresh context per account, signed out and dropped when the account is done. Each account's
-  password, 2FA key, recovery codes and tokens live in `pass` in the ci-admin layout, outside the instance's store
-  items that CI environments read; they are written through `vaults.store` (`pass insert` on standard input, read
-  back), never a shell or an argument, registered with the redactor at once (the login is not a secret) and never
+  password, 2FA key, recovery codes and token live in the accounts store of `~/.config/otterdog-e2e/setup.yaml`
+  (pass or Vault, ci-admin's names), outside the instance's store items that CI environments read; the env file
+  refers to a pass entry, but gets the value (or a copy in the instance store) of a Vault field, since a Vault policy
+  grants the whole secret, every bot's password and 2FA key included. They are written through `vaults.store`
+  (`pass insert` on standard input, or the Vault API with check-and-set, read back), never a shell or an argument,
+  registered with the redactor at once (the login and the e-mail are not secrets) and never
   printed, screenshotted or saved: the token is read from the page, not the clipboard, and the recovery codes
   download that GitHub requires stays in Playwright's temporary directory, deleted with the context. The writes come
   before the browser step they protect (key before its code, codes before their acknowledgement, token as soon as it

@@ -14,6 +14,7 @@ import functools
 import os
 import sys
 from collections.abc import Callable, Mapping
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import click
@@ -97,7 +98,22 @@ def _open_browser(stack: contextlib.ExitStack) -> PlaywrightBrowser:
     return stack.enter_context(browser)
 
 
-def _setup_accounts(instance: str, days: int, stack: contextlib.ExitStack) -> Callable[..., AccountResult]:
+class _LazyBrowser:
+    """The browser of ``accounts``: Firefox starts at the first account that needs it (none when all are complete)."""
+
+    def __init__(self, stack: contextlib.ExitStack) -> None:
+        """Bind the exit stack that closes Firefox."""
+        self.stack = stack
+        self.browser: PlaywrightBrowser | None = None
+
+    def session(self) -> contextlib.AbstractContextManager[Any]:
+        """A session of the browser, started first when needed."""
+        if self.browser is None:
+            self.browser = _open_browser(self.stack)
+        return self.browser.session()
+
+
+def _setup_accounts(days: int, stack: contextlib.ExitStack) -> Callable[..., AccountResult]:
     """``run_account`` of the setup wizard (--browser): AccountSetup.setup in one browser opened at first use."""
     from otterdog_e2e.onboard.accounts import AccountSetup
 
@@ -108,7 +124,7 @@ def _setup_accounts(instance: str, days: int, stack: contextlib.ExitStack) -> Ca
         if not opened:
             opened.append(_open_browser(stack))
         accounts = AccountSetup(
-            instance, org=org, environ=environ, browser=opened[0], io=_accounts_io(), days=days, rotate=rotate
+            org=org, environ=environ, browser=opened[0], io=_accounts_io(), days=days, rotate=rotate
         )
         return accounts.setup(account)
 
@@ -177,7 +193,7 @@ def _setup_manifest(port: int, open_url: Callable[[str], Any] | None) -> Callabl
     "--browser",
     is_flag=True,
     help="create the classic tokens (and enroll 2FA) of the machine accounts in a Firefox window, their secrets in "
-    "pass (ci-admin layout, E2E_<ROLE>_PASS_DIR), like `otterdog-e2e accounts`",
+    "the accounts store of ~/.config/otterdog-e2e/setup.yaml, like `otterdog-e2e accounts`",
 )
 @_handled
 def setup_command(
@@ -240,7 +256,7 @@ def setup_command(
             run_manifest=_setup_manifest(port, webbrowser.open if open_browser else None),
             bootstrap=functools.partial(_setup_bootstrap, pristine=pristine, wait_timeout=timeout),
             doctor=functools.partial(_setup_doctor, pristine=pristine),
-            run_account=_setup_accounts(options.instance, expires_in, stack) if browser else None,
+            run_account=_setup_accounts(expires_in, stack) if browser else None,
         )
         try:
             wizard.run()
@@ -255,17 +271,17 @@ def setup_command(
     "roles",
     multiple=True,
     type=click.Choice(ACCOUNT_ROLES),
-    help="role(s) to set up, repeatable (default: every role with a pass directory)",
+    help="role(s) to set up, repeatable (default: every role whose account is in the accounts store)",
 )
 @click.option(
-    "--pass-dir",
-    "pass_dirs",
-    multiple=True,
-    metavar="ROLE=DIR",
-    help="pass directory of a role's machine account in the ci-admin layout (e.g. admin=bots/<project>/github.com), "
-    "written as E2E_<ROLE>_PASS_DIR; repeatable",
+    "--config",
+    "config_path",
+    default=None,
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="setup configuration file with the accounts section (default: E2E_SETUP_CONFIG, else "
+    "~/.config/otterdog-e2e/setup.yaml)",
 )
-@click.option("--rotate", is_flag=True, help="create a new token even when the one in pass is valid")
+@click.option("--rotate", is_flag=True, help="create a new token even when the one in the store is valid")
 @click.option(
     "--expires-in",
     default="90",
@@ -275,22 +291,22 @@ def setup_command(
 )
 @_handled
 def accounts_command(
-    target: str, roles: tuple[str, ...], pass_dirs: tuple[str, ...], rotate: bool, expires_in: str
+    target: str, roles: tuple[str, ...], config_path: Path | None, rotate: bool, expires_in: str
 ) -> None:
     """Set up machine accounts in a Firefox window: sign in, enroll 2FA when missing, create the classic token.
 
-    Secrets in pass, ci-admin layout (<dir>/username, password, 2FA-seed, 2FA-recovery-codes,
-    otterdog-e2e-<instance>-token); PASSWORD_STORE_DIR, else ~/.cbi/config. The env file gets the pass directories
-    only: `otterdog-e2e setup` then finds each token in pass and checks it. Refused in CI.
+    Where their secrets are (store pass:<directory> or vault:<secret path>, entry name, item names) is the accounts
+    section of the setup configuration file (docs/onboarding.md). The env file gets nothing but PASSWORD_STORE_DIR
+    taken from ~/.cbi/config: `otterdog-e2e setup` then finds each token in the store and checks it. Refused in CI.
     """
     from otterdog_e2e.context import in_ci
     from otterdog_e2e.onboard.accounts import (
+        SETUP_CONFIG_ENV,
         AccountError,
         AccountSetup,
-        MachineAccount,
-        check_pass_dir,
-        pass_dir_env,
+        load_accounts_config,
         pass_environ,
+        setup_config_path,
     )
     from otterdog_e2e.onboard.envfile import instance_env_path, read_env_file, update_env_file
     from otterdog_e2e.onboard.wizard import ENV_FILE_HEADER
@@ -300,40 +316,38 @@ def accounts_command(
     instance = _instance(target)
     path = instance_env_path(instance, os.environ)
     values = read_env_file(path) if path.is_file() else {}
-    updates: dict[str, str | None] = {}
-    for item in pass_dirs:
-        role, sep, directory = item.partition("=")
-        if not sep or role.strip() not in ACCOUNT_ROLES:
-            raise click.UsageError(f"--pass-dir: expected ROLE=DIR with a role of setup, got {item!r}")
-        try:
-            updates[pass_dir_env(role.strip())] = check_pass_dir(directory)
-        except AccountError as exc:
-            raise click.UsageError(f"--pass-dir: {exc}") from None
-    environ = {**os.environ, **values, **{key: str(value) for key, value in updates.items()}}
-    store_dir = pass_environ(environ).get("PASSWORD_STORE_DIR")
-    if store_dir and not environ.get("PASSWORD_STORE_DIR"):
-        updates["PASSWORD_STORE_DIR"] = store_dir  # from ~/.cbi/config: runs must resolve the same references
-    if updates:
-        for name in update_env_file(path, updates, header=ENV_FILE_HEADER.format(instance=instance)):
-            _echo(f"saved {name} in {path}")
-        values = read_env_file(path)
-    selected = roles or tuple(role for role in ACCOUNT_ROLES if values.get(pass_dir_env(role)))
-    missing = [role for role in selected if not values.get(pass_dir_env(role))]
-    if not selected or missing:
+    environ = {**os.environ, **values, **({SETUP_CONFIG_ENV: str(config_path)} if config_path else {})}
+    try:
+        config = load_accounts_config(environ)
+    except AccountError as exc:
+        raise click.ClickException(str(exc)) from None
+    if config is None:
         raise click.UsageError(
-            f"no pass directory for {', '.join(missing) or 'any role'}: --pass-dir <role>=bots/<project>/github.com"
+            f"no accounts section in {setup_config_path(environ)}: add one (store, entry, items: docs/onboarding.md)"
         )
-    accounts = [MachineAccount(role, values[pass_dir_env(role)]) for role in selected]
+    store_dir = pass_environ(environ).get("PASSWORD_STORE_DIR")
+    if config.provider == "pass" and store_dir and not environ.get("PASSWORD_STORE_DIR"):
+        header = ENV_FILE_HEADER.format(instance=instance)
+        for name in update_env_file(path, {"PASSWORD_STORE_DIR": store_dir}, header=header):
+            _echo(f"saved {name} in {path} (from ~/.cbi/config: runs resolve the same pass references)")
+        environ["PASSWORD_STORE_DIR"] = store_dir
     with contextlib.ExitStack() as stack:
         setup = AccountSetup(
-            instance,
             org=values.get("E2E_ORG"),
-            environ={**os.environ, **values},
-            browser=_open_browser(stack),
+            environ=environ,
+            browser=_LazyBrowser(stack),
             io=_accounts_io(),
             days=int(expires_in),
             rotate=rotate,
         )
+        accounts = [config.account(instance, role) for role in roles or ACCOUNT_ROLES]
+        if not roles:
+            accounts = [account for account in accounts if setup.exists(account)]
+            if not accounts:
+                raise click.UsageError(
+                    f"no account of instance {instance} in {config.store} (e.g. "
+                    f"{config.account(instance, 'admin').ref('password')}): --role to set one up anyway"
+                )
         try:
             for result in setup.run(accounts):
                 state = "created" if result.token_created else "kept"
@@ -341,7 +355,7 @@ def accounts_command(
                 _echo(f"{result.role}: {result.login}: token {state} at {result.token_ref}{enrolled}")
         except AccountError as exc:
             raise click.ClickException(str(exc)) from None
-    _echo(f"next: otterdog-e2e setup --target {instance} (finds the tokens in pass and checks them)")
+    _echo(f"next: otterdog-e2e setup --target {instance} (finds the tokens in the accounts store and checks them)")
 
 
 @main.command("ci-sync")

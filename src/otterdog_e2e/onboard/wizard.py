@@ -19,10 +19,11 @@ run keeps its progress and the next run continues where it stopped:
    run setup again), and only then shows the token URL. When the role then ends without a token after a token of
    ANOTHER account was refused, the invitation this run created is cancelled while still pending (``DELETE
    /orgs/{org}/memberships/{login}``, admin token) and an accepted one is reported (never removed). Classic tokens are
-   checked before any membership (bootstrap invites and publicizes later). A role whose machine account has a pass directory (E2E_<ROLE>_PASS_DIR, written by ``otterdog-e2e accounts``)
-   and the instance's token there (``<dir>/otterdog-e2e-<instance>-token``) takes it without a prompt, through the
-   same checks; with --browser, a role without a valid token is set up in the browser first (onboard/accounts.py,
-   ``run_account``), the prompt following when that fails;
+   checked before any membership (bootstrap invites and publicizes later). A role whose token is in the accounts
+   store (the accounts section of ~/.config/otterdog-e2e/setup.yaml, written by ``otterdog-e2e accounts``) takes it
+   without a prompt, through the same checks (the env file gets its pass reference, or for a Vault store its value:
+   keeps_account_references); with --browser, a role without a valid token is set up in the browser first
+   (onboard/accounts.py, ``run_account``), the prompt following when that fails;
 3. web-UI login of the admin account (optional): password and TOTP setup key (hidden, settings.normalize_totp_seed),
    or the admin account's pass entries (opt-in);
 4. GitHub App (optional; the org description must carry the safety marker, as for ``app-manifest``): the manifest flow
@@ -57,6 +58,7 @@ included (the key file may then be deleted); the end lists the Vault policies of
 
 from __future__ import annotations
 
+import functools
 import re
 import time
 from collections.abc import Callable, Iterable, Mapping
@@ -70,15 +72,12 @@ import yaml
 from otterdog_e2e.context import in_ci, installation_problems
 from otterdog_e2e.github.http import GitHubError
 from otterdog_e2e.onboard.accounts import (
-    PASSWORD,
-    SEED,
     AccountError,
     AccountResult,
-    MachineAccount,
-    check_pass_dir,
-    pass_dir_env,
+    AccountsConfig,
+    load_accounts_config,
     pass_environ,
-    token_entry,
+    setup_config_path,
 )
 from otterdog_e2e.onboard.envfile import (
     check_instance_name,
@@ -500,8 +499,8 @@ class SetupWizard:
                 return
         found = None if stored or rotate else self.from_account(role)
         if found is not None:
-            self.echo(f"{role}: found in the machine account's pass entries at {found}")
-            if self.keep_stored(role, found, org):
+            self.echo(f"{role}: found in the accounts store at {found}")
+            if self.keep_stored(role, found, org, keep_reference=self.keeps_account_references):
                 return
         # the oracle is usually left out (the admin token serves as oracle): only that question defaults to no
         if (
@@ -522,9 +521,9 @@ class SetupWizard:
         if stored and self.io.confirm(f"Remove the unusable {spec.token_env} from {self.env_path}?", True):
             self.write({spec.token_env: None, spec.login_env: None, spec.type_env: None})
 
-    def keep_stored(self, role: str, stored: str, org: OrgInfo) -> bool:
+    def keep_stored(self, role: str, stored: str, org: OrgInfo, *, keep_reference: bool = True) -> bool:
         """Validate the stored token (a vault reference resolved first); True (and its login/type refreshed) when it
-        passes."""
+        passes. ``keep_reference`` False: the value is recorded, not the reference (a Vault accounts store)."""
         spec = ROLE_TOKENS[role]
         try:
             token = self.reveal(stored, spec.token_env)
@@ -535,7 +534,8 @@ class SetupWizard:
         self.echo(
             f"{role}: keeping the token of {checked.login} ({TOKEN_KIND_LABELS[checked.kind]}, {_expiry(checked)})"
         )
-        self.record(role, token, checked, org, written=stored if is_reference(stored) else None)
+        written = stored if keep_reference and is_reference(stored) else None
+        self.record(role, token, checked, org, written=written)
         return True
 
     def provider_env(self) -> dict[str, str]:
@@ -607,25 +607,39 @@ class SetupWizard:
         """What the env file gets for a plain secret: its store reference (written there) with a store, else it."""
         return self.into_store(name, value) if self.store and not is_reference(value) else value
 
-    # --- machine accounts in pass (onboard/accounts.py) ---------------------------------------------------------
+    # --- machine accounts (onboard/accounts.py: the accounts section of the setup configuration file) -------------
+    @functools.cached_property
+    def accounts_config(self) -> AccountsConfig | None:
+        """The accounts section of ~/.config/otterdog-e2e/setup.yaml (E2E_SETUP_CONFIG), None without it."""
+        try:
+            return load_accounts_config(self.environ)
+        except AccountError as exc:
+            raise SetupError(str(exc)) from None
+
+    @property
+    def keeps_account_references(self) -> bool:
+        """Whether the env file may refer to the accounts store: pass yes; Vault no, since a Vault policy grants a
+        whole secret, and the one of the accounts holds every password and 2FA key: a CI environment reading a token
+        there would read them all. Values from a Vault accounts store go to the instance store, else as values."""
+        return self.accounts_config is not None and self.accounts_config.provider == "pass"
+
     def pass_env(self) -> dict[str, str]:
         """provider_env() with the PASSWORD_STORE_DIR of ci-admin's ~/.cbi/config when neither sets one."""
         return pass_environ(self.provider_env())
 
     def keep_store_dir(self) -> None:
-        """Write the PASSWORD_STORE_DIR the account entries were read with (from ~/.cbi/config), so that runs, doctor
+        """Write the PASSWORD_STORE_DIR a pass accounts store was read with (from ~/.cbi/config), so that runs, doctor
         and ci-sync resolve the same pass references."""
         directory = self.pass_env().get("PASSWORD_STORE_DIR")
-        if directory and not self.provider_env().get("PASSWORD_STORE_DIR"):
+        if self.keeps_account_references and directory and not self.provider_env().get("PASSWORD_STORE_DIR"):
             self.write({"PASSWORD_STORE_DIR": directory})
             self.echo(f"PASSWORD_STORE_DIR={directory} (from ~/.cbi/config) written: the pass references use it")
 
     def account_ref(self, role: str, item: str) -> str | None:
-        """``pass:<dir>/<item>`` of the role's account (E2E_<ROLE>_PASS_DIR) when it can be read, else None."""
-        directory = self.values.get(pass_dir_env(role))
-        if not directory:
+        """The reference of an item of the role's account in the accounts store when it can be read, else None."""
+        if self.accounts_config is None:
             return None
-        reference = MachineAccount(role, directory).ref(item)
+        reference = self.accounts_config.account(self.instance, role).ref(item)
         try:
             resolve(reference, self.pass_env())
         except VaultError:
@@ -634,33 +648,20 @@ class SetupWizard:
         return reference
 
     def from_account(self, role: str) -> str | None:
-        """The reference of the instance's token in the role's account entries (written by ``accounts``)."""
-        return self.account_ref(role, token_entry(self.instance))
+        """The reference of the role's token in the accounts store (written by ``accounts``)."""
+        return self.account_ref(role, "token")
 
     def browser_token(self, role: str, org: OrgInfo) -> bool:
-        """--browser: set up the role's machine account in the browser (pass directory asked once and written), then
-        check its token like a typed one; False (the prompt follows) when it is skipped or fails."""
+        """--browser: set up the role's machine account in the browser, then check its token like a typed one; False
+        (the prompt follows) without an accounts store or when the browser fails."""
         if self.run_account is None or ROLE_TOKENS[role].classic_scopes is None:
             return False
-        env = pass_dir_env(role)
-        directory = self.values.get(env)
-        if not directory:
-            answer = self.io.prompt(
-                f"{role}: pass directory of the machine account (ci-admin layout, e.g. bots/<project>/github.com; "
-                "empty: no browser)",
-                "",
-            ).strip()
-            if not answer:
-                return False
-            try:
-                directory = check_pass_dir(answer)
-            except AccountError as exc:
-                self.echo(f"{role}: {exc}")
-                return False
-            self.write({env: directory})
+        if self.accounts_config is None:
+            self.echo(f"{role}: --browser needs the accounts section of {setup_config_path(self.environ)}")
+            return False
         try:
             result = self.run_account(
-                MachineAccount(role, directory),
+                self.accounts_config.account(self.instance, role),
                 org=org.login,
                 rotate=role in self.options.rotate,
                 environ=self.provider_env(),
@@ -669,7 +670,7 @@ class SetupWizard:
             self.echo(f"{role}: browser: {exc}")
             return False
         self.keep_store_dir()
-        return self.keep_stored(role, result.token_ref, org)
+        return self.keep_stored(role, result.token_ref, org, keep_reference=self.keeps_account_references)
 
     def typed_secret(self, label: str, answer: str) -> tuple[str, str | None]:
         """(value, reference) of a typed secret: a vault reference resolved (SetupError when it cannot be read)."""
@@ -1191,22 +1192,31 @@ class SetupWizard:
         )
 
     def account_web_login(self, password_env: str, seed_env: str) -> bool:
-        """Offer the admin account's pass entries (password, 2FA-seed) as the web-UI login (opt-in, default no, like
-        the web step itself); True when their references were written."""
-        refs = {password_env: self.account_ref("admin", PASSWORD), seed_env: self.account_ref("admin", SEED)}
+        """Offer the admin account's password and 2FA key of the accounts store as the web-UI login (opt-in, default
+        no, like the web step itself); True when written: their references (pass), else their values, into the instance
+        store when there is one (keeps_account_references)."""
+        refs = {password_env: self.account_ref("admin", "password"), seed_env: self.account_ref("admin", "totp_seed")}
         if not all(refs.values()) or not self.io.confirm(
-            f"Use the admin account's pass entries {refs[password_env]} and {refs[seed_env]} as the web-UI login? "
-            "(optional: the web-UI tier logs in to github.com as the admin, trusted SUTs only)",
+            f"Use the admin account's {refs[password_env]} and {refs[seed_env]} as the web-UI login? (optional: the "
+            "web-UI tier logs in to github.com as the admin, trusted SUTs only)",
             False,
         ):
             return False
         try:
-            normalize_totp_seed(resolve(str(refs[seed_env]), self.pass_env()), where=seed_env)
+            values = {name: resolve(str(reference), self.pass_env()).strip() for name, reference in refs.items()}
+            REDACTOR.add(*values.values())
+            values[seed_env] = normalize_totp_seed(values[seed_env], where=seed_env)
         except (VaultError, WebCredentialsError) as exc:
             self.echo(f"web-UI login: {exc}")
             return False
-        self.write({name: str(reference) for name, reference in refs.items()})
-        self.echo(f"web-UI login: {password_env} and {seed_env} refer to the admin account's pass entries")
+        if self.keeps_account_references:
+            self.write({name: str(reference) for name, reference in refs.items()})
+            self.echo(f"web-UI login: {password_env} and {seed_env} refer to the admin account in the accounts store")
+        else:
+            self.write({name: self.stored_or_plain(name, value) for name, value in values.items()})
+            self.echo(
+                f"web-UI login: {password_env} and {seed_env} copied from the admin account in the accounts store"
+            )
         return True
 
     def read_seed(self, seed_env: str) -> str | None:

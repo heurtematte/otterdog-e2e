@@ -13,8 +13,8 @@ its pinned id, the logins and tokens of the machine accounts, the GitHub App cre
 * ``cisync``   - ``CiSync``: the GitHub environments, variables and secrets of an instance, set through the operator's
   own ``gh`` CLI (secrets on stdin only), dry run by default;
 * ``accounts`` - ``AccountSetup``: the machine accounts in a browser (sign-in, 2FA enrollment, classic token) with
-  their secrets in pass, ci-admin layout (``otterdog-e2e accounts``, ``setup --browser``); ``browser`` its Playwright
-  side (optional extra ``browser``).
+  their secrets in the accounts store of setup.yaml, pass or Vault (``otterdog-e2e accounts``, ``setup --browser``);
+  ``browser`` its Playwright side (optional extra ``browser``).
 
 What GitHub does not let a program do through its API (accounts, 2FA, token creation, org creation, App registration
 and installation clicks, invitations, approvals) stays manual, except 2FA and classic tokens in the browser: the
