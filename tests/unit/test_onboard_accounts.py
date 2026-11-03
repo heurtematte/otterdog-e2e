@@ -20,12 +20,14 @@ from otterdog_e2e.onboard.accounts import (
     AccountsConfig,
     AccountSetup,
     AccountsIO,
+    SignIn,
     cbi_password_store_dir,
     load_accounts_config,
     parse_accounts_config,
     pass_environ,
     setup_config_path,
     totp_code,
+    web_login,
 )
 from otterdog_e2e.testing.fakes import FakeGitHubHttp
 from otterdog_e2e.vaults import VaultError, parse
@@ -97,6 +99,17 @@ def test_invalid_accounts_sections(data: Any, message: str) -> None:
     with pytest.raises(AccountError, match=r"^setup\.yaml: ") as caught:
         parse_accounts_config(data, "setup.yaml")
     assert message in str(caught.value)
+
+
+def test_one_set_of_accounts_for_every_instance() -> None:
+    """accounts.set: every instance uses the accounts of that set (the organizations of the shards share them)."""
+    config = parse_accounts_config({"store": STORE, "set": "free"}, "setup.yaml")
+    for instance in ("repos", "webapp", "enterprise"):
+        assert config.account(instance, "admin").ref("password") == f"{BASE}-password"
+        assert config.account(instance, "admin").label == "otterdog-e2e-free-admin"
+    for bad in ("", 3, "a/../b"):
+        with pytest.raises(AccountError, match=r"accounts\.set"):
+            parse_accounts_config({"store": STORE, "set": bad}, "setup.yaml")
 
 
 def test_the_setup_configuration_file(tmp_path: Path) -> None:
@@ -183,6 +196,10 @@ class FakeSession:
         """A new token value."""
         self.events.append(("token", note, url, days))
         return NEW_TOKEN
+
+    def open(self, url: str) -> None:
+        """Show a page."""
+        self.events.append(("open", url))
 
 
 class FakeBrowser:
@@ -475,18 +492,150 @@ def test_accounts_command_is_refused_in_ci(cli_env: dict[str, str | None]) -> No
     assert result.exit_code == 1 and "refused when CI is set" in result.output
 
 
+# --- web-login ------------------------------------------------------------------------------------------------------
+def test_sign_in_reads_the_store_and_asks_nothing(world: World) -> None:
+    """The store names the account and holds its password and 2FA key; nothing is asked nor written."""
+    world.entries[f"{BASE}-2FA-seed"] = SHOWN_SEED
+    setup, browser = world.setup(FakeSession(world.events))
+    account = setup.sign_in(ACCOUNT)
+    assert (account.role, account.name, account.login, account.password, account.seed) == (
+        "admin",
+        EMAIL,
+        None,
+        PASSWORD,
+        SEED,
+    )
+    assert account.source == f"{BASE}-password" and PASSWORD not in repr(account) and browser.opened == 0
+    del world.entries[f"{BASE}-password"]
+    with pytest.raises(AccountError, match="no password at"):
+        setup.sign_in(ACCOUNT)
+    assert not world.events
+
+
+def test_web_login_signs_in_shows_the_page_and_waits(world: World) -> None:
+    """The 2FA code comes from the key, else it is typed; the page is shown until the operator answers; the login
+    GitHub shows must be the account's."""
+    session = FakeSession(world.events, enabled=True, asked_login_code=True)
+    io = AccountsIO(echo=world.echoed.append, secret_prompt=world.secret_prompt, prompt=lambda text: "123456")
+    waited: list[str] = []
+    account = SignIn("admin", EMAIL, LOGIN, PASSWORD, SEED, f"{BASE}-password")
+    assert web_login(FakeBrowser(session), io, account, "https://github.com/e2e-test-org", until=waited.append) == LOGIN
+    assert [event[0] for event in world.events] == ["login", "login code", "open"]
+    assert world.events[1][1].isdigit() and world.events[2] == ("open", "https://github.com/e2e-test-org")
+    assert len(waited) == 1 and "press Enter to sign out and close the window" in waited[0]
+    assert_no_secret(world.output)
+    world.events.clear()
+    typed = SignIn("account", LOGIN, LOGIN, PASSWORD, None, "the terminal")
+    web_login(FakeBrowser(session), io, typed, "https://github.com/", until=waited.append)
+    assert world.events[1] == ("login code", "123456")
+    with pytest.raises(AccountError, match=f"signed in as {LOGIN}, but the account is other"):
+        web_login(FakeBrowser(session), io, SignIn("account", "other", "other", PASSWORD, None, "x"), "u", until=print)
+
+
+def invoke_web_login(env: dict[str, str | None], *args: str, input: str = "\n") -> Any:
+    """Run ``otterdog-e2e web-login`` (``input``: the terminal's answers)."""
+    from click.testing import CliRunner
+
+    from otterdog_e2e import cli
+
+    return CliRunner().invoke(cli.main, ["web-login", *args], env=env, input=input)
+
+
+def test_web_login_command_with_an_instance(world: World, cli_env: dict[str, str | None]) -> None:
+    """--target: the account of the instance in the accounts store, on the page of --url, then signed out."""
+    result = invoke_web_login(cli_env, "--target", "free", "--url", "/orgs/e2e-test-org/settings")
+    assert result.exit_code == 0, result.output
+    assert world.events == [("login", EMAIL, PASSWORD), ("open", "https://github.com/orgs/e2e-test-org/settings")]
+    assert f"admin: signing in as {EMAIL} (password from {BASE}-password)" in result.output
+    assert f"admin: {LOGIN} signed out, window closed" in result.output
+    assert_no_secret(result.output)
+    result = invoke_web_login(cli_env, "--target", "free", "--role", "author")
+    assert result.exit_code == 1 and "author: neither" in result.output
+
+
+def test_web_login_command_admin_from_the_env_file(
+    world: World, cli_env: dict[str, str | None], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The admin signs in with the web credentials of the env file (resolved as runs resolve them), on the page of the
+    organization; the accounts store is not read."""
+    from otterdog_e2e import settings as settings_module
+
+    env_file = Path(str(cli_env["HOME"])) / ".config" / "otterdog-e2e" / "free.env"
+    env_file.write_text("E2E_ORG=e2e-test-org\nE2E_ADMIN_PASSWORD=pass:web/password\n")
+    web = settings_module.WebCredentials("admin", LOGIN, LOGIN, "web password", SEED)
+    monkeypatch.setattr(settings_module, "load_target", lambda name, settings, environ: object())
+    monkeypatch.setattr(settings_module, "resolve_web_credentials", lambda target, environ: web)
+    monkeypatch.setattr(settings_module, "web_credential_env_names", lambda target: {"password_env": "E2E_X_PASSWORD"})
+    world.entries.clear()
+    result = invoke_web_login(cli_env, "--target", "free")
+    assert result.exit_code == 0, result.output
+    assert world.events == [("login", LOGIN, "web password"), ("open", "https://github.com/e2e-test-org")]
+    assert f"admin: signing in as {LOGIN} (password from E2E_X_PASSWORD)" in result.output
+
+
+def test_web_login_command_finds_the_account_in_the_store(world: World, cli_env: dict[str, str | None]) -> None:
+    """ACCOUNT (or --login) names the entries of the accounts store: its e-mail and password sign it in, nothing is
+    typed but the Enter that closes the window."""
+    for args in (["otterdog-e2e-free-admin"], ["--login", "otterdog-e2e-free-admin"]):
+        world.events.clear()
+        result = invoke_web_login(cli_env, *args)
+        assert result.exit_code == 0, result.output
+        assert world.events == [("login", EMAIL, PASSWORD), ("open", "https://github.com/")]
+        assert f"account: signing in as {EMAIL} (password from {BASE}-password)" in result.output
+        assert_no_secret(result.output)
+
+
+def test_web_login_command_without_an_instance(world: World, cli_env: dict[str, str | None]) -> None:
+    """An account the store does not know is typed: its login (ACCOUNT or asked), its hidden password."""
+    result = invoke_web_login(cli_env, LOGIN, input=f"{PASSWORD}\n\n")
+    assert result.exit_code == 0, result.output
+    assert world.events == [("login", LOGIN, PASSWORD), ("open", "https://github.com/")]
+    assert f"no password of {LOGIN} at {STORE}/{LOGIN}-password: it is typed" in result.output
+    assert PASSWORD not in result.output
+    world.events.clear()
+    result = invoke_web_login(cli_env, input=f"{LOGIN}\n{PASSWORD}\n\n")
+    assert result.exit_code == 0, result.output
+    assert world.events[0] == ("login", LOGIN, PASSWORD)
+
+
+@pytest.mark.parametrize(
+    ("args", "message"),
+    [
+        (["--role", "author"], "--role names an account of an instance: pass --target"),
+        (["--target", "free", "x"], "ACCOUNT 'x' or --target"),
+        (["x", "--login", "y"], "ACCOUNT 'x' or --login 'y': one account"),
+        (["--login", "x", "--url", "https://example.org/"], "a page of github.com"),
+    ],
+)
+def test_web_login_command_usage(cli_env: dict[str, str | None], args: list[str], message: str) -> None:
+    """The instance names its accounts, an account needs no --role, one account at a time, the page is on
+    github.com."""
+    result = invoke_web_login(cli_env, *args, input=f"{PASSWORD}\n\n")
+    assert result.exit_code == 2 and message in result.output
+
+
+def test_web_login_command_is_refused_in_ci(cli_env: dict[str, str | None]) -> None:
+    """A visible browser has no place in CI."""
+    result = invoke_web_login({**cli_env, "CI": "true"}, "--login", LOGIN)
+    assert result.exit_code == 1 and "refused when CI is set" in result.output
+
+
 # --- onboard.browser without Playwright -----------------------------------------------------------------------------
 def test_browser_without_playwright_names_the_install(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """The browser module imports without Playwright (an optional extra); opening the browser then fails with the
-    install commands, Firefox going to the web-UI tier's browsers path."""
+    install commands, Firefox going to PLAYWRIGHT_BROWSERS_PATH when it is set, else to Playwright's own cache."""
     import sys
 
     from otterdog_e2e.onboard.browser import CLASSIC_TOKEN_RE, PlaywrightBrowser
 
     monkeypatch.setitem(sys.modules, "playwright", None)
     monkeypatch.setitem(sys.modules, "playwright.sync_api", None)
-    browser = PlaywrightBrowser(browsers_path=tmp_path / "ms-playwright", pause=lambda message: None)
+    monkeypatch.delenv("PLAYWRIGHT_BROWSERS_PATH", raising=False)
     with pytest.raises(AccountError, match="Playwright is not installed: install the browser extra") as caught:
+        PlaywrightBrowser(pause=lambda message: None).__enter__()
+    assert "make init" in str(caught.value) and "PLAYWRIGHT_BROWSERS_PATH" not in str(caught.value)
+    browser = PlaywrightBrowser(browsers_path=tmp_path / "ms-playwright", pause=lambda message: None)
+    with pytest.raises(AccountError, match="Playwright is not installed") as caught:
         browser.__enter__()
-    assert f"PLAYWRIGHT_BROWSERS_PATH={tmp_path / 'ms-playwright'}" in str(caught.value)
+    assert f"PLAYWRIGHT_BROWSERS_PATH={tmp_path / 'ms-playwright'} .venv/bin/python" in str(caught.value)
     assert CLASSIC_TOKEN_RE.fullmatch(NEW_TOKEN) and not CLASSIC_TOKEN_RE.fullmatch("github_pat_" + "x" * 30)

@@ -25,6 +25,7 @@ from otterdog_e2e.redact import REDACTOR
 if TYPE_CHECKING:
     from otterdog_e2e.batch import InstanceInfo
     from otterdog_e2e.redact import Redactor
+    from otterdog_e2e.shards import ShardLoad
 
 logger = logging.getLogger(__name__)
 
@@ -45,17 +46,19 @@ def report(directory: str) -> None:
 
 
 def render_instances(instances: Sequence[InstanceInfo]) -> str:
-    """Table of ``otterdog-e2e targets``: instance, profile, org and env file, a ``problem:`` line under the instances
-    whose target cannot be loaded."""
+    """Table of ``otterdog-e2e targets``: instance, profile, shard, org and env file, a ``problem:`` line under the
+    instances whose target cannot be loaded."""
     if not instances:
         return f"no target instance: no {CONFIG_HOME}/<instance>.env file and no targets/<profile>.yaml"
-    header = ("INSTANCE", "PROFILE", "ORG", "ENV FILE")
-    rows = [(info.name, info.profile or "-", info.org or "-", info.env_file or "-") for info in instances]
-    widths = [max(len(row[index]) for row in (header, *rows)) for index in range(3)]
+    header = ("INSTANCE", "PROFILE", "SHARD", "ORG", "ENV FILE")
+    rows = [
+        (info.name, info.profile or "-", info.shard or "-", info.org or "-", info.env_file or "-") for info in instances
+    ]
+    widths = [max(len(row[index]) for row in (header, *rows)) for index in range(4)]
     lines = []
     for row, info in zip((header, *rows), (None, *instances), strict=True):
         lines.append(
-            "  ".join(value.ljust(width) for value, width in zip(row[:3], widths, strict=True)) + f"  {row[3]}"
+            "  ".join(value.ljust(width) for value, width in zip(row[:4], widths, strict=True)) + f"  {row[4]}"
         )
         if info is not None and info.problem:
             lines.append(f"  problem: {info.problem}")
@@ -75,6 +78,79 @@ def targets_command(as_json: bool) -> None:
         _echo_json([dataclasses.asdict(info) for info in instances])
     else:
         _echo(render_instances(instances))
+
+
+def render_shards(loads: Sequence[ShardLoad], instances: Mapping[str, list[str]]) -> str:
+    """Table of ``otterdog-e2e shards``: per shard its profile, YAML scenarios and steps, live test functions, the
+    instances that select it, then what it runs."""
+    header = ("SHARD", "PROFILE", "SCENARIOS", "STEPS", "TESTS", "INSTANCES")
+    rows = [
+        (
+            load.shard.name + (" (default)" if load.shard.default else ""),
+            load.shard.profile,
+            str(load.scenarios),
+            str(load.steps),
+            str(load.tests),
+            ", ".join(instances.get(load.shard.name, [])) or "-",
+        )
+        for load in loads
+    ]
+    widths = [max(len(row[index]) for row in (header, *rows)) for index in range(len(header))]
+    lines = [
+        "  ".join(value.ljust(width) for value, width in zip(row, widths, strict=True)).rstrip()
+        for row in (header, *rows)
+    ]
+    for load in loads:
+        lines += ["", f"{load.shard.name}: {load.shard.description}"]
+        domains = sorted({item.facts.domain for item in load.items if item.facts.domain})
+        modules = sorted(item.name for item in load.items if item.tests)
+        if domains:
+            lines.append(f"  scenario domains: {', '.join(domains)}")
+        if modules:
+            lines.append(f"  test modules: {', '.join(modules)}")
+    return "\n".join(lines)
+
+
+@main.command("shards")
+@click.option("--json", "as_json", is_flag=True, help="print the shards as JSON")
+@_handled
+def shards_command(as_json: bool) -> None:
+    """Show the shards of scenarios/shards.yaml: which live items each test organization runs (the YAML scenarios and
+    the live test modules), their sizes, and the instances whose env file selects each one (E2E_SHARD); read-only."""
+    from otterdog_e2e.batch import list_instances
+    from otterdog_e2e.shards import SHARDS_FILE, ShardError, load_shards, shard_loads, static_items
+
+    settings = _settings()
+    try:
+        shards = load_shards(settings.project_root)
+    except ShardError as exc:
+        raise click.ClickException(str(exc)) from None
+    if shards is None:
+        raise click.ClickException(f"no {SHARDS_FILE} in {settings.project_root}")
+    loads = shard_loads(shards, static_items(settings.project_root))
+    instances: dict[str, list[str]] = {}
+    for info in list_instances(settings, os.environ):
+        if info.shard:
+            instances.setdefault(info.shard, []).append(info.name)
+    if as_json:
+        _echo_json(
+            [
+                {
+                    "shard": load.shard.name,
+                    "profile": load.shard.profile,
+                    "default": load.shard.default,
+                    "description": load.shard.description,
+                    "instances": instances.get(load.shard.name, []),
+                    "scenarios": sorted(item.name for item in load.items if item.steps),
+                    "steps": load.steps,
+                    "modules": sorted(item.name for item in load.items if item.tests),
+                    "tests": load.tests,
+                }
+                for load in loads
+            ]
+        )
+    else:
+        _echo(render_shards(loads, instances))
 
 
 def register_environment_secrets(environ: Mapping[str, str], redactor: Redactor | None = None) -> int:

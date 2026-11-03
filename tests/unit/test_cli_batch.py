@@ -497,14 +497,16 @@ def test_single_target_commands_refuse_lists(world: Batch, args: list[str]) -> N
 
 # --- targets -------------------------------------------------------------------------------------------------------------
 def test_targets_lists_instances_and_profiles(world: Batch) -> None:
-    """Instance, profile, org and env file of every instance env file and profile; problems below; --json."""
+    """Instance, profile, shard, org and env file of every instance env file and profile; problems below; --json."""
+    with (world.config / "acme.env").open("a") as env:
+        env.write("E2E_SHARD=repos\n")
     result = invoke("targets")
     assert result.exit_code == 0, result.output
     lines = result.stdout.splitlines()
-    assert lines[0].split() == ["INSTANCE", "PROFILE", "ORG", "ENV", "FILE"]
-    assert lines[1].split() == ["acme", "free", "acme-e2e", str(world.config / "acme.env")]
-    assert lines[3].split() == ["free", "free", "free-e2e", str(world.config / "free.env")]
-    assert lines[4].split() == ["team", "team", "-", "-"] and lines[5].startswith("  problem: ")
+    assert lines[0].split() == ["INSTANCE", "PROFILE", "SHARD", "ORG", "ENV", "FILE"]
+    assert lines[1].split() == ["acme", "free", "repos", "acme-e2e", str(world.config / "acme.env")]
+    assert lines[3].split() == ["free", "free", "-", "free-e2e", str(world.config / "free.env")]
+    assert lines[4].split() == ["team", "team", "-", "-", "-"] and lines[5].startswith("  problem: ")
     data = json.loads(invoke("targets", "--json").stdout)
     assert [entry["name"] for entry in data] == ["acme", "beta", "free", "team"]
     assert data[1] == {
@@ -513,6 +515,7 @@ def test_targets_lists_instances_and_profiles(world: Batch) -> None:
         "org": "beta-e2e",
         "env_file": str(world.config / "beta.env"),
         "problem": None,
+        "shard": None,
     }
     assert TOKEN not in result.output
 

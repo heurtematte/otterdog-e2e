@@ -60,6 +60,17 @@ class LiveFacet(ContextState):
             return "the org lease of this session was lost (taken over or deleted): no further writes"
         return None
 
+    def shard_name(self) -> str | None:
+        """The shard of the target (E2E_SHARD of the environment or of the target's env files, shards.py), None without
+        a target or a shard: every live item runs. TargetError for a malformed target name."""
+        from otterdog_e2e.settings import load_env_files
+        from otterdog_e2e.shards import SHARD_ENV
+
+        if not self.options.target:
+            return None
+        load_env_files(target_env_name(self.options.target), self.settings.project_root, self.environ)
+        return (self.environ.get(SHARD_ENV) or "").strip() or None
+
     def load_target(self) -> Target:
         """Load the env files, the target and its identities (no GitHub access); TargetError when invalid."""
         if self.target is not None:

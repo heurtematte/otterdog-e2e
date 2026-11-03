@@ -153,6 +153,30 @@ a session whose org lease is lost (failed renewal) stops being live. Time budget
 SUT, P0 cli 30 min (4 min per scenario), P0 webapp 25 min (5 min per PR flow), web_ui 30 min, differential 15 min,
 `pr-fast` lane 45 min.
 
+## Organizations and shards
+
+One test organization serves one live session at a time (its org lease), so several organizations only save time when
+each runs its share of the live items. `scenarios/shards.yaml` names the shards, in order; the instance of an
+organization selects one with `E2E_SHARD` in its env file (`setup` writes it), and the plugin then deselects the live
+items of the other shards at collection (`shards.py`, `pytest_plugin._deselect_other_shards`):
+
+| Shard | Profile | Takes |
+|---|---|---|
+| `enterprise` | enterprise | the enterprise tier, the items needing plan Team or Enterprise or a capability a Free organization lacks (private repositories, organization rulesets, push rulesets, `evaluate`, custom roles, merge queue, GHAS), the `rulesets` and `org-roles` domains |
+| `webapp` | free | the webapp and webhooks tiers and the items requiring the App: the only organization where it is installed, whose events no other shard disturbs |
+| `org-level` | free | the web-UI tier and the `org_level` items (full baseline reset, unfiltered plans), which no longer slow the repository-scoped shards; the only organization with the admin's web login |
+| `repos` | free | the `repo`, `bpr` and `teams` domains and the repository test modules |
+| `automation` | free | the rest (default shard): environments, secrets, variables, workflows, webhooks, custom properties, otterdog's other commands, the differential tier |
+
+A live item belongs to the first shard one of whose `match` entries it satisfies (tier, scenario domain, test module,
+plan, required capabilities, `org_level`), else to the default shard, so it has exactly one; `tests/unit/test_shards.py`
+checks that no item lands on a shard whose plan lacks what it requires. Offline and unit items are never filtered, an
+explicit scenario selection (`--e2e-scenario`) runs on any instance, and an instance without `E2E_SHARD` runs every
+live item. `otterdog-e2e shards` shows the share of each (scenarios, steps, test functions) and the instances that
+select it; `run --target <the five instances> --parallel 5` runs them at once, and CI does the same with its matrix of
+instances (`E2E_INSTANCES`). The organizations share one set of machine accounts (`set:` of the accounts store,
+[onboarding](onboarding.md#the-organizations-of-the-shards)).
+
 ## A live session
 
 ```mermaid

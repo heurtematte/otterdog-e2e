@@ -348,7 +348,9 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
     return World(tmp_path, environ={"HOME": str(tmp_path / "home")}, settings=make_settings(project))
 
 
-def run_wizard(world: World, script: Script, **options: Any) -> SetupWizard:
+def run_wizard(
+    world: World, script: Script, *, sign_in_at: Callable[[str, str], None] | None = None, **options: Any
+) -> SetupWizard:
     """Run the wizard of instance ``org2`` (unless given) against the world."""
     assert world.settings is not None
     wizard = SetupWizard(
@@ -362,6 +364,7 @@ def run_wizard(world: World, script: Script, **options: Any) -> SetupWizard:
         write_http=world.write_http,
         bootstrap=world.bootstrap,
         doctor=world.doctor,
+        sign_in_at=sign_in_at,
     )
     wizard.run()
     return wizard
@@ -752,6 +755,50 @@ def test_an_interrupted_run_keeps_its_progress(world: World) -> None:
     with pytest.raises(KeyboardInterrupt):
         run_wizard(world, script)
     assert world.env()["E2E_ADMIN_TOKEN"] == TOKENS["admin"] and world.env()["E2E_PROFILE"] == "free"
+
+
+# --- shard (scenarios/shards.yaml) ----------------------------------------------------------------------------------------
+def with_shards(world: World) -> None:
+    """The project gets the shard map of the repository."""
+    assert world.settings is not None
+    path = world.settings.project_root / "scenarios" / "shards.yaml"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy(ROOT / "scenarios" / "shards.yaml", path)
+
+
+def test_an_instance_named_after_a_shard_runs_that_shard(world: World) -> None:
+    """Confirmed (the default): E2E_SHARD written, the profile is the shard's, the App is not proposed by default on
+    a shard that runs neither the webapp nor the webhooks tier."""
+    with_shards(world)
+    script = Script(secrets=[TOKENS["admin"]], confirms={"Run only the live items of the shard repos": True})
+    run_wizard(world, script, instance="repos")
+    env = world.env("repos")
+    assert env["E2E_SHARD"] == "repos" and env["E2E_PROFILE"] == "free"
+    assert "shard repos: repository settings, branch protection, teams and import (profile free)" in script.output
+    assert any("the shard repos does not run them" in text for text in script.asked)
+
+
+def test_the_shard_of_an_instance_is_optional(world: World) -> None:
+    """--shard none (or declining the proposed one): every live item; an unknown shard is an error; an instance not
+    named after a shard is never asked."""
+    with_shards(world)
+    script = Script(secrets=[TOKENS["admin"]])
+    run_wizard(world, script, instance="repos", shard="none")
+    assert "E2E_SHARD" not in world.env("repos") and "shard: none, repos runs every live item" in script.output
+    with pytest.raises(SetupError, match="unknown shard 'nope'"):
+        run_wizard(world, Script(secrets=[TOKENS["admin"]]), instance="acme", shard="nope")
+    script = Script(secrets=[TOKENS["admin"]])
+    run_wizard(world, script)
+    assert not [text for text in script.asked if "shard" in text] and "E2E_SHARD" not in world.env()
+
+
+def test_the_app_is_proposed_on_the_shard_that_runs_it(world: World) -> None:
+    """The webapp shard runs the webapp and webhooks tiers: its App question says so (and defaults to yes)."""
+    with_shards(world)
+    script = Script(secrets=[TOKENS["admin"]], confirms={"Create the GitHub App": False})
+    run_wizard(world, script, instance="webapp")
+    assert world.env("webapp")["E2E_SHARD"] == "webapp"
+    assert any("the shard webapp runs them" in text for text in script.asked)
 
 
 # --- org and profile --------------------------------------------------------------------------------------------------
@@ -1402,6 +1449,51 @@ def write_setup_config(world: World, store: str = ACCOUNTS_STORE) -> None:
     path = world.config_dir / "setup.yaml"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(f"accounts:\n  store: {store}\n")
+
+
+def test_a_missing_org_is_created_in_the_browser_as_the_admin_account(world: World) -> None:
+    """With an accounts store, setup offers the creation page signed in as the instance's admin account: its name is
+    proposed (Enter keeps it), another account may be named; the org is then checked again."""
+    write_setup_config(world)
+    world.missing_org_checks = 1
+    shown: list[tuple[str, str]] = []
+    script = Script(secrets=[TOKENS["admin"]], answers=[""], confirms={"Check e2e-test-org again": True})
+    run_wizard(world, script, profile="free", sign_in_at=lambda account, url: shown.append((account, url)))
+    assert shown == [("otterdog-e2e-org2-admin", "https://github.com/account/organizations/new?plan=free")]
+    assert "Create e2e-test-org in a browser signed in as the admin account?" in script.asked
+    assert "in the window: name the organization e2e-test-org, keep it empty" in script.output
+    assert world.env()["E2E_ORG_ID"] == str(ORG_ID)
+    world.missing_org_checks = 1
+    shown.clear()
+    (world.config_dir / "org2.env").unlink()
+    script = Script(secrets=[TOKENS["admin"]], answers=["some-owner"], confirms={"Check e2e-test-org again": True})
+    run_wizard(world, script, profile="free", sign_in_at=lambda account, url: shown.append((account, url)))
+    assert shown == [("some-owner", "https://github.com/account/organizations/new?plan=free")]
+
+
+def test_the_browser_creation_of_the_org_is_optional(world: World) -> None:
+    """Declined, or without an accounts store: nothing is opened nor asked; a browser failure leaves the creation to
+    the operator."""
+    world.missing_org_checks = 1
+    opened: list[str] = []
+    script = Script(secrets=[TOKENS["admin"]], confirms={"Check e2e-test-org again": True})
+    run_wizard(world, script, profile="free", sign_in_at=lambda account, url: opened.append(account))
+    assert not opened and not [text for text in script.asked if "in a browser" in text]
+    write_setup_config(world)
+    (world.config_dir / "org2.env").unlink()
+    world.missing_org_checks = 1
+    script = Script(secrets=[TOKENS["admin"]], confirms={"in a browser": False, "Check e2e-test-org again": True})
+    run_wizard(world, script, profile="free", sign_in_at=lambda account, url: opened.append(account))
+    assert not opened
+
+    def broken(account: str, url: str) -> None:
+        raise AccountError("Firefox does not start")
+
+    (world.config_dir / "org2.env").unlink()
+    world.missing_org_checks = 1
+    script = Script(secrets=[TOKENS["admin"]], answers=[""], confirms={"Check e2e-test-org again": True})
+    run_wizard(world, script, profile="free", sign_in_at=broken)
+    assert "browser: Firefox does not start: create e2e-test-org by hand" in script.output
 
 
 def test_setup_finds_the_token_of_the_accounts_store(world: World, secret_store: dict[str, str]) -> None:

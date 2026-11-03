@@ -13,7 +13,9 @@ eclipse-cbi/ci-admin: ``username``, ``email``, ``password``, ``2FA-seed``, ``2FA
 reference of an item is ``<store>/<entry>``, one convention for both: a pass entry under the directory, or the field
 ``<entry>`` of the Vault KV v2 secret ``<secret path>`` (vaults.parse splits at the last ``/``), e.g.
 ``pass:bots/technology.csi/github.com/otterdog-e2e-free-admin-password`` and
-``vault:otterdog-e2e/technology.csi/github/otterdog-e2e-free-admin-password``.
+``vault:otterdog-e2e/technology.csi/github/otterdog-e2e-free-admin-password``. ``set`` gives every instance the
+accounts of one set: ``set: free`` makes ``{instance}`` free for all of them, so the test organizations of the shards
+share one set of machine accounts (otterdog-e2e-free-admin...).
 
 * the login: the username item, else E2E_<ROLE>_LOGIN, else the account is signed in with its e-mail item (GitHub
   accepts both) and the login GitHub shows is used;
@@ -105,6 +107,7 @@ class AccountsConfig:
     entry: str = DEFAULT_ENTRY
     items: Mapping[str, str] = field(default_factory=lambda: dict(DEFAULT_ITEMS))
     source: str = "setup configuration"
+    set: str | None = None  # the {instance} of every instance: one set of accounts for all the organizations
 
     @property
     def provider(self) -> str:
@@ -112,15 +115,20 @@ class AccountsConfig:
         return self.store.partition(":")[0]
 
     def account(self, instance: str, role: str) -> MachineAccount:
-        """The account of ``role`` in ``instance``."""
-        return MachineAccount(role, instance, self)
+        """The account of ``role`` in ``instance`` (in the shared ``set`` when there is one)."""
+        return MachineAccount(role, self.set or instance, self)
+
+    def named(self, name: str) -> MachineAccount:
+        """The account whose entries start with ``name``, what the entry template gives before the item (e.g.
+        otterdog-e2e-free-admin: web-login without an instance)."""
+        return MachineAccount("account", "", self, _check_path(name, "the account name"))
 
 
 def parse_accounts_config(data: Any, source: str) -> AccountsConfig:
     """AccountsConfig of the ``accounts`` mapping (AccountError naming ``source`` for anything unexpected)."""
     if not isinstance(data, Mapping):
         raise AccountError(f"{source}: accounts must be a mapping with a store")
-    unknown = sorted(set(data) - {"store", "entry", "items"})
+    unknown = sorted(set(data) - {"store", "entry", "items", "set"})
     if unknown:
         raise AccountError(f"{source}: unknown key(s) in accounts: {', '.join(map(str, unknown))}")
     raw_store = str(data.get("store") or "").strip()
@@ -146,7 +154,12 @@ def parse_accounts_config(data: Any, source: str) -> AccountsConfig:
         _check_path(value, f"{source}: accounts.items.{key}")
     if len(set(items.values())) != len(items):
         raise AccountError(f"{source}: accounts.items gives two items the same name")
-    config = AccountsConfig(store_value, entry, items, source)
+    shared = data.get("set")
+    if shared is not None and (not isinstance(shared, str) or not shared.strip()):
+        raise AccountError(f"{source}: accounts.set names the set of accounts every instance uses (e.g. free)")
+    config = AccountsConfig(
+        store_value, entry, items, source, _check_path(shared.strip(), f"{source}: accounts.set") if shared else None
+    )
     config.account("i", "config_reader").ref("token")  # the template renders a valid path
     return config
 
@@ -214,9 +227,28 @@ class MachineAccount:
     role: str
     instance: str
     config: AccountsConfig
+    name: str | None = None  # AccountsConfig.named: the entries are <name><separator><item>
+
+    def _template_parts(self) -> tuple[str, str, str]:
+        """The entry template before its item (head), between its role and its item (separator), after it (tail)."""
+        head, _, tail = self.config.entry.rpartition("{item}")
+        return head, head[head.rfind("}") + 1 :] if "}" in head else "-", tail
+
+    @property
+    def label(self) -> str:
+        """The name the account's entries start with (otterdog-e2e-free-admin): ``web-login ACCOUNT`` takes it."""
+        if self.name is not None:
+            return self.name
+        head, separator, _ = self._template_parts()
+        prefix = head.format(instance=self.instance, role=self.role.replace("_", "-"))
+        return prefix.removesuffix(separator) if separator else prefix
 
     def entry(self, item: str) -> str:
-        """The name of ``item`` (a key of DEFAULT_ITEMS) in the store: the entry template filled in."""
+        """The name of ``item`` (a key of DEFAULT_ITEMS) in the store: the entry template filled in, or the account's
+        name followed by what the template puts between its role and its item."""
+        if self.name is not None:
+            _, separator, tail = self._template_parts()
+            return _check_path(f"{self.name}{separator}{self.config.items[item]}{tail}", "the account name")
         name = self.config.entry.format(
             instance=self.instance, role=self.role.replace("_", "-"), item=self.config.items[item]
         )
@@ -267,6 +299,10 @@ class GitHubSession(Protocol):
         from the prefilled ``url`` (a sudo confirmation answered with the sign-in's password or code source)."""
         ...
 
+    def open(self, url: str) -> None:
+        """Show the page ``url`` (otterdog-e2e web-login)."""
+        ...
+
 
 class Browser(Protocol):
     """Opens one isolated session per account (onboard.browser.PlaywrightBrowser)."""
@@ -283,6 +319,47 @@ class AccountsIO:
     echo: Callable[[str], None]
     secret_prompt: Callable[[str], str]
     prompt: Callable[[str], str]
+
+
+@dataclass(frozen=True)
+class SignIn:
+    """What signs an account in on github.com (web-login): ``name`` is typed (login or e-mail), ``login`` the account
+    it must be when known, ``source`` where the password comes from (a variable or a reference, never a value)."""
+
+    role: str
+    name: str
+    login: str | None
+    password: str = field(repr=False)
+    seed: str | None = field(repr=False)
+    source: str
+
+
+def web_login(browser: Browser, io: AccountsIO, account: SignIn, url: str, *, until: Callable[[str], object]) -> str:
+    """Sign ``account`` in in a fresh browser session, show ``url`` and keep the window until ``until(message)``
+    returns; leaving the session signs the account out and drops its cookies. A 2FA code comes from the account's key,
+    else it is typed. The login GitHub shows."""
+
+    def code() -> str:
+        """The 2FA code: of the account's key, else typed."""
+        if account.seed is not None:
+            return totp_code(account.seed)
+        return io.prompt(f"{account.role}: GitHub asks a 2FA code of {account.name}: type the code of its app").strip()
+
+    def device_code() -> str:
+        """The verification code GitHub e-mailed for a new device, typed (empty: typed in the browser)."""
+        return io.prompt(
+            f"{account.role}: GitHub sent a verification code to the e-mail address of {account.name}: type it here, "
+            "or in the browser window and press Enter"
+        ).strip()
+
+    io.echo(f"{account.role}: signing in as {account.name} (password from {account.source})")
+    with browser.session() as session:
+        shown = session.login(account.name, account.password, code=code, device_code=device_code)
+        if account.login and shown.lower() != account.login.lower():
+            raise AccountError(f"{account.role}: signed in as {shown}, but the account is {account.login}")
+        session.open(url)
+        until(f"{account.role}: {shown} is signed in on {url}: press Enter to sign out and close the window")
+    return shown
 
 
 def _default_http(token: str, identity: str) -> GitHubHttp:
@@ -373,6 +450,21 @@ class AccountSetup:
             raise AccountError(str(exc)) from None
         REDACTOR.add(seed, seed.lower())
         return seed
+
+    def sign_in(self, account: MachineAccount) -> SignIn:
+        """The web sign-in of the account from the store (AccountError without a name or a password); nothing is
+        asked nor written."""
+        role = account.role
+        login_env = ROLE_TOKENS[role].login_env if role in ROLE_TOKENS else None
+        login = self.read(account, "username", secret=False) or (self.environ.get(login_env) if login_env else None)
+        name = login or self.read(account, "email", secret=False)
+        if not name:
+            names = ", ".join(filter(None, (account.ref("username"), login_env)))
+            raise AccountError(f"{role}: neither {names} nor {account.ref('email')} names the account")
+        password = self.read(account, "password")
+        if not password:
+            raise AccountError(f"{role}: no password at {account.ref('password')}")
+        return SignIn(role, name, login, password, self.seed(account), account.ref("password"))
 
     def stored_token(self, account: MachineAccount, login: str | None) -> str | None:
         """The reference of the account's token when it is a classic token (of ``login`` when it is known) with the

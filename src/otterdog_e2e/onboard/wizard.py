@@ -105,6 +105,7 @@ from otterdog_e2e.settings import (
     WebCredentialsError,
     normalize_totp_seed,
 )
+from otterdog_e2e.shards import SHARD_ENV, SHARDS_FILE, ItemFacts, Shard, ShardError, ShardMap, load_shards
 from otterdog_e2e.vaults import VaultError, is_reference, resolve, store
 from otterdog_e2e.waiting import WaitTimeoutError, wait_until
 
@@ -126,6 +127,7 @@ APP_INSTALL_URL = "https://github.com/apps/{slug}/installations/new/permissions?
 APP_WEBHOOK_URL_ENV = "E2E_APP_WEBHOOK_URL"  # the App's webhook sink (non-secret), reused by --from and re-runs
 APP_ENV = ("E2E_APP_ID", "E2E_APP_SLUG", "E2E_APP_PRIVATE_KEY_FILE", "E2E_APP_WEBHOOK_SECRET")
 WEB_ROTATION, APP_ROTATION = "web", "app"
+NO_SHARD = "none"  # setup --shard none: the instance runs every live item
 ROTATABLE = (*ROLES, WEB_ROTATION, APP_ROTATION)
 TOKEN_KIND_LABELS: Mapping[str, str] = {CLASSIC: "classic PAT", FINE_GRAINED: "fine-grained PAT"}
 # --from: settings of another instance that are neither secret nor specific to its org
@@ -189,6 +191,7 @@ class SetupOptions:
     poll_interval: float = POLL_INTERVAL
     store: str | None = None  # secret store vault:<prefix> / pass:<prefix> (onboard/store.py)
     browser: bool = False  # create the classic tokens of the machine accounts in the browser (onboard/accounts.py)
+    shard: str | None = None  # the shard of the instance (scenarios/shards.yaml); NO_SHARD: every live item
 
 
 @dataclass(frozen=True)
@@ -296,11 +299,14 @@ class SetupWizard:
         bootstrap: Callable[[str], None] | None = None,
         doctor: Callable[[str], None] | None = None,
         run_account: Callable[..., AccountResult] | None = None,
+        sign_in_at: Callable[[str, str], None] | None = None,
     ) -> None:
         """Bind the flow; nothing is read or asked before run(). ``run_manifest(target, webhook_url)`` returns the
         manifest code (None: no App step), ``bootstrap`` / ``doctor`` take the instance name (None: not offered),
         ``write_http(admin_token, verified)`` is the only writing client (invitations), ``run_account(account, *,
-        org, rotate, environ)`` sets up a machine account in the browser for --browser (AccountSetup.setup)."""
+        org, rotate, environ)`` sets up a machine account in the browser for --browser (AccountSetup.setup),
+        ``sign_in_at(account, url)`` shows a page in a browser signed in as an account of the accounts store until the
+        operator is done (web-login ACCOUNT --url: the creation of the organization by its admin)."""
         unknown = sorted(set(options.rotate) - set(ROTATABLE))
         if unknown:
             raise SetupError(f"--rotate: unknown value(s) {', '.join(unknown)} (expected {', '.join(ROTATABLE)})")
@@ -316,11 +322,14 @@ class SetupWizard:
         self.bootstrap = bootstrap
         self.doctor = doctor
         self.run_account = run_account
+        self.sign_in_at = sign_in_at
         self.instance = check_instance_name(options.instance)
         self.env_path = instance_env_path(self.instance, environ)
         self.values: dict[str, str] = {}
         self.clients: dict[str, GitHubHttp] = {}
         self.profile: str | None = None
+        self.shard_map: ShardMap | None = None
+        self.shard: Shard | None = None
         self.invited: dict[str, str] = {}  # role -> login invited by THIS run (PUT /orgs/{org}/memberships/{login})
 
     # --- plumbing -----------------------------------------------------------------------------------------------
@@ -395,6 +404,7 @@ class SetupWizard:
         self.echo(f"otterdog-e2e setup of instance {self.instance}: {self.env_path}")
         self.copy_from()
         self.store_step()
+        self.shard_step()
         org = self.org_step()
         self.role_step("admin", org)
         self.profile_step(org)
@@ -425,7 +435,10 @@ class SetupWizard:
     def org_step(self) -> OrgInfo:
         """The live org (created by the operator when missing); E2E_ORG and E2E_ORG_ID written."""
         pinned = self.values.get("E2E_ORG")
-        login = (self.options.org or pinned or self.io.prompt("Login of the dedicated test organization", None)).strip()
+        proposed = f"otterdog-e2e-{self.instance}"
+        login = (
+            self.options.org or pinned or self.io.prompt("Login of the dedicated test organization", proposed)
+        ).strip()
         if pinned and login.lower() != pinned.lower():
             raise SetupError(
                 f"{self.env_path} pins the organization {pinned}: set up {login} as another instance (--target)"
@@ -437,6 +450,7 @@ class SetupWizard:
         while (data := anonymous.get(f"/orgs/{login}", allow_404=True)) is None:
             for line in self.org_creation_help(login):
                 self.echo(line)
+            self.create_org_in_browser(login)
             if not self.io.confirm(f"Check {login} again?", True):
                 raise SetupError(f"organization {login} not found: create it, then run setup again")
         live, org_id = str(data.get("login") or ""), data.get("id")
@@ -465,8 +479,7 @@ class SetupWizard:
         """How to create the missing org (GitHub has no API for Free/Team orgs), after the plan of the profile
         (--profile, E2E_PROFILE, else the profile named like the instance; a profile's literal expected_plan); while
         no plan is known: the Free URL and the Enterprise Cloud note, and the hint to pass --profile."""
-        profile = self.options.profile or self.values.get("E2E_PROFILE") or self.instance
-        plan = profile if profile in (*ORG_CREATION_URLS, "enterprise") else self.expected_plan(profile)
+        plan = self.org_plan()
         if plan == "enterprise":
             return [f"organization {login} not found.", ENTERPRISE_ORG_NOTE]
         create = f"organization {login} not found: create it signed in as the admin machine account (no API can):"
@@ -482,6 +495,64 @@ class SetupWizard:
             f"  {ENTERPRISE_ORG_NOTE} (not automated by setup)",
             f"  the plan of instance {self.instance} is not known yet: pass --profile {choices} for its hint only",
         ]
+
+    def org_plan(self) -> str | None:
+        """The plan of the org to create: the one of the profile (--profile, E2E_PROFILE, else the profile named like
+        the instance; a profile's literal expected_plan), None while it is not known."""
+        shard_profile = self.shard.profile if self.shard is not None else None
+        profile = self.options.profile or self.values.get("E2E_PROFILE") or shard_profile or self.instance
+        return profile if profile in (*ORG_CREATION_URLS, "enterprise") else self.expected_plan(profile)
+
+    # --- shard --------------------------------------------------------------------------------------------------
+    def shard_step(self) -> None:
+        """E2E_SHARD: the live items the instance runs (scenarios/shards.yaml): --shard, the stored one, else the shard
+        named like the instance (proposed, the operator confirms); none (NO_SHARD) or no shard map: every live item."""
+        try:
+            self.shard_map = load_shards(self.settings.project_root)
+        except ShardError as exc:
+            raise SetupError(str(exc)) from None
+        stored = self.values.get(SHARD_ENV)
+        name = self.options.shard or stored
+        if name is None and self.shard_map is not None and self.instance in self.shard_map.names:
+            shard = self.shard_map.get(self.instance)
+            question = f"Run only the live items of the shard {shard.name} on {self.instance} ({shard.description})?"
+            name = shard.name if self.io.confirm(question, True) else NO_SHARD
+        if name is None or name == NO_SHARD:
+            if stored and name == NO_SHARD:
+                self.write({SHARD_ENV: ""})
+            self.echo(f"shard: none, {self.instance} runs every live item")
+            return
+        if self.shard_map is None:
+            raise SetupError(f"shard {name}: no {SHARDS_FILE} in {self.settings.project_root}")
+        try:
+            self.shard = self.shard_map.get(name)
+        except ShardError as exc:
+            raise SetupError(str(exc)) from None
+        self.echo(f"shard {self.shard.name}: {self.shard.description} (profile {self.shard.profile})")
+        self.write({SHARD_ENV: self.shard.name})
+
+    def shard_runs(self, tier: str) -> bool | None:
+        """Whether the shard of the instance runs the items of ``tier`` (None without a shard: every tier)."""
+        if self.shard is None or self.shard_map is None:
+            return None
+        return self.shard_map.assign(ItemFacts(tier)) is self.shard
+
+    def create_org_in_browser(self, login: str) -> None:
+        """Offer the creation page of the org in a browser signed in as the admin account of the accounts store: its
+        name is proposed, the operator confirms it or names another account (the org's owner); the window stays until
+        the operator is done. Not offered without sign_in_at, an accounts store or a creation URL (plan)."""
+        url = ORG_CREATION_URLS.get(self.org_plan() or "")
+        if self.sign_in_at is None or url is None or self.accounts_config is None:
+            return
+        if not self.io.confirm(f"Create {login} in a browser signed in as the admin account?", True):
+            return
+        default = self.accounts_config.account(self.instance, "admin").label
+        account = self.io.prompt("Account that creates the organization (its owner: the admin)", default).strip()
+        self.echo(f"in the window: name the organization {login}, keep it empty, then press Enter here")
+        try:
+            self.sign_in_at(account or default, url)
+        except AccountError as exc:
+            self.echo(f"browser: {exc}: create {login} by hand")
 
     # --- tokens -------------------------------------------------------------------------------------------------
     def role_step(self, role: str, org: OrgInfo) -> None:
@@ -1103,7 +1174,8 @@ class SetupWizard:
                     )
             profile = self.instance
         else:
-            profile = self.options.profile or stored or (plan if plan in available else "")
+            shard_profile = self.shard.profile if self.shard is not None else None
+            profile = self.options.profile or stored or shard_profile or (plan if plan in available else "")
         while profile not in available:
             if profile:
                 self.echo(f"no profile {profile!r} (targets/<profile>.yaml): one of {', '.join(available)}")
@@ -1150,8 +1222,11 @@ class SetupWizard:
                 return
         elif not rotate and not self.io.confirm(
             "Set up the web-UI login of the admin account? (optional: the web-UI tier logs in to github.com as the "
-            "admin, trusted SUTs only)",
-            False,
+            "admin, trusted SUTs only)"
+            + (
+                f"; the shard {self.shard.name} runs it" if self.shard is not None and self.shard_runs("web_ui") else ""
+            ),
+            bool(self.shard_runs("web_ui")),
         ):
             self.echo("web-UI login: skipped")
             return
@@ -1253,8 +1328,15 @@ class SetupWizard:
         if self.run_manifest is None:
             self.echo("GitHub App: the manifest flow is not available here (otterdog-e2e app-manifest)")
             return APP_SKIPPED
+        needed = self.shard_runs("webapp")
+        why = (
+            ""
+            if needed is None or self.shard is None
+            else f"; the shard {self.shard.name} " + ("runs them" if needed else "does not run them")
+        )
         if not confirmed and not self.io.confirm(
-            "Create the GitHub App of the webapp and webhooks tiers? (optional: one browser click)", True
+            f"Create the GitHub App of the webapp and webhooks tiers? (optional: one browser click){why}",
+            needed is None or needed,
         ):
             self.echo("GitHub App: skipped (run setup again to add it)")
             return APP_SKIPPED

@@ -27,7 +27,7 @@ from otterdog_e2e.context import E2EContext, E2EOptions, parse_duration
 from otterdog_e2e.redact import REDACTOR
 
 if TYPE_CHECKING:
-    from otterdog_e2e.onboard.accounts import AccountResult, AccountsIO, MachineAccount
+    from otterdog_e2e.onboard.accounts import AccountResult, AccountsIO, MachineAccount, SignIn
     from otterdog_e2e.onboard.browser import PlaywrightBrowser
     from otterdog_e2e.settings import Target
 
@@ -88,13 +88,12 @@ def _accounts_io() -> AccountsIO:
 def _open_browser(stack: contextlib.ExitStack) -> PlaywrightBrowser:
     """A visible Firefox for the machine accounts, closed with ``stack``; failed accounts pause before closing."""
     from otterdog_e2e.onboard.browser import PlaywrightBrowser
-    from otterdog_e2e.sut.cli_install import playwright_browsers_path
 
     def pause(message: str) -> None:
         """Wait for the operator before a failed account's window closes."""
         click.prompt(message, default="", show_default=False)
 
-    browser = PlaywrightBrowser(browsers_path=playwright_browsers_path(_settings()), pause=pause)
+    browser = PlaywrightBrowser(pause=pause)  # Playwright's Firefox (make init), not the web-UI tier's
     return stack.enter_context(browser)
 
 
@@ -195,6 +194,12 @@ def _setup_manifest(port: int, open_url: Callable[[str], Any] | None) -> Callabl
     help="create the classic tokens (and enroll 2FA) of the machine accounts in a Firefox window, their secrets in "
     "the accounts store of ~/.config/otterdog-e2e/setup.yaml, like `otterdog-e2e accounts`",
 )
+@click.option(
+    "--shard",
+    default=None,
+    help="the live items the instance runs (scenarios/shards.yaml, `otterdog-e2e shards`); none: all of them "
+    "(default: stored, else the shard named like the instance, confirmed)",
+)
 @_handled
 def setup_command(
     target: str,
@@ -210,6 +215,7 @@ def setup_command(
     open_browser: bool,
     store: str | None,
     browser: bool,
+    shard: str | None,
 ) -> None:
     """Onboard a test org interactively: org, tokens of every role, web login, GitHub App, then bootstrap and doctor.
 
@@ -239,6 +245,7 @@ def setup_command(
         wait_timeout=timeout,
         store=store,
         browser=browser,
+        shard=shard,
     )
     io = WizardIO(
         prompt=lambda text, default: str(click.prompt(text, default=default)).strip(),
@@ -257,6 +264,7 @@ def setup_command(
             bootstrap=functools.partial(_setup_bootstrap, pristine=pristine, wait_timeout=timeout),
             doctor=functools.partial(_setup_doctor, pristine=pristine),
             run_account=_setup_accounts(expires_in, stack) if browser else None,
+            sign_in_at=_sign_in_at,
         )
         try:
             wizard.run()
@@ -356,6 +364,180 @@ def accounts_command(
         except AccountError as exc:
             raise click.ClickException(str(exc)) from None
     _echo(f"next: otterdog-e2e setup --target {instance} (finds the tokens in the accounts store and checks them)")
+
+
+GITHUB = "https://github.com"
+
+
+def web_login_url(url: str | None, org: str | None) -> str:
+    """The page web-login shows: ``url`` (a page of github.com, or its path), else the page of the organization."""
+    if not url:
+        return f"{GITHUB}/{org}" if org else f"{GITHUB}/"
+    if url.startswith("/"):
+        return GITHUB + url
+    if url == GITHUB or url.startswith(f"{GITHUB}/"):
+        return url
+    raise click.UsageError(f"--url {url!r}: a page of github.com (https://github.com/... or a path /...)")
+
+
+def _admin_sign_in(instance: str, environ: Mapping[str, str]) -> tuple[SignIn | None, str | None]:
+    """The web credentials of the admin in the env file of the instance (E2E_ADMIN_PASSWORD, E2E_ADMIN_TOTP_SEED),
+    resolved as runs resolve them; else None and why."""
+    from otterdog_e2e.onboard.accounts import SignIn
+    from otterdog_e2e.settings import TargetError, load_target, resolve_web_credentials, web_credential_env_names
+
+    try:
+        target = load_target(instance, _settings(), environ)
+        web = resolve_web_credentials(target, environ)
+    except TargetError as exc:
+        return None, str(exc)
+    if web is None:
+        return None, "E2E_ADMIN_PASSWORD and E2E_ADMIN_TOTP_SEED are not set"
+    source = web_credential_env_names(target)["password_env"]
+    return SignIn("admin", web.username, web.login, web.password, web.totp_seed, source), None
+
+
+def _typed_sign_in(name: str | None) -> SignIn:
+    """An account typed in the terminal: its login or e-mail (``name``, else asked) and its password (hidden); the
+    2FA code is asked when GitHub asks it."""
+    from otterdog_e2e.onboard.accounts import SignIn
+
+    name = (name or str(click.prompt("login or e-mail of the account"))).strip()
+    password = str(click.prompt(f"password of {name} (input hidden)", default="", hide_input=True, show_default=False))
+    if not name or not password:
+        raise click.UsageError("web-login needs the login (or e-mail) and the password of the account")
+    REDACTOR.add(password)
+    return SignIn("account", name, None if "@" in name else name, password, None, "the terminal")
+
+
+def _named_sign_in(name: str | None, config_path: Path | None, stack: contextlib.ExitStack) -> SignIn:
+    """The account ``name`` of the accounts store when the store has its password (entries ``<name>-<item>``, e.g.
+    otterdog-e2e-free-admin), else typed in the terminal."""
+    from otterdog_e2e.onboard.accounts import SETUP_CONFIG_ENV, AccountSetup, load_accounts_config, setup_config_path
+
+    environ = {**os.environ, **({SETUP_CONFIG_ENV: str(config_path)} if config_path else {})}
+    if not name:
+        return _typed_sign_in(name)
+    config = load_accounts_config(environ)
+    if config is None:
+        _echo(
+            f"no accounts store in {setup_config_path(environ)} (docs/onboarding.md): the password of {name} is typed"
+        )
+        return _typed_sign_in(name)
+    store = AccountSetup(org=None, environ=environ, browser=_LazyBrowser(stack), io=_accounts_io())
+    account = config.named(name)
+    if store.read(account, "password") is None:
+        _echo(f"no password of {name} at {account.ref('password')}: it is typed")
+        return _typed_sign_in(name)
+    return store.sign_in(account)
+
+
+@main.command("web-login")
+@click.argument("name", metavar="[ACCOUNT]", required=False)
+@click.option(
+    "--target",
+    "target",
+    default=None,
+    help="instance whose account signs in (env file ~/.config/otterdog-e2e/<name>.env), instead of ACCOUNT",
+)
+@click.option("--role", default=None, type=click.Choice(ACCOUNT_ROLES), help="account of the instance [default: admin]")
+@click.option("--login", "login", default=None, help="ACCOUNT, as an option")
+@click.option("--url", default=None, help="page to show: https://github.com/... or a path (default: the organization)")
+@click.option(
+    "--config",
+    "config_path",
+    default=None,
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="setup configuration file with the accounts section (default: E2E_SETUP_CONFIG, else "
+    "~/.config/otterdog-e2e/setup.yaml)",
+)
+@_handled
+def web_login_command(
+    name: str | None,
+    target: str | None,
+    role: str | None,
+    login: str | None,
+    url: str | None,
+    config_path: Path | None,
+) -> None:
+    """Open Firefox signed in as an account (like otterdog web-login): ACCOUNT, or an account of an instance on its
+    test organization.
+
+    ACCOUNT (a login, an e-mail, or the name of its entries in the accounts store, e.g. otterdog-e2e-free-admin):
+    signs in with the password and 2FA key of the store when it has them, else the password and the 2FA code are
+    typed (asked too without ACCOUNT). --target: admin signs in with the web credentials of the env file
+    (E2E_ADMIN_PASSWORD, E2E_ADMIN_TOTP_SEED), else from the accounts store; the other roles from the accounts store
+    (docs/onboarding.md). Enter in the terminal signs the account out and closes the window. Refused in CI.
+    """
+    from otterdog_e2e.context import in_ci
+    from otterdog_e2e.onboard.accounts import AccountError, web_login
+
+    if in_ci(os.environ):
+        raise click.ClickException("web-login drives a visible browser and is refused when CI is set")
+    if name and login and name != login:
+        raise click.UsageError(f"ACCOUNT {name!r} or --login {login!r}: one account")
+    name = name or login
+    with contextlib.ExitStack() as stack:
+        try:
+            if target is None:
+                if role:
+                    raise click.UsageError("--role names an account of an instance: pass --target")
+                account, page = _named_sign_in(name, config_path, stack), web_login_url(url, None)
+            else:
+                if name:
+                    raise click.UsageError(f"ACCOUNT {name!r} or --target: an instance names its own accounts")
+                account, page = _instance_sign_in(target, role or "admin", url, config_path, stack)
+            shown = web_login(
+                _open_browser(stack),
+                _accounts_io(),
+                account,
+                page,
+                until=lambda message: click.prompt(message, default="", show_default=False),
+            )
+        except AccountError as exc:
+            raise click.ClickException(str(exc)) from None
+    _echo(f"{account.role}: {shown} signed out, window closed")
+
+
+def _sign_in_at(name: str, url: str) -> None:
+    """``web-login ACCOUNT --url URL`` for setup: the creation of the organization by its admin account."""
+    from otterdog_e2e.onboard.accounts import web_login
+
+    with contextlib.ExitStack() as stack:
+        account = _named_sign_in(name, None, stack)
+        web_login(
+            _open_browser(stack),
+            _accounts_io(),
+            account,
+            url,
+            until=lambda message: click.prompt(message, default="", show_default=False),
+        )
+
+
+def _instance_sign_in(
+    target: str, role: str, url: str | None, config_path: Path | None, stack: contextlib.ExitStack
+) -> tuple[SignIn, str]:
+    """The sign-in of the ``role`` account of an instance and the page to show (web-login --target)."""
+    from otterdog_e2e.onboard.accounts import SETUP_CONFIG_ENV, AccountSetup, load_accounts_config, setup_config_path
+    from otterdog_e2e.onboard.envfile import instance_env_path, read_env_file
+
+    instance = _instance(target)
+    path = instance_env_path(instance, os.environ)
+    values = read_env_file(path) if path.is_file() else {}
+    environ = {**os.environ, **values, **({SETUP_CONFIG_ENV: str(config_path)} if config_path else {})}
+    page = web_login_url(url, values.get("E2E_ORG"))
+    account, why = _admin_sign_in(instance, environ) if role == "admin" and values else (None, None)
+    if account is not None:
+        return account, page
+    config = load_accounts_config(environ)
+    if config is None:
+        env = f" ({path}: {why})" if why else ""
+        raise click.UsageError(
+            f"no web sign-in of the {role} account of {instance}{env}: add an accounts section to "
+            f"{setup_config_path(environ)} (docs/onboarding.md)"
+        )
+    store = AccountSetup(org=values.get("E2E_ORG"), environ=environ, browser=_LazyBrowser(stack), io=_accounts_io())
+    return store.sign_in(config.account(instance, role)), page
 
 
 @main.command("ci-sync")

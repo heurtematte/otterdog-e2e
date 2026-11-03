@@ -648,6 +648,51 @@ def test_tags_spare_unit_and_offline_tiers_but_not_the_scenario_filter(inner: In
     assert kept(inner, "--e2e-scenario=O-*,W-*", "--e2e-tags=webapp") == {"test_offline", "test_webapp"}
 
 
+SHARD_MAP = """
+shards:
+  app:
+    profile: free
+    match:
+      - tiers: [webapp]
+  rest:
+    profile: free
+    default: true
+"""
+
+
+def test_a_shard_runs_only_its_live_items(inner: Inner, monkeypatch: pytest.MonkeyPatch) -> None:
+    """E2E_SHARD of the target keeps the items of its shard in the sharded tiers (scenarios/shards.yaml); unit and
+    offline items stay, an explicit --e2e-scenario selection is never filtered, an unknown shard is a usage error."""
+    inner.pytester.mkpydir("tests")
+    marked = "import pytest\n\n@pytest.mark.scenario({scenario!r})\ndef {name}():\n    pass\n"
+    files = {
+        "unit/test_u.py": "def test_unit():\n    pass\n",
+        "offline/test_o.py": marked.format(scenario="O-VAL-OK", name="test_offline"),
+        "cli/test_c.py": marked.format(scenario="cli.repo.basic", name="test_cli"),
+        "webapp/test_w.py": marked.format(scenario="W-BOOT", name="test_webapp"),
+        "differential/test_d.py": marked.format(scenario="O-VAL-OK", name="test_differential"),
+    }
+    for relative, text in files.items():
+        path = inner.pytester.path / "tests" / relative
+        path.parent.mkdir(exist_ok=True)
+        path.write_text(text)
+    shards = inner.settings.project_root / "scenarios" / "shards.yaml"
+    shards.parent.mkdir(parents=True, exist_ok=True)
+    shards.write_text(SHARD_MAP)
+    everything = {"test_unit", "test_offline", "test_cli", "test_webapp", "test_differential"}
+    monkeypatch.setenv("E2E_TARGET", "fake")
+    assert kept(inner) == everything
+    monkeypatch.setenv("E2E_SHARD", "app")
+    assert kept(inner) == {"test_unit", "test_offline", "test_webapp"}
+    monkeypatch.setenv("E2E_SHARD", "rest")
+    assert kept(inner) == {"test_unit", "test_offline", "test_cli", "test_differential"}
+    assert kept(inner, "--e2e-scenario=W-*") == {"test_webapp"}
+    monkeypatch.setenv("E2E_SHARD", "nope")
+    result = inner.run("--collect-only")
+    assert result.ret == pytest.ExitCode.USAGE_ERROR
+    assert "E2E_SHARD: unknown shard 'nope': app, rest" in result.stderr.str()
+
+
 REFERENCING_TEST = """
 import pytest
 

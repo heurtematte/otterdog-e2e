@@ -209,6 +209,7 @@ class InstanceInfo:
     org: str | None
     env_file: str | None
     problem: str | None = None
+    shard: str | None = None  # E2E_SHARD of the instance (scenarios/shards.yaml)
 
 
 def list_instances(settings: HarnessSettings, environ: Mapping[str, str] | None = None) -> list[InstanceInfo]:
@@ -233,7 +234,8 @@ def list_instances(settings: HarnessSettings, environ: Mapping[str, str] | None 
             # a profile nobody configured as an instance yet: say how to, not which variable is missing
             unconfigured = not files and org is None and name in profile_names(settings)
             problem = f"not configured (otterdog-e2e setup --target {name})" if unconfigured else REDACTOR(str(exc))
-        infos.append(InstanceInfo(name, profile, org, str(files[0]) if files else None, problem))
+        shard = (instance_env.get("E2E_SHARD") or "").strip() or None
+        infos.append(InstanceInfo(name, profile, org, str(files[0]) if files else None, problem, shard))
     return infos
 
 

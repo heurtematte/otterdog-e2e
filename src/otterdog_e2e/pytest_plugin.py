@@ -83,6 +83,7 @@ if TYPE_CHECKING:
     from otterdog_e2e.scenarios.engine import ScenarioEngine
     from otterdog_e2e.scenarios.model import Scenario
     from otterdog_e2e.settings import HarnessSettings, Identity, Target
+    from otterdog_e2e.shards import ItemFacts
     from otterdog_e2e.sut.cli_install import InstalledCli
     from otterdog_e2e.sut.image import BuiltImage
     from otterdog_e2e.sut.template import TemplateRef
@@ -412,6 +413,7 @@ def pytest_collection_modifyitems(session: pytest.Session, config: pytest.Config
             _apply_collection_skips(item, context)
     _reject_showlocals(config, items)
     _reject_target_list(context, items)
+    _deselect_other_shards(config, items, context)
 
 
 def _apply_item_marks(item: pytest.Item) -> None:
@@ -465,6 +467,66 @@ def _deselect(config: pytest.Config, items: list[pytest.Item], options: E2EOptio
     drop: list[pytest.Item] = []
     for item in items:
         (keep if _selected(item, options.tags, options.scenario, change_scenarios) else drop).append(item)
+    if drop:
+        config.hook.pytest_deselected(items=drop)
+        items[:] = keep
+
+
+def item_facts(item: pytest.Item, root: Path) -> ItemFacts:
+    """What the shard rules read of an item (shards.ItemFacts): its scenario's domain, plan, capabilities and
+    org_level, else its test module and its plan, requires and org_level markers."""
+    from otterdog_e2e.shards import ItemFacts
+
+    tier = item_tier(item) or ""
+    scenario = scenario_param(item)
+    if scenario is not None:
+        return ItemFacts(
+            tier,
+            domain=Path(scenario.source).parent.name,
+            plan=str(scenario.min_plan),
+            requires=tuple(scenario.requires),
+            org_level=bool(scenario.org_level),
+        )
+    path = Path(item.path)
+    module = path.relative_to(root).as_posix() if path.is_relative_to(root) else path.name
+    plans = marker_args(item, "plan")
+    return ItemFacts(
+        tier,
+        module=module,
+        plan="free" if not plans or "free" in plans else plans[0],
+        requires=tuple(marker_args(item, "requires")),
+        org_level=item.get_closest_marker("org_level") is not None,
+    )
+
+
+def _deselect_other_shards(config: pytest.Config, items: list[pytest.Item], context: E2EContext) -> None:
+    """With a shard (E2E_SHARD of the target, scenarios/shards.yaml), deselect the items of the sharded tiers that
+    belong to another shard; an explicit --e2e-scenario selection is never filtered. The shard goes to run.json."""
+    from otterdog_e2e.settings import TargetError
+    from otterdog_e2e.shards import SHARDED_TIERS, SHARDS_FILE, ShardError, load_shards
+
+    if context.options.scenario or not any(item_tier(item) in SHARDED_TIERS for item in items):
+        return
+    try:
+        name = context.shard_name()
+    except TargetError as exc:
+        raise pytest.UsageError(str(exc)) from None
+    if not name:
+        return
+    root = context.settings.project_root
+    try:
+        shards = load_shards(root)
+        if shards is None:
+            raise ShardError(f"E2E_SHARD={name} but {SHARDS_FILE} does not exist")
+        shard = shards.get(name)
+    except ShardError as exc:
+        raise pytest.UsageError(f"E2E_SHARD: {exc}") from None
+    keep: list[pytest.Item] = []
+    drop: list[pytest.Item] = []
+    for item in items:
+        sharded = item_tier(item) in SHARDED_TIERS
+        (drop if sharded and shards.assign(item_facts(item, root)) is not shard else keep).append(item)
+    context.write_run_info(shard=name)
     if drop:
         config.hook.pytest_deselected(items=drop)
         items[:] = keep

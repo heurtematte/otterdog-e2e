@@ -306,6 +306,19 @@ PUBLIC_NAMES: dict[str, list[str]] = {
         "load_change",
     ],
     "otterdog_e2e.selection": ["PATH_RULES", "ALWAYS_TAGS", "select_tags"],
+    # which test organization runs which live items (scenarios/shards.yaml)
+    "otterdog_e2e.shards": [
+        "SHARDS_FILE",
+        "SHARD_ENV",
+        "ItemFacts",
+        "Shard",
+        "ShardMap",
+        "ShardError",
+        "parse_shards",
+        "load_shards",
+        "static_items",
+        "shard_loads",
+    ],
     "otterdog_e2e.report": ["build_summary", "scrub_artifacts", "run_overview", "tally_text"],
     # the coverage matrix (scenarios/coverage.yaml): checks and rendering of tests/unit/test_coverage_matrix.py
     "otterdog_e2e.coverage_matrix": [

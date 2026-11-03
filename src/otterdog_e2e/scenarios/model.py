@@ -119,7 +119,7 @@ E2E_SECRET_REFERENCE_RE = re.compile(r"^(?!(?:pass|bitwarden|vault):)[a-z][a-z0-
 # offline only: a reference with several ':' (KB-025, 'pass:a:b' crashes validation with a ValueError)
 OFFLINE_SECRET_RE = re.compile(r"^pass:[A-Za-z0-9._/-]+(?::[A-Za-z0-9._/-]+)+$")
 DUMMY_HINT = "'********', 'e2e-dummy-<8 chars [0-9a-z]>' or a 'pass:<path>' reference"
-IGNORED_FILES = ("known_bugs.yaml",)
+IGNORED_FILES = ("known_bugs.yaml", "shards.yaml")
 SCENARIO_SUFFIXES = (".yaml", ".yml")
 
 # extra offline commands a step may run (observed by differential runs); each takes the vendored template (--local);

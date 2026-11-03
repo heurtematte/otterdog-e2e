@@ -72,8 +72,9 @@ help: ## Show this help
 	@echo "           TARGET=a,b|@all|@<list> runs several instances (run-based targets, pr, doctor, janitor);"
 	@echo "           PARALLEL=<n> runs up to n of them at once"
 
-init: ## Create .venv with the harness and its dev tools (poetry install --with dev), link otterdog-e2e into E2E_LINK
-	$(POETRY) install --with dev
+init: ## Create .venv with the harness, its dev tools and Playwright's Firefox, link otterdog-e2e into E2E_LINK
+	$(POETRY) install --with dev --extras browser
+	$(PYTHON) -m playwright install firefox
 	@target="$(abspath $(VENV))/bin/otterdog-e2e"; link="$(E2E_LINK)"; \
 	if [ -e "$$link" ] && [ ! -L "$$link" ]; then \
 		echo "$$link exists and is not a symlink: left alone (run $(VENV)/bin/otterdog-e2e)"; \

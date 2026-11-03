@@ -8,8 +8,10 @@ AccountError naming the step, and the window stays open (``pause``) for the oper
 hand, instead of guessing. Nothing is screenshotted or saved: these pages show secrets. The recovery codes download
 that unlocks the acknowledgement stays in Playwright's temporary directory, deleted with the context.
 
-Playwright is an optional dependency (``poetry install -E browser``); its Firefox is the one of the web-UI tier, in
-playwright_browsers_path: ``PLAYWRIGHT_BROWSERS_PATH=<path> .venv/bin/python -m playwright install firefox``.
+Playwright is an optional dependency (``poetry install -E browser``, which ``make init`` installs with Firefox); its
+Firefox is Playwright's own, in PLAYWRIGHT_BROWSERS_PATH or else its global cache (``~/.cache/ms-playwright`` on
+Linux, shared with otterdog's ``make init``): ``.venv/bin/python -m playwright install firefox``. The web-UI tier keeps
+the browsers of each SUT apart (sut.cli_install.playwright_browsers_path).
 """
 
 from __future__ import annotations
@@ -34,8 +36,8 @@ CLASSIC_TOKEN_RE = re.compile(r"\bghp_[A-Za-z0-9]{36}\b")
 DEFAULT_TIMEOUT_MS = 15_000
 HUMAN_TIMEOUT = 300.0  # seconds for what the operator does in the window (device code, captcha)
 INSTALL_HINT = (
-    "install the browser extra and Firefox: poetry install -E browser, then "
-    "PLAYWRIGHT_BROWSERS_PATH={path} .venv/bin/python -m playwright install firefox"
+    "install the browser extra and Firefox: make init (or poetry install -E browser, then "
+    "{env}.venv/bin/python -m playwright install firefox)"
 )
 
 
@@ -262,6 +264,11 @@ class PlaywrightSession:
         page.get_by_role("button", name=re.compile(r"^(\d+ days|custom.*|no expiration)$", re.IGNORECASE)).first.click()
         page.get_by_role("menuitemradio", name=f"{days} days", exact=True).first.click()
 
+    def open(self, url: str) -> None:
+        """Show the page ``url``."""
+        with self.step(f"page {url}"):
+            self.page.goto(url)
+
     def sign_out(self) -> None:
         """Best effort: end the session server-side (the context is closed anyway)."""
         page = self.page
@@ -274,8 +281,11 @@ class PlaywrightBrowser:
     """A visible Firefox (``with`` block); ``session()`` gives each account a fresh context. ``pause(message)`` is
     called before a failed session closes, so the operator can look at the page."""
 
-    def __init__(self, *, browsers_path: Path, pause: Callable[[str], None], headless: bool = False) -> None:
-        """Bind; nothing starts before ``__enter__``."""
+    def __init__(
+        self, *, pause: Callable[[str], None], browsers_path: Path | None = None, headless: bool = False
+    ) -> None:
+        """Bind (``browsers_path``: PLAYWRIGHT_BROWSERS_PATH when it is not set, else Playwright's); nothing starts
+        before ``__enter__``."""
         self.browsers_path = browsers_path
         self.pause = pause
         self.headless = headless
@@ -284,12 +294,14 @@ class PlaywrightBrowser:
 
     def __enter__(self) -> Self:
         """Start Playwright and Firefox (AccountError with the install hint when either is missing)."""
-        hint = INSTALL_HINT.format(path=self.browsers_path)
+        where = os.environ.get("PLAYWRIGHT_BROWSERS_PATH") or (self.browsers_path and str(self.browsers_path))
+        hint = INSTALL_HINT.format(env=f"PLAYWRIGHT_BROWSERS_PATH={where} " if where else "")
         try:
             from playwright.sync_api import Error, sync_playwright
         except ImportError:
             raise AccountError(f"Playwright is not installed: {hint}") from None
-        os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", str(self.browsers_path))
+        if self.browsers_path is not None:
+            os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", str(self.browsers_path))
         self._playwright = sync_playwright().start()
         try:
             self._browser = self._playwright.firefox.launch(headless=self.headless)

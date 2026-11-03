@@ -1,0 +1,70 @@
+# otterdog-e2e: the shards of the live tiers (src/otterdog_e2e/shards.py, docs/architecture.md "Organizations and
+# shards").
+#
+# One test organization serves one live session at a time (its org lease): a run over several organizations only saves
+# time when each runs its share of the live items. A shard names that share; the instance of an organization selects
+# it with E2E_SHARD in its env file (`otterdog-e2e setup` writes it), and `run --target @all --parallel 5` then runs the
+# shards at once. Offline and unit items are never filtered, an explicit scenario selection (SCENARIO=, --scenario)
+# runs on any instance, and an instance without E2E_SHARD runs every live item.
+#
+# A live item belongs to the FIRST shard (in this order) one of whose `match` entries it satisfies, else to the default
+# shard. An entry is satisfied when each of its keys is:
+#   tiers      the tier of the item (cli, webhooks, webapp, web_ui, enterprise, differential)
+#   domains    the domain of a YAML scenario (scenarios/<tier>/<domain>/)
+#   modules    globs of its test module, from the project root (tests/cli/test_repo_*.py)
+#   plans      the plan it needs (a scenario's min_plan, a test's plan marker)
+#   requires   one of the capabilities it requires (docs/capability-matrix.md)
+#   org_level  whether it changes the whole organization (full baseline reset, unfiltered plans)
+# `otterdog-e2e shards` shows what each shard runs.
+shards:
+  enterprise:
+    profile: enterprise
+    description: Enterprise Cloud and Team features, the enterprise tier and the rulesets
+    match:
+      - tiers: [enterprise]
+      - plans: [team, enterprise]
+      # the capabilities a Free organization does not have: their items would be skipped on the other shards
+      - requires:
+          - private_repo_branch_protection
+          - private_repo_rulesets
+          - private_repo_environments
+          - private_repo_env_protection_rules
+          - org_secrets_private_repos
+          - org_rulesets
+          - otterdog_org_rulesets
+          - push_rulesets
+          - ruleset_evaluate
+          - merge_queue_private
+          - custom_org_roles
+          - internal_repos
+          - private_pages
+          - larger_runners
+          - ghas_private
+      - domains: [rulesets, org-roles]
+  webapp:
+    profile: free
+    description: the GitHub App, its webapp and its webhook deliveries
+    match:
+      - tiers: [webapp, webhooks]
+      - requires: [app]  # the only organization where the App is installed
+  org-level:
+    profile: free
+    description: changes of the whole organization (org_level) and the web-UI tier
+    match:
+      - tiers: [web_ui]
+      - org_level: true
+      - modules: [tests/cli/test_baseline.py, tests/cli/test_org_*.py]
+  repos:
+    profile: free
+    description: repository settings, branch protection, teams and import
+    match:
+      - domains: [repo, bpr, teams]
+      - modules:
+          - tests/cli/test_repo_*.py
+          - tests/cli/test_protection_import.py
+          - tests/cli/test_import.py
+          - tests/cli/test_smoke.py
+  automation:
+    profile: free
+    description: environments, secrets, variables, workflows, webhooks, custom properties and otterdog's other commands
+    default: true

@@ -44,6 +44,9 @@ The words of the harness and of this documentation. On the documentation site, t
 - **capability**: what a target can do (its plan, its features, its roles), probed once per session; the tests that
   need a missing capability are skipped with the reason ([capability matrix](capability-matrix.md)).
 - **baseline**: the known state of a test organization that a live session starts from and resets to.
+- **shard**: the share of the live items one test organization runs (`scenarios/shards.yaml`, `E2E_SHARD` of its
+  instance), so that several organizations run the live tiers at once
+  ([architecture](architecture.md#organizations-and-shards)).
 
 ## Scenarios and tests
 
