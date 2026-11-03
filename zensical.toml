@@ -74,7 +74,8 @@ name = "otterdog documentation"
 
 [project.theme]
 # partials/actions.html: the edit button of a generated page opens its source (docs_site.py, edit_url); main.html: the
-# announcement bar and the hero of the home page
+# announcement bar and the hero of the home page; partials/tabs.html: the tiers of the scenario explorer as a second
+# row of tabs
 custom_dir = "docs-theme"
 # otterdog's own logo and favicon (eclipse-csi/otterdog docs/otterdog.png and docs/favicon.png)
 logo = "assets/otterdog.png"

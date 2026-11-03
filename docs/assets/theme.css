@@ -37,6 +37,20 @@
   color: var(--e2e-eclipse-orange);
 }
 
+/* the second row of tabs: the sections of the active tab (docs-theme/partials/tabs.html) */
+.md-tabs.e2e-subtabs {
+  background-color: var(--md-primary-fg-color--dark);
+}
+
+.e2e-subtabs .md-tabs__item {
+  height: 2rem;
+}
+
+.e2e-subtabs .md-tabs__link {
+  margin-top: 0.6rem;
+  font-size: 0.65rem;
+}
+
 @media screen and (min-width: 45em) {
   .md-header .md-search__button,
   .md-header .md-search__button:focus,
@@ -63,16 +77,7 @@
 }
 
 .e2e-hero__inner {
-  display: flex;
-  align-items: center;
-  gap: 2rem;
   padding: 2.4rem 0.8rem;
-}
-
-.e2e-hero__logo {
-  flex: none;
-  width: 6rem;
-  height: 6rem;
 }
 
 .md-typeset .e2e-hero__title {
@@ -107,7 +112,6 @@
 
 @media screen and (max-width: 44.9375em) {
   .e2e-hero__inner {
-    flex-direction: column;
     text-align: center;
   }
 }

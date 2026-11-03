@@ -191,7 +191,8 @@ def test_stage_generates_the_pages_with_their_sources(staged: Any) -> None:
     assert {f"docs/{path.relative_to(DOCS).as_posix()}" for path in DOCS.rglob("*") if path.is_file()} <= set(
         staged.files
     )
-    assert "theme/partials/actions.html" in files and "edit_url: " not in files["docs/security.md"]
+    assert {"theme/main.html", "theme/partials/actions.html", "theme/partials/tabs.html"} <= set(files)
+    assert "edit_url: " not in files["docs/security.md"]
     assert "> [!" not in files["docs/index.md"], "GitHub callouts of README.md become admonitions"
     assert staged.problems == []
 
