@@ -101,6 +101,49 @@ A token kept in an external vault is entered as its reference (`vault:<path>/<fi
 vault access, checks the value like a typed token and writes the reference, never the value
 ([Secrets in an external vault](security.md#secrets-in-an-external-vault-t1-t3)).
 
+### Machine accounts in the browser
+
+Instead of clicking each token yourself, `otterdog-e2e accounts` signs in to github.com as each machine account in a
+visible Firefox window, enrolls two-factor authentication (authenticator app) when the account has none and creates
+the role's **classic** token (its scopes, the note of the prefilled URL, an expiration of 7, 30, 60 or 90 days). It
+follows the scripts of [eclipse-cbi/ci-admin](https://github.com/eclipse-cbi/ci-admin/tree/master/github/playwright)
+and their `pass` layout: each account has a directory, e.g. `bots/<project>/github.com`, given once with `--pass-dir`
+and kept as `E2E_<ROLE>_PASS_DIR` in the env file:
+
+| Entry | Read or written |
+|---|---|
+| `<dir>/username` | read (else `E2E_<ROLE>_LOGIN`) |
+| `<dir>/password` | read; asked once (hidden) and stored when missing |
+| `<dir>/2FA-seed` | read for the sign-in codes; written by the enrollment (base32, as `oathtool -b` reads it) |
+| `<dir>/2FA-recovery-codes` | written by the enrollment, one code per line |
+| `<dir>/otterdog-e2e-<instance>-token` | the instance's classic token (an account may serve several instances) |
+
+```bash
+poetry install -E browser                                   # once: Playwright (optional extra)
+PLAYWRIGHT_BROWSERS_PATH=~/.cache/otterdog-e2e/ms-playwright .venv/bin/python -m playwright install firefox
+.venv/bin/otterdog-e2e accounts --target free --pass-dir admin=bots/<project>/github.com \
+  --pass-dir author=bots/<project-author>/github.com          # --role, --rotate, --expires-in 90
+.venv/bin/otterdog-e2e setup --target free                  # finds the tokens in pass and checks them
+```
+
+`pass` runs with `PASSWORD_STORE_DIR`, else the `password-store.cbi-dir` of ci-admin's `~/.cbi/config`; in that case
+`PASSWORD_STORE_DIR` is written to the env file too, so that runs, doctor and ci-sync resolve the same references.
+`accounts` never writes a token to the env file: setup finds `<dir>/otterdog-e2e-<instance>-token` without a prompt,
+applies its checks (kind and scopes, isolation, owner membership) and only then writes the `pass:` reference. A
+stored valid token and a stored key mean nothing to do (no window opens); `--rotate` regenerates the token.
+
+`setup --browser` does the same inline: for each role without a valid token it asks the pass directory (empty: the
+usual prompt) and sets the account up before its checks; a failure in the browser falls back to the prompt. With the
+admin account in pass, the web login step also offers its `password` and `2FA-seed` entries (default no, like the
+web-UI tier itself).
+
+What stays yours: creating the accounts (GitHub's terms), a captcha, and the verification code GitHub e-mails when
+an account signs in from a new device (typed in the terminal, or in the window). When a page is not what the
+automation expects (GitHub changes them without notice), it stops at the named step and leaves the window open for
+you to look or finish by hand; the secrets already stored stay. The writes are ordered so that an interruption never
+locks an account out: the 2FA key is stored before the code that enables it, the recovery codes before they are
+acknowledged, the token as soon as GitHub shows it. Refused in CI.
+
 ### Secrets in a store
 
 With `--store`, setup keeps the secrets of the instance in HashiCorp Vault or pass, at the places of the
@@ -448,8 +491,8 @@ can, waits for the result.
 | Step | Why it is manual | What the harness does instead |
 |---|---|---|
 | Creating the machine accounts | GitHub's [Terms of Service](https://docs.github.com/en/site-policy/github-terms/github-terms-of-service): an account must be created by a human, accounts registered by bots or other automated methods are not permitted; a machine account is set up by a human who is responsible for it, and a person may maintain no more than one free machine account besides their own account, so the roles need accounts held by several people | the roles and their rules: [setup-free-org.md](setup-free-org.md#1-machine-accounts); setup validates each account through its token (isolation, one account per role) |
-| Enrolling two-factor authentication (TOTP) | done in the account's security settings ([configuring 2FA](https://docs.github.com/en/authentication/securing-your-account-with-two-factor-authentication-2fa/configuring-two-factor-authentication)); the setup key is shown once while enrolling and cannot be read back | setup asks the key in a hidden prompt and normalizes it; doctor checks the account's 2FA and the key without logging in |
-| Creating a personal access token, classic or fine-grained | no API creates a token; the creation page takes URL parameters for the name, description, resource owner, expiration (`expires_in`, at most 366 days) and permissions, but none for the repository access ([pre-filling a fine-grained token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#pre-filling-fine-grained-personal-access-token-details-using-url-parameters)); a classic token has no expiration parameter | prefilled URLs per role and kind; "All repositories" (config_reader: "Public repositories") and the classic expiration are named as the steps left; the token is checked before it is written |
+| Enrolling two-factor authentication (TOTP) | done in the account's security settings ([configuring 2FA](https://docs.github.com/en/authentication/securing-your-account-with-two-factor-authentication-2fa/configuring-two-factor-authentication)); the setup key is shown once while enrolling and cannot be read back; no API | `accounts` (or `setup --browser`) enrolls it in a browser window and stores the key and recovery codes in pass ([machine accounts in the browser](#machine-accounts-in-the-browser)); otherwise setup asks the key in a hidden prompt and normalizes it; doctor checks the account's 2FA and the key without logging in |
+| Creating a personal access token, classic or fine-grained | no API creates a token; the creation page takes URL parameters for the name, description, resource owner, expiration (`expires_in`, at most 366 days) and permissions, but none for the repository access ([pre-filling a fine-grained token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#pre-filling-fine-grained-personal-access-token-details-using-url-parameters)); a classic token has no expiration parameter | `accounts` (or `setup --browser`) creates the classic tokens in a browser window, into pass; otherwise prefilled URLs per role and kind, "All repositories" (config_reader: "Public repositories") and the classic expiration named as the steps left; either way the token is checked before it is written |
 | Creating a Free or Team organization | no REST or GraphQL API creates one. Enterprise Cloud enterprise owners can create an organization with the GraphQL mutation `createEnterpriseOrganization` ([enterprise administration](https://docs.github.com/en/enterprise-cloud@latest/graphql/reference/enterprise-admin)): the harness does not, it never holds an enterprise owner's token | setup prints the creation URL of the profile's plan (`https://github.com/account/organizations/new?plan=free` for the Free profile), or the Enterprise Cloud hint; while the profile is not known, the Free (and Team) URL with the Enterprise Cloud note and the hint to pass `--profile`; it reads `GET /orgs/{org}` again when you answer "Check again?" |
 | The organization's token policies (allow classic or fine-grained tokens, require approval, maximum lifetime) | organization settings only ([setting a token policy](https://docs.github.com/en/organizations/managing-programmatic-access-to-your-organization/setting-a-personal-access-token-policy-for-your-organization)); the REST API only reviews requests and revokes tokens, for GitHub Apps ([REST personal access tokens](https://docs.github.com/en/rest/orgs/personal-access-tokens)) | the settings to choose: [organization prerequisites](setup-free-org.md#organization-prerequisites); a token the policy blocks is refused by setup and doctor with the reason |
 | Registering the GitHub App | the manifest flow ends with an owner confirming the App on github.com ([registering an App from a manifest](https://docs.github.com/en/apps/sharing-github-apps/registering-a-github-app-from-a-manifest)) | setup and `app-manifest` serve the auto-posting form on `127.0.0.1`, receive GitHub's redirect, exchange the code at once and store the credentials |

@@ -421,6 +421,17 @@ command.
   invitation of the same run that is still pending when the role ends without a token after a token of another
   account was refused (admin token, write-scoped to the organization verified first: pin and plan). A new or stored
   App passes `safety.verify_app` before setup prints its installation link.
+- **Machine accounts in the browser** (`otterdog-e2e accounts`, `setup --browser`, [onboarding.md](onboarding.md#machine-accounts-in-the-browser)):
+  the only place the harness drives a browser itself, at onboarding on your machine (refused in CI), in a visible
+  Firefox with one fresh context per account, signed out and dropped when the account is done. Each account's
+  password, 2FA key, recovery codes and tokens live in `pass` in the ci-admin layout, outside the instance's store
+  items that CI environments read; they are written through `vaults.store` (`pass insert` on standard input, read
+  back), never a shell or an argument, registered with the redactor at once (the login is not a secret) and never
+  printed, screenshotted or saved: the token is read from the page, not the clipboard, and the recovery codes
+  download that GitHub requires stays in Playwright's temporary directory, deleted with the context. The writes come
+  before the browser step they protect (key before its code, codes before their acknowledgement, token as soon as it
+  is shown), so an interruption never locks an account out. The tokens expire (7 to 90 days, never "no expiration")
+  and reach the env file only through setup's checks above. Accounts are still created by a person (GitHub's terms).
 - **ci-sync uses your credential, never a machine account's**: it runs `gh` through `procs.run` with your `HOME` (your
   `gh` login and configuration); the sanitized environment strips every `E2E_*` and token variable, and only
   `GH_TOKEN`, `GITHUB_TOKEN`, `GH_HOST` and `GH_CONFIG_DIR` are passed on when you export them. It refuses to run when

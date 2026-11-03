@@ -19,8 +19,12 @@ run keeps its progress and the next run continues where it stopped:
    run setup again), and only then shows the token URL. When the role then ends without a token after a token of
    ANOTHER account was refused, the invitation this run created is cancelled while still pending (``DELETE
    /orgs/{org}/memberships/{login}``, admin token) and an accepted one is reported (never removed). Classic tokens are
-   checked before any membership (bootstrap invites and publicizes later);
-3. web-UI login of the admin account (optional): password and TOTP setup key (hidden, settings.normalize_totp_seed);
+   checked before any membership (bootstrap invites and publicizes later). A role whose machine account has a pass directory (E2E_<ROLE>_PASS_DIR, written by ``otterdog-e2e accounts``)
+   and the instance's token there (``<dir>/otterdog-e2e-<instance>-token``) takes it without a prompt, through the
+   same checks; with --browser, a role without a valid token is set up in the browser first (onboard/accounts.py,
+   ``run_account``), the prompt following when that fails;
+3. web-UI login of the admin account (optional): password and TOTP setup key (hidden, settings.normalize_totp_seed),
+   or the admin account's pass entries (opt-in);
 4. GitHub App (optional; the org description must carry the safety marker, as for ``app-manifest``): the manifest flow
    (browser click), E2E_APP_* written into the instance env file itself; a new or stored App is verified first
    (``safety.verify_app``: owned by the test org, installed on test orgs only; refused otherwise, ``--rotate app``),
@@ -65,6 +69,17 @@ import yaml
 
 from otterdog_e2e.context import in_ci, installation_problems
 from otterdog_e2e.github.http import GitHubError
+from otterdog_e2e.onboard.accounts import (
+    PASSWORD,
+    SEED,
+    AccountError,
+    AccountResult,
+    MachineAccount,
+    check_pass_dir,
+    pass_dir_env,
+    pass_environ,
+    token_entry,
+)
 from otterdog_e2e.onboard.envfile import (
     check_instance_name,
     instance_app_dir,
@@ -174,6 +189,7 @@ class SetupOptions:
     wait_timeout: float = DEFAULT_WAIT_TIMEOUT
     poll_interval: float = POLL_INTERVAL
     store: str | None = None  # secret store vault:<prefix> / pass:<prefix> (onboard/store.py)
+    browser: bool = False  # create the classic tokens of the machine accounts in the browser (onboard/accounts.py)
 
 
 @dataclass(frozen=True)
@@ -280,10 +296,12 @@ class SetupWizard:
         app_auth: Callable[[AppCredentials], Any] = _default_app_auth,
         bootstrap: Callable[[str], None] | None = None,
         doctor: Callable[[str], None] | None = None,
+        run_account: Callable[..., AccountResult] | None = None,
     ) -> None:
         """Bind the flow; nothing is read or asked before run(). ``run_manifest(target, webhook_url)`` returns the
         manifest code (None: no App step), ``bootstrap`` / ``doctor`` take the instance name (None: not offered),
-        ``write_http(admin_token, verified)`` is the only writing client (invitations)."""
+        ``write_http(admin_token, verified)`` is the only writing client (invitations), ``run_account(account, *,
+        org, rotate, environ)`` sets up a machine account in the browser for --browser (AccountSetup.setup)."""
         unknown = sorted(set(options.rotate) - set(ROTATABLE))
         if unknown:
             raise SetupError(f"--rotate: unknown value(s) {', '.join(unknown)} (expected {', '.join(ROTATABLE)})")
@@ -298,6 +316,7 @@ class SetupWizard:
         self.app_auth = app_auth
         self.bootstrap = bootstrap
         self.doctor = doctor
+        self.run_account = run_account
         self.instance = check_instance_name(options.instance)
         self.env_path = instance_env_path(self.instance, environ)
         self.values: dict[str, str] = {}
@@ -479,6 +498,11 @@ class SetupWizard:
             self.echo(f"{role}: found in the store at {found}")
             if self.keep_stored(role, found, org):
                 return
+        found = None if stored or rotate else self.from_account(role)
+        if found is not None:
+            self.echo(f"{role}: found in the machine account's pass entries at {found}")
+            if self.keep_stored(role, found, org):
+                return
         # the oracle is usually left out (the admin token serves as oracle): only that question defaults to no
         if (
             not stored
@@ -486,6 +510,8 @@ class SetupWizard:
             and not self.io.confirm(f"Set up the {role} token? ({spec.purpose})", role != "oracle")
         ):
             self.echo(f"{role}: skipped (run setup again to add it)")
+            return
+        if self.options.browser and self.browser_token(role, org):
             return
         if self.prompt_token(role, org, stored=stored if rotate else None):
             return
@@ -580,6 +606,70 @@ class SetupWizard:
     def stored_or_plain(self, name: str, value: str) -> str:
         """What the env file gets for a plain secret: its store reference (written there) with a store, else it."""
         return self.into_store(name, value) if self.store and not is_reference(value) else value
+
+    # --- machine accounts in pass (onboard/accounts.py) ---------------------------------------------------------
+    def pass_env(self) -> dict[str, str]:
+        """provider_env() with the PASSWORD_STORE_DIR of ci-admin's ~/.cbi/config when neither sets one."""
+        return pass_environ(self.provider_env())
+
+    def keep_store_dir(self) -> None:
+        """Write the PASSWORD_STORE_DIR the account entries were read with (from ~/.cbi/config), so that runs, doctor
+        and ci-sync resolve the same pass references."""
+        directory = self.pass_env().get("PASSWORD_STORE_DIR")
+        if directory and not self.provider_env().get("PASSWORD_STORE_DIR"):
+            self.write({"PASSWORD_STORE_DIR": directory})
+            self.echo(f"PASSWORD_STORE_DIR={directory} (from ~/.cbi/config) written: the pass references use it")
+
+    def account_ref(self, role: str, item: str) -> str | None:
+        """``pass:<dir>/<item>`` of the role's account (E2E_<ROLE>_PASS_DIR) when it can be read, else None."""
+        directory = self.values.get(pass_dir_env(role))
+        if not directory:
+            return None
+        reference = MachineAccount(role, directory).ref(item)
+        try:
+            resolve(reference, self.pass_env())
+        except VaultError:
+            return None
+        self.keep_store_dir()
+        return reference
+
+    def from_account(self, role: str) -> str | None:
+        """The reference of the instance's token in the role's account entries (written by ``accounts``)."""
+        return self.account_ref(role, token_entry(self.instance))
+
+    def browser_token(self, role: str, org: OrgInfo) -> bool:
+        """--browser: set up the role's machine account in the browser (pass directory asked once and written), then
+        check its token like a typed one; False (the prompt follows) when it is skipped or fails."""
+        if self.run_account is None or ROLE_TOKENS[role].classic_scopes is None:
+            return False
+        env = pass_dir_env(role)
+        directory = self.values.get(env)
+        if not directory:
+            answer = self.io.prompt(
+                f"{role}: pass directory of the machine account (ci-admin layout, e.g. bots/<project>/github.com; "
+                "empty: no browser)",
+                "",
+            ).strip()
+            if not answer:
+                return False
+            try:
+                directory = check_pass_dir(answer)
+            except AccountError as exc:
+                self.echo(f"{role}: {exc}")
+                return False
+            self.write({env: directory})
+        try:
+            result = self.run_account(
+                MachineAccount(role, directory),
+                org=org.login,
+                rotate=role in self.options.rotate,
+                environ=self.provider_env(),
+            )
+        except AccountError as exc:
+            self.echo(f"{role}: browser: {exc}")
+            return False
+        self.keep_store_dir()
+        return self.keep_stored(role, result.token_ref, org)
 
     def typed_secret(self, label: str, answer: str) -> tuple[str, str | None]:
         """(value, reference) of a typed secret: a vault reference resolved (SetupError when it cannot be read)."""
@@ -1036,6 +1126,8 @@ class SetupWizard:
             if all(found.values()):
                 self.echo(f"web-UI login: found in the store at {found[password_env]} and {found[seed_env]}")
                 self.write({name: str(reference) for name, reference in found.items()})
+            elif self.account_web_login(password_env, seed_env):
+                return
         stored_seed = self.values.get(seed_env)
         if self.values.get(password_env) and stored_seed and not rotate:
             try:
@@ -1097,6 +1189,25 @@ class SetupWizard:
                 seed_env: self.stored_or_plain(seed_env, seed),
             }
         )
+
+    def account_web_login(self, password_env: str, seed_env: str) -> bool:
+        """Offer the admin account's pass entries (password, 2FA-seed) as the web-UI login (opt-in, default no, like
+        the web step itself); True when their references were written."""
+        refs = {password_env: self.account_ref("admin", PASSWORD), seed_env: self.account_ref("admin", SEED)}
+        if not all(refs.values()) or not self.io.confirm(
+            f"Use the admin account's pass entries {refs[password_env]} and {refs[seed_env]} as the web-UI login? "
+            "(optional: the web-UI tier logs in to github.com as the admin, trusted SUTs only)",
+            False,
+        ):
+            return False
+        try:
+            normalize_totp_seed(resolve(str(refs[seed_env]), self.pass_env()), where=seed_env)
+        except (VaultError, WebCredentialsError) as exc:
+            self.echo(f"web-UI login: {exc}")
+            return False
+        self.write({name: str(reference) for name, reference in refs.items()})
+        self.echo(f"web-UI login: {password_env} and {seed_env} refer to the admin account's pass entries")
+        return True
 
     def read_seed(self, seed_env: str) -> str | None:
         """A TOTP setup key normalized by settings.normalize_totp_seed, or the vault reference of a valid one (None:

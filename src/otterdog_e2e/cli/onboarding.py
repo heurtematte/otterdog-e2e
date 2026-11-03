@@ -9,6 +9,7 @@ secrets with the operator's gh login. Both are refused in CI.
 
 from __future__ import annotations
 
+import contextlib
 import functools
 import os
 import sys
@@ -25,10 +26,13 @@ from otterdog_e2e.context import E2EContext, E2EOptions, parse_duration
 from otterdog_e2e.redact import REDACTOR
 
 if TYPE_CHECKING:
+    from otterdog_e2e.onboard.accounts import AccountResult, AccountsIO, MachineAccount
+    from otterdog_e2e.onboard.browser import PlaywrightBrowser
     from otterdog_e2e.settings import Target
 
 # --- setup and ci-sync: onboarding of a test org instance (otterdog_e2e.onboard, docs/onboarding.md) ---------------
-SETUP_ROTATABLE = ("admin", "oracle", "author", "approver", "outsider", "config_reader", "web", "app")
+ACCOUNT_ROLES = ("admin", "oracle", "author", "approver", "outsider", "config_reader")  # onboard.tokens.ROLES
+SETUP_ROTATABLE = (*ACCOUNT_ROLES, "web", "app")
 
 
 def _instance(target: str) -> str:
@@ -67,6 +71,48 @@ def _setup_doctor(instance: str, *, pristine: Mapping[str, str]) -> None:
     fresh copy of ``pristine`` (see _setup_bootstrap)."""
     context = E2EContext.create(E2EOptions(target=instance), environ=dict(pristine), make_dirs=False)
     _echo(render_rows(Doctor(context).run()))
+
+
+def _accounts_io() -> AccountsIO:
+    """The terminal side of onboard.accounts (hidden password prompt, plain device code prompt)."""
+    from otterdog_e2e.onboard.accounts import AccountsIO
+
+    return AccountsIO(
+        echo=_echo,
+        secret_prompt=lambda text: str(click.prompt(text, default="", hide_input=True, show_default=False)),
+        prompt=lambda text: str(click.prompt(text, default="", show_default=False)),
+    )
+
+
+def _open_browser(stack: contextlib.ExitStack) -> PlaywrightBrowser:
+    """A visible Firefox for the machine accounts, closed with ``stack``; failed accounts pause before closing."""
+    from otterdog_e2e.onboard.browser import PlaywrightBrowser
+    from otterdog_e2e.sut.cli_install import playwright_browsers_path
+
+    def pause(message: str) -> None:
+        """Wait for the operator before a failed account's window closes."""
+        click.prompt(message, default="", show_default=False)
+
+    browser = PlaywrightBrowser(browsers_path=playwright_browsers_path(_settings()), pause=pause)
+    return stack.enter_context(browser)
+
+
+def _setup_accounts(instance: str, days: int, stack: contextlib.ExitStack) -> Callable[..., AccountResult]:
+    """``run_account`` of the setup wizard (--browser): AccountSetup.setup in one browser opened at first use."""
+    from otterdog_e2e.onboard.accounts import AccountSetup
+
+    opened: list[PlaywrightBrowser] = []
+
+    def run_account(account: MachineAccount, *, org: str, rotate: bool, environ: Mapping[str, str]) -> AccountResult:
+        """Set up one machine account."""
+        if not opened:
+            opened.append(_open_browser(stack))
+        accounts = AccountSetup(
+            instance, org=org, environ=environ, browser=opened[0], io=_accounts_io(), days=days, rotate=rotate
+        )
+        return accounts.setup(account)
+
+    return run_account
 
 
 def _setup_manifest(port: int, open_url: Callable[[str], Any] | None) -> Callable[[Target, str], str]:
@@ -127,6 +173,12 @@ def _setup_manifest(port: int, open_url: Callable[[str], Any] | None) -> Callabl
     help="keep the secrets in a secret store, vault:<prefix> or pass:<prefix> (e.g. vault:otterdog-e2e): the env file "
     "gets references only (docs/security.md, reference layout)",
 )
+@click.option(
+    "--browser",
+    is_flag=True,
+    help="create the classic tokens (and enroll 2FA) of the machine accounts in a Firefox window, their secrets in "
+    "pass (ci-admin layout, E2E_<ROLE>_PASS_DIR), like `otterdog-e2e accounts`",
+)
 @_handled
 def setup_command(
     target: str,
@@ -141,12 +193,13 @@ def setup_command(
     wait_timeout: str,
     open_browser: bool,
     store: str | None,
+    browser: bool,
 ) -> None:
     """Onboard a test org interactively: org, tokens of every role, web login, GitHub App, then bootstrap and doctor.
 
     Every validated value is written at once to ~/.config/otterdog-e2e/<instance>.env (0600): an interrupted run
     keeps its progress and the next one continues. Refused in CI. What GitHub does not let a program do (accounts,
-    token creation, org creation, App clicks) is printed as prefilled URLs.
+    org creation, App clicks) is printed as prefilled URLs; token creation too, unless --browser.
     """
     import webbrowser
 
@@ -169,6 +222,7 @@ def setup_command(
         open_urls=open_browser,
         wait_timeout=timeout,
         store=store,
+        browser=browser,
     )
     io = WizardIO(
         prompt=lambda text, default: str(click.prompt(text, default=default)).strip(),
@@ -177,19 +231,117 @@ def setup_command(
         echo=_echo,
         open_url=webbrowser.open,
     )
-    wizard = SetupWizard(
-        options,
-        io,
-        environ=pristine,
-        settings=_settings(),
-        run_manifest=_setup_manifest(port, webbrowser.open if open_browser else None),
-        bootstrap=functools.partial(_setup_bootstrap, pristine=pristine, wait_timeout=timeout),
-        doctor=functools.partial(_setup_doctor, pristine=pristine),
+    with contextlib.ExitStack() as stack:
+        wizard = SetupWizard(
+            options,
+            io,
+            environ=pristine,
+            settings=_settings(),
+            run_manifest=_setup_manifest(port, webbrowser.open if open_browser else None),
+            bootstrap=functools.partial(_setup_bootstrap, pristine=pristine, wait_timeout=timeout),
+            doctor=functools.partial(_setup_doctor, pristine=pristine),
+            run_account=_setup_accounts(options.instance, expires_in, stack) if browser else None,
+        )
+        try:
+            wizard.run()
+        except SetupError as exc:
+            raise click.ClickException(str(exc)) from None
+
+
+@main.command("accounts")
+@click.option("--target", "target", required=True, help="instance name (env file ~/.config/otterdog-e2e/<name>.env)")
+@click.option(
+    "--role",
+    "roles",
+    multiple=True,
+    type=click.Choice(ACCOUNT_ROLES),
+    help="role(s) to set up, repeatable (default: every role with a pass directory)",
+)
+@click.option(
+    "--pass-dir",
+    "pass_dirs",
+    multiple=True,
+    metavar="ROLE=DIR",
+    help="pass directory of a role's machine account in the ci-admin layout (e.g. admin=bots/<project>/github.com), "
+    "written as E2E_<ROLE>_PASS_DIR; repeatable",
+)
+@click.option("--rotate", is_flag=True, help="create a new token even when the one in pass is valid")
+@click.option(
+    "--expires-in",
+    default="90",
+    show_default=True,
+    type=click.Choice(["7", "30", "60", "90"]),
+    help="days of validity of the classic tokens",
+)
+@_handled
+def accounts_command(
+    target: str, roles: tuple[str, ...], pass_dirs: tuple[str, ...], rotate: bool, expires_in: str
+) -> None:
+    """Set up machine accounts in a Firefox window: sign in, enroll 2FA when missing, create the classic token.
+
+    Secrets in pass, ci-admin layout (<dir>/username, password, 2FA-seed, 2FA-recovery-codes,
+    otterdog-e2e-<instance>-token); PASSWORD_STORE_DIR, else ~/.cbi/config. The env file gets the pass directories
+    only: `otterdog-e2e setup` then finds each token in pass and checks it. Refused in CI.
+    """
+    from otterdog_e2e.context import in_ci
+    from otterdog_e2e.onboard.accounts import (
+        AccountError,
+        AccountSetup,
+        MachineAccount,
+        check_pass_dir,
+        pass_dir_env,
+        pass_environ,
     )
-    try:
-        wizard.run()
-    except SetupError as exc:
-        raise click.ClickException(str(exc)) from None
+    from otterdog_e2e.onboard.envfile import instance_env_path, read_env_file, update_env_file
+    from otterdog_e2e.onboard.wizard import ENV_FILE_HEADER
+
+    if in_ci(os.environ):
+        raise click.ClickException("accounts drives a visible browser and is refused when CI is set")
+    instance = _instance(target)
+    path = instance_env_path(instance, os.environ)
+    values = read_env_file(path) if path.is_file() else {}
+    updates: dict[str, str | None] = {}
+    for item in pass_dirs:
+        role, sep, directory = item.partition("=")
+        if not sep or role.strip() not in ACCOUNT_ROLES:
+            raise click.UsageError(f"--pass-dir: expected ROLE=DIR with a role of setup, got {item!r}")
+        try:
+            updates[pass_dir_env(role.strip())] = check_pass_dir(directory)
+        except AccountError as exc:
+            raise click.UsageError(f"--pass-dir: {exc}") from None
+    environ = {**os.environ, **values, **{key: str(value) for key, value in updates.items()}}
+    store_dir = pass_environ(environ).get("PASSWORD_STORE_DIR")
+    if store_dir and not environ.get("PASSWORD_STORE_DIR"):
+        updates["PASSWORD_STORE_DIR"] = store_dir  # from ~/.cbi/config: runs must resolve the same references
+    if updates:
+        for name in update_env_file(path, updates, header=ENV_FILE_HEADER.format(instance=instance)):
+            _echo(f"saved {name} in {path}")
+        values = read_env_file(path)
+    selected = roles or tuple(role for role in ACCOUNT_ROLES if values.get(pass_dir_env(role)))
+    missing = [role for role in selected if not values.get(pass_dir_env(role))]
+    if not selected or missing:
+        raise click.UsageError(
+            f"no pass directory for {', '.join(missing) or 'any role'}: --pass-dir <role>=bots/<project>/github.com"
+        )
+    accounts = [MachineAccount(role, values[pass_dir_env(role)]) for role in selected]
+    with contextlib.ExitStack() as stack:
+        setup = AccountSetup(
+            instance,
+            org=values.get("E2E_ORG"),
+            environ={**os.environ, **values},
+            browser=_open_browser(stack),
+            io=_accounts_io(),
+            days=int(expires_in),
+            rotate=rotate,
+        )
+        try:
+            for result in setup.run(accounts):
+                state = "created" if result.token_created else "kept"
+                enrolled = ", 2FA enrolled" if result.enrolled else ""
+                _echo(f"{result.role}: {result.login}: token {state} at {result.token_ref}{enrolled}")
+        except AccountError as exc:
+            raise click.ClickException(str(exc)) from None
+    _echo(f"next: otterdog-e2e setup --target {instance} (finds the tokens in pass and checks them)")
 
 
 @main.command("ci-sync")

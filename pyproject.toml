@@ -18,6 +18,8 @@ dependencies = [
 
 [project.optional-dependencies]
 mongo = ["pymongo (>=4.8,<5.0)"]
+# `otterdog-e2e accounts` and `setup --browser`: machine accounts set up in Firefox (onboard/browser.py)
+browser = ["playwright (>=1.49,<2.0)"]
 
 [project.scripts]
 otterdog-e2e = "otterdog_e2e.cli:main"

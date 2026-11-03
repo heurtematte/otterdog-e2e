@@ -369,6 +369,15 @@ PUBLIC_NAMES: dict[str, list[str]] = {
         "vault_policies",
     ],
     "otterdog_e2e.onboard.cisync": ["CiSync", "CiSyncError", "Operation", "workflow_names", "environment_kinds"],
+    "otterdog_e2e.onboard.accounts": [
+        "AccountSetup",
+        "AccountError",
+        "AccountResult",
+        "MachineAccount",
+        "pass_dir_env",
+        "totp_code",
+    ],
+    "otterdog_e2e.onboard.browser": ["PlaywrightBrowser", "PlaywrightSession"],
     "otterdog_e2e.context": ["E2EContext", "E2EOptions", "get_context", "E2E_CONTEXT_KEY"],
     # the facets E2EContext is assembled from (each over ContextState) and the small helpers
     "otterdog_e2e.context.helpers": [
