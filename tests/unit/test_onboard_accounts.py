@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+import click
 import pytest
 
 from otterdog_e2e.onboard import accounts as accounts_module
@@ -107,9 +108,23 @@ def test_one_set_of_accounts_for_every_instance() -> None:
     for instance in ("repos", "webapp", "enterprise"):
         assert config.account(instance, "admin").ref("password") == f"{BASE}-password"
         assert config.account(instance, "admin").label == "otterdog-e2e-free-admin"
-    for bad in ("", 3, "a/../b"):
+    for bad in ("", 3, "a/../b", {}, {"enterprise": ""}, {"enterprise": 3}, {"a/../b": "free"}):
         with pytest.raises(AccountError, match=r"accounts\.set"):
             parse_accounts_config({"store": STORE, "set": bad}, "setup.yaml")
+
+
+def test_an_instance_can_keep_its_own_accounts() -> None:
+    """accounts.set as a mapping: the set of each instance named, ``default`` for the others; without ``default``,
+    the others use their own accounts."""
+    config = parse_accounts_config({"store": STORE, "set": {"default": "free", "enterprise": "enterprise"}}, "x")
+    assert config.account("repos", "admin").label == "otterdog-e2e-free-admin"
+    assert config.account("enterprise", "admin").label == "otterdog-e2e-enterprise-admin"
+    assert config.account("enterprise", "config_reader").ref("token") == (
+        f"{STORE}/otterdog-e2e-enterprise-config-reader-api-token"
+    )
+    config = parse_accounts_config({"store": STORE, "set": {"repos": "free"}}, "x")
+    assert config.account("repos", "admin").label == "otterdog-e2e-free-admin"
+    assert config.account("webapp", "admin").label == "otterdog-e2e-webapp-admin"
 
 
 def test_the_setup_configuration_file(tmp_path: Path) -> None:
@@ -166,6 +181,7 @@ class FakeSession:
     enabled: bool = False
     codes: list[str] = field(default_factory=lambda: list(CODES))
     asked_login_code: bool = False
+    unreadable_key: bool = False  # the page hides the setup key: asked
 
     def login(self, username: str, password: str, *, code: Callable[[], str], device_code: Callable[[], str]) -> str:
         """Sign in (asks a 2FA code when enabled)."""
@@ -184,15 +200,17 @@ class FakeSession:
         keep_seed: Callable[[str], None],
         code: Callable[[str], str],
         keep_recovery_codes: Callable[[list[str]], None],
+        ask_key: Callable[[str], str],
     ) -> None:
-        """Setup key, code, recovery codes, acknowledgement."""
-        keep_seed(SHOWN_SEED)
-        self.events.append(("submit code", code(SHOWN_SEED)))
+        """Setup key (asked when unreadable), code, recovery codes, acknowledgement."""
+        shown = ask_key("GitHub's setup key could not be read (0 characters)") if self.unreadable_key else SHOWN_SEED
+        keep_seed(shown)
+        self.events.append(("submit code", code(shown)))
         keep_recovery_codes(self.codes)
         self.events.append(("acknowledge",))
         self.enabled = True
 
-    def classic_token(self, *, note: str, url: str, days: int) -> str:
+    def classic_token(self, *, note: str, url: str, days: int | None) -> str:
         """A new token value."""
         self.events.append(("token", note, url, days))
         return NEW_TOKEN
@@ -200,6 +218,20 @@ class FakeSession:
     def open(self, url: str) -> None:
         """Show a page."""
         self.events.append(("open", url))
+
+    def join_org(self, org: str, login: str, *, public: bool) -> None:
+        """Accept an invitation (fails for the org named "broken")."""
+        if org == "broken":
+            raise AccountError("invitation: no Join button")
+        self.events.append(("join", org, login, public))
+
+    def install_app(self, url: str) -> None:
+        """Install the App."""
+        self.events.append(("install", url))
+
+    def confirm_app(self, url: str) -> None:
+        """Create the App."""
+        self.events.append(("confirm", url))
 
 
 class FakeBrowser:
@@ -226,6 +258,8 @@ class World:
     events: list[tuple[Any, ...]] = field(default_factory=list)
     echoed: list[str] = field(default_factory=list)
     secrets: list[str] = field(default_factory=list)
+    asked: list[str] = field(default_factory=list)  # the hidden prompts
+    plain: list[str] = field(default_factory=list)  # the references read as no secret
     tokens: dict[str, tuple[str, set[str] | None]] = field(default_factory=dict)  # token -> (login, scopes)
 
     def http(self, token: str, role: str) -> FakeGitHubHttp:
@@ -245,6 +279,7 @@ class World:
 
     def secret_prompt(self, text: str) -> str:
         """Next scripted hidden answer."""
+        self.asked.append(text)
         assert self.secrets, f"unexpected prompt: {text}"
         return self.secrets.pop(0)
 
@@ -261,10 +296,12 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
     state = World(tmp_path)
     state.entries.update({f"{BASE}-email": EMAIL, f"{BASE}-password": PASSWORD})
 
-    def resolve(value: str, environ: object) -> str:
-        """entries[value]."""
+    def resolve(value: str, environ: object, *, secret: bool = True) -> str:
+        """entries[value]; the values read as no secret are recorded in ``plain``."""
         if value not in state.entries:
             raise VaultError(f"{value}: is not in the password store")
+        if not secret:
+            state.plain.append(value)
         return state.entries[value]
 
     def store(value: str, secret: str, environ: object) -> None:
@@ -311,9 +348,22 @@ def test_fresh_account_gets_2fa_and_its_token(world: World) -> None:
     _, note, url, days = next(event for event in world.events if event[0] == "token")
     assert note.startswith("otterdog-e2e admin of the test organization e2e-test-org (instance free)")
     assert url.startswith("https://github.com/settings/tokens/new?scopes=repo,workflow,admin:org,admin:org_hook,")
-    assert days == 90 and browser.opened == 1
+    assert days is None and browser.opened == 1  # no expiration
+    assert "classic token created (no expiration)" in world.output
     assert_no_secret(world.output)
     assert f"stored {TOKEN_REF}" in world.output  # logins and e-mails are no secrets: references keep them
+
+
+def test_a_setup_key_the_page_hides_is_asked(world: World) -> None:
+    """A setup key the page does not give is asked (hidden) from the dialog left open, then stored and used."""
+    world.secrets.append(SHOWN_SEED)
+    setup, _ = world.setup(FakeSession(world.events, unreadable_key=True))
+    assert setup.setup(ACCOUNT).enrolled and world.entries[f"{BASE}-2FA-seed"] == SEED
+    (asked,) = world.asked
+    assert asked == (
+        "  admin: GitHub's setup key could not be read (0 characters): copy it from the dialog in the browser window "
+        "and paste it here (input hidden)"
+    )
 
 
 def test_the_known_login_signs_in_and_must_match(world: World) -> None:
@@ -424,9 +474,13 @@ def test_recovery_codes_are_required(world: World) -> None:
 
 
 def test_classic_expirations_only(world: World) -> None:
-    """The classic form offers 7, 30, 60 and 90 days."""
+    """The classic form offers 7, 30, 60 and 90 days, or no expiration (None)."""
     with pytest.raises(AccountError, match="7, 30, 60, 90 days"):
         world.setup(FakeSession(world.events), days=366)
+    setup, _ = world.setup(FakeSession(world.events), days=30)
+    setup.setup(ACCOUNT)
+    assert next(event for event in world.events if event[0] == "token")[3] == 30
+    assert "classic token created (30 days)" in world.output
 
 
 # --- otterdog-e2e accounts ------------------------------------------------------------------------------------------
@@ -620,6 +674,186 @@ def test_web_login_command_is_refused_in_ci(cli_env: dict[str, str | None]) -> N
     assert result.exit_code == 1 and "refused when CI is set" in result.output
 
 
+# --- setup: the web steps in the browser, --shards ------------------------------------------------------------------
+def web_steps(cli_env: dict[str, str | None], stack: contextlib.ExitStack) -> Any:
+    """The web steps of setup for the instance free, with the fake browser and the accounts store of cli_env."""
+    from otterdog_e2e.cli import onboarding
+
+    return onboarding._WebSteps(stack, "free", {key: value for key, value in cli_env.items() if value is not None})
+
+
+def test_setup_web_steps_sign_the_store_accounts_in(
+    world: World, cli_env: dict[str, str | None], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Each step asks first, signs the role's account of the accounts store in and does the step; a declined one, a
+    role the store does not know or a failing step is left to the operator."""
+    answers: list[bool] = [True, True, True, False, True]
+    monkeypatch.setattr("click.confirm", lambda text, default: answers.pop(0))
+    with contextlib.ExitStack() as stack:
+        web = web_steps(cli_env, stack)
+        assert web.join("admin", "e2e-test-org", LOGIN, public=True)
+        assert web.install_app("https://github.com/apps/a/installations/new")
+        assert web.confirm_app("http://127.0.0.1:8765/")
+        assert not web.join("admin", "e2e-test-org", LOGIN, public=False)  # declined
+        assert not web.join("author", "e2e-test-org", "e2e-author", public=True)  # not in the store: not asked
+        assert not web.join("admin", "broken", LOGIN, public=True)
+    logins = [event for event in world.events if event[0] == "login"]
+    steps = [event for event in world.events if event[0] != "login"]
+    assert logins == [("login", EMAIL, PASSWORD)] * 4
+    assert steps == [
+        ("join", "e2e-test-org", LOGIN, True),
+        ("install", "https://github.com/apps/a/installations/new"),
+        ("confirm", "http://127.0.0.1:8765/"),
+    ]
+    assert answers == []
+
+
+def test_automatic_web_steps_ask_nothing(
+    world: World, cli_env: dict[str, str | None], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """automatic (setup with the accounts store): each step is done without a confirmation."""
+    from otterdog_e2e.cli import onboarding
+
+    monkeypatch.setattr("click.confirm", lambda text, default: pytest.fail(f"asked: {text}"))
+    environ = {key: value for key, value in cli_env.items() if value is not None}
+    with contextlib.ExitStack() as stack:
+        web = onboarding._WebSteps(stack, "free", environ, automatic=True)
+        assert web.join("admin", "e2e-test-org", LOGIN, public=True)
+    assert ("join", "e2e-test-org", LOGIN, True) in world.events
+
+
+def test_bootstrap_alone_accepts_the_invitations_in_one_firefox(
+    world: World, cli_env: dict[str, str | None], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`bootstrap` without setup: with the accounts store, the invitations are accepted in Firefox (one browser for
+    all, nothing asked); without the store or in CI, no browser."""
+    import types
+
+    from otterdog_e2e.cli import bootstrap as cli_bootstrap
+    from otterdog_e2e.cli import onboarding
+
+    opened: list[int] = []
+    monkeypatch.setattr(
+        onboarding, "_open_browser", lambda stack: opened.append(1) or FakeBrowser(FakeSession(world.events))
+    )
+    monkeypatch.setattr("click.confirm", lambda text, default: pytest.fail(f"asked: {text}"))
+    environ = {key: value for key, value in cli_env.items() if value is not None}
+
+    def context(**extra: str) -> Any:
+        """The bits of E2EContext the join uses."""
+        target = types.SimpleNamespace(name="free")
+        return types.SimpleNamespace(environ={**environ, **extra}, require_target=lambda: target)
+
+    with contextlib.ExitStack() as stack:
+        join = cli_bootstrap._browser_join(context(), stack)
+        assert join is not None
+        assert join("admin", "e2e-test-org", LOGIN, public=True) and join("admin", "e2e-test-org", LOGIN, public=False)
+        assert cli_bootstrap._browser_join(context(CI="true"), stack) is None
+        assert cli_bootstrap._browser_join(context(HOME=str(world.tmp_path / "nobody")), stack) is None
+    assert [event for event in world.events if event[0] == "join"] == [
+        ("join", "e2e-test-org", LOGIN, True),
+        ("join", "e2e-test-org", LOGIN, False),
+    ]
+    assert opened == [1]
+
+
+def invoke_setup(env: dict[str, str | None], *args: str, input: str = "") -> Any:
+    """Run ``otterdog-e2e setup``."""
+    from click.testing import CliRunner
+
+    from otterdog_e2e import cli
+
+    return CliRunner().invoke(cli.main, ["setup", *args], env=env, input=input)
+
+
+def test_setup_shards_sets_up_every_shard_instance(
+    cli_env: dict[str, str | None], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """--shards: one setup per shard instance in the map's order; with the accounts store nothing is asked: an instance
+    set up already runs again until its setup finished (it is then in @shards); without it (--no-browser), an
+    instance set up already runs again only when confirmed; a stopped one names how to resume; --target and --shards
+    exclude each other."""
+    from otterdog_e2e.batch import list_file
+    from otterdog_e2e.cli import onboarding
+
+    done: list[tuple[str, str | None]] = []
+    monkeypatch.setattr(
+        onboarding, "_shard_instances", lambda environ: [("enterprise", "enterprise"), ("free", "repos")]
+    )
+    monkeypatch.setattr(onboarding, "_set_up_already", lambda instance, shard, environ: instance == "enterprise")
+    monkeypatch.setattr(
+        onboarding, "_setup_instance", lambda options, **kw: done.append((options.instance, options.shard))
+    )
+    result = invoke_setup(cli_env, "--shards")
+    assert result.exit_code == 0, result.output
+    assert done == [("enterprise", "enterprise"), ("free", "repos")]  # enterprise never finished its setup
+    assert "\u2501\u2501 [1/2] enterprise \u2501" in result.output
+    assert "\u2501\u2501 [2/2] free (shard repos) \u2501" in result.output
+    assert "otterdog-e2e run --target @shards --parallel 2" in result.output
+    shards = list_file("shards", {"HOME": str(cli_env["HOME"])})
+    shards.parent.mkdir(parents=True)
+    shards.write_text("# the instances of @shards\nenterprise\n")
+    done.clear()
+    result = invoke_setup(cli_env, "--shards")
+    assert result.exit_code == 0 and done == [("free", "repos")], result.output
+    assert "\u2013 kept as it is (setup --target enterprise runs it again)" in result.output
+    assert "run its setup again?" not in result.output
+    done.clear()
+    result = invoke_setup(cli_env, "--shards", "--no-browser", input="\n")
+    assert result.exit_code == 0 and done == [("free", "repos")], result.output
+    assert "enterprise is set up already: run its setup again? [y/N]" in result.output
+
+    def stopped(options: Any, **kw: Any) -> None:
+        raise click.ClickException("no admin token")
+
+    monkeypatch.setattr(onboarding, "_setup_instance", stopped)
+    result = invoke_setup(cli_env, "--shards", "--no-browser", input="y\n")
+    assert result.exit_code == 1 and "setup of enterprise stopped: no admin token" in result.output
+    for args in ([], ["--target", "free", "--shards"], ["--shards", "--org", "x"]):
+        assert invoke_setup(cli_env, *args).exit_code == 2
+
+
+def test_setup_lines_get_their_marks_in_colour(monkeypatch: pytest.MonkeyPatch) -> None:
+    """In a terminal: titles bold, the done mark green, the attention mark yellow, skipped and saved lines dim, the
+    rest as it is (click drops the styles when the output is no terminal)."""
+    from otterdog_e2e.cli import onboarding
+
+    printed: list[str] = []
+    monkeypatch.setattr(click, "echo", printed.append)
+    lines = ["▸ Organization", "  ✓ e2e-test-org (id 1)", "  ! token refused", "    saved E2E_ORG", "plain"]
+    for line in lines:
+        onboarding._setup_echo(line)
+    assert printed == [
+        click.style("▸ Organization", bold=True),
+        "  " + click.style("✓", fg="green", bold=True) + " e2e-test-org (id 1)",
+        "  " + click.style("!", fg="yellow", bold=True) + " token refused",
+        click.style("    saved E2E_ORG", dim=True),
+        "plain",
+    ]
+
+
+def test_the_instance_of_a_shard_is_the_one_that_selects_it(cli_env: dict[str, str | None], tmp_path: Path) -> None:
+    """An instance whose E2E_SHARD names a shard serves it (the existing free organization as repos), the others are
+    named after their shard."""
+    from otterdog_e2e.cli import onboarding
+
+    config = Path(str(cli_env["HOME"])) / ".config" / "otterdog-e2e"
+    (config / "free.env").write_text("E2E_PROFILE=free\nE2E_SHARD=repos\n")
+    environ = {key: value for key, value in cli_env.items() if value is not None}
+    instances = onboarding._shard_instances(environ)
+    assert instances == [
+        ("enterprise", "enterprise"),
+        ("webapp", "webapp"),
+        ("org-level", "org-level"),
+        ("free", "repos"),
+        ("automation", "automation"),
+    ]
+    assert not onboarding._set_up_already("free", "repos", environ)
+    (config / "free.env").write_text("E2E_SHARD=repos\nE2E_ORG_ID=1\nE2E_ADMIN_TOKEN=pass:x\n")
+    assert onboarding._set_up_already("free", "repos", environ)
+    assert not onboarding._set_up_already("free", "webapp", environ)
+
+
 # --- onboard.browser without Playwright -----------------------------------------------------------------------------
 def test_browser_without_playwright_names_the_install(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """The browser module imports without Playwright (an optional extra); opening the browser then fails with the
@@ -639,3 +873,193 @@ def test_browser_without_playwright_names_the_install(tmp_path: Path, monkeypatc
         browser.__enter__()
     assert f"PLAYWRIGHT_BROWSERS_PATH={tmp_path / 'ms-playwright'} .venv/bin/python" in str(caught.value)
     assert CLASSIC_TOKEN_RE.fullmatch(NEW_TOKEN) and not CLASSIC_TOKEN_RE.fullmatch("github_pat_" + "x" * 30)
+
+
+GNOME_46_XSETTINGS = """<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema gettext-domain="gnome-settings-daemon" id="org.gnome.settings-daemon.plugins.xsettings" path="/x/">
+    <key name="overrides" type="a{sv}">
+      <default>{}</default>
+    </key>
+  </schema>
+  <schema id="org.gnome.settings-daemon.plugins.xsettings.deprecated">
+    <key name="antialiasing" enum="org.gnome.settings-daemon.GsdFontAntialiasingMode">
+      <default>'grayscale'</default>
+    </key>
+  </schema>
+</schemalist>
+"""
+
+
+def test_firefox_gets_the_font_keys_gnome_46_moved(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """GNOME 46 moved antialiasing to a deprecated schema, where Playwright's Firefox does not look (it aborts): the
+    compat directory has the xsettings schema with the key back, compiled once; nothing when the system schema has it,
+    or has no such schema, or glib-compile-schemas is missing."""
+    from otterdog_e2e.onboard import browser as browser_module
+
+    system, target = tmp_path / "system", tmp_path / "compat"
+    system.mkdir()
+    (system / browser_module.GSD_ENUMS).write_text("<schemalist/>\n")
+    (system / f"{browser_module.XSETTINGS_SCHEMA}.gschema.xml").write_text(GNOME_46_XSETTINGS)
+    compiles: list[list[str]] = []
+
+    def run(argv: list[str], **kwargs: Any) -> Any:
+        """glib-compile-schemas: the compiled file."""
+        compiles.append(argv)
+        (Path(argv[1]) / "gschemas.compiled").write_text("compiled")
+        return type("Done", (), {"returncode": 0})()
+
+    monkeypatch.setattr(browser_module.shutil, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(browser_module.procs, "run", run)
+    assert browser_module.gsettings_compat_dir(target, system) == target
+    merged = (target / f"{browser_module.XSETTINGS_SCHEMA}.gschema.xml").read_text()
+    main = merged.split("</schema>")[0]
+    assert 'name="overrides"' in main and 'name="antialiasing"' in main and merged.count("</schema>") == 2
+    assert browser_module.gsettings_compat_dir(target, system) == target and len(compiles) == 1  # built once
+    monkeypatch.setattr(browser_module.shutil, "which", lambda name: None)
+    assert browser_module.gsettings_compat_dir(tmp_path / "other", system) is None  # no compiler
+    (system / f"{browser_module.XSETTINGS_SCHEMA}.gschema.xml").write_text(merged)
+    assert browser_module.gsettings_compat_dir(target, system) is None  # the system schema has the keys
+    assert browser_module.gsettings_compat_dir(target, tmp_path / "none") is None  # no GNOME schemas
+
+
+def test_a_firefox_that_stops_names_what_it_printed() -> None:
+    """A launch failure names Firefox's last error line; a missing Firefox is told apart (the install hint)."""
+    from otterdog_e2e.onboard.browser import MISSING_FIREFOX_RE, _launch_error
+
+    error = Exception(
+        "BrowserType.launch: Failed to launch the browser process.\nBrowser logs:\n"
+        "[pid=1][err] ###!!! ASSERTION: glib assertion\n[pid=1][err] \n"
+        "[pid=1][err] GLib-GIO-ERROR **: Settings schema does not contain a key named 'antialiasing'\n"
+        "[pid=1] <process did exit: exitCode=null, signal=SIGTRAP>"
+    )
+    assert _launch_error(error) == "GLib-GIO-ERROR **: Settings schema does not contain a key named 'antialiasing'"
+    assert _launch_error(Exception("Timeout 180000ms exceeded.\nmore")) == "Timeout 180000ms exceeded."
+    assert MISSING_FIREFOX_RE.search("BrowserType.launch: Executable doesn't exist at /x/firefox")
+    assert not MISSING_FIREFOX_RE.search(str(error))
+
+
+# --- onboard.browser: the setup key of the 2FA enrollment -----------------------------------------------------------
+@pytest.mark.parametrize(
+    "shown",
+    [
+        SHOWN_SEED,
+        SEED,
+        f"{SEED}\nCopied!",
+        SHOWN_SEED.replace(" ", "\u200b"),
+        f"Your two-factor secret\n{SEED[:8]}\u2013{SEED[8:]}\nClose",
+        f"otpauth://totp/GitHub:{LOGIN}?secret={SEED}&amp;issuer=GitHub",
+    ],
+)
+def test_the_setup_key_is_read_from_what_the_dialog_shows(shown: str) -> None:
+    """The key in the texts of the setup key dialog: grouped or not, between invisible characters, dashes, words or
+    in an otpauth:// URI."""
+    from otterdog_e2e.onboard.browser import setup_key_in
+
+    assert setup_key_in(["", "Loading", shown]) == SEED
+
+
+def test_texts_without_a_setup_key_are_described_not_quoted() -> None:
+    """No key in short, lower-case or non base32 texts; the description gives lengths and kinds, never the text."""
+    from otterdog_e2e.onboard.browser import describe_key_texts, setup_key_in
+
+    assert setup_key_in(["", "123456", "Your two-factor secret", SEED[:-1] + "0", SEED.lower()]) is None
+    text = describe_key_texts([SEED[:4] + "\u200b" + SEED[4:8] + "!", ""])
+    assert text == "10 characters (digits 2-7, exclamation mark, upper-case letters, zero width space); 0 characters"
+    assert describe_key_texts([]) == "no setup key element"
+
+
+class KeyPage:
+    """GitHub's 2FA setup page as PlaywrightSession.setup_key reads it: the key element shows ``shown`` in turn (the
+    last one stays), the dialog nothing, the page source ``source``."""
+
+    def __init__(self, shown: list[str], source: str = "") -> None:
+        """The successive texts of the key element."""
+        self.shown, self.source, self.url, self.waits = list(shown), source, "about:blank", 0
+
+    def goto(self, url: str) -> None:
+        """Open ``url``."""
+        self.url = url
+
+    def wait_for_load_state(self) -> None:
+        """Loaded at once."""
+
+    def wait_for_timeout(self, timeout: float) -> None:
+        """Count the waits instead."""
+        self.waits += 1
+
+    def content(self) -> str:
+        """The page source."""
+        return self.source
+
+    def key_texts(self) -> list[str]:
+        """The text of the key element now; the next read shows the next one."""
+        return [self.shown.pop(0) if len(self.shown) > 1 else self.shown[0]]
+
+    def get_by_role(self, role: str, name: Any) -> Any:
+        """The setup key button (no "Confirm access" heading)."""
+        return KeyLocator(lambda: [] if role == "heading" else ["setup key"])
+
+    def locator(self, selector: str) -> Any:
+        """The key element, else the dialog around it."""
+        from otterdog_e2e.onboard.browser import SETUP_KEY_SELECTOR
+
+        return KeyLocator(self.key_texts if selector == SETUP_KEY_SELECTOR else list)
+
+
+class KeyLocator:
+    """A locator whose elements show ``texts()``."""
+
+    def __init__(self, texts: Callable[[], list[str]]) -> None:
+        """The texts of its elements."""
+        self.texts = texts
+        self.first = self
+
+    def count(self) -> int:
+        """Its elements."""
+        return len(self.texts())
+
+    def is_visible(self) -> bool:
+        """Visible when it matches."""
+        return True
+
+    def click(self) -> None:
+        """Clicked."""
+
+    def all_inner_texts(self) -> list[str]:
+        """The texts as shown."""
+        return self.texts()
+
+    def all_text_contents(self) -> list[str]:
+        """The texts as written (read in the same turn as the texts shown)."""
+        return []
+
+    def evaluate_all(self, script: str) -> list[str]:
+        """The text nodes (none apart)."""
+        return []
+
+
+def test_the_setup_key_is_read_again_until_github_filled_it_in(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The key element is read every half second until it holds a key, else the page's otpauth:// URI; without a key
+    in time, the key is asked with a description of what the element showed (never its text)."""
+    import sys
+    import types
+
+    from otterdog_e2e.onboard import browser as browser_module
+
+    monkeypatch.setitem(sys.modules, "playwright.sync_api", types.SimpleNamespace(Error=RuntimeError))  # no extra
+    asked: list[str] = []
+
+    def ask_key(problem: str) -> str:
+        """The operator pastes the key."""
+        asked.append(problem)
+        return SHOWN_SEED
+
+    page = KeyPage(["", "Loading", SHOWN_SEED])
+    assert browser_module.PlaywrightSession(page).setup_key(ask_key) == SEED
+    assert page.url == browser_module.TWO_FACTOR_SETUP_URL and page.waits == 2
+    uri = f'<a href="otpauth://totp/GitHub:{LOGIN}?secret={SEED}&amp;issuer=GitHub">'
+    assert browser_module.PlaywrightSession(KeyPage([""], uri)).setup_key(ask_key) == SEED
+    monkeypatch.setattr(browser_module, "SETUP_KEY_TIMEOUT", 0.0)
+    assert browser_module.PlaywrightSession(KeyPage(["123890"])).setup_key(ask_key) == SHOWN_SEED
+    assert asked == ["GitHub's setup key could not be read (6 characters (digits 0 1 8 9, digits 2-7))"]

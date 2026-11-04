@@ -128,6 +128,7 @@ class World:
         default_factory=lambda: {"login": ORG, "id": ORG_ID, "plan": {"name": "free"}, "description": "scratch"}
     )
     missing_org_checks: int = 0  # anonymous GET /orgs/{org} answers 404 this many times first
+    flagged: set[str] = field(default_factory=set)  # logins whose public profile is hidden (flagged accounts)
     environ: dict[str, str] = field(default_factory=dict)
     settings: HarnessSettings | None = None
     clients: list[FakeGitHubHttp] = field(default_factory=list)
@@ -144,6 +145,11 @@ class World:
     accepts_invitations: bool = True  # a pending invitation is active at the next poll
     other_orgs: dict[str, dict[str, Any]] = field(default_factory=dict)  # GET /orgs/{login} of other test orgs
 
+    def profile_answer(self, call: Any) -> tuple[int, Any]:
+        """The public profile of a login: 404 for a flagged account."""
+        login = call.path.rsplit("/", 1)[-1]
+        return (404, {"message": "Not Found"}) if login in self.flagged else (200, {"login": login})
+
     def http(self, token: str | None, identity: str) -> FakeGitHubHttp:
         """A fake client per call: anonymous org reads, or the account behind ``token``."""
         if token is None:
@@ -157,6 +163,7 @@ class World:
                 return 200, {key: self.org[key] for key in ("login", "id", "description")}
 
             client.add("GET", "/orgs/*", responder=org_answer, repeat=True)
+            client.add("GET", "/users/*", responder=self.profile_answer, repeat=True)
             self.clients.append(client)
             return client
         account = self.accounts.get(token)
@@ -348,8 +355,31 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
     return World(tmp_path, environ={"HOME": str(tmp_path / "home")}, settings=make_settings(project))
 
 
+@dataclass
+class FakeWeb:
+    """setup's browser steps (onboard.wizard.WebSteps): each call recorded, done or not."""
+
+    done: bool = True
+    calls: list[tuple[Any, ...]] = field(default_factory=list)
+
+    def join(self, role: str, org: str, login: str, *, public: bool) -> bool:
+        """A member joins."""
+        self.calls.append(("join", role, org, login, public))
+        return self.done
+
+    def install_app(self, url: str) -> bool:
+        """The admin installs the App."""
+        self.calls.append(("install", url))
+        return self.done
+
+
 def run_wizard(
-    world: World, script: Script, *, sign_in_at: Callable[[str, str], None] | None = None, **options: Any
+    world: World,
+    script: Script,
+    *,
+    sign_in_at: Callable[[str, str], None] | None = None,
+    web: FakeWeb | None = None,
+    **options: Any,
 ) -> SetupWizard:
     """Run the wizard of instance ``org2`` (unless given) against the world."""
     assert world.settings is not None
@@ -365,6 +395,7 @@ def run_wizard(
         bootstrap=world.bootstrap,
         doctor=world.doctor,
         sign_in_at=sign_in_at,
+        web=web,
     )
     wizard.run()
     return wizard
@@ -395,10 +426,22 @@ def test_fresh_instance_with_the_admin_only(world: World) -> None:
     assert "https://github.com/settings/tokens/new?scopes=repo,workflow,admin:org,admin:org_hook,delete_repo&" in (
         script.output
     )
-    assert "profile free (targets/free.yaml), plan free" in script.output
+    assert "\u2713 free (targets/free.yaml), plan free" in script.output
     assert "otterdog-e2e ci-sync --target org2" in script.output
     assert not script.opened and not world.bootstraps and not world.doctors
     assert_no_secret(script.output)
+
+
+def test_the_question_of_an_optional_role_says_what_each_answer_means(world: World) -> None:
+    """The oracle defaults to no (the admin token checks); without another role, its tests are skipped."""
+    script = Script(secrets=[TOKENS["admin"]])
+    run_wizard(world, script)
+    questions = [text.strip() for text in script.asked if "Set up the" in text]
+    assert questions[0] == (
+        "Set up the oracle token? (no, the default: the admin token checks what otterdog did; yes: a second owner of "
+        "the organization checks it with its own token)"
+    )
+    assert "Set up the author token? (no: the tests that need it are skipped)" in questions
 
 
 def test_every_role_web_login_and_bootstrap(world: World) -> None:
@@ -596,7 +639,7 @@ def test_an_invitation_not_accepted_in_time_is_resumed_by_the_next_run(world: Wo
     script = Script(secrets=[TOKENS["admin"]], answers=["e2e-author"], confirms={"author token": True})
     run_wizard(world, script, token_type="fine-grained", wait_timeout=30)
     assert "e2e-author has not accepted the invitation yet: run setup again" in script.output
-    assert script.now == 30.0 and not [text for text in script.asked if text.startswith("author token")]
+    assert script.now == 30.0 and not [text for text in script.asked if "Paste the author token" in text]
     env = world.env()
     assert env["E2E_AUTHOR_LOGIN"] == "e2e-author" and env["E2E_AUTHOR_TOKEN_TYPE"] == "fine-grained"
     assert "E2E_AUTHOR_TOKEN" not in env
@@ -614,7 +657,8 @@ def test_member_logins_are_checked_before_any_invitation(world: World) -> None:
     run_wizard(world, script, token_type="fine-grained")
     output = script.output
     assert "'not a login' is not a GitHub login" in output and "some-org is not a GitHub user account" in output
-    assert "the same account is already stored for the author" in output and "approver: skipped" in output
+    approver = output.split("\u25b8 approver token")[1].split("\u25b8 ")[0]  # the step of the approver
+    assert "the same account is already stored for the author" in approver and "\u2013 skipped" in approver
     assert not world.invites and "E2E_APPROVER_LOGIN" not in world.env()
 
 
@@ -629,7 +673,7 @@ class MembershipAtTokenPrompt(Script):
 
     def secret_prompt(self, text: str) -> str:
         """Set the membership state of the invited account first."""
-        if text.startswith(f"{self.role} token") and self.world is not None:
+        if f"Paste the {self.role} token" in text and self.world is not None:
             self.world.accepts_invitations = False
             self.world.memberships[self.login]["state"] = self.state
         return super().secret_prompt(text)
@@ -652,7 +696,7 @@ def test_an_invitation_of_this_run_is_withdrawn_after_a_token_of_another_account
     assert "token of e2e-oracle2, but e2e-oracle is the invited oracle account" in script.output
     if state == "pending":
         assert world.cancelled == ["e2e-oracle"]
-        assert "oracle: cancelled the pending invitation of e2e-oracle to e2e-test-org" in script.output
+        assert "cancelled the pending invitation of e2e-oracle to e2e-test-org" in script.output
         assert "E2E_ORACLE_LOGIN" not in world.env()
     else:
         assert not world.cancelled
@@ -713,9 +757,9 @@ def test_stored_valid_tokens_are_kept(world: World) -> None:
     run_wizard(world, Script(secrets=[TOKENS["admin"], TOKENS["author"]], confirms={"author token": True}))
     script = Script(secrets=[])
     run_wizard(world, script)
-    assert "admin: keeping the token of e2e-admin (classic PAT, no expiration)" in script.output
-    assert "author: keeping the token of e2e-author" in script.output
-    assert not [text for text in script.asked if "token or vault reference (input hidden" in text]
+    assert "\u2713 keeping the token of e2e-admin (classic PAT, no expiration)" in script.output
+    assert "keeping the token of e2e-author" in script.output
+    assert not [text for text in script.asked if "or a vault reference (input hidden" in text]
 
 
 def test_rotate_asks_again_and_empty_keeps_the_stored_token(world: World) -> None:
@@ -728,7 +772,7 @@ def test_rotate_asks_again_and_empty_keeps_the_stored_token(world: World) -> Non
     assert "regenerating the existing token" in script.output
     script = Script(secrets=[""])
     run_wizard(world, script, rotate=("admin",))
-    assert world.env()["E2E_ADMIN_TOKEN"] == "tokadmin_rotated_00000000" and "admin: unchanged" in script.output
+    assert world.env()["E2E_ADMIN_TOKEN"] == "tokadmin_rotated_00000000" and "\u2013 unchanged" in script.output
 
 
 def test_an_unusable_stored_token_can_be_removed(world: World) -> None:
@@ -774,8 +818,40 @@ def test_an_instance_named_after_a_shard_runs_that_shard(world: World) -> None:
     run_wizard(world, script, instance="repos")
     env = world.env("repos")
     assert env["E2E_SHARD"] == "repos" and env["E2E_PROFILE"] == "free"
-    assert "shard repos: repository settings, branch protection, teams and import (profile free)" in script.output
+    assert "\u2713 repos: repository settings, branch protection, teams and import (profile free)" in script.output
     assert any("the shard repos does not run them" in text for text in script.asked)
+    shards_list = world.config_dir / "lists" / "shards"
+    assert shards_list.read_text().splitlines()[-1] == "repos" and f"repos listed in {shards_list}" in script.output
+    assert stat.S_IMODE(shards_list.stat().st_mode) == 0o600
+    run_wizard(world, Script(secrets=[], confirms={}), instance="repos")
+    assert shards_list.read_text().count("repos") == 1  # listed once
+
+
+def test_automatic_setup_names_the_shard_of_what_it_leaves_out(world: World, secret_store: dict[str, str]) -> None:
+    """Automatic setup of a shard instance: the web-UI login and the App, steps of other shards, are skipped with the
+    shard that runs them; nothing is asked."""
+    with_shards(world)
+    write_setup_config(world)
+
+    def run_account(account: MachineAccount, **kwargs: Any) -> AccountResult:
+        """Store the admin token like AccountSetup does."""
+        secret_store[account.ref("token")] = TOKENS["admin"]
+        return AccountResult("admin", "e2e-admin", account.ref("token"), token_created=True, enrolled=True)
+
+    script = Script()
+    run_browser_wizard(world, script, run_account, browser=None, instance="repos")
+    assert script.asked == [] and world.env("repos")["E2E_SHARD"] == "repos"
+    assert "\u2013 skipped: the web-UI tier runs on the shard org-level, not repos" in script.output
+    assert "\u2013 skipped: the webapp and webhooks tiers run on the shard webapp, not repos" in script.output
+
+
+def test_the_org_of_a_shard_instance_is_not_asked(world: World) -> None:
+    """Without --org nor a stored E2E_ORG, the instance of a shard takes otterdog-e2e-<instance>."""
+    with_shards(world)
+    script = Script(secrets=[TOKENS["admin"]], confirms={"Run only the live items of the shard repos": True})
+    run_wizard(world, script, instance="repos", org=None)
+    assert not [text for text in script.asked if "Login of the dedicated" in text]
+    assert "/orgs/otterdog-e2e-repos" in [call.path for client in world.clients for call in client.calls]
 
 
 def test_the_shard_of_an_instance_is_optional(world: World) -> None:
@@ -784,7 +860,7 @@ def test_the_shard_of_an_instance_is_optional(world: World) -> None:
     with_shards(world)
     script = Script(secrets=[TOKENS["admin"]])
     run_wizard(world, script, instance="repos", shard="none")
-    assert "E2E_SHARD" not in world.env("repos") and "shard: none, repos runs every live item" in script.output
+    assert "E2E_SHARD" not in world.env("repos") and "none: repos runs every live item" in script.output
     with pytest.raises(SetupError, match="unknown shard 'nope'"):
         run_wizard(world, Script(secrets=[TOKENS["admin"]]), instance="acme", shard="nope")
     script = Script(secrets=[TOKENS["admin"]])
@@ -1024,7 +1100,7 @@ def test_stored_web_credentials_are_kept_unless_rotated(world: World) -> None:
     run_wizard(world, Script(secrets=[TOKENS["admin"], PASSWORD, SEED], confirms={"web-UI login": True}))
     script = Script()
     run_wizard(world, script)
-    assert "web-UI login: keeping E2E_ADMIN_PASSWORD and E2E_ADMIN_TOTP_SEED" in script.output
+    assert "\u2713 keeping E2E_ADMIN_PASSWORD and E2E_ADMIN_TOTP_SEED" in script.output
     script = Script(secrets=["new password value", SEED])
     run_wizard(world, script, rotate=("web",))
     assert world.env()["E2E_ADMIN_PASSWORD"] == "new password value"
@@ -1052,8 +1128,27 @@ def test_the_app_step_writes_its_keys_and_polls_the_installation(world: World) -
     install = f"https://github.com/apps/otterdog-e2e-e2e-test-org/installations/new/permissions?target_id={ORG_ID}"
     assert install in script.output and install in script.opened
     assert world.app is not None and world.app.calls == 3 and script.now == 10.0  # checked, polled, slept, found
-    assert "GitHub App installation 777 ready" in script.output
+    assert "\u2713 installation 777 ready" in script.output
     assert_no_secret(script.output)
+
+
+def test_the_browser_steps_join_the_members_and_install_the_app(world: World) -> None:
+    """With the browser steps the invited member joins (public: author) before the poll, and the admin installs the
+    App before the installation is polled; each poll then finds it done."""
+    world.accounts["tokauthor_finegrained_xxx"] = Account("e2e-author", None, membership=member())
+    web = FakeWeb()
+    script = Script(
+        secrets=[TOKENS["admin"], "tokauthor_finegrained_xxx"], answers=["e2e-author"], confirms={"author token": True}
+    )
+    run_wizard(world, script, token_type="fine-grained", web=web)
+    assert ("join", "author", ORG, "e2e-author", True) in web.calls
+    world.org["description"] = "[otterdog-e2e] scratch"
+    world.installations = [None, dict(INSTALLATION)]
+    web = FakeWeb()
+    script = Script(secrets=[TOKENS["admin"]], answers=["https://sink.example.org/hook"], confirms={"GitHub App": True})
+    run_wizard(world, script, instance="org3", web=web)
+    install = f"https://github.com/apps/otterdog-e2e-e2e-test-org/installations/new/permissions?target_id={ORG_ID}"
+    assert web.calls == [("install", install)]
 
 
 def test_the_installation_wait_times_out(world: World) -> None:
@@ -1118,7 +1213,7 @@ def test_a_stored_app_is_kept_and_its_installation_checked(world: World) -> None
     )
     script = Script(secrets=[TOKENS["admin"]])
     run_wizard(world, script)
-    assert "GitHub App: keeping my-app (id 1)" in script.output and "installation 777 ready" in script.output
+    assert "\u2713 keeping my-app (id 1)" in script.output and "installation 777 ready" in script.output
     assert not world.manifest_calls
 
 
@@ -1157,7 +1252,7 @@ def test_exported_variables_that_override_the_file_are_named(world: World) -> No
     world.environ["E2E_ORG_ID"] = "1"
     script = Script(secrets=[TOKENS["admin"]])
     run_wizard(world, script)
-    assert "warning: exported in this shell, these override" in script.output and "E2E_ORG_ID" in script.output
+    assert "! exported in this shell, these override" in script.output and "E2E_ORG_ID" in script.output
 
 
 def test_unknown_rotation_and_invalid_instances_are_refused(world: World) -> None:
@@ -1186,7 +1281,10 @@ def test_cli_setup_end_to_end(world: World, monkeypatch: pytest.MonkeyPatch) -> 
     )
     assert result.exit_code == 0, result.output
     assert world.env()["E2E_ADMIN_TOKEN"] == TOKENS["admin"]
-    assert TOKENS["admin"] not in result.output and "admin token or vault reference (input hidden" in result.output
+    assert (
+        TOKENS["admin"] not in result.output
+        and "Paste the admin token or a vault reference (input hidden" in result.output
+    )
 
 
 @pytest.mark.parametrize("target", ["a,b", "@all", "Org2", "org2-webui"])
@@ -1307,12 +1405,12 @@ def test_a_typed_token_reference_is_checked_and_written(world: World, vault: dic
     the REFERENCE is written; a re-run resolves the stored reference and keeps it."""
     script = Script(secrets=["pass:e2e/org2/missing", "pass:e2e/org2/admin-token"])
     run_wizard(world, script)
-    assert "admin: token refused, nothing written: admin token: pass:e2e/org2/missing: not found" in script.output
+    assert "! token refused, nothing written: admin token: pass:e2e/org2/missing: not found" in script.output
     env = world.env()
     assert env["E2E_ADMIN_TOKEN"] == "pass:e2e/org2/admin-token" and env["E2E_ADMIN_LOGIN"] == "e2e-admin"
     rerun = Script(secrets=[])
     run_wizard(world, rerun)
-    assert "admin: keeping the token of e2e-admin (classic PAT, no expiration)" in rerun.output
+    assert "\u2713 keeping the token of e2e-admin (classic PAT, no expiration)" in rerun.output
     assert world.env()["E2E_ADMIN_TOKEN"] == "pass:e2e/org2/admin-token"
     assert_no_secret(script.output + rerun.output)
 
@@ -1323,9 +1421,7 @@ def test_a_stored_unreadable_reference_is_not_usable(world: World, vault: dict[s
     del vault["pass:e2e/org2/admin-token"]
     script = Script(secrets=[TOKENS["admin"]])
     run_wizard(world, script)
-    assert "admin: the stored E2E_ADMIN_TOKEN is not usable: E2E_ADMIN_TOKEN: pass:e2e/org2/admin-token" in (
-        script.output
-    )
+    assert "! the stored E2E_ADMIN_TOKEN is not usable: E2E_ADMIN_TOKEN: pass:e2e/org2/admin-token" in (script.output)
     assert world.env()["E2E_ADMIN_TOKEN"] == TOKENS["admin"]
     vault["pass:e2e/org2/admin-token"] = TOKENS["admin"]
 
@@ -1345,7 +1441,7 @@ def test_web_login_references(world: World, vault: dict[str, str]) -> None:
     assert env["E2E_ADMIN_TOTP_SEED"] == "bitwarden:item-1@login.totp"
     script = Script(secrets=[])
     run_wizard(world, script)
-    assert "web-UI login: keeping E2E_ADMIN_PASSWORD and E2E_ADMIN_TOTP_SEED" in script.output
+    assert "\u2713 keeping E2E_ADMIN_PASSWORD and E2E_ADMIN_TOTP_SEED" in script.output
 
 
 # --- secret store (--store) -------------------------------------------------------------------------------------------
@@ -1355,7 +1451,7 @@ def secret_store(monkeypatch: pytest.MonkeyPatch) -> dict[str, str]:
     settings (the App credentials of the installation check) reads it too."""
     entries: dict[str, str] = {}
 
-    def resolve(value: str, environ: object) -> str:
+    def resolve(value: str, environ: object, *, secret: bool = True) -> str:
         """entries[value]."""
         if value not in entries:
             raise VaultError(f"{value}: HTTP 404")
@@ -1388,7 +1484,7 @@ def test_a_vault_store_gets_the_secrets_and_the_env_file_their_references(
     assert '    path "secret/data/otterdog-e2e/org2/web" { capabilities = ["read"] }' in script.output
     rerun = Script(secrets=[])
     run_wizard(world, rerun)
-    assert "admin: keeping the token of e2e-admin" in rerun.output
+    assert "keeping the token of e2e-admin" in rerun.output
     assert_no_secret(script.output + rerun.output)
 
 
@@ -1397,7 +1493,7 @@ def test_a_token_at_its_place_in_the_store_needs_no_prompt(world: World, secret_
     secret_store["pass:otterdog-e2e/org2/admin/token"] = TOKENS["admin"]
     script = Script(secrets=[])
     run_wizard(world, script, store="pass:otterdog-e2e")
-    assert "admin: found in the store at pass:otterdog-e2e/org2/admin/token" in script.output
+    assert "found in the store at pass:otterdog-e2e/org2/admin/token" in script.output
     assert world.env()["E2E_ADMIN_TOKEN"] == "pass:otterdog-e2e/org2/admin/token"
 
 
@@ -1460,8 +1556,8 @@ def test_a_missing_org_is_created_in_the_browser_as_the_admin_account(world: Wor
     script = Script(secrets=[TOKENS["admin"]], answers=[""], confirms={"Check e2e-test-org again": True})
     run_wizard(world, script, profile="free", sign_in_at=lambda account, url: shown.append((account, url)))
     assert shown == [("otterdog-e2e-org2-admin", "https://github.com/account/organizations/new?plan=free")]
-    assert "Create e2e-test-org in a browser signed in as the admin account?" in script.asked
-    assert "in the window: name the organization e2e-test-org, keep it empty" in script.output
+    assert "  Create e2e-test-org in a browser signed in as the admin account?" in script.asked
+    assert "in the window, create the organization e2e-test-org yourself (the one step left to you" in script.output
     assert world.env()["E2E_ORG_ID"] == str(ORG_ID)
     world.missing_org_checks = 1
     shown.clear()
@@ -1469,6 +1565,18 @@ def test_a_missing_org_is_created_in_the_browser_as_the_admin_account(world: Wor
     script = Script(secrets=[TOKENS["admin"]], answers=["some-owner"], confirms={"Check e2e-test-org again": True})
     run_wizard(world, script, profile="free", sign_in_at=lambda account, url: shown.append((account, url)))
     assert shown == [("some-owner", "https://github.com/account/organizations/new?plan=free")]
+
+
+def test_automatic_setup_opens_one_creation_window(world: World) -> None:
+    """Automatic setup (the accounts store, the browser): the creation window is opened without asking, the org
+    checked again once; still missing, setup stops instead of opening another window."""
+    write_setup_config(world)
+    world.missing_org_checks = 5
+    shown: list[str] = []
+    script = Script(secrets=[TOKENS["admin"]])
+    with pytest.raises(SetupError, match="e2e-test-org was not created in the window: create it"):
+        run_wizard(world, script, profile="free", browser=True, sign_in_at=lambda account, url: shown.append(account))
+    assert shown == ["otterdog-e2e-org2-admin"] and script.asked == []
 
 
 def test_the_browser_creation_of_the_org_is_optional(world: World) -> None:
@@ -1505,7 +1613,7 @@ def test_setup_finds_the_token_of_the_accounts_store(world: World, secret_store:
     run_wizard(world, script)
     env = world.env()
     assert env["E2E_ADMIN_TOKEN"] == ADMIN_ACCOUNT_TOKEN and env["E2E_ADMIN_LOGIN"] == "e2e-admin"
-    assert f"admin: found in the accounts store at {ADMIN_ACCOUNT_TOKEN}" in script.output
+    assert f"found in the accounts store at {ADMIN_ACCOUNT_TOKEN}" in script.output
     assert "PASSWORD_STORE_DIR" not in env  # set by neither the environment nor ~/.cbi/config
     assert_no_secret(script.output)
 
@@ -1531,7 +1639,7 @@ def test_a_refused_account_token_is_not_written(world: World, secret_store: dict
     script = Script(secrets=[TOKENS["admin"]])
     run_wizard(world, script)
     assert world.env()["E2E_ADMIN_TOKEN"] == TOKENS["admin"]
-    assert "admin: the stored E2E_ADMIN_TOKEN is not usable" in script.output
+    assert "! the stored E2E_ADMIN_TOKEN is not usable" in script.output
 
 
 def test_the_cbi_password_store_is_written_with_the_references(world: World, secret_store: dict[str, str]) -> None:
@@ -1557,7 +1665,7 @@ def test_an_invalid_setup_configuration_stops_setup(world: World, secret_store: 
 def run_browser_wizard(
     world: World, script: Script, run_account: Callable[..., AccountResult], **options: Any
 ) -> SetupWizard:
-    """run_wizard with --browser and a fake run_account."""
+    """run_wizard with a fake run_account (and --browser unless ``browser`` says otherwise)."""
     assert world.settings is not None
     wizard = SetupWizard(
         SetupOptions(**{"instance": "org2", "org": ORG, "browser": True, **options}),
@@ -1594,7 +1702,127 @@ def test_setup_browser_sets_up_the_account_then_checks_its_token(world: World, s
         ("admin", "org2", ORG, False)
     ]
     assert world.env()["E2E_ADMIN_TOKEN"] == ADMIN_ACCOUNT_TOKEN
+    assert "tokens/new" not in script.output and "1. Open" not in script.output  # no instructions
     assert_no_secret(script.output)
+
+
+def test_the_accounts_store_creates_the_tokens_in_the_browser_by_default(
+    world: World, secret_store: dict[str, str]
+) -> None:
+    """Without --browser nor --no-browser, an accounts store means the browser; --no-browser prints the steps."""
+    write_setup_config(world)
+    calls: list[str] = []
+
+    def run_account(account: MachineAccount, **kwargs: Any) -> AccountResult:
+        """Store the token like AccountSetup does."""
+        calls.append(account.role)
+        secret_store[account.ref("token")] = TOKENS["admin"]
+        return AccountResult("admin", "e2e-admin", account.ref("token"), token_created=True, enrolled=True)
+
+    run_browser_wizard(world, Script(), run_account, browser=None)
+    assert calls == ["admin"] and world.env()["E2E_ADMIN_TOKEN"] == ADMIN_ACCOUNT_TOKEN
+    script = Script(secrets=[TOKENS["admin"]])
+    run_browser_wizard(world, script, run_account, instance="org3", browser=False)
+    assert calls == ["admin"] and "1. Open https://github.com/settings/tokens/new?" in script.output
+
+
+def test_the_accounts_store_decides_the_optional_roles(world: World, secret_store: dict[str, str]) -> None:
+    """With the accounts store, no optional role is asked: each one whose account is in the store is set up in the
+    browser (the oracle too), unless its token in the store passes the checks (nothing created again, the browser
+    not opened); the others are skipped, their account named. A second run opens the browser for nobody."""
+    write_setup_config(world)
+    for role in ("oracle", "author", "approver"):
+        secret_store[f"{ACCOUNTS_STORE}/otterdog-e2e-org2-{role}-email"] = f"e2e-{role}@example.org"
+    secret_store[f"{ACCOUNTS_STORE}/otterdog-e2e-org2-approver-api-token"] = TOKENS["approver"]
+    secret_store[f"{ACCOUNTS_STORE}/otterdog-e2e-org2-approver-2FA-seed"] = "JBSWY3DPEHPK3PXP"
+    world.memberships = {"e2e-oracle": {"state": "active", "role": "admin"}}
+    calls: list[str] = []
+
+    def run_account(account: MachineAccount, **kwargs: Any) -> AccountResult:
+        """Store the role's token like AccountSetup does."""
+        calls.append(account.role)
+        secret_store[account.ref("token")] = TOKENS[account.role]
+        return AccountResult(
+            account.role, f"e2e-{account.role}", account.ref("token"), token_created=True, enrolled=True
+        )
+
+    script = Script()
+    run_browser_wizard(world, script, run_account, browser=None)
+    assert calls == ["admin", "oracle", "author"]
+    assert not [text for text in script.asked if "Set up the" in text and "token" in text]
+    env = world.env()
+    assert env["E2E_ORACLE_TOKEN"] == f"{ACCOUNTS_STORE}/otterdog-e2e-org2-oracle-api-token"
+    assert env["E2E_AUTHOR_TOKEN"] == f"{ACCOUNTS_STORE}/otterdog-e2e-org2-author-api-token"
+    assert env["E2E_APPROVER_TOKEN"] == f"{ACCOUNTS_STORE}/otterdog-e2e-org2-approver-api-token"  # kept as it is
+    assert f"\u2013 skipped: otterdog-e2e-org2-outsider is not in {ACCOUNTS_STORE}" in script.output
+    run_browser_wizard(world, Script(), run_account, browser=None)
+    assert calls == ["admin", "oracle", "author"]
+
+
+def test_a_flagged_account_is_reported_then_asked(world: World, secret_store: dict[str, str]) -> None:
+    """GitHub hides the profile of a flagged account: a warning, then a question even in automatic mode (once per
+    account and run): going on leaves a role that joins the org (the oracle) out, its stored token removed, and keeps
+    a flagged admin as it is; answering no stops the setup."""
+    write_setup_config(world)
+    for role in ("oracle", "outsider"):
+        secret_store[f"{ACCOUNTS_STORE}/otterdog-e2e-org2-{role}-email"] = f"e2e-{role}@example.org"
+    world.flagged = {"e2e-oracle", "e2e-admin", "e2e-outsider"}
+    world.memberships = {"e2e-oracle": {"state": "active", "role": "admin"}}
+
+    def run_account(account: MachineAccount, **kwargs: Any) -> AccountResult:
+        """Store the role's token like AccountSetup does."""
+        secret_store[account.ref("token")] = TOKENS[account.role]
+        return AccountResult(
+            account.role, f"e2e-{account.role}", account.ref("token"), token_created=True, enrolled=True
+        )
+
+    script = Script()
+    run_browser_wizard(world, script, run_account, browser=None)
+    assert [text.strip() for text in script.asked] == [
+        "Continue the setup with e2e-admin as it is? (no: setup stops; run it again once the flag is lifted)",
+        "Continue the setup without the oracle e2e-oracle? (no: setup stops; run it again once the flag is lifted)",
+        "Continue the setup with e2e-outsider as it is? (no: setup stops; run it again once the flag is lifted)",
+    ]
+    assert "flagged account (what it writes (comments, issues) is hidden from the others)" in script.output
+    assert world.env()["E2E_OUTSIDER_LOGIN"] == "e2e-outsider"  # kept: the outsider never joins
+    assert script.output.count("GitHub hides the profile of e2e-admin") == 1
+    assert (
+        "! GitHub hides the profile of e2e-oracle from anonymous visitors, as it does for a flagged account (it can "
+        "neither join an organization nor accept an invitation)" in script.output
+    )
+    assert "\u2013 skipped: GitHub flagged e2e-oracle" in script.output
+    env = world.env()
+    assert env["E2E_ADMIN_TOKEN"] == ADMIN_ACCOUNT_TOKEN and "E2E_ORACLE_TOKEN" not in env
+    oracle = {
+        "E2E_ORACLE_LOGIN": "e2e-oracle",
+        "E2E_ORACLE_TOKEN": TOKENS["oracle"],
+        "E2E_ORACLE_TOKEN_TYPE": "classic",
+    }
+    world.write_env("org2", "".join(f"{key}={value}\n" for key, value in {**env, **oracle}.items()))
+    script = Script()
+    run_browser_wizard(world, script, run_account, browser=None)
+    assert "skipped: GitHub flagged e2e-oracle (its E2E_ORACLE_TOKEN removed)" in script.output
+    assert not [key for key in world.env() if key.startswith("E2E_ORACLE_")]
+    script = Script(confirms={"Continue the setup with e2e-admin": False})
+    with pytest.raises(SetupError, match="stopped: GitHub flagged e2e-admin; run setup again once the flag is lifted"):
+        run_browser_wizard(world, script, run_account, browser=None)
+
+
+def test_with_the_accounts_store_setup_asks_nothing(world: World, secret_store: dict[str, str]) -> None:
+    """With the accounts store setup decides: nothing asked (roles, web login, App, bootstrap, doctor); bootstrap and
+    doctor run; the App of an instance without a shard waits for its webhook sink."""
+    write_setup_config(world)
+
+    def run_account(account: MachineAccount, **kwargs: Any) -> AccountResult:
+        """Store the admin token like AccountSetup does."""
+        secret_store[account.ref("token")] = TOKENS["admin"]
+        return AccountResult("admin", "e2e-admin", account.ref("token"), token_created=True, enrolled=True)
+
+    script = Script()
+    run_browser_wizard(world, script, run_account, browser=None)
+    assert script.asked == []
+    assert world.bootstraps == ["org2"] and world.doctors == ["org2"]
+    assert "skipped (setup --webhook-url <https sink> adds it)" in script.output
 
 
 def test_setup_browser_needs_the_accounts_section(world: World, secret_store: dict[str, str]) -> None:
@@ -1606,7 +1834,7 @@ def test_setup_browser_needs_the_accounts_section(world: World, secret_store: di
 
     script = Script(secrets=[TOKENS["admin"]])
     run_browser_wizard(world, script, run_account)
-    assert "admin: --browser needs the accounts section of" in script.output and "setup.yaml" in script.output
+    assert "! --browser needs the accounts section of" in script.output and "setup.yaml" in script.output
 
 
 def test_setup_browser_failure_falls_back_to_the_prompt(world: World, secret_store: dict[str, str]) -> None:
@@ -1619,7 +1847,11 @@ def test_setup_browser_failure_falls_back_to_the_prompt(world: World, secret_sto
 
     script = Script(secrets=[TOKENS["admin"]])
     run_browser_wizard(world, script, run_account)
-    assert "admin: browser: 2FA setup key: no such button" in script.output
+    assert "! browser: 2FA setup key: no such button" in script.output
+    assert "create it by hand, signed in as otterdog-e2e-org2-admin: https://github.com/settings/tokens/new?" in (
+        script.output
+    )
+    assert "1. Open" not in script.output  # the URL only, no steps
     assert world.env()["E2E_ADMIN_TOKEN"] == TOKENS["admin"]
 
 

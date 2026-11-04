@@ -24,6 +24,7 @@ import yaml
 
 SHARDS_FILE = "scenarios/shards.yaml"
 SHARD_ENV = "E2E_SHARD"
+SHARDS_LIST = "shards"  # ~/.config/otterdog-e2e/lists/shards: the instances of the shards (run --target @shards)
 # the tiers whose items the shards split (live tiers and the live observations of the differential tier)
 SHARDED_TIERS = ("cli", "webhooks", "webapp", "web_ui", "enterprise", "differential")
 LIST_KEYS = ("tiers", "domains", "modules", "plans", "requires")

@@ -124,7 +124,16 @@ allow. The GitHub App needs "IP allow list configuration for installed GitHub Ap
 Enterprise policies can lock organization settings (repository creation, forking, Actions permissions, base
 permissions, two-factor requirement, ...). A locked setting that the baseline or a scenario tries to change makes
 `apply` fail or leaves a permanent drift (converge never reaches a no-op). Keep the enterprise policies permissive
-for the test organization, or set `baseline.settings` in the target to the values the policies enforce.
+for the test organization, or declare the values the policies enforce in the baseline of the instance:
+`E2E_BASELINE_SETTINGS` in its env file, `key=value` pairs separated by commas (YAML scalars, `null` leaves a
+setting unmanaged, a dotted key sets a nested one), merged over `baseline.settings` of the profile. An enterprise
+that disables deploy keys refuses the whole settings update of the baseline (`422 Deploy key policy has been set
+by enterprise administrators`), and the repositories then fail in turn (`409 The organization does not allow
+GitHub Actions to create or approve pull requests`, a setting of that same update):
+
+```bash
+E2E_BASELINE_SETTINGS=deploy_keys_enabled_for_repositories=false
+```
 
 The enterprise's personal access token policies (**Policies, Personal access tokens**) decide which token kinds
 reach the organization: with "Restrict access via personal access tokens (classic)" every classic PAT gets 403

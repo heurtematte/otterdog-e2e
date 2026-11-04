@@ -72,6 +72,10 @@ baseline:
   # The harness always pins workflows.fork_pr_approval_policy: first_time_contributors (GitHub's default, unset in
   # the template); a `workflows:` mapping here is merged over it.
   settings: {}
+  # per instance, merged over settings: key=value pairs separated by commas (YAML scalars, null: unmanaged,
+  # dotted keys for nested settings), e.g. the values the enterprise policies of an Enterprise Cloud org enforce:
+  # E2E_BASELINE_SETTINGS=deploy_keys_enabled_for_repositories=false
+  instance_settings: "${E2E_BASELINE_SETTINGS:-}"
 # web-UI tier (docs/web-ui-testing.md), optional: a harmless GitHub App of the test org (no permissions, no events)
 # that the tier installs and uninstalls with otterdog install-app / uninstall-app; never the e2e App. Empty: none.
 web_ui:

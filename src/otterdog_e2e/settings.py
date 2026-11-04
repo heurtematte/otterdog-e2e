@@ -69,6 +69,7 @@ TRANSPORTS = ("relay", "external", "none")
 TEMPLATE_MODES = ("auto", "upstream", "publish", "url")
 # org settings the renderer always takes from the LIVE org (marker, plan, billing): never overridable (F1)
 RESERVED_BASELINE_SETTINGS = ("plan", "description", "billing_email")
+SETTING_PATH_RE = re.compile(r"^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$")  # an org setting, dotted when nested
 # team names must equal their slugs: the webapp compares GraphQL team names with slugs
 TEAM_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 TARGET_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
@@ -558,7 +559,7 @@ _WEBAPP_KEYS = (
     "port",
 )
 _FIXTURE_KEYS = ("repos", "extra_protected_repos")
-_BASELINE_KEYS = ("settings",)
+_BASELINE_KEYS = ("settings", "instance_settings")
 
 
 class _Section:
@@ -925,17 +926,63 @@ def _fixtures(top: _Section) -> tuple[tuple[str, ...], tuple[str, ...]]:
 
 
 def _baseline_settings(top: _Section) -> dict[str, Any]:
-    """baseline.settings: org settings overrides, never the live-derived plan/description/billing_email."""
+    """baseline.settings: org settings overrides, then baseline.instance_settings merged over them (the instance's
+    E2E_BASELINE_SETTINGS in the shipped profiles: the values its enterprise policies enforce); never the live-derived
+    plan/description/billing_email."""
     baseline = top.section("baseline", _BASELINE_KEYS)
     value = baseline.data.get("settings")
     if value is None:
-        return {}
+        value = {}
     if not isinstance(value, Mapping) or not all(isinstance(key, str) for key in value):
         raise TargetError(f"{baseline.path('settings')}: expected a mapping of org settings")
-    reserved = sorted(set(value) & set(RESERVED_BASELINE_SETTINGS))
+    merged = _merge_settings(dict(value), _instance_settings(baseline))
+    reserved = sorted(set(merged) & set(RESERVED_BASELINE_SETTINGS))
     if reserved:
         raise TargetError(f"{baseline.path('settings')}: {', '.join(reserved)} always come from the live organization")
-    return dict(value)
+    return merged
+
+
+def _instance_settings(baseline: _Section) -> dict[str, Any]:
+    """baseline.instance_settings: comma-separated ``key=value`` pairs (an env file's one line), each value a YAML
+    scalar (false, 30, null: unmanaged, text) and a dotted key for a nested setting, e.g.
+    ``deploy_keys_enabled_for_repositories=false,workflows.actions_can_approve_pull_request_reviews=false``."""
+    where = baseline.path("instance_settings")
+    text = baseline.data.get("instance_settings")
+    if text is None:
+        return {}
+    if not isinstance(text, str):
+        raise TargetError(f"{where}: expected key=value pairs separated by commas")
+    result: dict[str, Any] = {}
+    for item in filter(None, (part.strip() for part in text.split(","))):
+        key, sep, raw = (part.strip() for part in item.partition("="))
+        if not sep or not SETTING_PATH_RE.fullmatch(key):
+            raise TargetError(f"{where}: expected key=value pairs separated by commas, got {item!r}")
+        try:
+            value = yaml.safe_load(raw) if raw else ""
+        except yaml.YAMLError:
+            value = raw
+        if isinstance(value, (Mapping, list)):
+            raise TargetError(f"{where}: {key} takes a single value (a dotted key sets a nested one), got {raw!r}")
+        *parents, leaf = key.split(".")
+        node = result
+        for parent in parents:
+            child = node.setdefault(parent, {})
+            if not isinstance(child, dict):
+                raise TargetError(f"{where}: {parent} is set and has nested settings")
+            node = child
+        node[leaf] = value
+    return result
+
+
+def _merge_settings(base: dict[str, Any], extra: Mapping[str, Any]) -> dict[str, Any]:
+    """``extra`` over ``base``, nested mappings merged (a value of ``extra`` wins)."""
+    for key, value in extra.items():
+        current = base.get(key)
+        if isinstance(value, Mapping) and isinstance(current, Mapping):
+            base[key] = _merge_settings(dict(current), value)
+        else:
+            base[key] = value
+    return base
 
 
 def _check_protected_names(names: Iterable[str]) -> None:

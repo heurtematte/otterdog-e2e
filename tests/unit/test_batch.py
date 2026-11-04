@@ -655,3 +655,16 @@ def test_list_instances(world: World) -> None:
 def test_list_instances_without_anything(tmp_path: Path) -> None:
     """No env file, no targets dir: nothing."""
     assert batch.list_instances(make_settings(tmp_path / "project"), {"HOME": str(tmp_path)}) == []
+
+
+def test_add_to_list_appends_an_instance_once(tmp_path: Path) -> None:
+    """setup lists the instance of a shard in ~/.config/otterdog-e2e/lists/<name> (0600 in a 0700 directory): created
+    with a comment, appended to, never twice; @<name> then reads it."""
+    environ = {"HOME": str(tmp_path)}
+    path = batch.add_to_list("shards", "repos", environ)
+    assert path == tmp_path / ".config" / "otterdog-e2e" / "lists" / "shards"
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600 and stat.S_IMODE(path.parent.stat().st_mode) == 0o700
+    path.write_text(path.read_text() + "webapp  # added by hand")
+    assert batch.add_to_list("shards", "enterprise", environ) == path
+    assert batch.add_to_list("shards", "repos", environ) is None
+    assert batch.read_target_list("shards", environ) == ["repos", "webapp", "enterprise"]

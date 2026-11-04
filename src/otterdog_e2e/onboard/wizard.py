@@ -3,7 +3,7 @@
 Every validated answer is written to the instance env file at once (``envfile.update_env_file``), so an interrupted
 run keeps its progress and the next run continues where it stopped:
 
-1. org: the login (--org, E2E_ORG, else asked) -> ``GET /orgs/{org}`` (exact-case login, id pinned in E2E_ORG_ID); a
+1. org: the login (--org, E2E_ORG, otterdog-e2e-<instance> for the instance of a shard, else asked) ->``GET /orgs/{org}`` (exact-case login, id pinned in E2E_ORG_ID); a
    missing org gets its creation URL (the profile's plan; both the Free URL and the Enterprise Cloud note while the
    profile is not known) and is checked again on demand (no API creates Free/Team orgs);
 2. tokens, one role after the other (admin required, the others skippable): the PREFILLED creation URL (classic or
@@ -22,7 +22,8 @@ run keeps its progress and the next run continues where it stopped:
    checked before any membership (bootstrap invites and publicizes later). A role whose token is in the accounts
    store (the accounts section of ~/.config/otterdog-e2e/setup.yaml, written by ``otterdog-e2e accounts``) takes it
    without a prompt, through the same checks (the env file gets its pass reference, or for a Vault store its value:
-   keeps_account_references); with --browser, a role without a valid token is set up in the browser first
+   keeps_account_references); with the accounts store (or --browser; --no-browser: the prefilled URL and its
+   steps instead), a role without a valid token is set up in the browser first, its classic token created there
    (onboard/accounts.py, ``run_account``), the prompt following when that fails;
 3. web-UI login of the admin account (optional): password and TOTP setup key (hidden, settings.normalize_totp_seed),
    or the admin account's pass entries (opt-in);
@@ -62,13 +63,14 @@ import functools
 import re
 import time
 from collections.abc import Callable, Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol
 
 import yaml
 
+from otterdog_e2e.batch import add_to_list
 from otterdog_e2e.context import in_ci, installation_problems
 from otterdog_e2e.github.http import GitHubError
 from otterdog_e2e.onboard.accounts import (
@@ -105,7 +107,16 @@ from otterdog_e2e.settings import (
     WebCredentialsError,
     normalize_totp_seed,
 )
-from otterdog_e2e.shards import SHARD_ENV, SHARDS_FILE, ItemFacts, Shard, ShardError, ShardMap, load_shards
+from otterdog_e2e.shards import (
+    SHARD_ENV,
+    SHARDS_FILE,
+    SHARDS_LIST,
+    ItemFacts,
+    Shard,
+    ShardError,
+    ShardMap,
+    load_shards,
+)
 from otterdog_e2e.vaults import VaultError, is_reference, resolve, store
 from otterdog_e2e.waiting import WaitTimeoutError, wait_until
 
@@ -128,6 +139,7 @@ APP_WEBHOOK_URL_ENV = "E2E_APP_WEBHOOK_URL"  # the App's webhook sink (non-secre
 APP_ENV = ("E2E_APP_ID", "E2E_APP_SLUG", "E2E_APP_PRIVATE_KEY_FILE", "E2E_APP_WEBHOOK_SECRET")
 WEB_ROTATION, APP_ROTATION = "web", "app"
 NO_SHARD = "none"  # setup --shard none: the instance runs every live item
+PUBLIC_MEMBERS = ("author", "approver")  # active and PUBLIC members (bootstrap.BOOTSTRAP_MEMBERS); the oracle owns
 ROTATABLE = (*ROLES, WEB_ROTATION, APP_ROTATION)
 TOKEN_KIND_LABELS: Mapping[str, str] = {CLASSIC: "classic PAT", FINE_GRAINED: "fine-grained PAT"}
 # --from: settings of another instance that are neither secret nor specific to its org
@@ -160,6 +172,9 @@ FINE_GRAINED_INVITES: Mapping[str, str] = {"author": "member", "approver": "memb
 INVITATION_URL = "https://github.com/orgs/{org}/invitation"
 PEOPLE_URL = "https://github.com/orgs/{org}/people"
 APP_READY, APP_SKIPPED, APP_NEEDS_MARKER = "ready", "skipped", "needs-marker"
+RULE_WIDTH = 100  # the title line of an instance's setup (banner)
+# the marks of the status lines (the CLI colours them): done, needs attention, skipped
+DONE, WARN, SKIPPED = "\u2713", "!", "\u2013"
 ENV_FILE_HEADER = (
     "otterdog-e2e instance {instance}: written by `otterdog-e2e setup` (re-run it to change or rotate a value).\n"
     "Holds tokens and passwords: keep it private (mode 0600), never commit or share it."
@@ -170,8 +185,27 @@ class SetupError(RuntimeError):
     """The setup cannot go on (the message never contains a secret); what was validated so far stays written."""
 
 
+class SetupStoppedError(SetupError):
+    """The operator stopped the setup at a question: never taken for a refused token."""
+
+
 class TokenRejectedError(ValueError):
     """A token failed a check (redacted reason); it is never written."""
+
+
+# the roles whose account joins the test org (bootstrap invites them): a flagged account cannot
+JOINING_ROLES = (*MEMBER_ROLES, "oracle")
+# what a flagged account loses, by role: the ones that join cannot; the outsider and the config_reader never join
+# (the outsider must stay out), but what they write (comments) is hidden from the others
+FLAGGED_LOSS = dict.fromkeys(
+    ("outsider", "config_reader"), "what it writes (comments, issues) is hidden from the others"
+)
+FLAGGED_JOIN_LOSS = "it can neither join an organization nor accept an invitation"
+FLAGGED_HELP = (
+    "GitHub hides the profile of {login} from anonymous visitors, as it does for a flagged account ({loss}); only "
+    "GitHub Support lifts the flag: https://support.github.com/contact (signed in as {login}, a flagged account "
+    "sees a banner)"
+)
 
 
 @dataclass(frozen=True)
@@ -190,8 +224,22 @@ class SetupOptions:
     wait_timeout: float = DEFAULT_WAIT_TIMEOUT
     poll_interval: float = POLL_INTERVAL
     store: str | None = None  # secret store vault:<prefix> / pass:<prefix> (onboard/store.py)
-    browser: bool = False  # create the classic tokens of the machine accounts in the browser (onboard/accounts.py)
+    # create the classic tokens of the machine accounts in the browser (onboard/accounts.py); None: when the accounts
+    # store is configured (--browser / --no-browser decide)
+    browser: bool | None = None
     shard: str | None = None  # the shard of the instance (scenarios/shards.yaml); NO_SHARD: every live item
+    banner: bool = True  # the title line (setup --shards prints its own, with the position of the instance)
+
+
+class WebSteps(Protocol):
+    """GitHub's web steps done in a browser as the machine accounts (the CLI's: the accounts store and Firefox); each
+    returns whether it was done, the operator does it otherwise. The wait that follows sees the result either way."""
+
+    def join(self, role: str, org: str, login: str, *, public: bool) -> bool:
+        """``login`` accepts its invitation of ``org`` and, with ``public``, makes its membership public."""
+
+    def install_app(self, url: str) -> bool:
+        """The admin installs the App from its installation page ``url``."""
 
 
 @dataclass(frozen=True)
@@ -275,6 +323,12 @@ def parse_org_ids(text: str | None) -> list[int]:
     return ids
 
 
+def banner(title: str) -> str:
+    """The ruled title line that starts the setup of an instance."""
+    head = f"\u2501\u2501 {title} "
+    return head + "\u2501" * max(3, RULE_WIDTH - len(head))
+
+
 def _expiry(checked: CheckedToken) -> str:
     """``expires <date>`` or ``no expiration``."""
     return f"expires {checked.expires_at:%Y-%m-%d}" if checked.expires_at else "no expiration"
@@ -300,18 +354,27 @@ class SetupWizard:
         doctor: Callable[[str], None] | None = None,
         run_account: Callable[..., AccountResult] | None = None,
         sign_in_at: Callable[[str, str], None] | None = None,
+        web: WebSteps | None = None,
     ) -> None:
         """Bind the flow; nothing is read or asked before run(). ``run_manifest(target, webhook_url)`` returns the
         manifest code (None: no App step), ``bootstrap`` / ``doctor`` take the instance name (None: not offered),
         ``write_http(admin_token, verified)`` is the only writing client (invitations), ``run_account(account, *,
         org, rotate, environ)`` sets up a machine account in the browser for --browser (AccountSetup.setup),
         ``sign_in_at(account, url)`` shows a page in a browser signed in as an account of the accounts store until the
-        operator is done (web-login ACCOUNT --url: the creation of the organization by its admin)."""
+        operator is done (web-login ACCOUNT --url: the creation of the organization by its admin), ``web`` does the
+        web steps of the members and the App (accepting invitations, public memberships, installing the App)."""
         unknown = sorted(set(options.rotate) - set(ROTATABLE))
         if unknown:
             raise SetupError(f"--rotate: unknown value(s) {', '.join(unknown)} (expected {', '.join(ROTATABLE)})")
         self.options = options
-        self.io = io
+        self.section_title: str | None = None  # the title of the current step, printed before its first output
+        self.in_section = False
+        self.io = replace(  # the questions of a step come under its title, indented like its lines
+            io,
+            prompt=lambda text, default: io.prompt(self.indented(text), default),
+            secret_prompt=lambda text: io.secret_prompt(self.indented(text)),
+            confirm=lambda text, default: io.confirm(self.indented(text), default),
+        )
         self.environ = environ
         self.settings = settings
         self.http = http
@@ -323,10 +386,14 @@ class SetupWizard:
         self.doctor = doctor
         self.run_account = run_account
         self.sign_in_at = sign_in_at
+        self.web = web
         self.instance = check_instance_name(options.instance)
         self.env_path = instance_env_path(self.instance, environ)
         self.values: dict[str, str] = {}
         self.clients: dict[str, GitHubHttp] = {}
+        self.flagged: dict[str, str] = {}  # role -> login of a flagged account left out (check_flagged)
+        self.flag_answers: dict[str, bool] = {}  # login -> continue? (asked once per flagged account)
+        self.visible_accounts: set[str] = set()  # logins whose profile is public
         self.profile: str | None = None
         self.shard_map: ShardMap | None = None
         self.shard: Shard | None = None
@@ -334,8 +401,33 @@ class SetupWizard:
 
     # --- plumbing -----------------------------------------------------------------------------------------------
     def echo(self, text: str = "") -> None:
-        """Print redacted text."""
-        self.io.echo(REDACTOR(text))
+        """Print redacted text (under the title of the current step)."""
+        self.io.echo(REDACTOR(self.indented(text)))
+
+    def done(self, text: str) -> None:
+        """A status line: done."""
+        self.echo(f"{DONE} {text}")
+
+    def warn(self, text: str) -> None:
+        """A status line: something the operator should look at."""
+        self.echo(f"{WARN} {text}")
+
+    def skipped(self, text: str = "skipped") -> None:
+        """A status line: left out."""
+        self.echo(f"{SKIPPED} {text}")
+
+    def section(self, title: str) -> None:
+        """Start a step: its title comes before its first output, so a step with nothing to say shows none."""
+        self.section_title = title
+        self.in_section = True
+
+    def indented(self, text: str) -> str:
+        """``text`` under the current step: its pending title printed first, then the text indented."""
+        if self.section_title is not None:
+            self.io.echo("")
+            self.io.echo(f"\u25b8 {self.section_title}")
+            self.section_title = None
+        return f"  {text}" if self.in_section and text else text
 
     def open(self, url: str) -> None:
         """Open ``url`` in a browser when --open was given (it is always printed as well)."""
@@ -354,7 +446,7 @@ class SetupWizard:
                 else:
                     self.values[key] = value
         if changed:
-            self.echo(f"  saved {', '.join(changed)} in {target}")
+            self.echo(f"  saved {', '.join(changed)}" + ("" if target == self.env_path else f" in {target}"))
         return changed
 
     def profiles(self) -> list[str]:
@@ -401,19 +493,42 @@ class SetupWizard:
         REDACTOR.add(
             *(value for key, value in self.values.items() if SECRET_KEY_RE.search(key) and not is_reference(value))
         )
-        self.echo(f"otterdog-e2e setup of instance {self.instance}: {self.env_path}")
+        if self.options.banner:
+            self.echo(banner(f"setup of {self.instance}"))
+        self.echo(f"settings file: {self.env_path}")
         self.copy_from()
+        self.section("Secret store")
         self.store_step()
+        self.section("Shard")
         self.shard_step()
+        self.section("Organization")
         org = self.org_step()
+        self.role_section("admin")
         self.role_step("admin", org)
+        self.section("Profile")
         self.profile_step(org)
         for role in ROLES:
             if role != "admin":
+                self.role_section(role)
                 self.role_step(role, org)
+        self.section("Web-UI login of the admin account")
         self.web_step()
+        self.section("GitHub App")
         app = self.app_step(org)
+        self.section("Bootstrap and doctor")
         self.finish(org, app)
+
+    def role_section(self, role: str) -> None:
+        """The step of a role's token, titled with what the role does."""
+        self.section(f"{role} token: {ROLE_TOKENS[role].purpose}")
+
+    def list_shard_instance(self) -> None:
+        """An instance of a shard joins ~/.config/otterdog-e2e/lists/shards, the target of ``run --target @shards``."""
+        if self.shard is None:
+            return
+        path = add_to_list(SHARDS_LIST, self.instance, self.environ)
+        if path is not None:
+            self.done(f"{self.instance} listed in {path}: otterdog-e2e run --target @{SHARDS_LIST} --parallel 5")
 
     def copy_from(self) -> None:
         """--from: copy COPYABLE_KEYS of another instance that this one does not set yet."""
@@ -433,12 +548,12 @@ class SetupWizard:
             self.write(copied)
 
     def org_step(self) -> OrgInfo:
-        """The live org (created by the operator when missing); E2E_ORG and E2E_ORG_ID written."""
+        """The live org (created by the operator when missing); E2E_ORG and E2E_ORG_ID written. Its login: --org, the
+        stored one, otterdog-e2e-<instance> for the instance of a shard (not asked), else asked."""
         pinned = self.values.get("E2E_ORG")
         proposed = f"otterdog-e2e-{self.instance}"
-        login = (
-            self.options.org or pinned or self.io.prompt("Login of the dedicated test organization", proposed)
-        ).strip()
+        login = self.options.org or pinned or (proposed if self.shard is not None else None)
+        login = (login or self.answer("Login of the dedicated test organization", proposed)).strip()
         if pinned and login.lower() != pinned.lower():
             raise SetupError(
                 f"{self.env_path} pins the organization {pinned}: set up {login} as another instance (--target)"
@@ -447,11 +562,18 @@ class SetupWizard:
             raise SetupError(f"{login!r} is not a GitHub organization login")
         check_org_allowed(login)
         anonymous = self.http(None, "anonymous")
+        windows = 0
         while (data := anonymous.get(f"/orgs/{login}", allow_404=True)) is None:
+            if self.automatic and windows:  # automatic: one window, then setup stops (never a loop of windows)
+                raise SetupError(
+                    f"organization {login} was not created in the window: create it (GitHub has no API for it, and "
+                    "its terms forbid accounts made by automated means), then run setup again"
+                )
             for line in self.org_creation_help(login):
                 self.echo(line)
-            self.create_org_in_browser(login)
-            if not self.io.confirm(f"Check {login} again?", True):
+            shown = self.create_org_in_browser(login)
+            windows += shown
+            if not self.ask(f"Check {login} again?", True, automatic=shown):
                 raise SetupError(f"organization {login} not found: create it, then run setup again")
         live, org_id = str(data.get("login") or ""), data.get("id")
         if isinstance(org_id, bool) or not isinstance(org_id, int) or org_id <= 0 or not LOGIN_RE.fullmatch(live):
@@ -471,7 +593,7 @@ class SetupWizard:
             self.echo(
                 f"note: instance {', '.join(others)} pins the same organization (runs of both share its org lease)"
             )
-        self.echo(f"organization {live} (id {org_id})")
+        self.done(f"{live} (id {org_id})")
         self.write({"E2E_ORG": live, "E2E_ORG_ID": str(org_id)})
         return OrgInfo(live, org_id)
 
@@ -516,11 +638,11 @@ class SetupWizard:
         if name is None and self.shard_map is not None and self.instance in self.shard_map.names:
             shard = self.shard_map.get(self.instance)
             question = f"Run only the live items of the shard {shard.name} on {self.instance} ({shard.description})?"
-            name = shard.name if self.io.confirm(question, True) else NO_SHARD
+            name = shard.name if self.ask(question, True) else NO_SHARD
         if name is None or name == NO_SHARD:
             if stored and name == NO_SHARD:
                 self.write({SHARD_ENV: ""})
-            self.echo(f"shard: none, {self.instance} runs every live item")
+            self.skipped(f"none: {self.instance} runs every live item")
             return
         if self.shard_map is None:
             raise SetupError(f"shard {name}: no {SHARDS_FILE} in {self.settings.project_root}")
@@ -528,7 +650,7 @@ class SetupWizard:
             self.shard = self.shard_map.get(name)
         except ShardError as exc:
             raise SetupError(str(exc)) from None
-        self.echo(f"shard {self.shard.name}: {self.shard.description} (profile {self.shard.profile})")
+        self.done(f"{self.shard.name}: {self.shard.description} (profile {self.shard.profile})")
         self.write({SHARD_ENV: self.shard.name})
 
     def shard_runs(self, tier: str) -> bool | None:
@@ -537,22 +659,27 @@ class SetupWizard:
             return None
         return self.shard_map.assign(ItemFacts(tier)) is self.shard
 
-    def create_org_in_browser(self, login: str) -> None:
+    def create_org_in_browser(self, login: str) -> bool:
         """Offer the creation page of the org in a browser signed in as the admin account of the accounts store: its
         name is proposed, the operator confirms it or names another account (the org's owner); the window stays until
-        the operator is done. Not offered without sign_in_at, an accounts store or a creation URL (plan)."""
+        the operator is done (True). Not offered without sign_in_at, an accounts store or a creation URL (plan)."""
         url = ORG_CREATION_URLS.get(self.org_plan() or "")
         if self.sign_in_at is None or url is None or self.accounts_config is None:
-            return
-        if not self.io.confirm(f"Create {login} in a browser signed in as the admin account?", True):
-            return
+            return False
+        if not self.ask(f"Create {login} in a browser signed in as the admin account?", True):
+            return False
         default = self.accounts_config.account(self.instance, "admin").label
-        account = self.io.prompt("Account that creates the organization (its owner: the admin)", default).strip()
-        self.echo(f"in the window: name the organization {login}, keep it empty, then press Enter here")
+        account = self.answer("Account that creates the organization (its owner: the admin)", default).strip()
+        self.echo(
+            f"in the window, create the organization {login} yourself (the one step left to you: no API creates it): "
+            "its name, a contact e-mail, owned by the account, then keep it empty; press Enter below once it exists"
+        )
         try:
             self.sign_in_at(account or default, url)
         except AccountError as exc:
-            self.echo(f"browser: {exc}: create {login} by hand")
+            self.warn(f"browser: {exc}: create {login} by hand")
+            return False
+        return True
 
     # --- tokens -------------------------------------------------------------------------------------------------
     def role_step(self, role: str, org: OrgInfo) -> None:
@@ -565,32 +692,50 @@ class SetupWizard:
             return
         found = None if stored or rotate else self.from_store(spec.token_env)
         if found is not None:
-            self.echo(f"{role}: found in the store at {found}")
+            self.echo(f"found in the store at {found}")
             if self.keep_stored(role, found, org):
                 return
         found = None if stored or rotate else self.from_account(role)
         if found is not None:
-            self.echo(f"{role}: found in the accounts store at {found}")
+            self.echo(f"found in the accounts store at {found}")
             if self.keep_stored(role, found, org, keep_reference=self.keeps_account_references):
                 return
+        if self.drop_flagged(role, stored):
+            return
+        config = self.accounts_config
+        if not stored and not spec.required and self.automatic and config is not None:
+            # the accounts store decides, nothing asked: the role is set up when its account is in it
+            if not self.account_exists(role):
+                account = config.account(self.instance, role)
+                self.skipped(f"skipped: {account.label} is not in {config.store} (run setup again once it is)")
+                return
         # the oracle is usually left out (the admin token serves as oracle): only that question defaults to no
-        if (
-            not stored
-            and not spec.required
-            and not self.io.confirm(f"Set up the {role} token? ({spec.purpose})", role != "oracle")
-        ):
-            self.echo(f"{role}: skipped (run setup again to add it)")
+        elif not stored and not spec.required and not self.io.confirm(self.optional_question(role), role != "oracle"):
+            self.skipped("skipped (run setup again to add it)")
             return
-        if self.options.browser and self.browser_token(role, org):
+        by_browser = self.browser_tokens
+        if (by_browser and self.browser_token(role, org)) or self.drop_flagged(role, stored):
             return
-        if self.prompt_token(role, org, stored=stored if rotate else None):
+        if self.prompt_token(role, org, stored=stored if rotate else None, brief=by_browser):
             return
         if stored and rotate and self.keep_stored(role, stored, org):
             return
         if spec.required:
             raise SetupError(f"{role}: a valid token is required")
-        if stored and self.io.confirm(f"Remove the unusable {spec.token_env} from {self.env_path}?", True):
+        if stored and self.ask(f"Remove the unusable {spec.token_env} from {self.env_path}?", True):
             self.write({spec.token_env: None, spec.login_env: None, spec.type_env: None})
+
+    def drop_flagged(self, role: str, stored: str | None) -> bool:
+        """An optional role whose account GitHub flagged (check_flagged) is left out without asking, its stored token
+        removed (True); False for any other role."""
+        spec = ROLE_TOKENS[role]
+        if role not in self.flagged or spec.required:
+            return False
+        if stored:
+            self.write({spec.token_env: None, spec.login_env: None, spec.type_env: None})
+        removed = f" (its {spec.token_env} removed)" if stored else ""
+        self.skipped(f"skipped: GitHub flagged {self.flagged[role]}{removed}")
+        return True
 
     def keep_stored(self, role: str, stored: str, org: OrgInfo, *, keep_reference: bool = True) -> bool:
         """Validate the stored token (a vault reference resolved first); True (and its login/type refreshed) when it
@@ -599,12 +744,12 @@ class SetupWizard:
         try:
             token = self.reveal(stored, spec.token_env)
             checked = self.check_token(role, token, org)
+        except SetupStoppedError:
+            raise
         except (TokenRejectedError, SetupError) as exc:
-            self.echo(f"{role}: the stored {spec.token_env} is not usable: {exc}")
+            self.warn(f"the stored {spec.token_env} is not usable: {exc}")
             return False
-        self.echo(
-            f"{role}: keeping the token of {checked.login} ({TOKEN_KIND_LABELS[checked.kind]}, {_expiry(checked)})"
-        )
+        self.done(f"keeping the token of {checked.login} ({TOKEN_KIND_LABELS[checked.kind]}, {_expiry(checked)})")
         written = stored if keep_reference and is_reference(stored) else None
         self.record(role, token, checked, org, written=written)
         return True
@@ -646,11 +791,11 @@ class SetupWizard:
         self.write({STORE_ENV: f"{provider}:{prefix}"})
         if provider == "vault" and not self.values.get("E2E_VAULT_ADDR"):
             default = self.environ.get("VAULT_ADDR") or None
-            address = self.io.prompt("Vault address (E2E_VAULT_ADDR, https://...)", default).strip().rstrip("/")
+            address = self.answer("Vault address (E2E_VAULT_ADDR, https://...)", default).strip().rstrip("/")
             if not address:
                 raise SetupError("a vault: store needs the Vault address (E2E_VAULT_ADDR)")
             self.write({"E2E_VAULT_ADDR": address})
-        self.echo(f"secret store {provider}:{prefix}: the secrets of {self.instance} go to {prefix}/{self.instance}/")
+        self.done(f"{provider}:{prefix}: the secrets of {self.instance} go to {prefix}/{self.instance}/")
 
     def from_store(self, name: str) -> str | None:
         """The reference of secret ``name`` at its place in the store when it can be read there, else None."""
@@ -718,6 +863,20 @@ class SetupWizard:
         self.keep_store_dir()
         return reference
 
+    def account_exists(self, role: str) -> bool:
+        """Whether the accounts store knows the role's account: its username or e-mail (read as no secret), else its
+        password."""
+        if self.accounts_config is None:
+            return False
+        account = self.accounts_config.account(self.instance, role)
+        for item in ("username", "email", "password"):
+            try:
+                if resolve(account.ref(item), self.pass_env(), secret=item == "password").strip():
+                    return True
+            except VaultError:
+                continue
+        return False
+
     def from_account(self, role: str) -> str | None:
         """The reference of the role's token in the accounts store (written by ``accounts``)."""
         return self.account_ref(role, "token")
@@ -728,7 +887,7 @@ class SetupWizard:
         if self.run_account is None or ROLE_TOKENS[role].classic_scopes is None:
             return False
         if self.accounts_config is None:
-            self.echo(f"{role}: --browser needs the accounts section of {setup_config_path(self.environ)}")
+            self.warn(f"--browser needs the accounts section of {setup_config_path(self.environ)}")
             return False
         try:
             result = self.run_account(
@@ -738,7 +897,7 @@ class SetupWizard:
                 environ=self.provider_env(),
             )
         except AccountError as exc:
-            self.echo(f"{role}: browser: {exc}")
+            self.warn(f"browser: {exc}")
             return False
         self.keep_store_dir()
         return self.keep_stored(role, result.token_ref, org, keep_reference=self.keeps_account_references)
@@ -751,6 +910,28 @@ class SetupWizard:
             return resolve(answer, {**self.environ, **self.values}).strip(), answer
         except VaultError as exc:
             raise SetupError(f"{label}: {exc}") from None
+
+    def optional_question(self, role: str) -> str:
+        """The question of an optional role: what no and yes mean (its purpose is the title of its section)."""
+        config = self.accounts_config
+        name = self.values.get(ROLE_TOKENS[role].login_env) or (
+            config.account(self.instance, role).label if config is not None else None
+        )
+        of = f" of {name}" if name else ""
+        if role == "oracle":
+            return (
+                f"Set up the oracle token{of}? (no, the default: the admin token checks what otterdog did; yes: a "
+                "second owner of the organization checks it with its own token)"
+            )
+        return f"Set up the {role} token{of}? (no: the tests that need it are skipped)"
+
+    def account_name(self, role: str) -> str:
+        """The account a role's token is created as: its stored login, else its account in the accounts store."""
+        stored = self.values.get(ROLE_TOKENS[role].login_env)
+        if stored:
+            return stored
+        config = self.accounts_config
+        return config.account(self.instance, role).label if config is not None else f"the {role} machine account"
 
     def url_kind(self, role: str) -> str:
         """Kind of the prefilled URL: the only kind of the role, else --token-type, the stored type, classic."""
@@ -767,7 +948,7 @@ class SetupWizard:
         spec = ROLE_TOKENS[role]
         login = self.member_login(role, org)
         if login is None:
-            self.echo(f"{role}: skipped")
+            self.skipped()
             return None
         admin = self.clients["admin"]
         path = f"/orgs/{org.login}/memberships/{login}"
@@ -776,18 +957,18 @@ class SetupWizard:
             self.invite(role, login, org)
         elif membership.get("role") != FINE_GRAINED_INVITES[role]:
             note = "; doctor requires the oracle to be an owner" if role == "oracle" else ""
-            self.echo(
-                f"{role}: {login} is a member with role {membership.get('role')!r} already (left unchanged{note})"
-            )
+            self.echo(f"{login} is a member with role {membership.get('role')!r} already (left unchanged{note})")
         self.write({spec.login_env: login, spec.type_env: FINE_GRAINED})
         if (membership or {}).get("state") == "active":
             return login
         invitation = INVITATION_URL.format(org=org.login)
         self.echo(
-            f"{role}: signed in as {login}, accept the invitation: {invitation} (waiting up to "
+            f"signed in as {login}, accept the invitation: {invitation} (waiting up to "
             f"{self.options.wait_timeout:g} s; Ctrl-C stops, setup can be run again)"
         )
         self.open(invitation)
+        if self.web is not None:
+            self.web.join(role, org.login, login, public=role in PUBLIC_MEMBERS)
         try:
             wait_until(
                 lambda: (admin.get(path, allow_404=True) or {}).get("state") == "active",
@@ -798,12 +979,12 @@ class SetupWizard:
                 clock=self.io.clock,
             )
         except WaitTimeoutError:
-            self.echo(
-                f"{role}: {login} has not accepted the invitation yet: run setup again once it did (a mistyped "
+            self.warn(
+                f"{login} has not accepted the invitation yet: run setup again once it did (a mistyped "
                 f"login: cancel its invitation at {PEOPLE_URL.format(org=org.login)})"
             )
             return None
-        self.echo(f"{role}: {login} is an active member of {org.login}")
+        self.done(f"{login} is an active member of {org.login}")
         return login
 
     def member_login(self, role: str, org: OrgInfo) -> str | None:
@@ -825,7 +1006,7 @@ class SetupWizard:
                 if not isinstance(user, Mapping) or user.get("type") != "User":
                     raise TokenRejectedError(f"{login} is not a GitHub user account")
             except TokenRejectedError as exc:
-                self.echo(f"{role}: {exc}")
+                self.warn(str(exc))
                 continue
             return str(user.get("login") or login)
         raise SetupError(f"{role}: no valid login after {MAX_ATTEMPTS} attempts")
@@ -849,7 +1030,7 @@ class SetupWizard:
         org_role = FINE_GRAINED_INVITES[role]
         self.admin_writer().put(f"/orgs/{org.login}/memberships/{login}", json={"role": org_role})
         self.invited[role] = login
-        self.echo(f"{role}: invited {login} to {org.login} as {'an owner' if org_role == 'admin' else 'a member'}")
+        self.done(f"invited {login} to {org.login} as {'an owner' if org_role == 'admin' else 'a member'}")
 
     def withdraw_invitation(self, role: str, login: str, org: OrgInfo) -> None:
         """The role ends without a token after a token of ANOTHER account than the invited ``login`` was refused: the
@@ -868,22 +1049,56 @@ class SetupWizard:
             if state == "pending":
                 self.admin_writer().delete(path)
         except GitHubError as exc:
-            self.echo(f"{role}: cannot cancel the invitation of {login} ({exc.status}): cancel it at {people}")
+            self.warn(f"cannot cancel the invitation of {login} ({exc.status}): cancel it at {people}")
             return
         if state == "pending":
             self.invited.pop(role, None)
-            self.echo(f"{role}: cancelled the pending invitation of {login} to {org.login} (created by this run)")
+            self.echo(f"cancelled the pending invitation of {login} to {org.login} (created by this run)")
             if not self.values.get(spec.token_env):
                 self.write({spec.login_env: None})
         elif state == "active":
-            self.echo(
-                f"{role}: warning: {login} accepted the invitation of this run and stays {what} of {org.login}: if it "
+            self.warn(
+                f"{login} accepted the invitation of this run and stays {what} of {org.login}: if it "
                 f"is not the {role} machine account, remove it: {people}"
             )
 
-    def prompt_token(self, role: str, org: OrgInfo, *, stored: str | None) -> bool:
-        """Print the prefilled URL and read tokens until one passes (True, written) or the operator enters nothing
-        (False); SetupError after MAX_ATTEMPTS refused tokens."""
+    @property
+    def automatic(self) -> bool:
+        """Whether setup decides instead of asking: with the accounts store (and the browser), every question takes
+        its answer (``ask``, ``answer``); what only the operator has (a webhook URL, a profile nobody can tell) is still
+        asked."""
+        return self.browser_tokens and self.accounts_config is not None
+
+    @property
+    def shares_accounts(self) -> bool:
+        """Whether the instance uses the accounts of another set (accounts.set): they serve several test orgs."""
+        config = self.accounts_config
+        return config is not None and config.account(self.instance, "admin").instance != self.instance
+
+    def ask(self, question: str, default: bool, *, automatic: bool | None = None) -> bool:
+        """A yes/no question; in automatic mode not asked: ``automatic``, else ``default``."""
+        if self.automatic:
+            return default if automatic is None else automatic
+        return self.io.confirm(question, default)
+
+    def answer(self, question: str, default: str | None) -> str:
+        """A question with a text answer; in automatic mode its default, when it has one, is taken without asking."""
+        if self.automatic and default:
+            return default
+        return self.io.prompt(question, default)
+
+    @property
+    def browser_tokens(self) -> bool:
+        """Whether the tokens are created in the browser: --browser / --no-browser, else when the accounts store is
+        configured (and the CLI can open the browser)."""
+        if self.options.browser is not None:
+            return self.options.browser
+        return self.run_account is not None and self.accounts_config is not None
+
+    def prompt_token(self, role: str, org: OrgInfo, *, stored: str | None, brief: bool = False) -> bool:
+        """Print the prefilled URL (``brief``: after the browser, that URL only, without the steps) and read tokens
+        until one passes (True, written) or the operator enters nothing (False); SetupError after MAX_ATTEMPTS
+        refused tokens."""
         spec = ROLE_TOKENS[role]
         kind = self.url_kind(role)
         invited = None
@@ -899,25 +1114,30 @@ class SetupWizard:
             login=self.values.get(spec.login_env),
             expires_in=self.options.expires_in,
         )
-        self.echo(f"{role}: create a {TOKEN_KIND_LABELS[kind]} signed in as the {role} machine account:")
-        self.echo(f"  {url}")
-        for step in token_steps(role, kind, org.login):
-            self.echo(f"  - {step}")
-        other = [item for item in spec.kinds if item != kind]
-        if other:
-            self.echo(f"  (a {TOKEN_KIND_LABELS[other[0]]} works too: --token-type {other[0]})")
-        if stored:
-            self.echo("  rotating: regenerating the existing token in the account's settings works too")
+        if brief:
+            self.echo(f"create it by hand, signed in as {self.account_name(role)}: {url}")
+        else:
+            self.echo(f"Create a {TOKEN_KIND_LABELS[kind]}, signed in as {self.account_name(role)}:")
+            steps = [f"open {url}", *token_steps(role, kind, org.login), "Generate token, copy it and paste it below"]
+            for number, step in enumerate(steps, start=1):
+                self.echo(f"  {number}. {step[:1].upper()}{step[1:]}")
+            other = [item for item in spec.kinds if item != kind]
+            if other:
+                self.echo(f"(a {TOKEN_KIND_LABELS[other[0]]} works too: --token-type {other[0]})")
+        if stored and not brief:
+            self.echo("(rotating: regenerating the existing token in the account's settings works too)")
         self.open(url)
         empty = "keep the stored one" if stored else ("try again" if spec.required else "skip")
         other_account = False  # a token of another account than the invited one was refused
         for _ in range(MAX_ATTEMPTS):
-            token = self.io.secret_prompt(f"{role} token or vault reference (input hidden; empty: {empty})").strip()
+            token = self.io.secret_prompt(
+                f"Paste the {role} token or a vault reference (input hidden; empty: {empty})"
+            ).strip()
             if not token:
                 if spec.required and not stored:
-                    self.echo(f"{role}: the token is required")
+                    self.warn("the token is required")
                     continue
-                self.echo(f"{role}: {'unchanged' if stored else 'skipped'}")
+                self.skipped("unchanged" if stored else "skipped")
                 if invited and other_account:
                     self.withdraw_invitation(role, invited, org)
                 return False
@@ -928,8 +1148,10 @@ class SetupWizard:
                 if invited and checked.login.lower() != invited.lower():
                     other_account = True
                     raise TokenRejectedError(f"token of {checked.login}, but {invited} is the invited {role} account")
+            except SetupStoppedError:
+                raise
             except (TokenRejectedError, SetupError) as exc:
-                self.echo(f"{role}: token refused, nothing written: {exc}")
+                self.warn(f"token refused, nothing written: {exc}")
                 continue
             self.record(role, token, checked, org, written=reference)
             return True
@@ -943,19 +1165,42 @@ class SetupWizard:
         spec = ROLE_TOKENS[role]
         self.write_shared(checked, org)
         if role == "oracle" and token == self.secret(ROLE_TOKENS["admin"].token_env):
-            self.echo("oracle: same token as the admin, which is the oracle's fallback anyway: nothing stored")
+            self.done("same token as the admin, which is the oracle's fallback anyway: nothing stored")
             self.write({spec.token_env: None, spec.login_env: None, spec.type_env: None})
             return
         if written is None and self.store:
             written = self.into_store(spec.token_env, token)
         previous = self.values.get(spec.login_env)
         if previous and previous.lower() != checked.login.lower():
-            self.echo(f"{role}: the login changes from {previous} to {checked.login}")
+            self.echo(f"the login changes from {previous} to {checked.login}")
         if (written or token) != self.values.get(spec.token_env):
-            self.echo(
-                f"{role}: token of {checked.login} accepted ({TOKEN_KIND_LABELS[checked.kind]}, {_expiry(checked)})"
-            )
+            self.done(f"token of {checked.login} accepted ({TOKEN_KIND_LABELS[checked.kind]}, {_expiry(checked)})")
         self.write({spec.login_env: checked.login, spec.token_env: written or token, spec.type_env: checked.kind})
+
+    def check_flagged(self, role: str, login: str) -> None:
+        """A flagged account (its profile hidden from an anonymous GET /users/{login}): a warning, then a question even
+        in automatic mode (the operator may be lifting the flag): continue (default) or stop (SetupError). Continuing
+        leaves a role that joins the org out (TokenRejectedError, remembered in ``flagged``: drop_flagged) and keeps
+        the others' account as it is. Asked once per account."""
+        if login.lower() in self.visible_accounts:
+            return
+        if self.http(None, "anonymous").get(f"/users/{login}", allow_404=True) is not None:
+            self.visible_accounts.add(login.lower())
+            return
+        joins = role in JOINING_ROLES and not ROLE_TOKENS[role].required
+        if login.lower() not in self.flag_answers:
+            self.warn(FLAGGED_HELP.format(login=login, loss=FLAGGED_LOSS.get(role, FLAGGED_JOIN_LOSS)))
+            question = (
+                f"Continue the setup without the {role} {login}? (no: setup stops; run it again once the flag is lifted)"
+                if joins
+                else f"Continue the setup with {login} as it is? (no: setup stops; run it again once the flag is lifted)"
+            )
+            self.flag_answers[login.lower()] = self.io.confirm(question, True)
+        if not self.flag_answers[login.lower()]:
+            raise SetupStoppedError(f"stopped: GitHub flagged {login}; run setup again once the flag is lifted")
+        if joins:
+            self.flagged[role] = login
+            raise TokenRejectedError(f"GitHub flagged {login}")
 
     def check_token(self, role: str, token: str, org: OrgInfo) -> CheckedToken:
         """Every check of a role's token (TokenRejectedError with the reason): shape, not another role's token, GET /user,
@@ -977,6 +1222,7 @@ class SetupWizard:
         if not LOGIN_RE.fullmatch(login):
             raise TokenRejectedError("GET /user returned no login")
         self.refuse_shared(role, login, what="account")
+        self.check_flagged(role, login)
         try:
             info = safety.read_token_info(http, role)
         except SafetyError as exc:
@@ -1047,7 +1293,7 @@ class SetupWizard:
                 "the admin account must own the organization"
             )
         self.echo(
-            f"oracle: {login} is not an owner of {org.login} yet (membership {state or 'none'}): bootstrap invites "
+            f"{login} is not an owner of {org.login} yet (membership {state or 'none'}): bootstrap invites "
             "it as an owner, doctor checks it"
         )
 
@@ -1135,7 +1381,7 @@ class SetupWizard:
             f"of {self.instance}, and {org.org_id} in theirs (written only once this token passed every check; "
             "needed when machine accounts serve several test orgs)?"
         )
-        return validated if self.io.confirm(question, False) else {}
+        return validated if self.ask(question, False, automatic=self.shares_accounts) else {}
 
     def write_shared(self, checked: CheckedToken, org: OrgInfo) -> None:
         """E2E_ALLOWED_ORG_IDS of a token that passed every check with shared org ids: this org id in the files of
@@ -1178,7 +1424,7 @@ class SetupWizard:
             profile = self.options.profile or stored or shard_profile or (plan if plan in available else "")
         while profile not in available:
             if profile:
-                self.echo(f"no profile {profile!r} (targets/<profile>.yaml): one of {', '.join(available)}")
+                self.warn(f"no profile {profile!r} (targets/<profile>.yaml): one of {', '.join(available)}")
             profile = self.io.prompt(f"Profile of {org.login} (plan {plan})", None).strip()
         expected = self.expected_plan(profile)
         if expected and expected != plan:
@@ -1186,7 +1432,7 @@ class SetupWizard:
                 f"profile {profile} expects plan {expected}, {org.login} is on plan {plan}: choose another --profile"
             )
         self.profile = profile
-        self.echo(f"profile {profile} (targets/{profile}.yaml), plan {plan}")
+        self.done(f"{profile} (targets/{profile}.yaml), plan {plan}")
         self.write({"E2E_PROFILE": profile})
 
     # --- web-UI login -------------------------------------------------------------------------------------------
@@ -1197,7 +1443,7 @@ class SetupWizard:
         if not rotate and not (self.values.get(password_env) or self.values.get(seed_env)):
             found = {name: self.from_store(name) for name in (password_env, seed_env)}
             if all(found.values()):
-                self.echo(f"web-UI login: found in the store at {found[password_env]} and {found[seed_env]}")
+                self.echo(f"found in the store at {found[password_env]} and {found[seed_env]}")
                 self.write({name: str(reference) for name, reference in found.items()})
             elif self.account_web_login(password_env, seed_env):
                 return
@@ -1207,9 +1453,9 @@ class SetupWizard:
                 kept_password = self.secret(password_env) or ""
                 kept_seed = normalize_totp_seed(self.secret(seed_env) or "", where=seed_env)
             except (WebCredentialsError, SetupError) as exc:
-                self.echo(f"web-UI login: {exc}")
+                self.warn(str(exc))
             else:
-                self.echo(f"web-UI login: keeping {password_env} and {seed_env}")
+                self.done(f"keeping {password_env} and {seed_env}")
                 if self.store:  # plain values move into the store, references stay as they are
                     values = ((password_env, kept_password), (seed_env, kept_seed))
                     moved = {
@@ -1220,7 +1466,7 @@ class SetupWizard:
                     if moved:
                         self.write(moved)
                 return
-        elif not rotate and not self.io.confirm(
+        elif not rotate and not self.ask(
             "Set up the web-UI login of the admin account? (optional: the web-UI tier logs in to github.com as the "
             "admin, trusted SUTs only)"
             + (
@@ -1228,11 +1474,11 @@ class SetupWizard:
             ),
             bool(self.shard_runs("web_ui")),
         ):
-            self.echo("web-UI login: skipped")
+            self.skipped(self.web_skip_reason() if self.automatic else "skipped")
             return
         admin = self.values.get(ROLE_TOKENS["admin"].login_env, "the admin account")
         self.echo(
-            f"web-UI login of {admin}: two-factor authentication with an authenticator app (TOTP) only; its setup key "
+            f"{admin}: two-factor authentication with an authenticator app (TOTP) only; its setup key "
             "is shown once while enrolling it (https://github.com/settings/security) and cannot be read back"
         )
         password = ""
@@ -1253,11 +1499,11 @@ class SetupWizard:
         else:
             raise SetupError(f"{password_env}: no readable password after {MAX_ATTEMPTS} attempts (nothing written)")
         if not password:
-            self.echo("web-UI login: skipped")
+            self.skipped()
             return
         seed = self.read_seed(seed_env)
         if seed is None:
-            self.echo("web-UI login: skipped")
+            self.skipped()
             return
         self.write(
             {
@@ -1266,15 +1512,28 @@ class SetupWizard:
             }
         )
 
+    def web_skip_reason(self) -> str:
+        """Why automatic setup leaves the web-UI login out: the shard that runs the web-UI tier is another one, or the
+        instance has no shard (the login is then added on request)."""
+        if self.shard is None or self.shard_map is None:
+            return f"skipped: no shard says {self.instance} runs the web-UI tier (setup --rotate web adds the login)"
+        return self.elsewhere("web_ui", "the web-UI tier runs")
+
+    def elsewhere(self, tier: str, what: str) -> str:
+        """ "skipped: <what> on the shard X, not Y": automatic setup leaving out the step of another shard's tier."""
+        assert self.shard is not None and self.shard_map is not None
+        return f"skipped: {what} on the shard {self.shard_map.assign(ItemFacts(tier)).name}, not {self.shard.name}"
+
     def account_web_login(self, password_env: str, seed_env: str) -> bool:
         """Offer the admin account's password and 2FA key of the accounts store as the web-UI login (opt-in, default
         no, like the web step itself); True when written: their references (pass), else their values, into the instance
         store when there is one (keeps_account_references)."""
         refs = {password_env: self.account_ref("admin", "password"), seed_env: self.account_ref("admin", "totp_seed")}
-        if not all(refs.values()) or not self.io.confirm(
+        if not all(refs.values()) or not self.ask(
             f"Use the admin account's {refs[password_env]} and {refs[seed_env]} as the web-UI login? (optional: the "
             "web-UI tier logs in to github.com as the admin, trusted SUTs only)",
             False,
+            automatic=bool(self.shard_runs("web_ui")),
         ):
             return False
         try:
@@ -1282,16 +1541,14 @@ class SetupWizard:
             REDACTOR.add(*values.values())
             values[seed_env] = normalize_totp_seed(values[seed_env], where=seed_env)
         except (VaultError, WebCredentialsError) as exc:
-            self.echo(f"web-UI login: {exc}")
+            self.warn(str(exc))
             return False
         if self.keeps_account_references:
             self.write({name: str(reference) for name, reference in refs.items()})
-            self.echo(f"web-UI login: {password_env} and {seed_env} refer to the admin account in the accounts store")
+            self.done(f"{password_env} and {seed_env} refer to the admin account in the accounts store")
         else:
             self.write({name: self.stored_or_plain(name, value) for name, value in values.items()})
-            self.echo(
-                f"web-UI login: {password_env} and {seed_env} copied from the admin account in the accounts store"
-            )
+            self.done(f"{password_env} and {seed_env} copied from the admin account in the accounts store")
         return True
 
     def read_seed(self, seed_env: str) -> str | None:
@@ -1321,12 +1578,12 @@ class SetupWizard:
         app_id = self.values.get("E2E_APP_ID")
         rotate = APP_ROTATION in self.options.rotate
         if app_id and not rotate:
-            self.echo(f"GitHub App: keeping {self.values.get('E2E_APP_SLUG') or '?'} (id {app_id})")
+            self.done(f"keeping {self.values.get('E2E_APP_SLUG') or '?'} (id {app_id})")
             self.app_into_store()
             self.wait_installation(org)
             return APP_READY
         if self.run_manifest is None:
-            self.echo("GitHub App: the manifest flow is not available here (otterdog-e2e app-manifest)")
+            self.skipped("the manifest flow is not available here (otterdog-e2e app-manifest)")
             return APP_SKIPPED
         needed = self.shard_runs("webapp")
         why = (
@@ -1334,17 +1591,25 @@ class SetupWizard:
             if needed is None or self.shard is None
             else f"; the shard {self.shard.name} " + ("runs them" if needed else "does not run them")
         )
-        if not confirmed and not self.io.confirm(
+        # automatic: for the shard that runs the tiers; without a shard, only when the webhook sink is known already
+        sink = bool(self.options.webhook_url or self.values.get(APP_WEBHOOK_URL_ENV))
+        if not confirmed and not self.ask(
             f"Create the GitHub App of the webapp and webhooks tiers? (optional: one browser click){why}",
             needed is None or needed,
+            automatic=bool(needed) or (needed is None and sink),
         ):
-            self.echo("GitHub App: skipped (run setup again to add it)")
+            if self.automatic and needed is False:
+                self.skipped(self.elsewhere("webapp", "the webapp and webhooks tiers run"))
+            elif self.automatic:
+                self.skipped("skipped (setup --webhook-url <https sink> adds it)")
+            else:
+                self.skipped("skipped (run setup again to add it)")
             return APP_SKIPPED
         target = self.target()
         description = str((self.clients["admin"].get(f"/orgs/{org.login}") or {}).get("description") or "")
         if target.marker not in description:
-            self.echo(
-                f"GitHub App: the description of {org.login} lacks the safety marker {target.marker!r} that proves a "
+            self.warn(
+                f"the description of {org.login} lacks the safety marker {target.marker!r} that proves a "
                 "dedicated test org: bootstrap adds it (the App is offered again right after it)"
             )
             return APP_NEEDS_MARKER
@@ -1360,7 +1625,7 @@ class SetupWizard:
         secret = Path(result["secret_path"]).read_text(encoding="utf-8").strip()
         REDACTOR.add(secret)
         slug = str(result["slug"])
-        self.echo(f"GitHub App {slug} (id {result['id']}) created; private key {result['pem_path']} (0600)")
+        self.done(f"{slug} (id {result['id']}) created; private key {result['pem_path']} (0600)")
         self.write(
             {
                 "E2E_APP_ID": str(result["id"]),
@@ -1372,7 +1637,7 @@ class SetupWizard:
         )
         self.app_into_store()
         if result.get("secret_generated"):
-            self.echo(
+            self.warn(
                 "GitHub returned no webhook secret: a random one was generated; set it as the App's webhook secret: "
                 f"https://github.com/organizations/{org.login}/settings/apps/{slug}"
             )
@@ -1438,7 +1703,7 @@ class SetupWizard:
         try:
             credentials = resolve_app_credentials(target, self.values)
         except TargetError as exc:
-            self.echo(f"GitHub App: {exc}")
+            self.warn(str(exc))
             return
         if credentials is None:
             return
@@ -1457,6 +1722,8 @@ class SetupWizard:
             url = APP_INSTALL_URL.format(slug=slug, org_id=org.org_id)
             self.echo(f"install the App on {org.login} for All repositories: {url}")
             self.open(url)
+            if self.web is not None:
+                self.web.install_app(url)
             self.echo(
                 f"waiting for the installation (up to {self.options.wait_timeout:g} s; Ctrl-C stops, setup can "
                 "be run again)"
@@ -1471,37 +1738,38 @@ class SetupWizard:
                     clock=self.io.clock,
                 )
             except WaitTimeoutError:
-                self.echo("GitHub App: not installed yet: install it, then run setup (or bootstrap) again")
+                self.warn("not installed yet: install it, then run setup (or bootstrap) again")
                 return
         problems = installation_problems(installation)
         if problems:
-            self.echo(
-                f"GitHub App installation {installation.get('id')}: {'; '.join(problems)} (accept the requested "
+            self.warn(
+                f"installation {installation.get('id')}: {'; '.join(problems)} (accept the requested "
                 "permissions and select All repositories)"
             )
         else:
-            self.echo(f"GitHub App installation {installation.get('id')} ready")
+            self.done(f"installation {installation.get('id')} ready")
 
     # --- end ------------------------------------------------------------------------------------------------------
     def finish(self, org: OrgInfo, app: str) -> None:
         """Offer bootstrap (then the App again when it waited for the marker) and doctor, then the manual steps."""
         self.warn_shadowed()
         command = f"otterdog-e2e bootstrap --target {self.instance} --apply"
-        if self.bootstrap is not None and self.io.confirm(
+        if self.bootstrap is not None and self.ask(
             f"Run `{command}` now? (safety marker after you type the org login, invitations, repositories, baseline)",
             True,
         ):
             self.bootstrap(self.instance)
-            if app == APP_NEEDS_MARKER and self.io.confirm("The marker is set now: create the GitHub App?", True):
+            if app == APP_NEEDS_MARKER and self.ask("The marker is set now: create the GitHub App?", True):
+                self.section("GitHub App")
                 app = self.app_step(org, confirmed=True)
-                if app == APP_READY and self.io.confirm(
+                if app == APP_READY and self.ask(
                     "Run bootstrap again for the App checks (otterdog.json, delivery probe)?", True
                 ):
                     self.bootstrap(self.instance)
-        if self.doctor is not None and self.io.confirm(
-            f"Run `otterdog-e2e doctor --target {self.instance}` now?", True
-        ):
+        if self.doctor is not None and self.ask(f"Run `otterdog-e2e doctor --target {self.instance}` now?", True):
             self.doctor(self.instance)
+        self.list_shard_instance()
+        self.section(f"What stays manual for {self.instance}")
         for line in self.next_steps(org, app):
             self.echo(line)
 
@@ -1511,11 +1779,11 @@ class SetupWizard:
             key for key, value in self.values.items() if key in self.environ and self.environ[key] != value
         )
         if shadowed:
-            self.echo(f"warning: exported in this shell, these override {self.env_path}: {', '.join(shadowed)}")
+            self.warn(f"exported in this shell, these override {self.env_path}: {', '.join(shadowed)}")
 
     def next_steps(self, org: OrgInfo, app: str) -> Iterable[str]:
         """What stays manual (docs/onboarding.md)."""
-        lines = [f"instance {self.instance} ({self.env_path}): what stays manual"]
+        lines = []
         if app == APP_NEEDS_MARKER:
             lines.append(f"- the GitHub App: run setup again once bootstrap added the safety marker to {org.login}")
         members = [

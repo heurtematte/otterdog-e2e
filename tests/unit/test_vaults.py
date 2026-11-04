@@ -257,6 +257,16 @@ def test_pass_reads_the_whole_entry(pass_bin: Path, tmp_path: Path) -> None:
     assert vaults.resolve("pass:e2e/store", env) == "store=/srv/e2e-store"
 
 
+def test_a_value_read_as_no_secret_is_not_redacted(pass_bin: Path, tmp_path: Path) -> None:
+    """secret=False (an account's username or e-mail): the value stays readable in the output, until it is read as a
+    secret."""
+    env = {"HOME": str(tmp_path), "E2E_PASS_BIN": str(pass_bin), "PASSWORD_STORE_DIR": "/srv/plain-store"}
+    assert vaults.resolve("pass:e2e/store", env, secret=False) == "store=/srv/plain-store"
+    assert REDACTOR("as store=/srv/plain-store") == "as store=/srv/plain-store"
+    assert vaults.resolve("pass:e2e/store", env) == "store=/srv/plain-store"  # cached, now registered
+    assert REDACTOR("as store=/srv/plain-store") == "as ***"
+
+
 def test_pass_errors(pass_bin: Path, tmp_path: Path) -> None:
     """A missing entry reports pass's own last error line; a missing CLI says so."""
     env = {"HOME": str(tmp_path), "E2E_PASS_BIN": str(pass_bin)}

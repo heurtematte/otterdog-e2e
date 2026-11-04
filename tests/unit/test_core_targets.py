@@ -112,6 +112,24 @@ def test_load_free_target_defaults(harness: HarnessSettings) -> None:
     assert target.source_path == harness.targets_dir / "free.yaml"
 
 
+def test_an_instance_declares_the_settings_its_enterprise_enforces(harness: HarnessSettings) -> None:
+    """E2E_BASELINE_SETTINGS: key=value pairs merged over baseline.settings (YAML scalars, null: unmanaged, dotted
+    keys for nested settings, the nested mappings merged)."""
+    target = free_target(
+        harness,
+        E2E_BASELINE_SETTINGS=(
+            "deploy_keys_enabled_for_repositories=false, workflows.actions_can_approve_pull_request_reviews=false,"
+            "members_can_create_private_pages=null,blog=https://example.org/a=b"
+        ),
+    )
+    assert target.baseline_settings == {
+        "deploy_keys_enabled_for_repositories": False,
+        "workflows": {"actions_can_approve_pull_request_reviews": False},
+        "members_can_create_private_pages": None,
+        "blog": "https://example.org/a=b",
+    }
+
+
 def test_load_target_environment_values(harness: HarnessSettings) -> None:
     """${VAR:-default} values come from the environment and are typed/validated."""
     target = free_target(
@@ -259,6 +277,10 @@ INVALID_CASES: list[tuple[str, Callable[[dict[str, Any]], None] | None, dict[str
     ),
     ("baseline description", setter("baseline.settings", {"description": "x"}), {}, "come from the live organization"),
     ("baseline not mapping", setter("baseline.settings", ["x"]), {}, "expected a mapping of org settings"),
+    ("instance setting without value", None, {"E2E_BASELINE_SETTINGS": "deploy_keys"}, "expected key=value pairs"),
+    ("instance setting key", None, {"E2E_BASELINE_SETTINGS": "Deploy Keys=false"}, "expected key=value pairs"),
+    ("instance description", None, {"E2E_BASELINE_SETTINGS": "description=x"}, "come from the live organization"),
+    ("instance nested over value", None, {"E2E_BASELINE_SETTINGS": "a=1,a.b=2"}, "a is set and has nested"),
     ("run-like fixture", setter("fixtures.repos", ["e2e-t3c7z8a5-fixture"]), {}, "looks like a run-prefixed name"),
     ("run-like config repo", None, {"E2E_ORG_CONFIG_REPO": "e2e-t3c7z8a5-config"}, "looks like a run-prefixed name"),
     ("bad repo name", None, {"E2E_CONFIGS_REPO": "bad name"}, "repository name"),

@@ -3,7 +3,7 @@ in the browser").
 
 For each role it logs in to github.com as the role's machine account, enrolls two-factor authentication (TOTP) when
 the account has none and creates the role's classic token (the scopes of onboard.tokens, the note of the prefilled
-URLs, an expiration), driving Firefox through Playwright (onboard.browser).
+URLs, no expiration unless asked), driving Firefox through Playwright (onboard.browser).
 
 Where the secrets of the accounts live is the ``accounts`` section of the setup configuration file
 (``~/.config/otterdog-e2e/setup.yaml``, or E2E_SETUP_CONFIG; AccountsConfig): a ``store`` (``pass:<directory>`` or
@@ -15,7 +15,9 @@ reference of an item is ``<store>/<entry>``, one convention for both: a pass ent
 ``pass:bots/technology.csi/github.com/otterdog-e2e-free-admin-password`` and
 ``vault:otterdog-e2e/technology.csi/github/otterdog-e2e-free-admin-password``. ``set`` gives every instance the
 accounts of one set: ``set: free`` makes ``{instance}`` free for all of them, so the test organizations of the shards
-share one set of machine accounts (otterdog-e2e-free-admin...).
+share one set of machine accounts (otterdog-e2e-free-admin...); a mapping gives the set of each instance, ``default``
+that of the others (``{default: free, enterprise: enterprise}``: the enterprise organization keeps its own accounts),
+an instance it does not name and without ``default`` using its own.
 
 * the login: the username item, else E2E_<ROLE>_LOGIN, else the account is signed in with its e-mail item (GitHub
   accepts both) and the login GitHub shows is used;
@@ -38,6 +40,7 @@ device (asked in the terminal), hence a visible window. Refused in CI.
 from __future__ import annotations
 
 import base64
+import contextlib
 import hashlib
 import hmac
 import json
@@ -54,7 +57,6 @@ from typing import TYPE_CHECKING, Any, Protocol
 import yaml
 
 from otterdog_e2e.onboard.tokens import (
-    DEFAULT_EXPIRES_IN,
     ROLE_TOKENS,
     classic_token_url,
     missing_scopes,
@@ -83,7 +85,7 @@ DEFAULT_ITEMS: Mapping[str, str] = {
 DEFAULT_ENTRY = "otterdog-e2e-{instance}-{role}-{item}"
 ENTRY_FIELDS = frozenset({"instance", "role", "item"})
 CBI_CONFIG = "~/.cbi/config"  # ci-admin's configuration: {"password-store": {"cbi-dir": ...}}
-CLASSIC_EXPIRATIONS = (7, 30, 60, 90)  # days the classic token form offers besides a custom date and none
+CLASSIC_EXPIRATIONS = (7, 30, 60, 90)  # days the classic token form offers besides a custom date and none (None)
 TOTP_PERIOD, TOTP_DIGITS = 30, 6
 _PATH_RE = re.compile(r"^[A-Za-z0-9_.@-]+(/[A-Za-z0-9_.@-]+)*$")
 
@@ -108,6 +110,7 @@ class AccountsConfig:
     items: Mapping[str, str] = field(default_factory=lambda: dict(DEFAULT_ITEMS))
     source: str = "setup configuration"
     set: str | None = None  # the {instance} of every instance: one set of accounts for all the organizations
+    sets: Mapping[str, str] = field(default_factory=dict)  # the {instance} of some instances, before ``set``
 
     @property
     def provider(self) -> str:
@@ -115,13 +118,31 @@ class AccountsConfig:
         return self.store.partition(":")[0]
 
     def account(self, instance: str, role: str) -> MachineAccount:
-        """The account of ``role`` in ``instance`` (in the shared ``set`` when there is one)."""
-        return MachineAccount(role, self.set or instance, self)
+        """The account of ``role`` in ``instance`` (in its set, else the shared ``set`` when there is one)."""
+        return MachineAccount(role, self.sets.get(instance) or self.set or instance, self)
 
     def named(self, name: str) -> MachineAccount:
         """The account whose entries start with ``name``, what the entry template gives before the item (e.g.
         otterdog-e2e-free-admin: web-login without an instance)."""
         return MachineAccount("account", "", self, _check_path(name, "the account name"))
+
+
+def _account_sets(value: Any, source: str) -> dict[str, str]:
+    """The set of each instance of ``accounts.set`` (``default``: the others'): a name for every instance, or a
+    mapping of instance names (and ``default``) to set names."""
+    usage = (
+        f"{source}: accounts.set names the set of accounts every instance uses (e.g. free), or maps instances (and "
+        "default) to their sets (e.g. {default: free, enterprise: enterprise})"
+    )
+    if value is None:
+        return {}
+    given = value if isinstance(value, Mapping) else {"default": value}
+    if not given or not all(isinstance(name, str) and name.strip() for item in given.items() for name in item):
+        raise AccountError(usage)
+    try:
+        return {_check_path(key.strip(), "instance"): _check_path(name.strip(), "set") for key, name in given.items()}
+    except AccountError:
+        raise AccountError(usage) from None
 
 
 def parse_accounts_config(data: Any, source: str) -> AccountsConfig:
@@ -154,12 +175,8 @@ def parse_accounts_config(data: Any, source: str) -> AccountsConfig:
         _check_path(value, f"{source}: accounts.items.{key}")
     if len(set(items.values())) != len(items):
         raise AccountError(f"{source}: accounts.items gives two items the same name")
-    shared = data.get("set")
-    if shared is not None and (not isinstance(shared, str) or not shared.strip()):
-        raise AccountError(f"{source}: accounts.set names the set of accounts every instance uses (e.g. free)")
-    config = AccountsConfig(
-        store_value, entry, items, source, _check_path(shared.strip(), f"{source}: accounts.set") if shared else None
-    )
+    sets = _account_sets(data.get("set"), source)
+    config = AccountsConfig(store_value, entry, items, source, sets.pop("default", None), sets)
     config.account("i", "config_reader").ref("token")  # the template renders a valid path
     return config
 
@@ -289,18 +306,34 @@ class GitHubSession(Protocol):
         keep_seed: Callable[[str], None],
         code: Callable[[str], str],
         keep_recovery_codes: Callable[[list[str]], None],
+        ask_key: Callable[[str], str],
     ) -> None:
         """Enroll an authenticator app: the setup key goes to ``keep_seed`` before ``code(seed)`` is submitted, the
-        recovery codes to ``keep_recovery_codes`` before they are acknowledged."""
+        recovery codes to ``keep_recovery_codes`` before they are acknowledged; ``ask_key(problem)`` gives the key
+        the page showed when it cannot be read."""
         ...
 
-    def classic_token(self, *, note: str, url: str, days: int) -> str:
+    def classic_token(self, *, note: str, url: str, days: int | None) -> str:
         """A new value of the classic token ``note``: regenerated when a token with that note exists, else created
-        from the prefilled ``url`` (a sudo confirmation answered with the sign-in's password or code source)."""
+        from the prefilled ``url`` (a sudo confirmation answered with the sign-in's password or code source),
+        expiring in ``days`` (None: no expiration)."""
         ...
 
     def open(self, url: str) -> None:
         """Show the page ``url`` (otterdog-e2e web-login)."""
+        ...
+
+    def join_org(self, org: str, login: str, *, public: bool) -> None:
+        """Accept the pending invitation of ``org`` (none: nothing to accept), then, with ``public``, make the
+        membership of ``login`` public (setup and bootstrap)."""
+        ...
+
+    def install_app(self, url: str) -> None:
+        """Install the App from its installation page ``url`` (the organization preselected), on all repositories."""
+        ...
+
+    def confirm_app(self, url: str) -> None:
+        """Open setup's manifest form ``url`` (it posts itself to GitHub) and create the App it describes."""
         ...
 
 
@@ -334,10 +367,11 @@ class SignIn:
     source: str
 
 
-def web_login(browser: Browser, io: AccountsIO, account: SignIn, url: str, *, until: Callable[[str], object]) -> str:
-    """Sign ``account`` in in a fresh browser session, show ``url`` and keep the window until ``until(message)``
-    returns; leaving the session signs the account out and drops its cookies. A 2FA code comes from the account's key,
-    else it is typed. The login GitHub shows."""
+@contextlib.contextmanager
+def signed_in(browser: Browser, io: AccountsIO, account: SignIn) -> Iterator[tuple[GitHubSession, str]]:
+    """A fresh browser session signed in as ``account`` and the login GitHub shows (it must be the account's when the
+    account's login is known); leaving it signs the account out and drops its cookies. A 2FA code comes from the
+    account's key, else it is typed, like the verification code GitHub e-mails for a new device."""
 
     def code() -> str:
         """The 2FA code: of the account's key, else typed."""
@@ -357,6 +391,13 @@ def web_login(browser: Browser, io: AccountsIO, account: SignIn, url: str, *, un
         shown = session.login(account.name, account.password, code=code, device_code=device_code)
         if account.login and shown.lower() != account.login.lower():
             raise AccountError(f"{account.role}: signed in as {shown}, but the account is {account.login}")
+        yield session, shown
+
+
+def web_login(browser: Browser, io: AccountsIO, account: SignIn, url: str, *, until: Callable[[str], object]) -> str:
+    """Sign ``account`` in (signed_in), show ``url`` and keep the window until ``until(message)`` returns; the login
+    GitHub shows."""
+    with signed_in(browser, io, account) as (session, shown):
         session.open(url)
         until(f"{account.role}: {shown} is signed in on {url}: press Enter to sign out and close the window")
     return shown
@@ -381,12 +422,13 @@ class AccountSetup:
         browser: Browser,
         io: AccountsIO,
         http: Callable[[str, str], GitHubHttp] | None = None,
-        days: int = DEFAULT_EXPIRES_IN,
+        days: int | None = None,
         rotate: bool = False,
     ) -> None:
-        """Bind; ``days`` must be one of CLASSIC_EXPIRATIONS; ``rotate``: a new token even when the stored one is
-        valid; ``http(token, role)``: the client of the token check (default: a read-only GitHubHttp)."""
-        if days not in CLASSIC_EXPIRATIONS:
+        """Bind; ``days`` must be one of CLASSIC_EXPIRATIONS (None: no expiration, the default); ``rotate``: a new
+        token even when the stored one is valid; ``http(token, role)``: the client of the token check (default: a
+        read-only GitHubHttp)."""
+        if days is not None and days not in CLASSIC_EXPIRATIONS:
             raise AccountError(
                 f"a classic token expires in {', '.join(map(str, CLASSIC_EXPIRATIONS))} days, not {days}"
             )
@@ -403,7 +445,7 @@ class AccountSetup:
         """The ``item`` of the account (stripped), None when it does not exist or cannot be read; a secret item is
         registered with REDACTOR (the username and e-mail are not)."""
         try:
-            value = resolve(account.ref(item), self.environ).strip()
+            value = resolve(account.ref(item), self.environ, secret=secret).strip()
         except VaultError:
             return None
         if value and secret:
@@ -582,10 +624,18 @@ class AccountSetup:
             REDACTOR.add(*codes)
             self.write(account, "recovery_codes", "\n".join(codes))
 
+        def ask_key(problem: str) -> str:
+            """The setup key copied by the operator from the dialog left open."""
+            return self.io.secret_prompt(
+                f"  {account.role}: {problem}: copy it from the dialog in the browser window and paste it here "
+                "(input hidden)"
+            )
+
         session.enroll_two_factor(
             keep_seed=keep_seed,
             code=lambda raw: totp_code(normalize_totp_seed(raw, where="the setup key GitHub showed")),
             keep_recovery_codes=keep_codes,
+            ask_key=ask_key,
         )
         self.io.echo(f"  {account.role}: 2FA enabled (authenticator app)")
         return True
@@ -600,7 +650,8 @@ class AccountSetup:
             raise AccountError(f"{role}: GitHub showed no token")
         REDACTOR.add(token)
         reference = self.write(account, "token", token)
-        self.io.echo(f"  {role}: classic token created ({self.days} days)")
+        lifetime = "no expiration" if self.days is None else f"{self.days} days"
+        self.io.echo(f"  {role}: classic token created ({lifetime})")
         return reference
 
     def run(self, accounts: Sequence[MachineAccount]) -> Iterator[AccountResult]:

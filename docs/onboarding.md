@@ -69,10 +69,10 @@ file (not `.env.e2e.<instance>` nor `.env.e2e`), and is refused when `CI` or `GI
 | 1. organization | the login (`--org`, the stored `E2E_ORG`, else asked), read with `GET /orgs/{org}`: exact-case login and id. A missing organization gets the creation hint of the profile's plan and a "Check again?" prompt; while the profile is not known yet (no `--profile`, no stored `E2E_PROFILE`, an instance not named after a profile), the hint shows the Free URL (`?plan=free`, and the Team one), the Enterprise Cloud note (`createEnterpriseOrganization`, not automated by setup) and suggests `--profile` | `E2E_ORG`, `E2E_ORG_ID` |
 | 2. admin token (required) | the prefilled URL, a hidden prompt, then the checks below; the admin must be an active owner | `E2E_ADMIN_LOGIN`, `E2E_ADMIN_TOKEN`, `E2E_ADMIN_TOKEN_TYPE` |
 | 3. profile | an instance named after a profile uses it; else `--profile`, the stored `E2E_PROFILE`, else the organization's plan; the profile's `expected_plan` must be the live plan | `E2E_PROFILE` |
-| 4. the other roles (optional) | in order oracle (skipped by default: the admin token serves as oracle), author, approver, outsider (classic PAT only), config_reader (a classic PAT without any scope, or a fine-grained token); answer no, or enter no token, to skip a role | `E2E_<ROLE>_LOGIN`, `E2E_<ROLE>_TOKEN`, `E2E_<ROLE>_TOKEN_TYPE` (config_reader: `E2E_CONFIG_READER_LOGIN`, `E2E_CONFIG_READER_TOKEN`, `E2E_CONFIG_READER_TOKEN_TYPE`) |
+| 4. the other roles (optional) | in order oracle (skipped by default: the admin token serves as oracle), author, approver, outsider (classic PAT only), config_reader (a classic PAT without any scope, or a fine-grained token); answer no, or enter no token, to skip a role; with the accounts store nothing is asked: each role whose account is in the store is set up in the browser (the oracle too), the others are skipped | `E2E_<ROLE>_LOGIN`, `E2E_<ROLE>_TOKEN`, `E2E_<ROLE>_TOKEN_TYPE` (config_reader: `E2E_CONFIG_READER_LOGIN`, `E2E_CONFIG_READER_TOKEN`, `E2E_CONFIG_READER_TOKEN_TYPE`) |
 | 5. web-UI login (optional, default no) | [The web login step](#the-web-login-step) | `E2E_ADMIN_PASSWORD`, `E2E_ADMIN_TOTP_SEED` |
 | 6. GitHub App (optional, default yes) | [The App step](#the-app-step) | `E2E_APP_WEBHOOK_URL`, `E2E_APP_ID`, `E2E_APP_SLUG`, `E2E_APP_PRIVATE_KEY_FILE`, `E2E_APP_WEBHOOK_SECRET` |
-| 7. bootstrap and doctor (offered) | `bootstrap --apply --wait` (you type the organization login for the safety marker; it waits for the invitations and the App installation, up to `--wait-timeout`), the App and a second bootstrap when the App waited for the marker, then `doctor` | - |
+| 7. bootstrap and doctor (offered) | `bootstrap --apply --wait` (you type the organization login for the safety marker, setup with the accounts store types it when the org has no foreign member; it waits for the invitations and the App installation, up to `--wait-timeout`), the App and a second bootstrap when the App waited for the marker, then `doctor` | - |
 | end | the list of what is still manual for this instance, and the `ci-sync` command | - |
 
 The env file:
@@ -108,8 +108,8 @@ vault access, checks the value like a typed token and writes the reference, neve
 
 Instead of clicking each token yourself, `otterdog-e2e accounts` signs in to github.com as each machine account in a
 visible Firefox window, enrolls two-factor authentication (authenticator app) when the account has none and creates
-the role's **classic** token (its scopes, the note of the prefilled URL, an expiration of 7, 30, 60 or 90 days), in the
-way of the scripts of [eclipse-cbi/ci-admin](https://github.com/eclipse-cbi/ci-admin/tree/master/github/playwright).
+the role's **classic** token (its scopes, the note of the prefilled URL, no expiration; `accounts --expires-in` 7,
+30, 60 or 90 days for one), in the way of the scripts of [eclipse-cbi/ci-admin](https://github.com/eclipse-cbi/ci-admin/tree/master/github/playwright).
 
 Where the secrets of the accounts are is the `accounts` section of the setup configuration file
 `~/.config/otterdog-e2e/setup.yaml` (another file: `E2E_SETUP_CONFIG` or `accounts --config`), one file for every
@@ -162,16 +162,51 @@ Vault store the **value** (into the instance store of `--store` when there is on
 accounts secret, because a Vault policy grants a whole secret and that one holds every password and 2FA key. A stored
 valid token and a stored key mean nothing to do (no window opens); `--rotate` regenerates the token.
 
-`setup --browser` does the same inline: each role without a valid token is set up in the browser before its checks;
-without an accounts section, or when the browser fails, the usual prompt follows. With the admin account in the
-store, the web login step also offers its password and 2FA key (default no, like the web-UI tier itself).
+`setup` does the same inline whenever the accounts section exists: each role without a valid token is set up in the
+browser before its checks (an optional role only when its account is in the store, without asking), its classic token
+created there (no expiration; setup's `--expires-in` is for the fine-grained URLs), without instructions to follow.
+When the browser fails, setup prints the token's creation URL only and asks for the token; `setup --no-browser` prints
+the prefilled URLs and their steps instead, and `--browser` asks for the accounts section when it is missing.
+
+With the accounts store, setup asks nothing: it decides each step, and prints what it did.
+
+| Step | Decision |
+|---|---|
+| shard, organization | the shard named after the instance, the organization `otterdog-e2e-<instance>`; a missing organization gets its creation page in the window as the admin account (you create it, then press Enter), else setup stops |
+| tokens | a valid token of the store is kept (nothing created again), else the account is set up in the browser; an optional role only when its account is in the store |
+| web-UI login | the admin account's password and 2FA key (their references) on the shard that runs the web-UI tier only |
+| GitHub App | on the shard that runs the webapp tiers (its webhook sink asked when no `--webhook-url` nor stored one gives it); an instance without a shard only when the sink is known |
+| shared accounts | the other test organizations of the accounts' set allowed in `E2E_ALLOWED_ORG_IDS` (validated as dedicated test orgs) |
+| web steps | the invitations accepted and the memberships made public in Firefox (Playwright) as soon as a member's token may not do it (its scopes, public_repo and read:org, cannot), then checked through the API; the App confirmed and installed; without a confirmation each. `bootstrap --apply` run alone does the invitations the same way when the accounts store exists |
+| bootstrap and doctor | run; bootstrap types the organization login of the safety marker itself when every member is a declared identity (a foreign member: you type it; foreign repositories: refused either way) |
+| `--shards` | an instance whose setup finished (listed in `@shards`) is kept, the others run again (what is valid is kept) |
+
+What stays yours: creating an organization, a webhook sink, the e-mailed verification code of a new device, a
+captcha, and a step that failed (its prompt follows). `setup --no-browser` asks every question as before.
+
+GitHub may flag a machine account (its anti-abuse checks; new accounts driven by automation are likely targets):
+its public profile is hidden (an anonymous `GET /users/<login>` answers 404) and it can neither join an
+organization nor accept an invitation (`422 ... your account has been flagged`). Setup checks every token's
+account and, for a flagged one, warns and asks whether to go on (the one question of automatic setup, default
+yes): going on leaves a flagged oracle, author or approver out (its stored token removed) and keeps a flagged
+admin, outsider or config_reader as it is; no stops setup. Bootstrap names a refused invitation of a flagged
+account. Only [GitHub Support](https://support.github.com/contact) lifts the flag; run setup again afterwards.
 
 What stays yours: creating the accounts (GitHub's terms), a captcha, and the verification code GitHub e-mails when
 an account signs in from a new device (typed in the terminal, or in the window). When a page is not what the
 automation expects (GitHub changes them without notice), it stops at the named step and leaves the window open for
-you to look or finish by hand; the secrets already stored stay. The writes are ordered so that an interruption never
-locks an account out: the 2FA key is stored before the code that enables it, the recovery codes before they are
-acknowledged, the token as soon as GitHub shows it. Refused in CI.
+you to look or finish by hand; the secrets already stored stay. The 2FA setup key is read from GitHub's dialog
+(waiting for GitHub to fill it in: its text, its field, an `otpauth://` URI of the page); only when none of them holds
+a key does a hidden prompt ask you to paste it from the dialog left open, naming what the page showed (lengths and
+kinds of characters, never the text). The writes are ordered so that an interruption never locks an account out: the
+2FA key is stored before the code that enables it, the recovery codes before they are acknowledged, the token as soon
+as GitHub shows it. Refused in CI.
+
+On GNOME 46 (Ubuntu 24.04), Playwright's Firefox aborts at start (`GLib-GIO-ERROR ... does not contain a key named
+'antialiasing'`): GNOME moved its font keys to a deprecated schema where Firefox does not look. The harness gives
+Firefox a schema directory with those keys back (`~/.cache/otterdog-e2e/gsettings-schemas`, through
+`GSETTINGS_SCHEMA_DIR`, compiled with `glib-compile-schemas`); the system's schemas stay untouched. When Firefox still
+does not start, the error names its last line of output.
 
 ### Signing in as an account
 
@@ -320,17 +355,41 @@ accounts:
   set: free            # otterdog-e2e-free-admin, otterdog-e2e-free-author... for every organization
 ```
 
-Then one `setup` per instance. Named after its shard, an instance proposes it (`E2E_SHARD`, confirmed), its profile,
-the organization `otterdog-e2e-<instance>` and, when the organization does not exist yet, its creation page signed in
-as the shared admin account; the App is proposed by default on `webapp` only, the web login on `org-level` only:
+An organization can keep its own accounts, like the Enterprise Cloud one, which an enterprise owner creates (its
+admin account must own it): `set` then maps each instance to its set, `default` giving that of the others (an
+instance it does not name, without `default`, uses its own accounts):
 
-```bash
-for instance in enterprise webapp org-level repos automation; do otterdog-e2e setup --target "$instance"; done
-otterdog-e2e shards                     # what each shard runs, and the instance that selects it
-otterdog-e2e run --target enterprise,webapp,org-level,repos,automation --suite cli,webhooks,webapp,enterprise --parallel 5
+```yaml
+accounts:
+  store: pass:bots/technology.csi/github.com
+  set:
+    default: free            # the four free organizations share otterdog-e2e-free-<role>
+    enterprise: enterprise   # otterdog-e2e-enterprise-admin... for otterdog-e2e-enterprise
 ```
 
-`setup --shard <name>` picks another shard, `--shard none` none (the instance then runs every live item, as before).
+Then `setup --shards` sets up the instance of every shard in turn: the instance whose env file already selects the
+shard (`E2E_SHARD`), else the one named after it; it asks before setting up again an instance done already (its
+organization, admin token and shard stored), and stops at the first failure, naming the instance to resume. For each,
+`setup` proposes the shard (confirmed), its profile, takes the organization `otterdog-e2e-<instance>` without asking
+(`setup --target <instance> --org <login>` names another, once) and, when the organization does not exist yet, its creation page signed in as the shared admin account; the App is proposed by
+default on `webapp` only, the web login on `org-level` only. The Enterprise Cloud organization is created by an
+enterprise owner beforehand (setup cannot).
+
+With the accounts store, setup also does in Firefox, after a confirmation each, the web steps GitHub has no API for:
+author and approver accept their invitation and make their membership public, the admin confirms the App of the
+manifest and installs it. A step whose page is not what the automation expects stops there and leaves the window open
+to finish by hand; setup's wait (`bootstrap --wait`, the installation poll) then sees it done either way. Each instance
+set up joins the list `~/.config/otterdog-e2e/lists/shards`:
+
+```bash
+otterdog-e2e setup --shards             # every shard, in the order of scenarios/shards.yaml
+otterdog-e2e shards                     # what each shard runs, and the instance that selects it
+otterdog-e2e run --target @shards --suite cli,webhooks,webapp,enterprise --parallel 5
+```
+
+`setup --target <instance> --shard <name>` sets up one instance for a shard (the existing `free` organization can
+serve `repos`: `--target free --shard repos`), `--shard none` none (the instance then runs every live item, as
+before).
 
 ## The App step
 
@@ -575,13 +634,13 @@ can, waits for the result.
 | Step | Why it is manual | What the harness does instead |
 |---|---|---|
 | Creating the machine accounts | GitHub's [Terms of Service](https://docs.github.com/en/site-policy/github-terms/github-terms-of-service): an account must be created by a human, accounts registered by bots or other automated methods are not permitted; a machine account is set up by a human who is responsible for it, and a person may maintain no more than one free machine account besides their own account, so the roles need accounts held by several people | the roles and their rules: [setup-free-org.md](setup-free-org.md#1-machine-accounts); setup validates each account through its token (isolation, one account per role) |
-| Enrolling two-factor authentication (TOTP) | done in the account's security settings ([configuring 2FA](https://docs.github.com/en/authentication/securing-your-account-with-two-factor-authentication-2fa/configuring-two-factor-authentication)); the setup key is shown once while enrolling and cannot be read back; no API | `accounts` (or `setup --browser`) enrolls it in a browser window and stores the key and recovery codes in pass ([machine accounts in the browser](#machine-accounts-in-the-browser)); otherwise setup asks the key in a hidden prompt and normalizes it; doctor checks the account's 2FA and the key without logging in |
-| Creating a personal access token, classic or fine-grained | no API creates a token; the creation page takes URL parameters for the name, description, resource owner, expiration (`expires_in`, at most 366 days) and permissions, but none for the repository access ([pre-filling a fine-grained token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#pre-filling-fine-grained-personal-access-token-details-using-url-parameters)); a classic token has no expiration parameter | `accounts` (or `setup --browser`) creates the classic tokens in a browser window, into pass; otherwise prefilled URLs per role and kind, "All repositories" (config_reader: "Public repositories") and the classic expiration named as the steps left; either way the token is checked before it is written |
-| Creating a Free or Team organization | no REST or GraphQL API creates one. Enterprise Cloud enterprise owners can create an organization with the GraphQL mutation `createEnterpriseOrganization` ([enterprise administration](https://docs.github.com/en/enterprise-cloud@latest/graphql/reference/enterprise-admin)): the harness does not, it never holds an enterprise owner's token | setup prints the creation URL of the profile's plan (`https://github.com/account/organizations/new?plan=free` for the Free profile), or the Enterprise Cloud hint; while the profile is not known, the Free (and Team) URL with the Enterprise Cloud note and the hint to pass `--profile`; with an accounts store it offers that page in Firefox signed in as the admin account (its name proposed, to confirm); it reads `GET /orgs/{org}` again when you answer "Check again?" |
+| Enrolling two-factor authentication (TOTP) | done in the account's security settings ([configuring 2FA](https://docs.github.com/en/authentication/securing-your-account-with-two-factor-authentication-2fa/configuring-two-factor-authentication)); the setup key is shown once while enrolling and cannot be read back; no API | `accounts` (or `setup` with an accounts store) enrolls it in a browser window and stores the key and recovery codes in pass ([machine accounts in the browser](#machine-accounts-in-the-browser)); otherwise setup asks the key in a hidden prompt and normalizes it; doctor checks the account's 2FA and the key without logging in |
+| Creating a personal access token, classic or fine-grained | no API creates a token; the creation page takes URL parameters for the name, description, resource owner, expiration (`expires_in`, at most 366 days) and permissions, but none for the repository access ([pre-filling a fine-grained token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#pre-filling-fine-grained-personal-access-token-details-using-url-parameters)); a classic token has no expiration parameter | `accounts` (or `setup` with an accounts store) creates the classic tokens in a browser window, into pass; otherwise prefilled URLs per role and kind, "All repositories" (config_reader: "Public repositories") and the classic expiration named as the steps left; either way the token is checked before it is written |
+| Creating a Free or Team organization | no REST or GraphQL API creates one. Enterprise Cloud enterprise owners can create an organization with the GraphQL mutation `createEnterpriseOrganization` ([enterprise administration](https://docs.github.com/en/enterprise-cloud@latest/graphql/reference/enterprise-admin)): the harness does not, it never holds an enterprise owner's token | setup prints the creation URL of the profile's plan (`https://github.com/account/organizations/new?plan=free` for the Free profile), or the Enterprise Cloud hint; while the profile is not known, the Free (and Team) URL with the Enterprise Cloud note and the hint to pass `--profile`; with an accounts store it offers that page in Firefox signed in as the admin account (its name proposed, to confirm); it reads `GET /orgs/{org}` again when you answer "Check again?"; with an accounts store, setup opens the creation page signed in as the admin account |
 | The organization's token policies (allow classic or fine-grained tokens, require approval, maximum lifetime) | organization settings only ([setting a token policy](https://docs.github.com/en/organizations/managing-programmatic-access-to-your-organization/setting-a-personal-access-token-policy-for-your-organization)); the REST API only reviews requests and revokes tokens, for GitHub Apps ([REST personal access tokens](https://docs.github.com/en/rest/orgs/personal-access-tokens)) | the settings to choose: [organization prerequisites](setup-free-org.md#organization-prerequisites); a token the policy blocks is refused by setup and doctor with the reason |
-| Registering the GitHub App | the manifest flow ends with an owner confirming the App on github.com ([registering an App from a manifest](https://docs.github.com/en/apps/sharing-github-apps/registering-a-github-app-from-a-manifest)) | setup and `app-manifest` serve the auto-posting form on `127.0.0.1`, receive GitHub's redirect, exchange the code at once and store the credentials |
-| Installing the GitHub App | an organization owner's click on github.com; Enterprise Cloud has an API for installing Apps on the organizations of an enterprise, which the harness does not use | the installation URL with `target_id` (the organization preselected); setup and `bootstrap --wait` poll `GET /orgs/{org}/installation` until the App is installed, then check it |
-| Accepting an invitation, making a membership public | done by the invited account; with their minimal scopes (`public_repo`, `read:org`) the member tokens are usually refused by the membership endpoints ([REST members](https://docs.github.com/en/rest/orgs/members)), and a fine-grained token cannot exist before the membership | bootstrap tries with the member's own token, then prints `https://github.com/orgs/<org>/invitation` and the People page `https://github.com/orgs/<org>/people`; `--wait` polls every 10 s until each account is active and public; setup invites and waits for the fine-grained roles |
+| Registering the GitHub App | the manifest flow ends with an owner confirming the App on github.com ([registering an App from a manifest](https://docs.github.com/en/apps/sharing-github-apps/registering-a-github-app-from-a-manifest)) | setup and `app-manifest` serve the auto-posting form on `127.0.0.1`, receive GitHub's redirect, exchange the code at once and store the credentials; with an accounts store, setup does it in Firefox as the admin (confirmed first) |
+| Installing the GitHub App | an organization owner's click on github.com; Enterprise Cloud has an API for installing Apps on the organizations of an enterprise, which the harness does not use | the installation URL with `target_id` (the organization preselected); setup and `bootstrap --wait` poll `GET /orgs/{org}/installation` until the App is installed, then check it; with an accounts store, setup does it in Firefox as the admin (confirmed first) |
+| Accepting an invitation, making a membership public | done by the invited account; with their minimal scopes (`public_repo`, `read:org`) the member tokens are usually refused by the membership endpoints ([REST members](https://docs.github.com/en/rest/orgs/members)), and a fine-grained token cannot exist before the membership | bootstrap tries with the member's own token, then prints `https://github.com/orgs/<org>/invitation` and the People page `https://github.com/orgs/<org>/people`; `--wait` polls every 10 s until each account is active and public; setup invites and waits for the fine-grained roles, and with an accounts store it signs each member in Firefox to accept and make public (confirmed first, finished by hand when a page is not the expected one) |
 | Approving a member's fine-grained token request | an owner's action in the organization settings; the API exists for GitHub Apps only (permission `organization_personal_access_token_requests`), and is deliberately not used: the e2e App's private key reaches the webapp under test, untrusted pull request images included, which could then approve tokens | the approval URL `https://github.com/organizations/<org>/settings/personal-access-token-requests` in setup's token steps and closing list, and in bootstrap's hint when a member's token is refused |
 | Authorizing a classic token for SAML SSO | a click in the token settings (Configure SSO) with an active SAML session ([authorizing a token for SSO](https://docs.github.com/en/enterprise-cloud@latest/authentication/authenticating-with-single-sign-on/authorizing-a-personal-access-token-for-use-with-single-sign-on)); fine-grained tokens are authorized when they are created | doctor and every session report the SSO requirement of a token (`X-GitHub-SSO`); [setup-enterprise-org.md](setup-enterprise-org.md#saml-single-sign-on) |
 

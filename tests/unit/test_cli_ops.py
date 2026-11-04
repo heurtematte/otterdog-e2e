@@ -159,6 +159,33 @@ def test_bootstrap_marker_needs_the_typed_login(org: Org) -> None:
     assert not admin_calls(org, "set_org_description")
 
 
+def automatic_marker(org: Org) -> list[str]:
+    """The marker step of an automatic Bootstrap (setup with the accounts store) answering "wrong"; its prompts."""
+    prompts: list[str] = []
+    context = E2EContext.create(E2EOptions(target="fake", run_id=FAKE_RUN_ID), environ={})
+    runner = cli_bootstrap.Bootstrap(
+        context, apply=True, confirm=lambda text: prompts.append(text) or "wrong", automatic=True
+    )
+    runner.marker(runner.verify())
+    return prompts
+
+
+def test_automatic_bootstrap_types_the_login_of_an_org_without_foreign_members(org: Org) -> None:
+    """automatic: the marker is added without a prompt when every member is a declared identity."""
+    org.oracle.set("members", value=["e2e-admin"])
+    assert automatic_marker(org) == []
+    [(description,)] = [call.args for call in admin_calls(org, "set_org_description")]
+    assert description.startswith(FAKE_MARKER)
+
+
+def test_automatic_bootstrap_asks_for_an_org_with_foreign_members(org: Org) -> None:
+    """A foreign member: the typed login is asked even in automatic mode, a wrong one changes nothing."""
+    org.oracle.set("members", value=["e2e-admin", "human-owner"])
+    with pytest.raises(click.ClickException, match="does not match"):
+        automatic_marker(org)
+    assert not admin_calls(org, "set_org_description")
+
+
 def test_bootstrap_refuses_orgs_with_foreign_repos(org: Org) -> None:
     """An org holding unmanaged repositories is never marked (protects real orgs)."""
     org.oracle.add_repo("production-service")
@@ -457,6 +484,21 @@ def test_bootstrap_never_demotes_the_oracle_and_promotes_an_active_member_with_a
     assert promoted == [(("e2e-oracle",), {"role": "admin"})]
 
 
+def test_bootstrap_names_a_flagged_account(org: Org) -> None:
+    """GitHub refuses the invitation of a flagged account (422): bootstrap says so and what lifts it, not the API
+    error."""
+    with_oracle(org)
+    org.oracle.set("membership", "e2e-oracle", value={"state": "pending", "role": "member"})
+    flagged = FakeGitHubHttp(identity="oracle", strict=False)
+    flagged.add("GET", "/user", json={"login": "e2e-oracle"}, repeat=True)
+    message = "You cannot accept this invitation because youraccount has been flagged."
+    flagged.add("PATCH", f"/user/memberships/orgs/{FAKE_ORG}", status=422, json={"message": message}, repeat=True)
+    org.https["oracle"] = flagged
+    with pytest.raises(click.ClickException, match=r"oracle e2e-oracle: GitHub flagged the account") as exc:
+        verified_steps(org).identities()
+    assert "https://support.github.com/contact" in str(exc.value)
+
+
 def test_bootstrap_stops_while_a_separate_oracle_is_not_an_active_owner(
     org: Org, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -544,6 +586,34 @@ def test_bootstrap_wait_polls_until_the_members_are_active_and_public(
         "[bootstrap] approver e2e-approver: active, public",
     ]
     assert output.rstrip().endswith("memberships ready: author e2e-author, approver e2e-approver")
+
+
+def test_bootstrap_wait_lets_the_pending_members_join_in_a_browser_first(
+    org: Org, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """With ``join`` (Firefox driven by Playwright) each member whose token may not join accepts its invitation and
+    makes its membership public in the browser; the API then shows them ready, so nothing waits."""
+    members_public: set[str] = set()
+    org.https["admin"] = admin_http(members_public)
+    for name in ("author", "approver"):
+        org.https[name] = refusing(name)
+    joined: list[tuple[str, str, str, bool]] = []
+
+    def join(role: str, org_login: str, login: str, *, public: bool) -> bool:
+        """The member joins (and goes public) in the browser."""
+        joined.append((role, org_login, login, public))
+        org.oracle.set("membership", login, value={"state": "active"})
+        if public:
+            members_public.add(login)
+        return True
+
+    clock = Clock()
+    verified_steps(org, clock=clock, wait=True, join=join).identities()
+    assert joined == [("author", FAKE_ORG, "e2e-author", True), ("approver", FAKE_ORG, "e2e-approver", True)]
+    assert clock.sleeps == []
+    out = capsys.readouterr().out
+    assert "author e2e-author: the token may not change its membership (403): Firefox does it next" in out
+    assert out.rstrip().endswith("approver e2e-approver: active, public (checked through the API)")
 
 
 def test_bootstrap_wait_also_waits_for_the_oracle_then_promotes_it(

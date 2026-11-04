@@ -9,6 +9,7 @@ are printed with their URLs; --wait polls until they are done.
 
 from __future__ import annotations
 
+import contextlib
 import time
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime, timedelta
@@ -20,6 +21,7 @@ from otterdog_e2e.cli.common import _declared_login, _echo, _handled, _public_me
 from otterdog_e2e.context import ContextError, E2EContext, describe_error, in_ci, parse_duration, parse_time
 
 if TYPE_CHECKING:
+    from otterdog_e2e.github.http import GitHubError
     from otterdog_e2e.github.oracle import Oracle
     from otterdog_e2e.otterdog.baseline import BaselineManager
     from otterdog_e2e.safety import VerifiedOrg
@@ -49,6 +51,15 @@ def token_requests_url(org: str) -> str:
     return f"https://github.com/organizations/{org}/settings/personal-access-token-requests"
 
 
+def _refuse_flagged(exc: GitHubError, name: str, login: str) -> None:
+    """GitHub's refusal of an invitation to a flagged account (422) as what to do, instead of the API error."""
+    if exc.status == 422 and "flagged" in str(exc).lower():
+        raise click.ClickException(
+            f"{name} {login}: GitHub flagged the account, which cannot accept the invitation: only GitHub Support lifts "
+            "the flag (https://support.github.com/contact); `otterdog-e2e setup` asks whether to go on without it"
+        )
+
+
 class Bootstrap:
     """SPEC 16 bootstrap, ordered and idempotent: verify -> marker -> identities -> repos -> lease -> template ->
     baseline reset -> push baseline -> App checks and delivery probe. Without ``apply`` it only reports. With ``wait``
@@ -66,9 +77,14 @@ class Bootstrap:
         wait: bool = False,
         wait_timeout: float = BOOTSTRAP_WAIT_TIMEOUT,
         clock: Callable[[], float] = time.monotonic,
+        join: Callable[..., object] | None = None,
+        automatic: bool = False,
     ) -> None:
         """Bind the steps to a context; ``confirm(prompt)`` returns what the operator typed; ``sleep`` and ``clock``
-        drive the waits."""
+        drive the waits; ``join(role, org, login, *, public)`` makes a pending member accept its invitation (and its
+        membership public) in a browser before the wait (setup's, onboard.wizard.WebSteps.join); ``automatic``
+        (setup with the accounts store): the org login of the safety marker is typed by bootstrap itself when the
+        org has no foreign member (foreign repositories are refused either way)."""
         self.ctx = context
         self.apply = apply
         self.confirm = confirm
@@ -77,6 +93,8 @@ class Bootstrap:
         self.wait = wait
         self.wait_timeout = wait_timeout
         self.clock = clock
+        self.join = join
+        self.automatic = automatic
         self._reader: Oracle | None = None
 
     def step(self, text: str) -> None:
@@ -190,7 +208,9 @@ class Bootstrap:
         foreign = self._foreign_members(target)
         if foreign:
             prompt = f"members not declared as identities: {', '.join(foreign)}\n{prompt}"
-        if self.confirm(prompt).strip() != target.org:
+        elif self.automatic:
+            self.step(f"no foreign member nor repository in {target.org}: its login typed by setup")
+        if (target.org if self.automatic and not foreign else self.confirm(prompt).strip()) != target.org:
             raise click.ClickException("the typed login does not match the org: nothing changed")
         self.ctx.mutator().set_org_description(f"{target.marker} {description}".strip())
         self.ctx.verify(require_marker=True, check_identities=False)
@@ -235,6 +255,10 @@ class Bootstrap:
         if oracle and not self._accept_oracle(target, oracle, invited["oracle"]):
             pending["oracle"] = oracle
         self._check_outsider(target)
+        if pending and self.apply and self.join is not None:
+            for name, login in pending.items():
+                self.join(name, target.org, login, public=name in BOOTSTRAP_MEMBERS)
+            pending = self._not_ready(target, pending)
         if pending and self.wait and self.apply:
             self.wait_for_memberships(target, pending)
         elif pending and self.apply:
@@ -300,7 +324,10 @@ class Bootstrap:
         return membership
 
     def _manual(self, target: Target, login: str, state: str | None, *, publicize: bool = True) -> str:
-        """The web-UI steps left to ``login``: accept the invitation (unless active), make the membership public."""
+        """The web-UI steps left to ``login``: accept the invitation (unless active), make the membership public;
+        done in Firefox as ``login`` when bootstrap has the browser (``join``)."""
+        if self.join is not None and self.apply:
+            return f"Firefox does it next, signed in as {login} (Playwright)"
         steps = [] if state == "active" else [f"accept the invitation at {org_invitation_url(target.org)}"]
         if publicize:
             steps.append(f"make the membership public at {org_people_url(target.org)}")
@@ -330,6 +357,7 @@ class Bootstrap:
                 state = "active"
             own.put(f"/orgs/{target.org}/public_members/{login}")
         except GitHubError as exc:
+            _refuse_flagged(exc, name, login)
             if exc.status not in (403, 404):
                 raise
             manual = self._manual(target, login, state)
@@ -362,6 +390,7 @@ class Bootstrap:
         try:
             self.ctx.http("oracle", write=True).patch(f"/user/memberships/orgs/{target.org}", json={"state": "active"})
         except GitHubError as exc:
+            _refuse_flagged(exc, "oracle", login)
             if exc.status not in (403, 404):
                 raise
             self.step(f"oracle {login}: invited (role {role}); the token may not accept it ({exc.status}): {manual}")
@@ -394,6 +423,18 @@ class Bootstrap:
         outsider = _declared_login(target, "outsider")
         if outsider and self.reader().membership(outsider) is not None:
             raise click.ClickException(f"the outsider {outsider} is a member of the org: remove it first")
+
+    def _not_ready(self, target: Target, pending: Mapping[str, str]) -> dict[str, str]:
+        """The pending identities whose membership the API does not show ready yet (after the browser joined them);
+        the ready ones reported."""
+        left = {}
+        for name, login in pending.items():
+            status, ok = self._membership_status(target, name, login)
+            if ok:
+                self.step(f"{name} {login}: {status} (checked through the API)")
+            else:
+                left[name] = login
+        return left
 
     def wait_for_memberships(self, target: Target, pending: Mapping[str, str]) -> None:
         """--wait: poll until every pending identity is active (author and approver also public) and the outsider is
@@ -584,9 +625,10 @@ class Bootstrap:
 def bootstrap(target: str, apply_: bool, wait: bool, wait_timeout: str) -> None:
     """Prepare a test org idempotently: marker, identities, repos, lease, template, baseline, App checks.
 
-    The web-UI steps GitHub does not allow to automate (accepting an invitation, making a membership public,
-    installing the App, approving a member's fine-grained token) are printed with their URLs; --wait polls until the
-    memberships are active and public and the App is installed.
+    The web-UI steps GitHub does not allow to automate through the API (accepting an invitation, making a membership
+    public, installing the App, approving a member's fine-grained token) are printed with their URLs; with the accounts
+    store of setup (docs/onboarding.md), Firefox accepts the invitations and makes the memberships public as the
+    machine accounts (Playwright). --wait polls until the memberships are active and public and the App is installed.
     """
     try:
         timeout = parse_duration(wait_timeout).total_seconds()
@@ -594,11 +636,36 @@ def bootstrap(target: str, apply_: bool, wait: bool, wait_timeout: str) -> None:
         raise click.UsageError(f"--wait-timeout: {exc}") from None
     if wait and not apply_:
         raise click.UsageError("--wait needs --apply (a dry run invites nobody and waits for nothing)")
-    with _session(target) as context:
+    with _session(target) as context, contextlib.ExitStack() as stack:
         Bootstrap(
             context,
             apply=apply_,
             confirm=lambda prompt: str(click.prompt(prompt)),
             wait=wait,
             wait_timeout=timeout,
+            join=_browser_join(context, stack),
         ).run()
+
+
+def _browser_join(context: E2EContext, stack: contextlib.ExitStack) -> Callable[..., object] | None:
+    """The invitations accepted in Firefox as the machine accounts of the accounts store (setup's web steps, without
+    asking; Firefox starts at the first one), None without the store or in CI."""
+    from otterdog_e2e.onboard.accounts import AccountError, load_accounts_config
+
+    try:
+        if in_ci(context.environ) or load_accounts_config(context.environ) is None:
+            return None
+    except AccountError:
+        return None
+
+    steps: list[Any] = []  # one _WebSteps (one Firefox), made at the first invitation
+
+    def join(role: str, org: str, login: str, *, public: bool) -> bool:
+        """One account accepts its invitation (the instance known once bootstrap loaded the target)."""
+        from otterdog_e2e.cli.onboarding import _WebSteps
+
+        if not steps:
+            steps.append(_WebSteps(stack, context.require_target().name, dict(context.environ), automatic=True))
+        return bool(steps[0].join(role, org, login, public=public))
+
+    return join

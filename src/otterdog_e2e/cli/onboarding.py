@@ -10,6 +10,7 @@ secrets with the operator's gh login. Both are refused in CI.
 from __future__ import annotations
 
 import contextlib
+import dataclasses
 import functools
 import os
 import sys
@@ -29,6 +30,7 @@ from otterdog_e2e.redact import REDACTOR
 if TYPE_CHECKING:
     from otterdog_e2e.onboard.accounts import AccountResult, AccountsIO, MachineAccount, SignIn
     from otterdog_e2e.onboard.browser import PlaywrightBrowser
+    from otterdog_e2e.onboard.wizard import SetupOptions
     from otterdog_e2e.settings import Target
 
 # --- setup and ci-sync: onboarding of a test org instance (otterdog_e2e.onboard, docs/onboarding.md) ---------------
@@ -47,10 +49,15 @@ def _instance(target: str) -> str:
 
 
 def _setup_bootstrap(
-    instance: str, *, pristine: Mapping[str, str], wait_timeout: float = BOOTSTRAP_WAIT_TIMEOUT
+    instance: str,
+    *,
+    pristine: Mapping[str, str],
+    wait_timeout: float = BOOTSTRAP_WAIT_TIMEOUT,
+    join: Callable[..., object] | None = None,
+    automatic: bool = False,
 ) -> None:
     """``bootstrap --target <instance> --apply --wait`` started by the setup wizard (asks for the typed org login,
-    then waits for the invitations to be accepted, the memberships made public and the App installed). Each run gets
+    typed by setup itself when ``automatic`` and the org has no foreign member, then waits for the invitations to be accepted, the memberships made public and the App installed). Each run gets
     a FRESH copy of ``pristine`` (the environment before setup read any env file): load_env_files never overrides,
     so values a former run loaded (an App replaced by setup meanwhile) would win over the env file otherwise."""
     context = E2EContext.create(E2EOptions(target=instance), environ=dict(pristine))
@@ -62,6 +69,8 @@ def _setup_bootstrap(
             confirm=lambda prompt: str(click.prompt(prompt)),
             wait=True,
             wait_timeout=wait_timeout,
+            join=join,
+            automatic=automatic,
         ).run()
     finally:
         context.close()
@@ -74,12 +83,30 @@ def _setup_doctor(instance: str, *, pristine: Mapping[str, str]) -> None:
     _echo(render_rows(Doctor(context).run()))
 
 
-def _accounts_io() -> AccountsIO:
+def _setup_echo(text: str = "") -> None:
+    """_echo of setup's lines, their marks in colour (click drops the styles when the output is no terminal):
+    titles bold, done green, needs attention yellow, skipped and saved dim."""
+    from otterdog_e2e.onboard.wizard import DONE, SKIPPED, WARN
+
+    text = REDACTOR(text)
+    body = text.lstrip(" ")
+    indent = text[: len(text) - len(body)]
+    if body.startswith(("\u2501", "\u25b8 ")):
+        text = click.style(text, bold=True)
+    elif body.startswith((f"{DONE} ", f"{WARN} ")):
+        colour = "green" if body.startswith(DONE) else "yellow"
+        text = indent + click.style(body[0], fg=colour, bold=True) + body[1:]
+    elif body.startswith((f"{SKIPPED} ", "saved ", "(")):
+        text = click.style(text, dim=True)
+    click.echo(text)
+
+
+def _accounts_io(echo: Callable[[str], None] = _echo) -> AccountsIO:
     """The terminal side of onboard.accounts (hidden password prompt, plain device code prompt)."""
     from otterdog_e2e.onboard.accounts import AccountsIO
 
     return AccountsIO(
-        echo=_echo,
+        echo=echo,
         secret_prompt=lambda text: str(click.prompt(text, default="", hide_input=True, show_default=False)),
         prompt=lambda text: str(click.prompt(text, default="", show_default=False)),
     )
@@ -112,29 +139,30 @@ class _LazyBrowser:
         return self.browser.session()
 
 
-def _setup_accounts(days: int, stack: contextlib.ExitStack) -> Callable[..., AccountResult]:
-    """``run_account`` of the setup wizard (--browser): AccountSetup.setup in one browser opened at first use."""
+def _setup_accounts(browser: _LazyBrowser) -> Callable[..., AccountResult]:
+    """``run_account`` of the setup wizard: AccountSetup.setup in ``browser`` (the Firefox of the web steps, started
+    at first use), its lines under the step of the role; the classic tokens get no expiration."""
     from otterdog_e2e.onboard.accounts import AccountSetup
-
-    opened: list[PlaywrightBrowser] = []
 
     def run_account(account: MachineAccount, *, org: str, rotate: bool, environ: Mapping[str, str]) -> AccountResult:
         """Set up one machine account."""
-        if not opened:
-            opened.append(_open_browser(stack))
-        accounts = AccountSetup(
-            org=org, environ=environ, browser=opened[0], io=_accounts_io(), days=days, rotate=rotate
-        )
+        io = _accounts_io(lambda text: _setup_echo(f"  {text}"))
+        accounts = AccountSetup(org=org, environ=environ, browser=browser, io=io, rotate=rotate)
         return accounts.setup(account)
 
     return run_account
 
 
-def _setup_manifest(port: int, open_url: Callable[[str], Any] | None) -> Callable[[Target, str], str]:
-    """The App manifest flow of the wizard: the loopback listener of app-manifest on ``port``."""
+def _setup_manifest(
+    port: int, open_url: Callable[[str], Any] | None, web: _WebSteps | None = None
+) -> Callable[[Target, str], str]:
+    """The App manifest flow of the wizard: the loopback listener of app-manifest on ``port``; the admin confirms the
+    App in Firefox when ``web`` can sign it in."""
 
     def ready(url: str) -> None:
-        """Tell where to confirm the App (and open it with --open)."""
+        """Confirm the App in Firefox as the admin, else tell where to confirm it (and open it with --open)."""
+        if web is not None and web.confirm_app(url):
+            return
         _echo(f"open {url} in a browser logged in as an owner of the test org, then confirm the App")
         if open_url is not None:
             open_url(url)
@@ -147,7 +175,9 @@ def _setup_manifest(port: int, open_url: Callable[[str], Any] | None) -> Callabl
 
 
 @main.command("setup")
-@click.option("--target", "target", required=True, help="instance name (env file ~/.config/otterdog-e2e/<name>.env)")
+@click.option(
+    "--target", "target", default=None, help="instance name (env file ~/.config/otterdog-e2e/<name>.env), or --shards"
+)
 @click.option("--profile", default=None, help="targets/<profile>.yaml of the instance (default: the org plan)")
 @click.option("--org", default=None, help="login of the dedicated test organization (default: stored or asked)")
 @click.option(
@@ -189,10 +219,11 @@ def _setup_manifest(port: int, open_url: Callable[[str], Any] | None) -> Callabl
     "gets references only (docs/security.md, reference layout)",
 )
 @click.option(
-    "--browser",
-    is_flag=True,
+    "--browser/--no-browser",
+    default=None,
     help="create the classic tokens (and enroll 2FA) of the machine accounts in a Firefox window, their secrets in "
-    "the accounts store of ~/.config/otterdog-e2e/setup.yaml, like `otterdog-e2e accounts`",
+    "the accounts store of ~/.config/otterdog-e2e/setup.yaml, like `otterdog-e2e accounts` (default: when that "
+    "store is configured); --no-browser prints the prefilled token URLs and their steps instead",
 )
 @click.option(
     "--shard",
@@ -200,9 +231,16 @@ def _setup_manifest(port: int, open_url: Callable[[str], Any] | None) -> Callabl
     help="the live items the instance runs (scenarios/shards.yaml, `otterdog-e2e shards`); none: all of them "
     "(default: stored, else the shard named like the instance, confirmed)",
 )
+@click.option(
+    "--shards",
+    "all_shards",
+    is_flag=True,
+    help="set up the instance of every shard in turn (named after it, or the instance whose E2E_SHARD selects it), "
+    "asking before setting up again one that is set up already, then list them in ~/.config/otterdog-e2e/lists/shards",
+)
 @_handled
 def setup_command(
-    target: str,
+    target: str | None,
     profile: str | None,
     org: str | None,
     token_type: str | None,
@@ -214,26 +252,33 @@ def setup_command(
     wait_timeout: str,
     open_browser: bool,
     store: str | None,
-    browser: bool,
+    browser: bool | None,
     shard: str | None,
+    all_shards: bool,
 ) -> None:
     """Onboard a test org interactively: org, tokens of every role, web login, GitHub App, then bootstrap and doctor.
 
     Every validated value is written at once to ~/.config/otterdog-e2e/<instance>.env (0600): an interrupted run
-    keeps its progress and the next one continues. Refused in CI. What GitHub does not let a program do (accounts,
-    org creation, App clicks) is printed as prefilled URLs; token creation too, unless --browser.
+    keeps its progress and the next one continues. Refused in CI. With an accounts store, the classic tokens of the
+    machine accounts are created in Firefox (--no-browser: printed as prefilled URLs), and the web steps GitHub gives
+    no API for are done there as the machine accounts, after a confirmation (creating the organization, accepting
+    the invitations, making memberships public, creating and installing the App); otherwise they are printed as
+    prefilled URLs. --shards sets up the instance of every shard in turn.
     """
-    import webbrowser
+    from otterdog_e2e.onboard.wizard import DONE, SKIPPED, SetupOptions, banner
+    from otterdog_e2e.shards import SHARDS_LIST
 
-    from otterdog_e2e.onboard.wizard import SetupError, SetupOptions, SetupWizard, WizardIO
-
+    if all_shards == (target is not None):
+        raise click.UsageError("setup takes --target <instance> or --shards")
+    if all_shards and (org or profile or shard):
+        raise click.UsageError("--shards sets up several organizations: --org, --profile and --shard name one")
     pristine = dict(os.environ)  # before any env file was read: the wizard, bootstrap and doctor each get a copy
     try:
         timeout = parse_duration(wait_timeout).total_seconds()
     except ValueError as exc:
         raise click.UsageError(f"--wait-timeout: {exc}") from None
     options = SetupOptions(
-        instance=_instance(target),
+        instance=_instance(target) if target else "",
         profile=profile,
         org=org,
         token_type=token_type,
@@ -247,29 +292,194 @@ def setup_command(
         browser=browser,
         shard=shard,
     )
+    if not all_shards:
+        _setup_instance(options, pristine=pristine, port=port)
+        return
+    automatic = _automatic(options, pristine)
+    instances = _shard_instances(pristine)
+    for number, (instance, shard_name) in enumerate(instances, start=1):
+        named = "" if instance == shard_name else f" (shard {shard_name})"
+        _setup_echo("")
+        _setup_echo(banner(f"[{number}/{len(instances)}] {instance}{named}"))
+        if _set_up_already(instance, shard_name, pristine) and (
+            _setup_finished(instance, pristine)
+            if automatic
+            else not click.confirm(f"{instance} is set up already: run its setup again?", default=False)
+        ):
+            _setup_echo(
+                f"{SKIPPED} kept as it is" + (f" (setup --target {instance} runs it again)" if automatic else "")
+            )
+            continue
+        try:
+            _setup_instance(
+                dataclasses.replace(options, instance=instance, shard=shard_name, banner=False),
+                pristine=pristine,
+                port=port,
+            )
+        except click.ClickException as exc:
+            raise click.ClickException(
+                f"setup of {instance} stopped: {exc.message}; `otterdog-e2e setup --shards` resumes (it asks before "
+                "setting up again the instances done)"
+            ) from None
+    _setup_echo("")
+    _setup_echo(banner("every shard has its instance"))
+    _setup_echo(
+        f"{DONE} {len(instances)} organizations: otterdog-e2e run --target @{SHARDS_LIST} --parallel {len(instances)}"
+    )
+
+
+def _setup_instance(options: SetupOptions, *, pristine: Mapping[str, str], port: int) -> None:
+    """The setup wizard of one instance, with the browser steps when the accounts store has the accounts."""
+    import webbrowser
+
+    from otterdog_e2e.onboard.wizard import SetupError, SetupWizard, WizardIO
+
     io = WizardIO(
         prompt=lambda text, default: str(click.prompt(text, default=default)).strip(),
         secret_prompt=lambda text: str(click.prompt(text, default="", hide_input=True, show_default=False)),
         confirm=lambda text, default: bool(click.confirm(text, default=default)),
-        echo=_echo,
+        echo=_setup_echo,
         open_url=webbrowser.open,
     )
+    automatic = _automatic(options, pristine)
     with contextlib.ExitStack() as stack:
+        web = _WebSteps(stack, options.instance, pristine, automatic=automatic)
         wizard = SetupWizard(
             options,
             io,
             environ=pristine,
             settings=_settings(),
-            run_manifest=_setup_manifest(port, webbrowser.open if open_browser else None),
-            bootstrap=functools.partial(_setup_bootstrap, pristine=pristine, wait_timeout=timeout),
+            run_manifest=_setup_manifest(port, webbrowser.open if options.open_urls else None, web),
+            bootstrap=functools.partial(
+                _setup_bootstrap,
+                pristine=pristine,
+                wait_timeout=options.wait_timeout,
+                join=web.join,
+                automatic=automatic,
+            ),
             doctor=functools.partial(_setup_doctor, pristine=pristine),
-            run_account=_setup_accounts(expires_in, stack) if browser else None,
+            run_account=None if options.browser is False else _setup_accounts(web.browser),
             sign_in_at=_sign_in_at,
+            web=web,
         )
         try:
             wizard.run()
         except SetupError as exc:
             raise click.ClickException(str(exc)) from None
+
+
+def _shard_instances(environ: Mapping[str, str]) -> list[tuple[str, str]]:
+    """(instance, shard) of every shard, in the order of the map: the instance whose E2E_SHARD selects it, else the
+    instance named after it."""
+    from otterdog_e2e.batch import list_instances
+    from otterdog_e2e.shards import SHARDS_FILE, ShardError, load_shards
+
+    settings = _settings()
+    try:
+        shards = load_shards(settings.project_root)
+    except ShardError as exc:
+        raise click.ClickException(str(exc)) from None
+    if shards is None:
+        raise click.ClickException(f"--shards: no {SHARDS_FILE} in {settings.project_root}")
+    selected: dict[str, str] = {}
+    for info in list_instances(settings, environ):
+        if info.shard:
+            selected.setdefault(info.shard, info.name)
+    return [(selected.get(shard.name, shard.name), shard.name) for shard in shards.shards]
+
+
+def _automatic(options: SetupOptions, environ: Mapping[str, str]) -> bool:
+    """Whether setup decides instead of asking (SetupWizard.automatic): an accounts store, the browser not refused."""
+    from otterdog_e2e.onboard.accounts import AccountError, load_accounts_config
+
+    if options.browser is False:
+        return False
+    try:
+        return load_accounts_config(environ) is not None
+    except AccountError:
+        return False
+
+
+def _setup_finished(instance: str, environ: Mapping[str, str]) -> bool:
+    """Whether a setup of ``instance`` ran to its end: it then joined the list of the shards (@shards)."""
+    from otterdog_e2e.batch import listed
+    from otterdog_e2e.shards import SHARDS_LIST
+
+    return listed(SHARDS_LIST, instance, environ)
+
+
+def _set_up_already(instance: str, shard: str, environ: Mapping[str, str]) -> bool:
+    """Whether the env file of ``instance`` holds its organization, its admin token and the shard (setup got past
+    them: running it again only checks what is stored)."""
+    from otterdog_e2e.onboard.envfile import instance_env_path, read_env_file
+
+    path = instance_env_path(instance, environ)
+    values = read_env_file(path) if path.is_file() else {}
+    return bool(values.get("E2E_ORG_ID") and values.get("E2E_ADMIN_TOKEN")) and values.get("E2E_SHARD") == shard
+
+
+class _WebSteps:
+    """The GitHub web steps of setup and bootstrap done in Firefox as the machine accounts of the accounts store
+    (onboard.wizard.WebSteps): each step asks first (``automatic``: done without asking); one the store cannot
+    sign in for, or that fails (the window stays
+    open to finish it by hand), is left to the operator, whom setup's wait then waits for."""
+
+    def __init__(
+        self, stack: contextlib.ExitStack, instance: str, environ: Mapping[str, str], *, automatic: bool = False
+    ) -> None:
+        """Bind; Firefox starts at the first step done."""
+        self.instance = instance
+        self.automatic = automatic
+        self.environ = environ
+        self.browser = _LazyBrowser(stack)
+
+    def _account(self, role: str) -> SignIn | None:
+        """The sign-in of the role's account in the accounts store (its set's), None without it."""
+        from otterdog_e2e.onboard.accounts import AccountError, AccountSetup, load_accounts_config
+        from otterdog_e2e.onboard.wizard import WARN
+
+        try:
+            config = load_accounts_config(self.environ)
+            if config is None:
+                return None
+            store = AccountSetup(org=None, environ=self.environ, browser=self.browser, io=_accounts_io())
+            account = config.account(self.instance, role)
+            return store.sign_in(account) if store.read(account, "password") is not None else None
+        except AccountError as exc:
+            _setup_echo(f"  {WARN} {role}: browser: {exc}")
+            return None
+
+    def _do(self, role: str, what: str, action: Callable[[Any], None]) -> bool:
+        """Sign the role's account in and do ``action`` with its session, after a confirmation; whether it was done."""
+        from otterdog_e2e.onboard.accounts import AccountError, signed_in
+        from otterdog_e2e.onboard.wizard import DONE, WARN
+
+        account = self._account(role)
+        if account is None or not (
+            self.automatic or click.confirm(f"  {role}: {what} in Firefox, as {account.name}?", default=True)
+        ):
+            return False
+        try:
+            with signed_in(self.browser, _accounts_io(), account) as (session, _):
+                action(session)
+        except AccountError as exc:
+            _setup_echo(f"  {WARN} {role}: browser: {exc}: left to you")
+            return False
+        _setup_echo(f"  {DONE} {role}: {what}")
+        return True
+
+    def join(self, role: str, org: str, login: str, *, public: bool) -> bool:
+        """``login`` accepts its invitation of ``org`` (and makes its membership public)."""
+        what = f"accept the invitation of {org}" + (" and make the membership public" if public else "")
+        return self._do(role, what, lambda session: session.join_org(org, login, public=public))
+
+    def install_app(self, url: str) -> bool:
+        """The admin installs the App."""
+        return self._do("admin", "install the GitHub App", lambda session: session.install_app(url))
+
+    def confirm_app(self, url: str) -> bool:
+        """The admin creates the App of setup's manifest form ``url``."""
+        return self._do("admin", "create the GitHub App", lambda session: session.confirm_app(url))
 
 
 @main.command("accounts")
@@ -292,10 +502,10 @@ def setup_command(
 @click.option("--rotate", is_flag=True, help="create a new token even when the one in the store is valid")
 @click.option(
     "--expires-in",
-    default="90",
+    default="none",
     show_default=True,
-    type=click.Choice(["7", "30", "60", "90"]),
-    help="days of validity of the classic tokens",
+    type=click.Choice(["7", "30", "60", "90", "none"]),
+    help="days of validity of the classic tokens (none: no expiration)",
 )
 @_handled
 def accounts_command(
@@ -345,7 +555,7 @@ def accounts_command(
             environ=environ,
             browser=_LazyBrowser(stack),
             io=_accounts_io(),
-            days=int(expires_in),
+            days=None if expires_in == "none" else int(expires_in),
             rotate=rotate,
         )
         accounts = [config.account(instance, role) for role in roles or ACCOUNT_ROLES]

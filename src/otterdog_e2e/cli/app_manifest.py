@@ -13,6 +13,7 @@ import http.server
 import logging
 import re
 import secrets
+import threading
 import time
 import urllib.parse
 from collections.abc import Callable, Mapping
@@ -55,23 +56,36 @@ class ManifestFlow:
         self.code: str | None = None
 
     def run(self, *, on_ready: Callable[[str], None] | None = None) -> str:
-        """Serve the auto-posting form and wait for GitHub's redirect; returns the temporary code."""
+        """Serve the auto-posting form and wait for GitHub's redirect; returns the temporary code. The listener serves
+        in a thread from the start, so ``on_ready(url)`` may drive a browser through the whole flow before it returns
+        (setup does, signed in as the admin) or return at once."""
         from otterdog_e2e.appmanifest import build_manifest, manifest_form_html
 
         server = _ManifestServer(("127.0.0.1", self.port), self)
+        stop = threading.Event()
+        deadline = time.monotonic() + self.timeout
+
+        def serve() -> None:
+            """Handle requests until the code came, the deadline passed or run() stops."""
+            while self.code is None and not stop.is_set() and time.monotonic() <= deadline:
+                server.handle_request()
+
+        serving = threading.Thread(target=serve, name="app-manifest-listener", daemon=True)
         try:
             base = f"http://127.0.0.1:{server.server_address[1]}/"
             manifest = build_manifest(self.target, webhook_url=self.webhook_url, redirect_url=f"{base}callback")
             self.page = manifest_form_html(self.target.org, manifest, self.state)
+            serving.start()
             (on_ready or (lambda url: _echo(f"open {url} in a browser logged in as an owner of {self.target.org}")))(
                 base
             )
-            deadline = time.monotonic() + self.timeout
-            while self.code is None:
-                if time.monotonic() > deadline:
-                    raise click.ClickException(f"no callback from GitHub within {self.timeout:g} s")
-                server.handle_request()
+            serving.join()
+            if self.code is None:
+                raise click.ClickException(f"no callback from GitHub within {self.timeout:g} s")
         finally:
+            stop.set()
+            if serving.is_alive():
+                serving.join(timeout=5)
             server.server_close()
         return self.code
 

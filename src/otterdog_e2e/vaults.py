@@ -155,19 +155,22 @@ class Resolver:
             self._vault_tokens.clear()
             self._items.clear()
 
-    def resolve(self, value: str, environ: Mapping[str, str]) -> str:
-        """The secret ``value`` refers to, registered with REDACTOR (VaultError when it cannot be read)."""
+    def resolve(self, value: str, environ: Mapping[str, str], *, secret: bool = True) -> str:
+        """The value ``value`` refers to, registered with REDACTOR unless ``secret`` is False (an account's username
+        or e-mail, shown in the output); VaultError when it cannot be read."""
         reference = parse(value)
         env = operator_env(environ)
         with self._lock:
             key = self._cache_key(reference, env)
             if key not in self._values:
-                secret = self._read(reference, env)
-                if not secret:
+                found = self._read(reference, env)
+                if not found:
                     raise VaultError(f"{reference}: empty value")
-                REDACTOR.add(secret, secret.strip())
-                self._values[key] = secret
-            return self._values[key]
+                self._values[key] = found
+            found = self._values[key]
+        if secret:
+            REDACTOR.add(found, found.strip())
+        return found
 
     def _cache_key(self, reference: Reference, env: Mapping[str, str]) -> tuple[str, ...]:
         """The reference plus what decides where it is read."""
@@ -411,9 +414,10 @@ def _vault_errors(response: Any) -> str:
 RESOLVER = Resolver()
 
 
-def resolve(value: str, environ: Mapping[str, str]) -> str:
-    """RESOLVER.resolve: the secret a reference names (VaultError when it cannot be read)."""
-    return RESOLVER.resolve(value, environ)
+def resolve(value: str, environ: Mapping[str, str], *, secret: bool = True) -> str:
+    """RESOLVER.resolve: the secret a reference names (``secret`` False: a value that is no secret, never
+    redacted); VaultError when it cannot be read."""
+    return RESOLVER.resolve(value, environ, secret=secret)
 
 
 def store(value: str, secret: str, environ: Mapping[str, str]) -> None:

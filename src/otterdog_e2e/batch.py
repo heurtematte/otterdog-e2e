@@ -118,6 +118,35 @@ def list_file(name: str, environ: Mapping[str, str] | None = None) -> Path:
     return _config_dir(environ) / LISTS_SUBDIR / name
 
 
+def listed(name: str, instance: str, environ: Mapping[str, str] | None = None) -> bool:
+    """Whether the list file of ``@<name>`` lists ``instance``."""
+    try:
+        text = list_file(name, environ).read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return False
+    return instance in {line.split("#", 1)[0].strip() for line in text.splitlines()}
+
+
+def add_to_list(name: str, instance: str, environ: Mapping[str, str] | None = None) -> Path | None:
+    """Append ``instance`` to the list file of ``@<name>`` (created 0600 in a 0700 directory) unless it lists it
+    already; the file when it was added, else None."""
+    path = list_file(name, environ)
+    try:
+        text = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        text = ""
+    if instance in {line.split("#", 1)[0].strip() for line in text.splitlines()}:
+        return None
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if not text:
+        text = f"# the instances of @{name}, one per line (written by otterdog-e2e setup)\n"
+    elif not text.endswith("\n"):
+        text += "\n"
+    path.write_text(f"{text}{instance}\n", encoding="utf-8")
+    path.chmod(0o600)
+    return path
+
+
 def read_target_list(name: str, environ: Mapping[str, str] | None = None) -> list[str]:
     """The instances of ``@<name>``: one per line, ``#`` starts a comment, blank lines skipped (BatchError when the
     file is missing, unreadable, empty or holds a list, an @-reference or spaces on a line)."""
