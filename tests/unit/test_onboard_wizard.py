@@ -1614,7 +1614,7 @@ def test_setup_finds_the_token_of_the_accounts_store(world: World, secret_store:
     env = world.env()
     assert env["E2E_ADMIN_TOKEN"] == ADMIN_ACCOUNT_TOKEN and env["E2E_ADMIN_LOGIN"] == "e2e-admin"
     assert f"found in the accounts store at {ADMIN_ACCOUNT_TOKEN}" in script.output
-    assert "PASSWORD_STORE_DIR" not in env  # set by neither the environment nor ~/.cbi/config
+    assert "PASSWORD_STORE_DIR" not in env  # the environment does not set it
     assert_no_secret(script.output)
 
 
@@ -1642,17 +1642,19 @@ def test_a_refused_account_token_is_not_written(world: World, secret_store: dict
     assert "! the stored E2E_ADMIN_TOKEN is not usable" in script.output
 
 
-def test_the_cbi_password_store_is_written_with_the_references(world: World, secret_store: dict[str, str]) -> None:
-    """Entries found through ci-admin's ~/.cbi/config: PASSWORD_STORE_DIR goes to the env file, so that runs resolve
-    the same references."""
+def test_the_cbi_config_is_never_read(world: World, secret_store: dict[str, str]) -> None:
+    """pass runs with PASSWORD_STORE_DIR only: ci-admin's ~/.cbi/config gives it nothing, and nothing of it reaches
+    the env file."""
     home = Path(world.environ["HOME"])
     (home / ".cbi").mkdir(parents=True)
     (home / ".cbi" / "config").write_text('{"password-store": {"cbi-dir": "/srv/cbi-pass"}}')
     write_setup_config(world)
     secret_store[ADMIN_ACCOUNT_TOKEN] = TOKENS["admin"]
-    run_wizard(world, Script(secrets=[]))
-    assert world.env()["PASSWORD_STORE_DIR"] == "/srv/cbi-pass"
+    script = Script(secrets=[])
+    run_wizard(world, script)
     assert world.env()["E2E_ADMIN_TOKEN"] == ADMIN_ACCOUNT_TOKEN
+    assert "PASSWORD_STORE_DIR" not in world.env()
+    assert "/srv/cbi-pass" not in script.output
 
 
 def test_an_invalid_setup_configuration_stops_setup(world: World, secret_store: dict[str, str]) -> None:

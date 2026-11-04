@@ -26,8 +26,8 @@ an instance it does not name and without ``default`` using its own.
 * the recovery codes: written by the enrollment (one code per line);
 * the token: the role's classic token, written as soon as GitHub shows it.
 
-``pass`` runs with PASSWORD_STORE_DIR, else the ``password-store.cbi-dir`` of ``~/.cbi/config`` as ci-admin does
-(cbi_password_store_dir). Writes go through vaults.store (stdin or the Vault API, read back), never a shell.
+``pass`` runs with PASSWORD_STORE_DIR and nothing else (ci-admin's ``~/.cbi/config`` is never read). Writes go
+through vaults.store (stdin or the Vault API, read back), never a shell.
 
 The token is written to the accounts store only: the env file gets it through setup, whose checks (token kind and
 scopes, isolation, owner membership) decide; setup finds it there without a prompt (SetupWizard.from_account).
@@ -43,7 +43,6 @@ import base64
 import contextlib
 import hashlib
 import hmac
-import json
 import re
 import string
 import struct
@@ -84,7 +83,6 @@ DEFAULT_ITEMS: Mapping[str, str] = {
 }
 DEFAULT_ENTRY = "otterdog-e2e-{instance}-{role}-{item}"
 ENTRY_FIELDS = frozenset({"instance", "role", "item"})
-CBI_CONFIG = "~/.cbi/config"  # ci-admin's configuration: {"password-store": {"cbi-dir": ...}}
 CLASSIC_EXPIRATIONS = (7, 30, 60, 90)  # days the classic token form offers besides a custom date and none (None)
 TOTP_PERIOD, TOTP_DIGITS = 30, 6
 _PATH_RE = re.compile(r"^[A-Za-z0-9_.@-]+(/[A-Za-z0-9_.@-]+)*$")
@@ -204,27 +202,6 @@ def load_accounts_config(environ: Mapping[str, str]) -> AccountsConfig | None:
     if data.get("accounts") is None:
         return None
     return parse_accounts_config(data["accounts"], str(path))
-
-
-def cbi_password_store_dir(home: Path | None = None) -> str | None:
-    """``password-store.cbi-dir`` of ci-admin's ``~/.cbi/config`` (None without the file or the key)."""
-    path = (home / ".cbi" / "config") if home is not None else Path(CBI_CONFIG).expanduser()
-    try:
-        config = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return None
-    value = (config.get("password-store") or {}).get("cbi-dir") if isinstance(config, dict) else None
-    return str(Path(value).expanduser()) if isinstance(value, str) and value else None
-
-
-def pass_environ(environ: Mapping[str, str]) -> dict[str, str]:
-    """``environ`` with PASSWORD_STORE_DIR from the ~/.cbi/config of its HOME when it does not set one."""
-    env = dict(environ)
-    if not env.get("PASSWORD_STORE_DIR"):
-        directory = cbi_password_store_dir(Path(env["HOME"]) if env.get("HOME") else None)
-        if directory:
-            env["PASSWORD_STORE_DIR"] = directory
-    return env
 
 
 def totp_code(seed: str, at: float | None = None) -> str:
@@ -433,7 +410,7 @@ class AccountSetup:
                 f"a classic token expires in {', '.join(map(str, CLASSIC_EXPIRATIONS))} days, not {days}"
             )
         self.org = org
-        self.environ = pass_environ(environ)
+        self.environ = dict(environ)
         self.browser = browser
         self.io = io
         self.http = http

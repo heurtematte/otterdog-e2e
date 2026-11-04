@@ -78,7 +78,6 @@ from otterdog_e2e.onboard.accounts import (
     AccountResult,
     AccountsConfig,
     load_accounts_config,
-    pass_environ,
     setup_config_path,
 )
 from otterdog_e2e.onboard.envfile import (
@@ -839,28 +838,15 @@ class SetupWizard:
         there would read them all. Values from a Vault accounts store go to the instance store, else as values."""
         return self.accounts_config is not None and self.accounts_config.provider == "pass"
 
-    def pass_env(self) -> dict[str, str]:
-        """provider_env() with the PASSWORD_STORE_DIR of ci-admin's ~/.cbi/config when neither sets one."""
-        return pass_environ(self.provider_env())
-
-    def keep_store_dir(self) -> None:
-        """Write the PASSWORD_STORE_DIR a pass accounts store was read with (from ~/.cbi/config), so that runs, doctor
-        and ci-sync resolve the same pass references."""
-        directory = self.pass_env().get("PASSWORD_STORE_DIR")
-        if self.keeps_account_references and directory and not self.provider_env().get("PASSWORD_STORE_DIR"):
-            self.write({"PASSWORD_STORE_DIR": directory})
-            self.echo(f"PASSWORD_STORE_DIR={directory} (from ~/.cbi/config) written: the pass references use it")
-
     def account_ref(self, role: str, item: str) -> str | None:
         """The reference of an item of the role's account in the accounts store when it can be read, else None."""
         if self.accounts_config is None:
             return None
         reference = self.accounts_config.account(self.instance, role).ref(item)
         try:
-            resolve(reference, self.pass_env())
+            resolve(reference, self.provider_env())
         except VaultError:
             return None
-        self.keep_store_dir()
         return reference
 
     def account_exists(self, role: str) -> bool:
@@ -871,7 +857,7 @@ class SetupWizard:
         account = self.accounts_config.account(self.instance, role)
         for item in ("username", "email", "password"):
             try:
-                if resolve(account.ref(item), self.pass_env(), secret=item == "password").strip():
+                if resolve(account.ref(item), self.provider_env(), secret=item == "password").strip():
                     return True
             except VaultError:
                 continue
@@ -899,7 +885,6 @@ class SetupWizard:
         except AccountError as exc:
             self.warn(f"browser: {exc}")
             return False
-        self.keep_store_dir()
         return self.keep_stored(role, result.token_ref, org, keep_reference=self.keeps_account_references)
 
     def typed_secret(self, label: str, answer: str) -> tuple[str, str | None]:
@@ -1537,7 +1522,7 @@ class SetupWizard:
         ):
             return False
         try:
-            values = {name: resolve(str(reference), self.pass_env()).strip() for name, reference in refs.items()}
+            values = {name: resolve(str(reference), self.provider_env()).strip() for name, reference in refs.items()}
             REDACTOR.add(*values.values())
             values[seed_env] = normalize_totp_seed(values[seed_env], where=seed_env)
         except (VaultError, WebCredentialsError) as exc:

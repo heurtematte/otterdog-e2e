@@ -5,7 +5,6 @@ are fakes, the order of the writes is checked against the browser steps (nothing
 from __future__ import annotations
 
 import contextlib
-import json
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -22,10 +21,8 @@ from otterdog_e2e.onboard.accounts import (
     AccountSetup,
     AccountsIO,
     SignIn,
-    cbi_password_store_dir,
     load_accounts_config,
     parse_accounts_config,
-    pass_environ,
     setup_config_path,
     totp_code,
     web_login,
@@ -159,16 +156,6 @@ def test_totp_code_matches_rfc_6238() -> None:
         "005924",
         "279037",
     ]
-
-
-def test_cbi_config_gives_the_password_store(tmp_path: Path) -> None:
-    """ci-admin's ~/.cbi/config of the environment's HOME, unless PASSWORD_STORE_DIR is set; no file: unchanged."""
-    assert cbi_password_store_dir(tmp_path) is None
-    (tmp_path / ".cbi").mkdir()
-    (tmp_path / ".cbi" / "config").write_text(json.dumps({"password-store": {"cbi-dir": "/srv/cbi-pass"}}))
-    assert cbi_password_store_dir(tmp_path) == "/srv/cbi-pass"
-    assert pass_environ({"HOME": str(tmp_path)})["PASSWORD_STORE_DIR"] == "/srv/cbi-pass"
-    assert pass_environ({"HOME": str(tmp_path), "PASSWORD_STORE_DIR": "/mine"})["PASSWORD_STORE_DIR"] == "/mine"
 
 
 # --- fakes ----------------------------------------------------------------------------------------------------------

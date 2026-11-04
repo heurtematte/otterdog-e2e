@@ -514,8 +514,8 @@ def accounts_command(
     """Set up machine accounts in a Firefox window: sign in, enroll 2FA when missing, create the classic token.
 
     Where their secrets are (store pass:<directory> or vault:<secret path>, entry name, item names) is the accounts
-    section of the setup configuration file (docs/onboarding.md). The env file gets nothing but PASSWORD_STORE_DIR
-    taken from ~/.cbi/config: `otterdog-e2e setup` then finds each token in the store and checks it. Refused in CI.
+    section of the setup configuration file (docs/onboarding.md); pass runs with PASSWORD_STORE_DIR. The env file
+    gets nothing: `otterdog-e2e setup` then finds each token in the store and checks it. Refused in CI.
     """
     from otterdog_e2e.context import in_ci
     from otterdog_e2e.onboard.accounts import (
@@ -523,11 +523,9 @@ def accounts_command(
         AccountError,
         AccountSetup,
         load_accounts_config,
-        pass_environ,
         setup_config_path,
     )
-    from otterdog_e2e.onboard.envfile import instance_env_path, read_env_file, update_env_file
-    from otterdog_e2e.onboard.wizard import ENV_FILE_HEADER
+    from otterdog_e2e.onboard.envfile import instance_env_path, read_env_file
 
     if in_ci(os.environ):
         raise click.ClickException("accounts drives a visible browser and is refused when CI is set")
@@ -543,12 +541,6 @@ def accounts_command(
         raise click.UsageError(
             f"no accounts section in {setup_config_path(environ)}: add one (store, entry, items: docs/onboarding.md)"
         )
-    store_dir = pass_environ(environ).get("PASSWORD_STORE_DIR")
-    if config.provider == "pass" and store_dir and not environ.get("PASSWORD_STORE_DIR"):
-        header = ENV_FILE_HEADER.format(instance=instance)
-        for name in update_env_file(path, {"PASSWORD_STORE_DIR": store_dir}, header=header):
-            _echo(f"saved {name} in {path} (from ~/.cbi/config: runs resolve the same pass references)")
-        environ["PASSWORD_STORE_DIR"] = store_dir
     with contextlib.ExitStack() as stack:
         setup = AccountSetup(
             org=values.get("E2E_ORG"),

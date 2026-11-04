@@ -151,10 +151,9 @@ make init                                                   # once: Playwright (
 .venv/bin/otterdog-e2e setup --target free                  # finds the tokens in the store and checks them
 ```
 
-`pass` runs with `PASSWORD_STORE_DIR`, else the `password-store.cbi-dir` of ci-admin's `~/.cbi/config`; in that case
-`PASSWORD_STORE_DIR` is written to the env file too, so that runs, doctor and ci-sync resolve the same references
-(export it, or write it to the env file yourself, when it comes from your shell). Vault uses `E2E_VAULT_ADDR` and
-your Vault login ([Secrets in an external vault](security.md#secrets-in-an-external-vault-t1-t3)).
+`pass` runs with `PASSWORD_STORE_DIR` and nothing else: ci-admin's `~/.cbi/config` is never read. Export it in your
+shell, or write it to the env file yourself, so that runs, doctor and ci-sync resolve the same references. Vault uses
+`E2E_VAULT_ADDR` and your Vault login ([Secrets in an external vault](security.md#secrets-in-an-external-vault-t1-t3)).
 
 `accounts` never writes a token to the env file: setup finds the role's token in the store without a prompt, applies
 its checks (kind and scopes, isolation, owner membership) and only then writes it: the `pass:` reference, or for a
