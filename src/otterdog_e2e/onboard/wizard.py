@@ -74,6 +74,8 @@ from otterdog_e2e.batch import add_to_list
 from otterdog_e2e.context import in_ci, installation_problems
 from otterdog_e2e.github.http import GitHubError
 from otterdog_e2e.onboard.accounts import (
+    FLAGGED_JOIN_LOSS,
+    FLAGGED_LOSS,
     AccountError,
     AccountResult,
     AccountsConfig,
@@ -194,12 +196,6 @@ class TokenRejectedError(ValueError):
 
 # the roles whose account joins the test org (bootstrap invites them): a flagged account cannot
 JOINING_ROLES = (*MEMBER_ROLES, "oracle")
-# what a flagged account loses, by role: the ones that join cannot; the outsider and the config_reader never join
-# (the outsider must stay out), but what they write (comments) is hidden from the others
-FLAGGED_LOSS = dict.fromkeys(
-    ("outsider", "config_reader"), "what it writes (comments, issues) is hidden from the others"
-)
-FLAGGED_JOIN_LOSS = "it can neither join an organization nor accept an invitation"
 FLAGGED_HELP = (
     "GitHub hides the profile of {login} from anonymous visitors, as it does for a flagged account ({loss}); only "
     "GitHub Support lifts the flag: https://support.github.com/contact (signed in as {login}, a flagged account "

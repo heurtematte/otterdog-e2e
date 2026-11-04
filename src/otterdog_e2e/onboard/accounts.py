@@ -85,6 +85,13 @@ DEFAULT_ENTRY = "otterdog-e2e-{instance}-{role}-{item}"
 ENTRY_FIELDS = frozenset({"instance", "role", "item"})
 CLASSIC_EXPIRATIONS = (7, 30, 60, 90)  # days the classic token form offers besides a custom date and none (None)
 TOTP_PERIOD, TOTP_DIGITS = 30, 6
+# a flagged account: GitHub hides its profile from anonymous visitors (GET /users/{login}: 404). What it loses, by role:
+# the roles that join the test org cannot; the outsider and the config_reader never join (the outsider must stay out),
+# but what they write (comments) is hidden from the others
+FLAGGED_LOSS = dict.fromkeys(
+    ("outsider", "config_reader"), "what it writes (comments, issues) is hidden from the others"
+)
+FLAGGED_JOIN_LOSS = "it can neither join an organization nor accept an invitation"
 _PATH_RE = re.compile(r"^[A-Za-z0-9_.@-]+(/[A-Za-z0-9_.@-]+)*$")
 
 

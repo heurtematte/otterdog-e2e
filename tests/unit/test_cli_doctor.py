@@ -13,8 +13,10 @@ from click.testing import CliRunner
 
 from otterdog_e2e import cli
 from otterdog_e2e.cli import doctor as cli_doctor
+from otterdog_e2e.onboard.accounts import AccountsConfig
+from otterdog_e2e.onboard.tokens import ROLE_TOKENS
 from otterdog_e2e.safety import SafetyError
-from otterdog_e2e.settings import AppCredentials, Target, TargetError
+from otterdog_e2e.settings import AppCredentials, IdentitySpec, Target, TargetError
 from otterdog_e2e.testing.fakes import (
     FAKE_LOGINS,
     FAKE_MARKER,
@@ -23,11 +25,13 @@ from otterdog_e2e.testing.fakes import (
     FakeGitHubHttp,
     FakeOracle,
     default_org_json,
+    fake_token,
     make_identities,
     make_settings,
     make_target,
     make_verified_org,
 )
+from otterdog_e2e.vaults import VaultError
 
 ROLES = ("admin", "author", "approver", "outsider", "config_reader")
 
@@ -44,6 +48,8 @@ class World:
     description: str = f"{FAKE_MARKER} test org"
     isolation_errors: dict[str, str] = field(default_factory=dict)
     target_error: str | None = None
+    accounts: AccountsConfig | None = None  # the accounts section of the setup configuration file
+    stored: dict[str, str] = field(default_factory=dict)  # the accounts store: reference -> secret
     docker: bool = True
     unshare: bool = True
 
@@ -55,6 +61,22 @@ class World:
         self.https[name] = client
         return client
 
+    def anonymous(self, *hidden: str, status: int = 404) -> FakeGitHubHttp:
+        """(Re)create the anonymous client: every profile public but ``hidden`` ones (404: flagged or no account)."""
+        client = FakeGitHubHttp(identity="anonymous", read_only=True)
+        for login in hidden:
+            message = "Not Found" if status == 404 else "API rate limit exceeded"
+            client.add("GET", f"/users/{login}", status=status, json={"message": message}, repeat=True)
+        client.add("GET", "/users/*", json={"login": "public"}, repeat=True)
+        self.https["anonymous"] = client
+        return client
+
+    def resolve(self, value: str, environ: object, *, secret: bool = True) -> str:
+        """The accounts store: ``stored[value]``, VaultError for a missing entry."""
+        if value not in self.stored:
+            raise VaultError(f"{value}: not found")
+        return self.stored[value]
+
 
 @pytest.fixture
 def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
@@ -64,6 +86,7 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
     for name in ("author", "approver", "outsider"):
         world.http(name, scopes={"public_repo"})
     world.http("config_reader", scopes=None)
+    world.anonymous()
     for name in ("author", "approver"):
         world.oracle.set("membership", FAKE_LOGINS[name], value={"state": "active", "role": "member"})
     world.oracle.add_team("otterdog-admins", members=["e2e-admin"])
@@ -101,7 +124,11 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
     monkeypatch.setattr("otterdog_e2e.github.app.AppAuth", lambda creds, **kw: world.app)
     monkeypatch.setattr("otterdog_e2e.sut.image.docker_available", lambda: world.docker)
     monkeypatch.setattr("otterdog_e2e.procs.unshare_available", lambda: world.unshare)
+    monkeypatch.setattr("otterdog_e2e.onboard.accounts.load_accounts_config", lambda environ: world.accounts)
+    monkeypatch.setattr("otterdog_e2e.vaults.resolve", world.resolve)
     monkeypatch.delenv("CI", raising=False)
+    for spec in ROLE_TOKENS.values():
+        monkeypatch.delenv(spec.login_env, raising=False)
     monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
     return world
 
@@ -144,6 +171,11 @@ def test_healthy_org_passes(world: World) -> None:
         "app:installation",
         "app:webhook",
         "app:deliveries",
+        "account:admin",
+        "account:author",
+        "account:approver",
+        "account:outsider",
+        "account:config_reader",
         "docker",
         "unshare",
     ):
@@ -353,10 +385,76 @@ def test_missing_admin_token(world: World) -> None:
 
 
 def test_target_errors_stop_early(world: World) -> None:
-    """An invalid target is the only (FAIL) row."""
+    """An invalid target is the only (FAIL) row (without an accounts store)."""
     world.target_error = "E2E_ORG_ID is not set"
     code, rows = doctor_json()
     assert code == 1 and statuses(rows) == {"target": "FAIL"} and "E2E_ORG_ID" in rows["target"]["detail"]
+
+
+def test_accounts_flagged_by_github(world: World) -> None:
+    """account:<role> of every token: a public profile is OK; a profile anonymous visitors cannot see is a flagged
+    account (WARN with what the role loses, GitHub Support as the fix); the oracle sharing the admin's token has no
+    row."""
+    world.anonymous("e2e-outsider", "e2e-author")
+    code, rows = doctor_json()
+    assert code == 0
+    assert (
+        rows["account:admin"]["status"] == "OK" and rows["account:admin"]["detail"] == "e2e-admin: exists, not flagged"
+    )
+    outsider = rows["account:outsider"]
+    assert (
+        outsider["status"] == "WARN"
+        and outsider["detail"] == "e2e-outsider: exists, flagged by GitHub (comments hidden)"
+    )
+    assert outsider["remediation"] == cli_doctor.FLAGGED_FIX
+    assert rows["account:author"]["detail"] == "e2e-author: exists, flagged by GitHub (cannot join an org)"
+    assert "account:oracle" not in rows
+
+
+def test_accounts_of_the_accounts_store(world: World) -> None:
+    """A role without a token nor a declared login: its token in the accounts store tells its login (it exists), else
+    its login is the name of its entries, which a public profile proves and a hidden one leaves open."""
+    world.target = make_target(identities={"admin": IdentitySpec("admin", "e2e-admin", "E2E_ADMIN_TOKEN")})
+    world.identities = make_identities("admin")
+    world.accounts = AccountsConfig(store="pass:bots/github.com")
+    world.stored["pass:bots/github.com/otterdog-e2e-fake-author-api-token"] = fake_token("stored")
+    world.http("author (accounts store)", login="otterdog-e2e-fake-author")
+    world.anonymous("otterdog-e2e-fake-author", "otterdog-e2e-fake-outsider")
+    _code, rows = doctor_json()
+    author = rows["account:author"]
+    assert author["status"] == "WARN"
+    assert author["detail"] == "otterdog-e2e-fake-author: exists, flagged by GitHub (cannot join an org)"
+    outsider = rows["account:outsider"]
+    assert (
+        outsider["status"] == "WARN"
+        and outsider["detail"] == "otterdog-e2e-fake-outsider: flagged by GitHub, or not created"
+    )
+    assert (
+        outsider["remediation"] == "otterdog-e2e web-login otterdog-e2e-fake-outsider: a flagged account sees a banner"
+    )
+    assert rows["account:approver"]["detail"] == "otterdog-e2e-fake-approver: exists, not flagged"
+    assert fake_token("stored") not in json.dumps(rows)
+
+
+def test_accounts_without_a_target(world: World) -> None:
+    """A target that does not load yet (no org): the accounts of its instance in the accounts store are checked."""
+    world.target_error = "github.org is required"
+    world.accounts = AccountsConfig(store="pass:bots/github.com")
+    world.anonymous("otterdog-e2e-fake-admin")
+    code, rows = doctor_json()
+    assert code == 1 and rows["target"]["status"] == "FAIL"
+    assert {name for name in statuses(rows) if name.startswith("account:")} == {
+        f"account:{role}" for role in cli_doctor.ACCOUNT_ROLES
+    }
+    assert rows["account:admin"]["status"] == "WARN" and rows["account:oracle"]["status"] == "OK"
+
+
+def test_accounts_under_the_anonymous_rate_limit(world: World) -> None:
+    """The anonymous rate limit leaves the account unchecked (WARN), never a failure."""
+    world.anonymous("e2e-admin", status=403)
+    code, rows = doctor_json()
+    assert code == 0 and rows["account:admin"]["status"] == "WARN"
+    assert "anonymous rate limit" in rows["account:admin"]["detail"]
 
 
 def test_url_template_should_be_pinned(world: World) -> None:

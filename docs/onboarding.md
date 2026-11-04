@@ -191,6 +191,12 @@ yes): going on leaves a flagged oracle, author or approver out (its stored token
 admin, outsider or config_reader as it is; no stops setup. Bootstrap names a refused invitation of a flagged
 account. Only [GitHub Support](https://support.github.com/contact) lifts the flag; run setup again afterwards.
 
+`doctor --target <instance>` shows the state of every machine account in its `account:<role>` rows: the login (that
+of the role's token, else of its token in the accounts store, else the declared one, else the name of its entries
+in the store), whether it exists (a token answers, or its profile is public) and whether GitHub flagged it (WARN).
+It checks them even before the organization exists (the target does not load yet). A hidden profile without a token
+is flagged or not created: `otterdog-e2e web-login <account>` tells (a flagged account sees a banner).
+
 What stays yours: creating the accounts (GitHub's terms), a captcha, and the verification code GitHub e-mails when
 an account signs in from a new device (typed in the terminal, or in the window). When a page is not what the
 automation expects (GitHub changes them without notice), it stops at the named step and leaves the window open for

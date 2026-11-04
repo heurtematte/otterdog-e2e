@@ -1,7 +1,8 @@
 """``otterdog-e2e doctor`` (SPEC 16): the read-only checks of a target, never mutating and never taking the org lease.
 
 Doctor checks, in dependency order: the target and its environment, every identity (declared login, token kind and
-expiration, isolation, the scopes or fine-grained permissions of the owner tokens), the org and its safety marker, the
+expiration, isolation, the scopes or fine-grained permissions of the owner tokens), every machine account (exists,
+flagged by GitHub: its token, the accounts store and an anonymous profile read), the org and its safety marker, the
 memberships, teams, repositories and unmanaged objects, the GitHub App, the web-UI tier, the template pin and the
 tools; render_rows prints the OK/WARN/FAIL table with remediation hints. Several targets are checked in turn, each with
 its own copy of the environment.
@@ -47,6 +48,7 @@ from otterdog_e2e.redact import REDACTOR
 if TYPE_CHECKING:
     from otterdog_e2e.github.app import AppAuth
     from otterdog_e2e.github.http import GitHubHttp
+    from otterdog_e2e.onboard.accounts import MachineAccount
     from otterdog_e2e.safety import VerifiedOrg
     from otterdog_e2e.settings import Target
 
@@ -80,6 +82,8 @@ FINE_GRAINED_OWNER_WRITE_READS: tuple[tuple[str, str], ...] = (
     ("/orgs/{org}/rulesets", "Organization > Administration: Read and write"),
 )
 DELIVERY_FRESHNESS = timedelta(hours=72)
+ACCOUNT_ROLES = ("admin", "oracle", "author", "approver", "outsider", "config_reader")  # account:<role> rows
+FLAGGED_FIX = "only GitHub Support lifts the flag: https://support.github.com/contact"
 OK, WARN, FAIL = "OK", "WARN", "FAIL"
 
 
@@ -101,6 +105,7 @@ class Doctor:
         """Bind the checks to a context (not verified yet)."""
         self.ctx = context
         self.rows: list[CheckRow] = []
+        self.token_logins: dict[str, str] = {}  # GET /user of each identity's token (check_identities)
 
     def add(self, name: str, status: str, detail: str = "", remediation: str = "") -> None:
         """Record one check result (redacted)."""
@@ -118,10 +123,13 @@ class Doctor:
         """Every check, in dependency order (GitHub checks need the admin identity and a matching org)."""
         target = self.check_target()
         if target is None:
+            self.guarded("accounts", functools.partial(self.check_accounts, None))
             return self.rows
         self.check_env(target)
         web = self.guarded("web:credentials", functools.partial(self.check_web, target))
-        if "admin" in self.ctx.identities and self.check_identities(target):
+        admin_ok = "admin" in self.ctx.identities and self.check_identities(target)
+        self.guarded("accounts", functools.partial(self.check_accounts, target))
+        if admin_ok:
             verified = self.check_org(target)
             if verified is not None:
                 for name, check in (
@@ -198,6 +206,8 @@ class Doctor:
 
         http = self.ctx.http(name)
         login = str((http.get("/user") or {}).get("login") or "")
+        if login:
+            self.token_logins[name] = login
         declared = _declared_login(target, name)
         if declared and login.lower() != declared.lower():
             self.add(
@@ -340,6 +350,84 @@ class Doctor:
             )
         else:
             self.add("scopes:config_reader", OK, "classic PAT without scope")
+
+    def check_accounts(self, target: Target | None) -> None:
+        """account:<role> of every machine account with a known login: whether it exists (a token answers GET /user,
+        or GitHub shows its profile) and whether GitHub flagged it (its profile hidden from an anonymous GET
+        /users/{login}). The login is that of the role's token, else of its token in the accounts store, else the
+        declared one, else the name of its accounts store entries; without a target, the accounts of the instance."""
+        from otterdog_e2e.onboard.accounts import AccountError, load_accounts_config
+        from otterdog_e2e.settings import target_env_name
+
+        try:
+            store = load_accounts_config(self.ctx.environ)
+        except AccountError as exc:
+            self.add("accounts", WARN, str(exc), "fix the accounts section of the setup configuration file")
+            store = None
+        instance = target.name if target is not None else target_env_name(self.ctx.options.target or "")
+        for role in ACCOUNT_ROLES:
+            account = store.account(instance, role) if store is not None else None
+            self.guarded(f"account:{role}", functools.partial(self._account, target, role, account))
+
+    def _account(self, target: Target | None, role: str, account: MachineAccount | None) -> None:
+        """The account:<role> row (none without a login)."""
+        from otterdog_e2e.github.http import GitHubError, GitHubHttp
+        from otterdog_e2e.onboard.accounts import FLAGGED_LOSS
+
+        login = self.token_logins.get(role)
+        if not login and account is not None:
+            login = self._stored_token_login(role, account)
+        exists = bool(login)
+        login = login or self._declared_account_login(target, role) or (account.label if account is not None else "")
+        if not login:
+            return
+        anonymous = GitHubHttp(None, read_only=True, identity="anonymous", max_retries=0)
+        try:
+            visible = anonymous.get(f"/users/{login}", allow_404=True) is not None
+        except GitHubError as exc:
+            if exc.status not in (403, 429):
+                raise
+            self.add(f"account:{role}", WARN, f"{login}: not checked (anonymous rate limit)", "retry later")
+            return
+        if visible:
+            self.add(f"account:{role}", OK, f"{login}: exists, not flagged")
+        elif exists:
+            loss = "comments hidden" if role in FLAGGED_LOSS else "cannot join an org"
+            self.add(f"account:{role}", WARN, f"{login}: exists, flagged by GitHub ({loss})", FLAGGED_FIX)
+        else:
+            sign_in = f"otterdog-e2e web-login {account.label}" if account is not None else f"sign in as {login}"
+            self.add(
+                f"account:{role}",
+                WARN,
+                f"{login}: flagged by GitHub, or not created",
+                f"{sign_in}: a flagged account sees a banner",
+            )
+
+    def _stored_token_login(self, role: str, account: MachineAccount) -> str | None:
+        """GET /user of the role's token in the accounts store, None without one or when GitHub refuses it."""
+        from otterdog_e2e.github.http import GitHubError, GitHubHttp
+        from otterdog_e2e.vaults import VaultError, resolve
+
+        try:
+            token = resolve(account.ref("token"), self.ctx.environ).strip()
+        except VaultError:
+            return None
+        if not token:
+            return None
+        REDACTOR.add(token)
+        try:
+            user = GitHubHttp(token, read_only=True, identity=f"{role} (accounts store)").get("/user") or {}
+        except GitHubError:
+            return None
+        return str(user.get("login") or "") or None
+
+    def _declared_account_login(self, target: Target | None, role: str) -> str | None:
+        """The login the target declares, else (no target) the E2E_<ROLE>_LOGIN of the environment."""
+        if target is not None:
+            return _declared_login(target, role)
+        from otterdog_e2e.onboard.tokens import ROLE_TOKENS
+
+        return (self.ctx.environ.get(ROLE_TOKENS[role].login_env) or "").strip() or None
 
     def check_org(self, target: Target) -> VerifiedOrg | None:
         """verify_target (id, login, denylist, plan) without the marker; the marker reported separately."""

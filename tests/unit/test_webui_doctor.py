@@ -52,10 +52,13 @@ class World:
             self.oracle.set("membership", FAKE_LOGINS[name], value={"state": "active", "role": "member"})
 
     def http(self, token: str | None, **kwargs: Any) -> FakeGitHubHttp:
-        """The admin client: GET /user (with two_factor_authentication) and public memberships."""
+        """The admin client: GET /user (with two_factor_authentication) and public memberships; the anonymous one:
+        every profile public."""
         client = FakeGitHubHttp(
             identity=kwargs["identity"], scopes=set(cli_doctor.REQUIRED_ADMIN_SCOPES), read_only=True
         )
+        if token is None:
+            return client.add("GET", "/users/*", json={"login": "public"}, repeat=True)
         user: dict[str, Any] = {"login": FAKE_LOGINS["admin"]}
         if self.two_factor is not None:
             user["two_factor_authentication"] = self.two_factor
@@ -75,6 +78,7 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
     monkeypatch.setattr("otterdog_e2e.settings.resolve_identities", lambda *a, **k: make_identities("admin"))
     monkeypatch.setattr("otterdog_e2e.settings.resolve_app_credentials", lambda *a, **k: credentials)
     monkeypatch.setattr("otterdog_e2e.github.http.GitHubHttp", world.http)
+    monkeypatch.setattr("otterdog_e2e.onboard.accounts.load_accounts_config", lambda environ: None)
     monkeypatch.setattr("otterdog_e2e.safety.check_identity_isolation", lambda *a, **k: None)
     org_json = {**default_org_json(), "description": f"{FAKE_MARKER} test org"}
     monkeypatch.setattr("otterdog_e2e.safety.verify_target", lambda *a, **k: make_verified_org(org_json=org_json))
