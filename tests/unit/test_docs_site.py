@@ -102,7 +102,10 @@ def test_site_settings() -> None:
     assert config["extra_javascript"] == ["assets/explorer.js"]
     assert config["extra_css"] == ["assets/explorer.css", "assets/theme.css"]
     assert config["theme"]["custom_dir"] == "docs-theme" and config["theme"].get("name", "material") == "material"
-    assert (config["theme"]["logo"], config["theme"]["favicon"]) == ("assets/otterdog.png", "assets/favicon.png")
+    assert (config["theme"]["logo"], config["theme"]["favicon"]) == (
+        "assets/images/otterdog-emblem.png",
+        "assets/images/favicon-32x32.png",
+    )
     assert (DOCS / config["theme"]["logo"]).is_file() and (DOCS / config["theme"]["favicon"]).is_file()
     assert not {"hooks", "watch", "validation", "docs_dir", "site_dir"} & set(config)
     override = (ROOT / "docs-theme" / "partials" / "actions.html").read_text(encoding="utf-8")
