@@ -543,7 +543,7 @@ def test_fixed_known_bugs_only_xfail_on_older_suts(
     scenarios_dir = inner.settings.scenarios_dir
     scenarios_dir.mkdir(parents=True)
     (scenarios_dir / "known_bugs.yaml").write_text("- {id: KB-008, title: t}\n")
-    bug = KnownBug("KB-008", "org ruleset crash", status="fixed", fixed_in="1.7.0.dev15")
+    bug = KnownBug("KB-008", "org ruleset crash", status="fixed", fixed_in="1.7.0")
     monkeypatch.setattr("otterdog_e2e.known_bugs.load", lambda path: {"KB-008": bug})
     monkeypatch.setattr(E2EContext, "sut_version", lambda self: sut_version)
     inner.pytester.makepyfile(
@@ -563,7 +563,7 @@ def test_fixed_known_bugs_only_xfail_on_older_suts(
     found = {line["nodeid"].split("::")[-1]: line["outcome"] for line in inner.results()}
     assert found == outcomes, result.stdout.str()
     if sut_version == "1.6.1":
-        result.stdout.fnmatch_lines(["*KB-008: org ruleset crash (fixed in 1.7.0.dev15; SUT 1.6.1 predates the fix)*"])
+        result.stdout.fnmatch_lines(["*KB-008: org ruleset crash (fixed in 1.7.0; SUT 1.6.1 predates the fix)*"])
 
 
 SELECTION = """

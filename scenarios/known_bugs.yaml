@@ -78,7 +78,7 @@
     - "e2e: scenarios/offline/plan/lplan-dict-one-way.yaml (steps team-permission-removed and custom-property-removed declare the bug)"
     - "e2e: scenarios/cli/teams/kb-team-permissions-removal.yaml (step remove-permission declares the bug)"
   upstream: https://github.com/eclipse-csi/otterdog/pull/842
-  fixed_in: 1.7.0.dev76
+  fixed_in: 1.7.0
   scenarios: []
 
 - id: KB-006
@@ -121,7 +121,7 @@
     - "e2e: scenarios/offline/rulesets/val-org-ruleset-strict.yaml (O-VAL-ORG-RULESET-STRICT, tests/offline: exit 2 on 9bdeb75 and d0d3b08)"
     - "e2e: scenarios/offline/rulesets/val-org-rulesets.yaml (step review-count-range declares the bug)"
   upstream: https://github.com/eclipse-csi/otterdog/pull/891
-  fixed_in: 1.8.0.dev6
+  fixed_in: 1.8.0
   scenarios: [enterprise.org-ruleset.missing-strict]
 
 - id: KB-009
@@ -228,7 +228,7 @@
     - otterdog/webapp/db/service.py:505-564
     - otterdog/webapp/tasks/check_sync.py:73-133
   upstream: https://github.com/eclipse-csi/otterdog/pull/792
-  fixed_in: 1.7.0.dev20
+  fixed_in: 1.7.0
   scenarios: []
 
 - id: KB-019
@@ -360,7 +360,7 @@
     - otterdog/cli.py:999-1001
     - "e2e: tests/offline/test_scenarios.py (ENUM_SCHEMA_STEPS: steps allowed-actions-with-repository of O-VAL-ORG-WORKFLOWS and unknown-allowed-actions of O-VAL-REPO-WORKFLOWS, an expected failure before #878)"
   upstream: https://github.com/eclipse-csi/otterdog/pull/878
-  fixed_in: 1.7.0.dev75
+  fixed_in: 1.7.0
   scenarios: []
 
 - id: KB-030
@@ -444,7 +444,7 @@
     - docs/reference/organization/repository/environment/index.md:45-54
     - examples/template/otterdog-defaults.libsonnet:288-292
   upstream: https://github.com/eclipse-csi/otterdog/pull/878
-  fixed_in: 1.7.0.dev75
+  fixed_in: 1.7.0
   scenarios: []
 
 - id: KB-036
@@ -455,7 +455,7 @@
     - otterdog/models/environment.py:128-135
     - docs/reference/organization/repository/environment/index.md:9
   upstream: https://github.com/eclipse-csi/otterdog/pull/878
-  fixed_in: 1.7.0.dev75
+  fixed_in: 1.7.0
   scenarios: []
 
 - id: KB-037
@@ -479,7 +479,7 @@
     - otterdog/models/repository.py:731-732
     - "e2e: scenarios/offline/workflows/val-org-workflows.yaml (fork_pr_approval_policy message asserted without the value order)"
   upstream: https://github.com/eclipse-csi/otterdog/pull/878
-  fixed_in: 1.7.0.dev75
+  fixed_in: 1.7.0
   scenarios: []
 
 - id: KB-039
@@ -684,7 +684,7 @@
     - otterdog/models/ruleset.py:451-458
     - "e2e: scenarios/offline/rulesets/val-ruleset-nested.yaml (asserts the messages after the header)"
   upstream: https://github.com/eclipse-csi/otterdog/pull/891
-  fixed_in: 1.8.0.dev6
+  fixed_in: 1.8.0
   scenarios: []
 
 - id: KB-056
@@ -853,7 +853,7 @@
   evidence:
     - otterdog/webapp/db/service.py:943-958
   upstream: https://github.com/eclipse-csi/otterdog/pull/864
-  fixed_in: 1.7.0.dev66
+  fixed_in: 1.7.0
   scenarios: [W-BP-UPDATE]
 
 - id: KB-071
@@ -864,7 +864,7 @@
     - otterdog/webapp/internal/routes.py:83-89
     - otterdog/webapp/blueprints/__init__.py:84-91
   upstream: https://github.com/eclipse-csi/otterdog/pull/864
-  fixed_in: 1.7.0.dev66
+  fixed_in: 1.7.0
   scenarios: [W-BP-RECHECK-LOST]
 
 - id: KB-072

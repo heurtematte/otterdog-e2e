@@ -380,13 +380,13 @@ def test_observe_offline_runs_base_then_head_with_their_own_templates(
 
 def test_fixed_in_skips_older_suts_except_in_differential_runs(tmp_path: Path, _fakes: list[tuple[Path, Path]]) -> None:
     """The offline tier skips a scenario whose fixed_in the SUT predates; DifferentialRunner records both sides."""
-    text = "id: O-FIX\ntitle: f\nfixed_in: 1.7.0.dev15\nsteps: [{fragments: {}, validate: {}}]\n"
+    text = "id: O-FIX\ntitle: f\nfixed_in: 1.7.0\nsteps: [{fragments: {}, validate: {}}]\n"
     fixed = write_scenario(tmp_path, text)
     old = type("Installed", (), {"sut": type("Sut", (), {"version": "1.6.1"})()})()
     cli = offline_cli()
     cli.installed = old  # type: ignore[attr-defined]
     outcome = engine(cli).run(fixed)
-    assert outcome.skipped == "SUT 1.6.1 predates otterdog 1.7.0.dev15, the first version O-FIX asserts"
+    assert outcome.skipped == "SUT 1.6.1 predates otterdog 1.7.0, the first release O-FIX asserts"
     assert cli.calls == []
     base, head = side("base"), side("head")
     base.cli.installed = old  # type: ignore[attr-defined]

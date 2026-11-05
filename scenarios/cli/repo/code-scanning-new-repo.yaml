@@ -9,11 +9,11 @@ description: |
   language check of a missing repository.
   Known-bad: v1.6.1 (476bf5e and earlier) - validation accepted it and the language validation/apply failed later.
   Validation only: nothing is applied.
-  Not released yet: 8e3a359 is otterdog 1.7.0.dev2 (v1.6.1 + 2 commits), so
-  fixed_in skips the scenario on older SUTs such as release:latest (ScenarioEngine.skip_reason).
+  Released in v1.7.0 (8e3a359 is v1.6.1 + 2 commits): fixed_in skips the scenario on older SUTs
+  (ScenarioEngine.skip_reason).
 priority: P1
 min_plan: free
-fixed_in: "1.7.0.dev2"
+fixed_in: "1.7.0"
 tags: [repo, regression, code-scanning]
 references:
   - pr: 767

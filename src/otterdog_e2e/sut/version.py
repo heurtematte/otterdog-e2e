@@ -24,6 +24,8 @@ PEP440_RE = re.compile(
     r"(?:(?P<pre_l>a|b|rc)(?P<pre_n>\d+))?(?:\.post(?P<post>\d+))?(?:\.dev(?P<dev>\d+))?"
     r"(?:\+(?P<local>[a-z0-9]+(?:\.[a-z0-9]+)*))?$"
 )
+# fixed_in: a release X.Y.Z, never a dev, pre-release or local version (predates compares release parts only)
+RELEASE_RE = re.compile(r"^\d+\.\d+\.\d+$")
 # placeholders: no build-arg (0.0.0.dev0), plugin missing (0.0.0), shallow or tagless checkout (0.1.0.devN)
 PLACEHOLDER_RE = re.compile(r"^(?:0\.0\.0|0\.0\.0\.dev0|0\.1\.0\.dev\d+)$")
 _SHA_RE = re.compile(r"^[0-9a-f]{7,40}$")
@@ -121,13 +123,35 @@ def version_key(version: str) -> tuple[object, ...]:
     )
 
 
+def release_key(version: str) -> tuple[int, ...]:
+    """Release part of a PEP 440 version, trailing zeros dropped: 1.7.0.dev15+e2e.g9bdeb75 is (1, 7) like 1.7.0."""
+    match = PEP440_RE.match(version)
+    if match is None:
+        raise ValueError(f"{version!r} is not a PEP 440 version")
+    release = [int(part) for part in match.group("release").split(".")]
+    while len(release) > 1 and release[-1] == 0:
+        release.pop()
+    return tuple(release)
+
+
+def release_error(text: str) -> str | None:
+    """Why ``text`` is not a release X.Y.Z (the form of ``fixed_in``), None when it is one."""
+    if RELEASE_RE.match(text):
+        return None
+    match = PEP440_RE.match(text)
+    if match is not None and RELEASE_RE.match(match.group("release")):
+        return f"{text!r} is not a release X.Y.Z, use {match.group('release')}: a dev build counts as its release"
+    return f"{text!r} is not a release X.Y.Z (e.g. 1.7.0)"
+
+
 def predates(version: str | None, fixed_in: str | None) -> bool | None:
-    """Whether ``version`` is older than ``fixed_in`` (PEP 440, local parts ignored): True/False, None when either
-    is missing or not a PEP 440 version (``pr-792``, a commit sha, ...)."""
+    """Whether ``version`` is older than the release ``fixed_in``: only release parts are compared, so a dev,
+    pre-release or local build counts as the release it leads to (1.7.0.dev15+e2e.g9bdeb75 does not predate 1.7.0);
+    True/False, None when either is missing or not a version."""
     if not version or not fixed_in:
         return None
     try:
-        return version_key(public_version(version)) < version_key(public_version(fixed_in))
+        return release_key(version) < release_key(fixed_in)
     except ValueError:
         return None
 

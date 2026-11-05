@@ -4,7 +4,7 @@ The file is a YAML list of ``{id: KB-001, title, status: suspected|confirmed|fix
 url|null, fixed_in: null, scenarios: [ids]}``. A scenario is linked to a bug through its ``known_bug: KB-001`` field or
 through the bug's ``scenarios`` list; collection adds ``pytest.mark.xfail(reason="<id>: <title>", strict=False)`` so a
 fix shows up as XPASS instead of hiding the test. Once an entry has ``status: fixed`` its tests run without xfail (they
-guard against regressions), except on SUTs whose version predates a PEP 440 ``fixed_in`` (KnownBug.affects).
+guard against regressions), except on SUTs whose version predates the release ``fixed_in`` (KnownBug.affects).
 
 A STEP may declare ``known_bug`` too (scenarios.engine.step_bug): only that step's failures are expected, so such a bug
 must not list the scenario (check_references reports it), or the whole item would xfail at collection.
@@ -70,8 +70,8 @@ class KnownBug:
         return self.status == "fixed"
 
     def affects(self, sut_version: str | None) -> bool:
-        """Whether the bug is expected in a SUT: always unless fixed; a fixed bug only in SUT versions older than a
-        PEP 440 ``fixed_in`` (never for an unknown SUT version or a non-version ``fixed_in`` such as ``pr-792``)."""
+        """Whether the bug is expected in a SUT: always unless fixed; a fixed bug only in SUT versions older than its
+        release ``fixed_in`` (a dev build counts as the release it leads to; never for an unknown SUT version)."""
         if not self.fixed:
             return True
         from otterdog_e2e.sut.version import predates
@@ -157,13 +157,19 @@ def _parse_bug(item: Any, where: str) -> KnownBug:
     status = item.get("status", "suspected")
     if status not in KNOWN_BUG_STATUSES:
         raise KnownBugError(f"{where}: status {status!r} is not one of {list(KNOWN_BUG_STATUSES)}")
+    from otterdog_e2e.sut.version import release_error
+
+    fixed_in = _optional_text(item.get("fixed_in"), f"{where}.fixed_in")
+    error = release_error(fixed_in) if fixed_in is not None else None
+    if error is not None:
+        raise KnownBugError(f"{where}.fixed_in: {error}")
     return KnownBug(
         id=bug_id,
         title=_text(item.get("title"), f"{where}.title"),
         status=status,
         evidence=_texts(item.get("evidence"), f"{where}.evidence"),
         upstream=_optional_text(item.get("upstream"), f"{where}.upstream"),
-        fixed_in=_optional_text(item.get("fixed_in"), f"{where}.fixed_in"),
+        fixed_in=fixed_in,
         scenarios=_texts(item.get("scenarios"), f"{where}.scenarios"),
         crash_signature=_optional_text(item.get("crash_signature"), f"{where}.crash_signature"),
     )

@@ -66,7 +66,8 @@ that commit only (a later push changes nothing).
      the PR; the change itself is asserted by the expected delta of the reference. Control steps stay strict. Pattern:
      `scenarios/offline/rulesets/val-ruleset-strict.yaml` (step `no-strict` records, step `with-strict` is strict);
    - live (`scenarios/cli/<domain>/`, regressions included) only when the behaviour needs GitHub: you can lint them, not
-     run them; once the PR is merged, a regression scenario gets `fixed_in` (the version of the merge commit);
+     run them; once the PR is merged, a regression scenario gets `fixed_in` (the release `X.Y.Z` that contains the merge commit,
+     the next minor while unreleased: never a dev version);
    - webapp or webhooks behaviour: a Python test of `tests/webapp/` or `tests/webhooks/` whose
      `pytest.mark.scenario(<id>, references=[...])` marker carries the reference (pattern:
      `tests/webapp/test_stale_status.py`; new comment markers go in the note); unverifiable here, say so.

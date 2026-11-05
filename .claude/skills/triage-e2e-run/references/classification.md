@@ -24,7 +24,7 @@ relevant paths: open those first.
 - **FAILED / ERROR**: what you triage (ERROR is a fixture setup or teardown failure: often harness or infrastructure).
 - **XFAIL**: a known bug reproduced where expected: nothing to do.
 - **XPASS**: a known bug did not show: the bug may be fixed in this SUT. Propose `status: fixed` with `fixed_in` (the
-  first version with the fix) after checking the otterdog history; a `KnownBugNotReproducedWarning` says the same for
+  first release `X.Y.Z` with the fix, never a dev version) after checking the otterdog history; a `KnownBugNotReproducedWarning` says the same for
   a step-level bug.
 - **SKIPPED**: never a failure; the reason says which capability, plan, identity, target or `fixed_in` gate applied.
 

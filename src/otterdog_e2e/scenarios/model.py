@@ -352,7 +352,7 @@ class Scenario:
     observe: bool = False
     variables: dict[str, Any] = field(default_factory=dict)
     cleanup: str = "auto"
-    fixed_in: str | None = None  # first otterdog version (PEP 440) with the fix/feature asserted: older SUTs skip
+    fixed_in: str | None = None  # first otterdog release (X.Y.Z) with the fix/feature asserted: older SUTs skip
     timeout: int | None = None  # pytest timeout (s) of the scenario's item, instead of collect.scenario_timeout()
     libraries: dict[str, str] = field(default_factory=dict)  # name -> SourceText, attached to every step's fragments
     references: list[Reference] = field(default_factory=list)  # changes (PRs) behind the behaviour (changes.py)
@@ -673,18 +673,15 @@ def _step_known_bug(value: Any, where: str) -> tuple[str | None, tuple[str, ...]
 
 
 def _fixed_in(value: Any) -> str | None:
-    """``fixed_in``: a PEP 440 otterdog version (``1.7.0.dev15``), without local part, or None."""
+    """``fixed_in``: the first otterdog release X.Y.Z with the change (``1.7.0``), or None; never a dev version."""
     if value is None:
         return None
-    from otterdog_e2e.sut.version import version_key
+    from otterdog_e2e.sut.version import release_error
 
     text = _str(value, "fixed_in")
-    try:
-        version_key(text)
-    except ValueError:
-        raise ScenarioError(f"fixed_in: {text!r} is not a PEP 440 version (e.g. 1.7.0.dev15)") from None
-    if "+" in text:
-        raise ScenarioError(f"fixed_in: {text!r} has a local version part (+...), use the public version")
+    error = release_error(text)
+    if error is not None:
+        raise ScenarioError(f"fixed_in: {error}")
     return text
 
 
@@ -2002,7 +1999,7 @@ def json_schema() -> dict[str, Any]:
             "propertyNames": {"pattern": r"^[A-Za-z_][A-Za-z0-9_]*$"},
             "additionalProperties": {"oneOf": [{"type": "string"}, file_ref]},
         },
-        "fixed_in": {"type": "string", "description": "first otterdog version (PEP 440) the scenario asserts"},
+        "fixed_in": {"type": "string", "description": "first otterdog release (X.Y.Z) the scenario asserts"},
         "references": {
             "type": "array",
             "description": "otterdog pull requests (pr) or named changes (change) behind this behaviour",

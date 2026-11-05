@@ -106,11 +106,10 @@ otterdog prints secret values.
   failure. A bug that surfaces as another exception needs the test's own `pytest.mark.xfail(raises=...)`, which takes
   precedence. In the webapp and webhooks tiers that extra `pytest.mark.xfail` naming the exception it tolerates is
   required, and `pytest.xfail()` is not used.
-- A fixed bug (`status: fixed`, `fixed_in: 1.7.0.devN`) turns its tests into regression guards; [SUTs](glossary.md#systems-under-test) older than
-  `fixed_in` still xfail.
-- **Unreleased fixes**: a regression of a fix merged after the latest release declares `fixed_in` (the version of the
-  fix commit: `X.(Y+1).0.dev<n>` with `n = git rev-list --count v<last release>..<sha>`, computed in the harness mirror
-  `$E2E_CACHE_DIR/mirror/eclipse-csi__otterdog.git`), and is listed in `UNRELEASED_FIXES` of
+- A fixed bug (`status: fixed`, `fixed_in: 1.7.0`) turns its tests into regression guards; [SUTs](glossary.md#systems-under-test) older than
+  `fixed_in` still xfail (a dev build counts as the release it leads to).
+- **Unreleased fixes**: a regression of a fix merged after the latest release declares `fixed_in` (a release `X.Y.Z`,
+  never a dev version: the release main's dev builds lead to, `X.(Y+1).0` after `v<X.Y.Z>`), and is listed in `UNRELEASED_FIXES` of
   `tests/unit/test_yaml_cli.py`. Offline scenarios whose outcome depends on the history leave the varying expectation
   out and assert it in `SUT_EXPECTATIONS` of `tests/offline/test_scenarios.py` (ancestry of the fix commit).
 

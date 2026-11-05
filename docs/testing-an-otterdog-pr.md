@@ -101,22 +101,23 @@ explicitly:
 ## Regression scenarios of unreleased fixes (`fixed_in`)
 
 A regression scenario asserts the behaviour a fix introduced, so it fails on every SUT that predates the fix. Such a
-scenario declares the first otterdog version containing the fix:
+scenario declares the first otterdog release containing the fix, as `X.Y.Z` (never a dev version):
 
 ```yaml
 id: regression.repo-ruleset-without-strict
-fixed_in: "1.7.0.dev15"     # 9bdeb75 = v1.6.1 + 15 commits
+fixed_in: "1.7.0"     # 9bdeb75 = v1.6.1 + 15 commits (1.7.0.dev15), released in v1.7.0
 ```
 
-The live engine (tiers `cli`, `enterprise`) and the offline engine skip the scenario when the SUT version is older
-(PEP 440 order, local part ignored): `release:latest` (1.6.1) skips the #767, #790 and #791 regressions, while
-`branch:main`, PR and local builds containing the fix run them. A differential run records the scenario on both sides
-anyway, because the difference is the point. The version is a heuristic: a PR branched off an old main can have a
-higher dev number without the fix. When ancestry matters, the offline tier decides with git
-(`tests/offline/conftest.py` SutHistory), as O-VAL-RULESET-STRICT does.
+The live engine (tiers `cli`, `enterprise`) and the offline engine skip the scenario when the SUT's release is older.
+Only release parts are compared (dev, pre-release and local parts are ignored, so 1.7.0.dev15 counts as 1.7.0): v1.6.1
+skips the #767, #790 and #791 regressions, v1.7.0 and later run them. A fix merged after the latest release declares
+the release main's dev builds lead to (`X.(Y+1).0`): `release:latest` skips it, `branch:main`, PR and local builds run
+it. A differential run records the scenario on both sides anyway, because the difference is the point. The release
+is a heuristic: a dev build of the same cycle that predates the fix runs the scenario without the fix. When ancestry
+matters, the offline tier decides with git (`tests/offline/conftest.py` SutHistory), as O-VAL-RULESET-STRICT does.
 
 Known bugs follow the same idea. A `scenarios/known_bugs.yaml` entry with `status: fixed` no longer turns its tests
-into xfails: they guard against the regression. The exception is a SUT whose version predates a PEP 440 `fixed_in`;
+into xfails: they guard against the regression. The exception is a SUT whose release predates the `fixed_in`;
 there the xfail stays, with "SUT ... predates the fix" in its reason.
 
 ## Scenario references

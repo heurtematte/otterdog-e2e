@@ -14,7 +14,7 @@ description: >-
 priority: P1
 tags: [offline, code-security, repo]
 observe: true
-fixed_in: 1.8.0.dev7
+fixed_in: 1.8.0
 variables: {plan: free}
 references:
   - pr: 892

@@ -80,9 +80,9 @@ non-strict xfail while its bug is open, see [known-issues.md](known-issues.md)):
 | `regression.rename-and-modify` | rename a repository and change it in one apply (#472) | P1 | implemented | |
 | `regression.ruleset-empty-status-checks` | ruleset with empty status checks (#562) | P1 | implemented | |
 | `regression.disabled-ruleset-without-refs` | disabled ruleset whose ref conditions come back null (#751) | P2 | implemented | |
-| `regression.code-scanning-new-repo` | code scanning languages on a not-yet-existing repository (#767) | P1 | implemented | `fixed_in: 1.7.0.dev2` |
-| `regression.repo-ruleset-without-strict` | repository ruleset without `strict` is a validation error (#790) | P1 | implemented | `fixed_in: 1.7.0.dev15` |
-| `regression.private-repo-template-defaults` | private repository with the template defaults (#791, #731, #635) | P1 | implemented | `fixed_in: 1.7.0.dev14` |
+| `regression.code-scanning-new-repo` | code scanning languages on a not-yet-existing repository (#767) | P1 | implemented | `fixed_in: 1.7.0` |
+| `regression.repo-ruleset-without-strict` | repository ruleset without `strict` is a validation error (#790) | P1 | implemented | `fixed_in: 1.7.0` |
+| `regression.private-repo-template-defaults` | private repository with the template defaults (#791, #731, #635) | P1 | implemented | `fixed_in: 1.7.0` |
 | `cli.kb.apply-exit-code` | KB-001: apply exits 0 on validation errors (`tests/cli/test_known_bugs.py`) | - | implemented | xfail KB-001 |
 | `cli.kb.variables-pagination` | KB-003: more than 10 variables | P2 | implemented | xfail KB-003 |
 | `cli.kb.webhook-url-alias` | KB-004: webhook URL change through `aliases` | P2 | implemented | xfail KB-004 |
@@ -241,13 +241,13 @@ yet. Known-bug items assert the correct behaviour and run as non-strict expected
 | `O-VAL-SECRETS` | Secret names and values are validated at every level | P1 | verified | `offline/secrets/val-secrets.yaml` | `config.secret-references`, `validation.secrets` |
 | `O-VAL-VARIABLES` | Repository and environment variable names are validated | P1 | verified | `offline/variables/val-variables.yaml` | `validation.variables` |
 | `O-VAL-WEBHOOKS` | Webhook content type, SSL flag and secret notices are validated | P1 | verified | `offline/webhooks/val-webhooks.yaml` | `validation.webhooks` |
-| `O-VAL-CODE-SECURITY` | Code security configurations and the repositories referencing them are validated | P1 | verified (main d9dac78; skipped before 1.8.0.dev7) | `offline/code-security/val-code-security-configurations.yaml` | `code-security.configuration.lifecycle`, `code-security.configuration.settings`, `code-security.repository-attachment`, `validation.code-security` |
-| `O-LPLAN-CODE-SECURITY` | local-plan diffs code security configurations and releases the repository settings they control | P1 | verified (main d9dac78; skipped before 1.8.0.dev7) | `offline/code-security/lplan-code-security-configurations.yaml` | `code-security.configuration.lifecycle`, `code-security.configuration.settings`, `code-security.repository-attachment` |
-| `O-VAL-DEPENDABOT-CODESPACES-SECRETS` | Dependabot and Codespaces secrets are validated like Actions secrets at organization and repository level | P1 | verified (main d9dac78; skipped before 1.8.0.dev5) | `offline/secrets/val-dependabot-codespaces-secrets.yaml` | `secrets-variables.org-dependabot-codespaces-secrets`, `secrets-variables.repo-dependabot-codespaces-secrets`, `validation.secret-names-uppercase` |
-| `O-LPLAN-DEPENDABOT-CODESPACES-SECRETS` | local-plan diffs Dependabot and Codespaces secrets as objects of their own kind | P1 | verified (main d9dac78; skipped before 1.8.0.dev5) | `offline/secrets/lplan-dependabot-codespaces-secrets.yaml` | `secrets-variables.org-dependabot-codespaces-secrets`, `secrets-variables.repo-dependabot-codespaces-secrets` |
+| `O-VAL-CODE-SECURITY` | Code security configurations and the repositories referencing them are validated | P1 | verified (main d9dac78; skipped before 1.8.0) | `offline/code-security/val-code-security-configurations.yaml` | `code-security.configuration.lifecycle`, `code-security.configuration.settings`, `code-security.repository-attachment`, `validation.code-security` |
+| `O-LPLAN-CODE-SECURITY` | local-plan diffs code security configurations and releases the repository settings they control | P1 | verified (main d9dac78; skipped before 1.8.0) | `offline/code-security/lplan-code-security-configurations.yaml` | `code-security.configuration.lifecycle`, `code-security.configuration.settings`, `code-security.repository-attachment` |
+| `O-VAL-DEPENDABOT-CODESPACES-SECRETS` | Dependabot and Codespaces secrets are validated like Actions secrets at organization and repository level | P1 | verified (main d9dac78; skipped before 1.8.0) | `offline/secrets/val-dependabot-codespaces-secrets.yaml` | `secrets-variables.org-dependabot-codespaces-secrets`, `secrets-variables.repo-dependabot-codespaces-secrets`, `validation.secret-names-uppercase` |
+| `O-LPLAN-DEPENDABOT-CODESPACES-SECRETS` | local-plan diffs Dependabot and Codespaces secrets as objects of their own kind | P1 | verified (main d9dac78; skipped before 1.8.0) | `offline/secrets/lplan-dependabot-codespaces-secrets.yaml` | `secrets-variables.org-dependabot-codespaces-secrets`, `secrets-variables.repo-dependabot-codespaces-secrets` |
 | `O-VAL-IMMUTABLE-RELEASES` | Immutable releases are validated and planned at organization and repository level | P2 | verified (v1.7.1, main d9dac78) | `offline/org-settings/val-immutable-releases.yaml` | `org-settings.immutable-releases`, `repositories.immutable-releases` |
 | `O-VAL-PAGES-CNAME` | The custom domain of GitHub Pages is validated and planned | P2 | verified (v1.7.1, main d9dac78) | `offline/repo/val-pages-custom-domain.yaml` | `repositories.pages-custom-domain` |
-| `O-SHOW-CODE-SCANNING-LANGUAGES` | The deprecated code scanning language javascript-typescript is loaded as javascript and typescript | P2 | verified (main d9dac78; skipped before 1.8.0.dev3) | `offline/repo/show-code-scanning-languages.yaml` | - |
+| `O-SHOW-CODE-SCANNING-LANGUAGES` | The deprecated code scanning language javascript-typescript is loaded as javascript and typescript | P2 | verified (main d9dac78; skipped before 1.8.0) | `offline/repo/show-code-scanning-languages.yaml` | - |
 
 ### Live CLI scenarios (`scenarios/cli`)
 
@@ -298,15 +298,15 @@ yet. Known-bug items assert the correct behaviour and run as non-strict expected
 | `cli.repo.visibility` | Switch an existing repository between public and private | P1 | implemented | `cli/repo/repo-visibility.yaml` | `repositories.visibility-forking` |
 | `cli.repo.webhook-secret` | Repository webhook secrets (plain value, dummy, --update-webhooks, removal) | P1 | implemented | `cli/webhooks/repo-webhook-secret.yaml` | `cli.plan.update-webhooks`, `webhooks.repo.secret` |
 | `cli.repo.webhook-settings` | Repository webhook settings (events, content_type, active, insecure_ssl) | P1 | implemented | `cli/webhooks/repo-webhook-settings.yaml` | `webhooks.repo.settings` |
-| `cli.code-security.configuration` | Code security configuration (create, attach to a new repository, change, delete) | P1 | implemented (fixed_in 1.8.0.dev7, lint-clean on main d9dac78) | `cli/code-security/configuration.yaml` | `code-security.configuration.lifecycle`, `code-security.configuration.settings`, `code-security.repository-attachment` |
-| `cli.secrets.dependabot-codespaces` | Dependabot and Codespaces secrets (organization and repository, visibility, removal) | P1 | implemented (fixed_in 1.8.0.dev5, lint-clean on main d9dac78) | `cli/secrets/dependabot-codespaces-secrets.yaml` | `secrets-variables.org-dependabot-codespaces-secrets`, `secrets-variables.repo-dependabot-codespaces-secrets` |
-| `cli.repo.immutable-releases` | Immutable releases of a repository (enabled at creation, then disabled) | P2 | implemented (fixed_in 1.7.0.dev58, lint-clean on main d9dac78) | `cli/repo/immutable-releases.yaml` | `repositories.immutable-releases` |
+| `cli.code-security.configuration` | Code security configuration (create, attach to a new repository, change, delete) | P1 | implemented (fixed_in 1.8.0, lint-clean on main d9dac78) | `cli/code-security/configuration.yaml` | `code-security.configuration.lifecycle`, `code-security.configuration.settings`, `code-security.repository-attachment` |
+| `cli.secrets.dependabot-codespaces` | Dependabot and Codespaces secrets (organization and repository, visibility, removal) | P1 | implemented (fixed_in 1.8.0, lint-clean on main d9dac78) | `cli/secrets/dependabot-codespaces-secrets.yaml` | `secrets-variables.org-dependabot-codespaces-secrets`, `secrets-variables.repo-dependabot-codespaces-secrets` |
+| `cli.repo.immutable-releases` | Immutable releases of a repository (enabled at creation, then disabled) | P2 | implemented (fixed_in 1.7.0, lint-clean on main d9dac78) | `cli/repo/immutable-releases.yaml` | `repositories.immutable-releases` |
 
 ### Regressions (tag `regression`, in `scenarios/cli/<domain>/`)
 
 | Id | Scenario | Priority | Status | Implemented by | Features (coverage.yaml) |
 |---|---|---|---|---|---|
-| `regression.user-bypass-actors` | an individual user ('@login') as a ruleset bypass actor | P2 | implemented | `cli/rulesets/user-bypass-actors.yaml` (fixed_in 1.7.0.dev7) | `rulesets.bypass-actors`, `regression.779-user-bypass-actors` |
+| `regression.user-bypass-actors` | an individual user ('@login') as a ruleset bypass actor | P2 | implemented | `cli/rulesets/user-bypass-actors.yaml` (fixed_in 1.7.0) | `rulesets.bypass-actors`, `regression.779-user-bypass-actors` |
 
 ### Enterprise scenarios (`scenarios/enterprise`)
 

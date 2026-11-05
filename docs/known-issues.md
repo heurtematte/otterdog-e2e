@@ -10,10 +10,10 @@ How the registry is used:
   a Python test), and the bug lists the scenario in `scenarios`. Each such test asserts the **correct** behaviour.
   At collection the plugin marks it `xfail(strict=False)`, scoped to the exception that reports the bug
   (`KnownBugReproduced` for a YAML scenario, `AssertionError` for a Python test, so harness errors stay failures): it
-  reports XFAIL while the bug exists and XPASS once it is fixed. On an XPASS, set `status: fixed` and `fixed_in: <version or pr-N>` and update this page. From then on the
-  plugin no longer adds the xfail: the test guards against a regression. Only [SUTs](glossary.md#systems-under-test) whose version predates a PEP 440
-  `fixed_in` (for example `1.7.0.dev21`) keep it, with "SUT ... predates the fix" in the reason. A `pr-N` value
-  cannot be compared with versions: replace it with the released version once there is one.
+  reports XFAIL while the bug exists and XPASS once it is fixed. On an XPASS, set `status: fixed` and `fixed_in: <X.Y.Z>` (the first release with the fix; while it is unreleased, the release main's dev builds lead to) and update this page. From then on the
+  plugin no longer adds the xfail: the test guards against a regression. Only [SUTs](glossary.md#systems-under-test) whose release predates
+  `fixed_in` keep it (1.6.1 for `fixed_in: 1.7.0`; a dev build counts as the release it leads to, so 1.7.0.dev21 does
+  not), with "SUT ... predates the fix" in the reason. `fixed_in` is a release `X.Y.Z`, never a dev version or `pr-N`.
 - Evidence entries prefixed `e2e:` point at a file of this project that detects the bug. Offline scenarios that
   detect a bug themselves (pytest.xfail when detected) are cited there instead of in `scenarios`, which would xfail
   them on every SUT.
@@ -267,14 +267,14 @@ side live.
 
 ### KB-005 — dict values diff one way only
 
-Status: **fixed** (1.7.0.dev76) · Upstream: https://github.com/eclipse-csi/otterdog/pull/842 · Scenarios: step
+Status: **fixed** (1.7.0) · Upstream: https://github.com/eclipse-csi/otterdog/pull/842 · Scenarios: step
 `remove-permission` of `cli.kb.team-permissions-removal`, steps `team-permission-removed` and `custom-property-removed`
 of `O-LPLAN-DICT-ONE-WAY`
 
 Fixed by #842 (c1cdc54, in v1.7.0): `is_different_ignoring_order` reports a difference as soon as the two dicts have
 different keys (`otterdog/utils.py:131-133` at main d9dac78), so the removal is planned as a change of the repository
 (`~ team_permissions = {` with a `-` line for the removed team) and applied without `--delete-resources`. The steps
-that declare the bug are strict again on SUTs from 1.7.0.dev76 and stay expected failures on older ones. The text
+that declare the bug are strict again on SUTs from 1.7.0 and stay expected failures on older ones. The text
 below describes the defect as it was.
 
 Evidence: `otterdog/utils.py:105-124`, `otterdog/models/__init__.py:437-475`.
@@ -339,7 +339,7 @@ write `max_cache_size_gb::: <n>` and require the capability.
 
 ### KB-008 — org ruleset validation raises AttributeError for incomplete nested rules (#790)
 
-Status: **fixed** (1.8.0.dev6) · Upstream: https://github.com/eclipse-csi/otterdog/pull/891 (introduced by #790) ·
+Status: **fixed** (1.8.0) · Upstream: https://github.com/eclipse-csi/otterdog/pull/891 (introduced by #790) ·
 Scenarios: `enterprise.org-ruleset.missing-strict`
 
 Fixed by #891 (d6f14f4, main after v1.7.1): nested ruleset rules are validated with their ruleset as parent object, so
@@ -616,7 +616,7 @@ ValueError: 'FIRST_TIMER' is not a valid AuthorAssociation
 
 ### KB-018 — a stale webhook snapshot can overwrite the status of a merged pull request
 
-Status: **fixed** (1.7.0.dev20) · Upstream: https://github.com/eclipse-csi/otterdog/pull/792 · Scenarios: none
+Status: **fixed** (1.7.0) · Upstream: https://github.com/eclipse-csi/otterdog/pull/792 · Scenarios: none
 
 Fixed by #792 (837d799, in v1.7.0); never reproduced live by this harness: W-PR-STALE-SNAPSHOT guards it on a live
 webapp run. The text below describes the defect as it was.
@@ -626,7 +626,7 @@ Evidence: `otterdog/webapp/db/service.py:505-564`, `otterdog/webapp/tasks/check_
 `update_or_create_pull_request` writes the lifecycle fields (draft, status, timestamps) from the task's snapshot
 unconditionally. CheckConfigurationInSyncTask sleeps at least 60 s (backoff) while holding the snapshot of the open
 PR, so it can turn a merged PR back to `open`. Upstream incident: osgi/.eclipsefdn#25. PR #792 makes the update
-conditional and atomic. Once it is merged, set `fixed_in: pr-792`. The deterministic e2e check (injecting a stale
+conditional and atomic. Once it is merged, set `fixed_in` to the first release that contains it. The deterministic e2e check (injecting a stale
 `converted_to_draft` snapshot after the merge) belongs to the webapp tier (W-PR-STALE-SNAPSHOT, whose reference to
 #792 declares the expected delta).
 
@@ -919,7 +919,7 @@ $ otterdog validate -c otterdog.json --local e2e-test-org         # orgs.newRepo
 
 ### KB-029 — an invalid workflows.allowed_actions crashes validation with a KeyError
 
-Status: **fixed** (1.7.0.dev75) · Upstream: https://github.com/eclipse-csi/otterdog/pull/878 · Scenarios: none
+Status: **fixed** (1.7.0) · Upstream: https://github.com/eclipse-csi/otterdog/pull/878 · Scenarios: none
 
 Unreachable since #878 (a26b543, in v1.7.0): the workflow settings schemas enumerate `allowed_actions`, so an invalid
 value is a load error (`failed to load configuration: invalid value at 'settings.workflows.allowed_actions': 'some' is
@@ -1204,7 +1204,7 @@ $ otterdog local-plan -c otterdog.json --local e2e-test-org       # exit code 0 
 
 ### KB-035 — the environment docs use newEnvironmentSecret / newEnvironmentVariable
 
-Status: **fixed** (1.7.0.dev75) · Upstream: https://github.com/eclipse-csi/otterdog/pull/878 · Scenarios: none
+Status: **fixed** (1.7.0) · Upstream: https://github.com/eclipse-csi/otterdog/pull/878 · Scenarios: none
 
 Fixed by #878 (a26b543, in v1.7.0): the reference pages and guides use `orgs.newEnvSecret` and `orgs.newEnvVariable`.
 The text below describes the defect as it was.
@@ -1242,7 +1242,7 @@ With `orgs.newEnvSecret` and `orgs.newEnvVariable` the configuration validates.
 
 ### KB-036 — the template comment of deployment_branch_policy lists values validation rejects
 
-Status: **fixed** (1.7.0.dev75) · Upstream: https://github.com/eclipse-csi/otterdog/pull/878 · Scenarios: none
+Status: **fixed** (1.7.0) · Upstream: https://github.com/eclipse-csi/otterdog/pull/878 · Scenarios: none
 
 Fixed by #878 (a26b543, in v1.7.0): the template comment reads `# Can be one of: all, protected, selected`, and the
 environment schema refuses any other value at load. The text below describes the defect as it was.
@@ -1320,7 +1320,7 @@ EOF
 
 ### KB-038 — two validation messages print Python sets in a random order
 
-Status: **fixed** (1.7.0.dev75) · Upstream: https://github.com/eclipse-csi/otterdog/pull/878 · Scenarios: none
+Status: **fixed** (1.7.0) · Upstream: https://github.com/eclipse-csi/otterdog/pull/878 · Scenarios: none
 
 Unreachable since #878 (a26b543, in v1.7.0): `fork_pr_approval_policy` and `code_scanning_default_languages` are
 schema enums, so an invalid value is a load error listing the allowed values in the schema order, before the two
@@ -1967,7 +1967,7 @@ print(
 
 ### KB-055 — nested ruleset messages name the repository twice
 
-Status: **fixed** (1.8.0.dev6) · Upstream: https://github.com/eclipse-csi/otterdog/pull/891 · Scenarios: none
+Status: **fixed** (1.8.0) · Upstream: https://github.com/eclipse-csi/otterdog/pull/891 · Scenarios: none
 (`O-VAL-RULESET-NESTED` asserts the messages after the header)
 
 Fixed by #891 (d6f14f4, main after v1.7.1): the messages name the ruleset, e.g. `Error: repo_ruleset[name="<rs>",
@@ -2318,12 +2318,12 @@ except Exception as ex:
 
 ### KB-070 — a definition change of several fields is stored one field per fetch
 
-Status: **fixed** (1.7.0.dev66) · Upstream: https://github.com/eclipse-csi/otterdog/pull/864 · Scenarios: `W-BP-UPDATE`
+Status: **fixed** (1.7.0) · Upstream: https://github.com/eclipse-csi/otterdog/pull/864 · Scenarios: `W-BP-UPDATE`
 (tests/webapp/test_blueprints.py)
 
 Fixed by #864 (7b863ff, in v1.7.0): `update_or_create_blueprint` updates path, name, description and config without
 short-circuiting (`otterdog/webapp/db/service.py:957-988` at main d9dac78). Not yet run live against the fix:
-`W-BP-UPDATE` guards it from 1.7.0.dev66 on. The text below describes the defect as it was.
+`W-BP-UPDATE` guards it from 1.7.0 on. The text below describes the defect as it was.
 
 Evidence: `otterdog/webapp/db/service.py:943-958`.
 
@@ -2340,12 +2340,12 @@ the previous `repo_selector`; a second identical fetch stores the selector.
 
 ### KB-071 — a second fetch drops the pending recheck of a changed definition
 
-Status: **fixed** (1.7.0.dev66) · Upstream: https://github.com/eclipse-csi/otterdog/pull/864 · Scenarios:
+Status: **fixed** (1.7.0) · Upstream: https://github.com/eclipse-csi/otterdog/pull/864 · Scenarios:
 `W-BP-RECHECK-LOST` (tests/webapp/test_blueprints.py)
 
 Fixed by #864 (7b863ff, in v1.7.0): `recheck_needed = recheck_needed or any(changed)` keeps a pending recheck
 (`otterdog/webapp/db/service.py:985-986` at main d9dac78). Not yet run live against the fix: `W-BP-RECHECK-LOST`
-guards it from 1.7.0.dev66 on. The text below describes the defect as it was.
+guards it from 1.7.0 on. The text below describes the defect as it was.
 
 Evidence: `otterdog/webapp/db/service.py:958`, `otterdog/webapp/internal/routes.py:83-89`,
 `otterdog/webapp/blueprints/__init__.py:84-91`.

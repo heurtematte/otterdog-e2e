@@ -388,18 +388,18 @@ def test_long_scenarios_get_an_extended_timeout() -> None:
     assert {s.id for s in live_scenarios() if s.timeout is not None} <= set(module.PROBES), "unexplained timeouts"
 
 
-UNRELEASED_FIXES = {  # scenario -> first otterdog version with the change it asserts (last tag + n commits on main)
-    "regression.code-scanning-new-repo": "1.7.0.dev2",
-    "regression.private-repo-template-defaults": "1.7.0.dev14",
-    "regression.repo-ruleset-without-strict": "1.7.0.dev15",
-    "regression.user-bypass-actors": "1.7.0.dev7",
-    "enterprise.org-ruleset.missing-strict": "1.7.0.dev15",  # #790 behaviour (BAT-05: KB-008 needs #790)
-    "cli.repo.immutable-releases": "1.7.0.dev58",  # #665
-    "cli.secrets.dependabot-codespaces": "1.8.0.dev5",  # #890, main after v1.7.1
-    "cli.code-security.configuration": "1.8.0.dev7",  # #892, main after v1.7.1
-    "cli.ruleset.copilot-code-scanning": "1.8.0.dev27",  # #900 not merged: version of its head, until the merge
+UNRELEASED_FIXES = {  # scenario -> first otterdog release with the change it asserts (the next minor while unreleased)
+    "regression.code-scanning-new-repo": "1.7.0",  # #767, 1.7.0.dev2
+    "regression.private-repo-template-defaults": "1.7.0",  # #791, 1.7.0.dev14
+    "regression.repo-ruleset-without-strict": "1.7.0",  # #790, 1.7.0.dev15
+    "regression.user-bypass-actors": "1.7.0",  # #779, 1.7.0.dev7
+    "enterprise.org-ruleset.missing-strict": "1.7.0",  # #790 behaviour (BAT-05: KB-008 needs #790)
+    "cli.repo.immutable-releases": "1.7.0",  # #665
+    "cli.secrets.dependabot-codespaces": "1.8.0",  # #890, main after v1.7.1
+    "cli.code-security.configuration": "1.8.0",  # #892, main after v1.7.1
+    "cli.ruleset.copilot-code-scanning": "1.8.0",  # #900 not merged: the release its head leads to, until the merge
 }
-LATEST_RELEASE = "1.7.1"  # release:latest; its fixed_in scenarios run there, the 1.8.0.dev ones skip
+LATEST_RELEASE = "1.7.1"  # release:latest; its fixed_in scenarios run there, the 1.8.0 ones skip
 
 
 def test_unreleased_regressions_skip_on_older_suts() -> None:
@@ -413,8 +413,8 @@ def test_unreleased_regressions_skip_on_older_suts() -> None:
         assert fixed_in_skip_reason(scenario, "1.6.1"), scenario_id
         released = not version.startswith("1.8.0")
         assert (fixed_in_skip_reason(scenario, LATEST_RELEASE) is None) is released, scenario_id
-        assert fixed_in_skip_reason(scenario, f"{version}+e2e.gd9dac78") is None, scenario_id
-        assert fixed_in_skip_reason(scenario, f"{version}+e2e.gd9dac78.dirty.1a2b3c4d") is None, scenario_id
+        assert fixed_in_skip_reason(scenario, f"{version}.dev3+e2e.gd9dac78") is None, scenario_id  # its dev builds
+        assert fixed_in_skip_reason(scenario, f"{version}.dev3+e2e.gd9dac78.dirty.1a2b3c4d") is None, scenario_id
         assert fixed_in_skip_reason(scenario, "1.8.0") is None, scenario_id
         assert fixed_in_skip_reason(scenario, None) is None, scenario_id  # unknown version: run it
     others = [s for s in live_scenarios() if s.id not in UNRELEASED_FIXES]
@@ -482,16 +482,18 @@ def test_every_step_renders_and_manifests(tmp_path: Path) -> None:
             assert teams <= {team["name"] for team in org["teams"]}, where
 
 
-PRIVATE_ADD_FIXED_IN = "1.7.0.dev14"  # #791 (b5f7bb1): first otterdog that creates private repos without Code Security
+PRIVATE_ADD_FIXED_IN = (
+    "1.7.0"  # #791 (b5f7bb1): first otterdog release that creates private repos without Code Security
+)
 
 
 @pytest.mark.skipif(JSONNET is None, reason="jsonnet binary not installed")
 def test_private_repositories_are_never_created_by_their_first_apply(tmp_path: Path) -> None:
-    """BAT-01: otterdog before 1.7.0.dev14 sends the code scanning default setup PATCH (state not-configured) after
+    """BAT-01: otterdog before 1.7.0 sends the code scanning default setup PATCH (state not-configured) after
     creating ANY repository, which GitHub refuses for a private repository without Code Security (Free, and Team or
     Enterprise without it): the apply fails. A live scenario that runs on release:latest therefore creates its
     repositories public and makes them private in a later step (cli.repo.visibility); only scenarios that skip such
-    SUTs (fixed_in >= 1.7.0.dev14, e.g. regression.private-repo-template-defaults) may create a private repository directly."""
+    SUTs (fixed_in >= 1.7.0, e.g. regression.private-repo-template-defaults) may create a private repository directly."""
     from otterdog_e2e.sut.version import predates
 
     target = make_target()

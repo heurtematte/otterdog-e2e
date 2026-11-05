@@ -176,7 +176,7 @@
     },
     "fixed_in": {
       "type": "string",
-      "description": "first otterdog version (PEP 440) the scenario asserts"
+      "description": "first otterdog release (X.Y.Z) the scenario asserts"
     },
     "references": {
       "type": "array",

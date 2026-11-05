@@ -12,11 +12,11 @@ description: |
   organization owner) is the bypass actor of a ruleset on the default branch of a public run repository, first in
   the default mode, then for pull requests only; the oracle sees a User actor and both steps converge, which shows
   the '@<login>' read-back.
-  Not released yet: f055d51 is otterdog 1.7.0.dev7 (v1.6.1 + 7 commits), so fixed_in skips the scenario on older SUTs
-  such as release:latest (ScenarioEngine.skip_reason).
+  Released in v1.7.0 (f055d51 is v1.6.1 + 7 commits): fixed_in skips the scenario on older SUTs
+  (ScenarioEngine.skip_reason).
 priority: P2
 min_plan: free
-fixed_in: "1.7.0.dev7"
+fixed_in: "1.7.0"
 tags: [rulesets, repo, regression]
 references:
   - pr: 779

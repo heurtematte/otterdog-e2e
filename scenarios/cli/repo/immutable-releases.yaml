@@ -11,7 +11,7 @@ description: |
   live organization: whether every plan offers immutable releases (otherwise the read answers 402/403 and the plan
   cannot converge).
 priority: P2
-fixed_in: 1.7.0.dev58
+fixed_in: 1.7.0
 tags: [repo]
 references:
   - pr: 665

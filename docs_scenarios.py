@@ -302,7 +302,7 @@ class Scenario:
 
     @property
     def since(self) -> str:
-        """The first otterdog version the scenario asserts (``fixed_in``), empty when it runs on every version."""
+        """The first otterdog release the scenario asserts (``fixed_in``), empty when it runs on every version."""
         return str(self.data.get("fixed_in") or "")
 
     def step_name(self, index: int) -> str:
@@ -1593,7 +1593,7 @@ def explorer_index(site: Site) -> str:
         "A scenario page shows:",
         "",
         (
-            "- **what it tests** and its **context**: tier and what it needs, otterdog versions (`fixed_in`), GitHub plan, "
+            "- **what it tests** and its **context**: tier and what it needs, otterdog releases (`fixed_in`), GitHub plan, "
             "capabilities, the otterdog pull requests behind the behaviour, known otterdog bugs and the features of the "
             f"[coverage matrix]({w.rel(COVERAGE_MATRIX)}) it covers, with links to their otterdog sources;"
         ),
@@ -1631,7 +1631,7 @@ def explorer_index(site: Site) -> str:
         "",
         (
             "The YAML scenarios by priority, GitHub plan (the plan of the simulated organization offline, the lowest "
-            "plan a live scenario runs on), scope (what they configure) and first otterdog version (`fixed_in`), per "
+            "plan a live scenario runs on), scope (what they configure) and first otterdog release (`fixed_in`), per "
             "tier: a count opens the table below filtered on it."
         ),
         "",

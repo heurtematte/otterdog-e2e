@@ -18,7 +18,7 @@ Append the entry at the end of the file:
     - otterdog/<path>.py:<line>-<line>          # otterdog source at the ref named in the section
     - "e2e: scenarios/offline/<file>.yaml (step <name> declares the bug)"
   upstream: null               # or the eclipse-csi/otterdog issue or PR URL
-  fixed_in: null               # PEP 440 version of the first otterdog with the fix (pr-N until released)
+  fixed_in: null               # first otterdog release X.Y.Z with the fix (the next minor until released)
   scenarios: []                # scenario ids linked AS A WHOLE only; never a scenario whose step declares the bug
 ```
 

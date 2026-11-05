@@ -134,13 +134,37 @@ def test_version_key_orders_like_pep440() -> None:
     assert version_key("1.4") == version_key("1.4.0")
 
 
-def test_predates_compares_public_versions() -> None:
-    """predates: PEP 440 order without local parts; None when a side is missing or not a version."""
+def test_predates_compares_releases() -> None:
+    """predates: release parts only (a dev, pre-release or local build counts as its release); None when a side is
+    missing or not a version."""
     from otterdog_e2e.sut.version import predates
 
-    assert predates("1.6.1", "1.7.0.dev15") is True
-    assert predates("1.7.0.dev15+e2e.g9bdeb75", "1.7.0.dev15") is False
-    assert predates("1.7.0.dev19+e2e.gd0d3b08.dirty", "1.7.0.dev15") is False
-    assert predates("1.7.0.dev14+e2e.gb5f7bb1", "1.7.0.dev15") is True
+    assert predates("1.6.1", "1.7.0") is True
+    assert predates("1.7.0.dev15+e2e.g9bdeb75", "1.7.0") is False
+    assert predates("1.7.0.dev1+e2e.gd0d3b08.dirty", "1.7.0") is False
+    assert predates("1.7.0rc1", "1.7.0") is False and predates("1.7.1", "1.7.0") is False
+    assert predates("1.7.1", "1.8.0") is True and predates("1.8.0.dev7+e2e.gd9dac78", "1.8.0") is False
+    assert predates("1.7", "1.7.0") is False
     assert predates(None, "1.7.0") is None and predates("1.6.1", None) is None
     assert predates("1.6.1", "pr-792") is None and predates("not-a-version", "1.6.1") is None
+
+
+@pytest.mark.parametrize(
+    ("text", "error"),
+    [
+        ("1.7.0", None),
+        ("10.0.12", None),
+        ("1.7.0.dev15", "'1.7.0.dev15' is not a release X.Y.Z, use 1.7.0: a dev build counts as its release"),
+        ("1.7.0+e2e.g9bdeb75", "'1.7.0+e2e.g9bdeb75' is not a release X.Y.Z, use 1.7.0"),
+        ("1.7.0rc1", "use 1.7.0"),
+        ("1.7", "'1.7' is not a release X.Y.Z (e.g. 1.7.0)"),
+        ("pr-792", "'pr-792' is not a release X.Y.Z (e.g. 1.7.0)"),
+    ],
+)
+def test_release_error_accepts_x_y_z_only(text: str, error: str | None) -> None:
+    from otterdog_e2e.sut.version import release_error
+
+    if error is None:
+        assert release_error(text) is None
+    else:
+        assert error in (release_error(text) or "")

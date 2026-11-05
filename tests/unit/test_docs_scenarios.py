@@ -215,8 +215,8 @@ def test_first_sentence_and_versions() -> None:
     module = explorer()
     assert module.first_sentence("One thing. Two.\n\nOther.") == "One thing."
     assert module.first_sentence("x" * 300, limit=10) == "xxxxxxx..."
-    assert module.is_newer("1.8.0.dev7", "v1.7.1")
-    assert not module.is_newer("1.7.0.dev58", "v1.7.1")
+    assert module.is_newer("1.8.0", "v1.7.1")
+    assert not module.is_newer("1.7.0", "v1.7.1")
     assert not module.is_newer("garbage", "v1.7.1")
 
 
@@ -393,18 +393,18 @@ def test_scope_comes_from_the_fragment_kinds() -> None:
 
 def test_scenario_table_filters_plan_scope_and_version() -> None:
     """The plan, scope and version columns are filterable; the version leaves the notes."""
-    data = {"id": "x", "fixed_in": "1.8.0.dev5", "min_plan": "team", "steps": [{"fragments": {"teams": []}}]}
+    data = {"id": "x", "fixed_in": "1.8.0", "min_plan": "team", "steps": [{"fragments": {"teams": []}}]}
     rows = explorer().scenario_table(writer("scenarios/index.md"), [scenario(data)])
     assert rows[0] == '<div class="e2e-filter" data-columns="Tier,Domain,Priority,Plan,Scope,Since,Tags"></div>'
     assert rows[2] == "| Scenario | Tier | Domain | Priority | Plan | Scope | Since | Tags | Steps | Notes |"
-    assert rows[4].endswith("| cli | repo | P1 | team | organization | 1.8.0.dev5 |  | 1 |  |")
+    assert rows[4].endswith("| cli | repo | P1 | team | organization | 1.8.0 |  | 1 |  |")
 
 
 def test_glance_counts_open_the_filtered_table() -> None:
     """One content tab per dimension, one column per tier and All: a count links the table filtered on it."""
     scenarios = [
         scenario({"id": "a", "priority": "P0"}, "offline"),
-        scenario({"id": "b", "fixed_in": "1.8.0.dev5"}),
+        scenario({"id": "b", "fixed_in": "1.8.0"}),
         scenario({"id": "c"}),
     ]
     text = "\n".join(explorer().glance(writer("scenarios/index.md"), scenarios, "all"))
@@ -418,7 +418,7 @@ def test_glance_counts_open_the_filtered_table() -> None:
     assert (
         "    | `free` | [1](?Tier=offline&Plan=free#all) | [2](?Tier=cli&Plan=free#all) | [3](?Plan=free#all) |" in text
     )
-    assert "    | `1.8.0.dev5` | - | [1](?Tier=cli&Since=1.8.0.dev5#all) | [1](?Since=1.8.0.dev5#all) |" in text
+    assert "    | `1.8.0` | - | [1](?Tier=cli&Since=1.8.0#all) | [1](?Since=1.8.0#all) |" in text
     assert "    | every version | 1 | 1 | 2 |" in text
 
 

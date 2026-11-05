@@ -531,15 +531,16 @@ def test_template_errors_are_found_at_load_time(tmp_path: Path, header: str, ste
 
 
 def test_fixed_in_and_timeout_keys(tmp_path: Path) -> None:
-    """fixed_in is a public PEP 440 version, timeout a positive int; both default to None; scenario keys are not
+    """fixed_in is a release X.Y.Z, timeout a positive int; both default to None; scenario keys are not
     variables (``variables.fixed_in`` would silently do nothing)."""
     plain = load_text(tmp_path)
     assert plain.fixed_in is None and plain.timeout is None
-    scenario = load_text(tmp_path, header="fixed_in: '1.7.0.dev15'\ntimeout: 960")
-    assert scenario.fixed_in == "1.7.0.dev15" and scenario.timeout == 960
+    scenario = load_text(tmp_path, header="fixed_in: '1.7.0'\ntimeout: 960")
+    assert scenario.fixed_in == "1.7.0" and scenario.timeout == 960
     assert load_text(tmp_path, header="fixed_in: 1.7.0", tier_dir="offline").fixed_in == "1.7.0"
-    assert_error(tmp_path, "fixed_in: 'pr-792' is not a PEP 440 version", header="fixed_in: pr-792")
-    assert_error(tmp_path, "local version part", header="fixed_in: 1.7.0.dev15+e2e.g9bdeb75")
+    assert_error(tmp_path, "fixed_in: 'pr-792' is not a release X.Y.Z \\(e.g. 1.7.0\\)", header="fixed_in: pr-792")
+    assert_error(tmp_path, "fixed_in: '1.7.0.dev15' is not a release X.Y.Z, use 1.7.0", header="fixed_in: 1.7.0.dev15")
+    assert_error(tmp_path, "is not a release X.Y.Z, use 1.7.0", header="fixed_in: 1.7.0+e2e.g9bdeb75")
     assert_error(tmp_path, "fixed_in: expected a non-empty string", header="fixed_in: 1.7")
     assert_error(tmp_path, "timeout: expected a positive number", header="timeout: 0")
     assert_error(tmp_path, "'fixed_in' is a scenario key", header="variables: {fixed_in: '1.7.0'}")

@@ -19,7 +19,7 @@ description: |
   baseline reset as cleanup; the janitor sweeps run-named configurations.
 priority: P1
 org_level: true
-fixed_in: 1.8.0.dev7
+fixed_in: 1.8.0
 tags: [code-security, repo]
 references:
   - pr: 892

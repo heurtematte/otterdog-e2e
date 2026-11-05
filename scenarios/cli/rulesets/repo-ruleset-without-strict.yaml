@@ -10,11 +10,11 @@ description: |
   "Error for key strict_required_status_checks_policy: 'strict'" (jsonbender), leaving nothing created.
   Validation only: nothing is applied. The org-ruleset variant crashes instead (KB-008, scenario
   enterprise.org-ruleset.missing-strict).
-  Not released yet: 9bdeb75 is otterdog 1.7.0.dev15 (v1.6.1 + 15 commits), so
-  fixed_in skips the scenario on older SUTs such as release:latest (ScenarioEngine.skip_reason).
+  Released in v1.7.0 (9bdeb75 is v1.6.1 + 15 commits): fixed_in skips the scenario on older SUTs
+  (ScenarioEngine.skip_reason).
 priority: P1
 min_plan: free
-fixed_in: "1.7.0.dev15"
+fixed_in: "1.7.0"
 tags: [rulesets, repo, regression]
 references:
   - pr: 790

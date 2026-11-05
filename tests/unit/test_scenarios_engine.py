@@ -409,16 +409,16 @@ def test_requires_and_min_plan_skip_without_side_effects(tmp_path: Path) -> None
 
 @pytest.mark.parametrize(
     ("sut_version", "skipped"),
-    [("1.6.1", True), ("1.7.0.dev15+e2e.g9bdeb75", False), ("1.7.0", False), (None, False)],
+    [("1.6.1", True), ("1.7.0.dev15+e2e.g9bdeb75", False), ("1.7.0.dev1", False), ("1.7.0", False), (None, False)],
 )
 def test_fixed_in_skips_older_suts(tmp_path: Path, sut_version: str | None, skipped: bool) -> None:
     """A scenario whose fixed_in the SUT predates is skipped before any CLI call (unknown versions run it)."""
     r = rig()
     r.cli.installed = type("Installed", (), {"sut": type("Sut", (), {"version": sut_version})()})()  # type: ignore[attr-defined]
-    fixed = scenario(tmp_path, "id: f\ntitle: f\nfixed_in: '1.7.0.dev15'\nsteps: [{fragments: {}, plan: null}]\n", "f")
+    fixed = scenario(tmp_path, "id: f\ntitle: f\nfixed_in: '1.7.0'\nsteps: [{fragments: {}, plan: null}]\n", "f")
     reason = r.engine.skip_reason(fixed)
     if skipped:
-        assert reason == "SUT 1.6.1 predates otterdog 1.7.0.dev15, the first version f asserts"
+        assert reason == "SUT 1.6.1 predates otterdog 1.7.0, the first release f asserts"
         assert r.engine.run(fixed).skipped == reason and r.cli.calls == [] and r.baseline.calls == []
     else:
         assert reason is None

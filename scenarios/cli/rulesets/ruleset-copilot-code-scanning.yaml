@@ -14,11 +14,11 @@ description: |
   plan after each apply must be empty (the rules are read back as written). The change step flips both Copilot
   flags and narrows the tools to another threshold; the last step sets both rules to null, which removes them from
   the ruleset. The pull request and status check rules are left out (KB-021). Not verified live yet: whether GitHub
-  accepts the Copilot rule on an organization without Copilot. fixed_in is provisional (1.8.0.dev27 is the version
-  of the PR head 15c685a): set it to the version of the merge commit once #900 is merged.
+  accepts the Copilot rule on an organization without Copilot. fixed_in is provisional (1.8.0, the release the
+  PR head 15c685a leads to): set it to the first release that contains #900 once it is merged.
 priority: P1
 min_plan: free
-fixed_in: "1.8.0.dev27"
+fixed_in: "1.8.0"
 tags: [rulesets, repo]
 references:
   - pr: 900

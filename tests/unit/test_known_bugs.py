@@ -29,7 +29,7 @@ VALID = """
 - id: KB-002
   title: stale PR status overwrite
   status: fixed
-  fixed_in: pr-792
+  fixed_in: 1.7.0
   upstream: https://github.com/eclipse-csi/otterdog/pull/792
   scenarios: [W-PR-STALE-SNAPSHOT]
 - id: KB-003
@@ -49,7 +49,7 @@ def test_load_valid_file(tmp_path: Path) -> None:
     bugs = load(write(tmp_path, VALID))
     assert list(bugs) == ["KB-001", "KB-002", "KB-003"]
     assert bugs["KB-001"].evidence == ["otterdog/operations/apply.py:121"] and bugs["KB-001"].status == "confirmed"
-    assert bugs["KB-002"].fixed_in == "pr-792" and bugs["KB-002"].upstream.endswith("/792")  # type: ignore[union-attr]
+    assert bugs["KB-002"].fixed_in == "1.7.0" and bugs["KB-002"].upstream.endswith("/792")  # type: ignore[union-attr]
     assert bugs["KB-003"] == KnownBug("KB-003", "unpaginated variable reads")
 
 
@@ -135,12 +135,20 @@ def test_step_level_references(tmp_path: Path) -> None:
 
 
 def test_fixed_bugs_affect_only_older_suts() -> None:
-    """Open bugs affect every SUT; a fixed bug only SUTs older than a PEP 440 fixed_in."""
+    """Open bugs affect every SUT; a fixed bug only SUTs older than its release fixed_in (dev builds count as it)."""
     assert KnownBug("KB-001", "t").affects(None) and not KnownBug("KB-001", "t").fixed
-    fixed = KnownBug("KB-008", "t", status="fixed", fixed_in="1.7.0.dev15")
+    fixed = KnownBug("KB-008", "t", status="fixed", fixed_in="1.7.0")
     assert fixed.fixed and fixed.affects("1.6.1") and not fixed.affects("1.7.0.dev15+e2e.g9bdeb75")
-    assert not fixed.affects(None)
-    assert not KnownBug("KB-018", "t", status="fixed", fixed_in="pr-792").affects("1.6.1")
+    assert not fixed.affects("1.7.1") and not fixed.affects(None)
+    assert not KnownBug("KB-018", "t", status="fixed").affects("1.6.1")  # fixed, release unknown
+
+
+@pytest.mark.parametrize("fixed_in", ["1.7.0.dev15", "pr-792", "1.7.0+e2e.g9bdeb75"])
+def test_fixed_in_is_a_release(tmp_path: Path, fixed_in: str) -> None:
+    """fixed_in is a release X.Y.Z: a dev, local or pr-N value is refused at load."""
+    text = f"- id: KB-001\n  title: t\n  status: fixed\n  fixed_in: {fixed_in}\n"
+    with pytest.raises(KnownBugError, match=r"\.fixed_in: .* is not a release X\.Y\.Z"):
+        load(write(tmp_path, text))
 
 
 # --- the project registry -----------------------------------------------------------------------------------------

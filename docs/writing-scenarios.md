@@ -124,7 +124,7 @@ make one TARGET=free SCENARIO=cli.example.repo-lifecycle
 | `variables` | mapping | `{}` | extra Jinja variables; `plan` overrides the plan rendered into the settings |
 | `libraries` | mapping | `{}` | jsonnet libraries inlined into every rendered configuration of the scenario: `<name>: <path>` or `<name>: {file, raw, vars}` ([Injecting jsonnet from files](#injecting-jsonnet-from-files)) |
 | `references` | list | `[]` | the otterdog PRs (`pr: <n>`) or named changes without PR (`change: <slug>`) behind the behaviour, each with an optional `note`, `expected_deltas` (`{step?, kind?, key?, note?}`), `base` and `template` ([References](#references)) |
-| `fixed_in` | PEP 440 version | `null` | first otterdog version with the fix or feature the scenario asserts (e.g. `"1.7.0.dev15"`): older SUTs skip it (live and offline tiers; differential runs record it on both sides) |
+| `fixed_in` | release `X.Y.Z` | `null` | first otterdog release with the fix or feature the scenario asserts (e.g. `"1.7.0"`, never a dev version): older SUTs skip it, a dev build counts as the release it leads to (live and offline tiers; differential runs record it on both sides) |
 | `timeout` | positive int | tier timeout | pytest timeout of the item in seconds; default: the tier timeout (cli/enterprise 600, offline 300), plus 600 for `org_level` live scenarios |
 | `steps` | list, required | | at least one step |
 | `cleanup` | `auto` \| `none` | `auto` | `none` keeps the objects (debugging only) |
@@ -687,7 +687,7 @@ plan warning on Free. Create it public and make it private in a later step: otte
 default SUT `release:latest` included, sends the code scanning default setup PATCH after creating any repository,
 which GitHub refuses for a private repository of an organization without Code Security, so a first apply that
 creates a private repository fails (#791). `tests/unit/test_yaml_cli.py` refuses such a step unless the scenario's
-`fixed_in` is at least 1.7.0.dev14.)
+`fixed_in` is at least 1.7.0.)
 
 - `variables: {plan: enterprise}` renders another plan into `settings.plan`: on a Free org the live plan is still
   `free`, and otterdog only prints `setting 'plan' is read-only`; this is how plan-gated validation is tested.
@@ -931,7 +931,7 @@ deltas in `differential.md` and their base and template ([testing-an-otterdog-pr
 `known_bug: KB-<nnn>` (or the bug's own `scenarios:` list in `scenarios/known_bugs.yaml`) turns the item into a
 non-strict xfail with the reason `<id>: <title>`: the scenario still runs, a failure is reported as XFAIL and a fixed
 bug shows up as XPASS. Once the entry has `status: fixed`, the xfail is dropped and the item guards against the
-regression. The exception is a SUT whose version predates a PEP 440 `fixed_in` of the bug: the xfail stays there.
+regression. The exception is a SUT whose release predates the `fixed_in` of the bug: the xfail stays there.
 See [known-issues.md](known-issues.md).
 
 A **step** can declare a known bug of its own, so that only its expectations are expected to fail while the other
@@ -967,11 +967,13 @@ and the remaining steps do not run).
 
 ## Fixes that are not released yet
 
-A regression scenario of a fix merged after the latest release declares `fixed_in` (the version of the fix commit,
-`v<last release> + n commits` -> `X.(Y+1).0.dev<n>`; `git rev-list --count v1.6.1..<sha>` in the harness mirror gives
-`n`). `release:latest` then skips it with "SUT 1.6.1 predates otterdog 1.7.0.dev15, ...", and `branch:main`, PR and
-local builds run it. Offline scenarios whose expectation depends on the exact history decide with git ancestry
-instead (`SUT_EXPECTATIONS` in `tests/offline/test_scenarios.py`).
+A regression scenario of a fix merged after the latest release declares `fixed_in`: the release main's dev builds
+lead to (`v<last release> + n commits` is `X.(Y+1).0.dev<n>`, so `fixed_in: X.(Y+1).0`), never a dev version. Only
+release parts are compared: `release:latest` (1.7.1) skips a `fixed_in: 1.8.0` scenario with "SUT 1.7.1 predates
+otterdog 1.8.0, ...", and `branch:main`, PR and local builds (`1.8.0.dev<n>`) run it. A dev build of the same cycle
+that predates the fix runs it too: offline scenarios whose expectation depends on the exact history decide with git
+ancestry instead (`SUT_EXPECTATIONS` in `tests/offline/test_scenarios.py`). Once the fix is released, `fixed_in`
+stays the first release that contains it.
 
 ## Loading rules
 
@@ -1001,7 +1003,7 @@ instead (`SUT_EXPECTATIONS` in `tests/offline/test_scenarios.py`).
 - `config` with `fragments` or `overlay`, `base_config` with `base_fragments`, either of them in a live scenario;
 - Jinja syntax errors, unknown variables, overriding a reserved variable (`import_path` and `project` included),
   `logins.<role>` of a role that is not `admin` and not listed in `identities`;
-- a `fixed_in` that is not a public PEP 440 version (`pr-792`, `1.7.0+local`), a `timeout` that is not a positive
+- a `fixed_in` that is not a release `X.Y.Z` (`pr-792`, `1.7.0.dev15`, `1.7.0+local`), a `timeout` that is not a positive
   integer, and a scenario key used as a variable name (`variables: {fixed_in: ...}` would silently do nothing).
 
 ## Editor support

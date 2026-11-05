@@ -199,15 +199,17 @@ def sut_version_of(cli: OtterdogCli) -> str | None:
 
 
 def fixed_in_skip_reason(scenario: Scenario, sut_version: str | None) -> str | None:
-    """Skip reason when the SUT predates the scenario's ``fixed_in`` (PEP 440, local part ignored).
+    """Skip reason when the SUT predates the scenario's release ``fixed_in`` (release parts only: a dev build counts
+    as the release it leads to).
 
     Regressions of fixes merged after the latest release would otherwise fail on every release:latest run; SUTs that
-    contain the fix (main, PR and local builds) run them. An unknown SUT version runs the scenario.
+    contain the fix (main, PR and local builds, X.Y.Z.devN of the release fixed_in) run them. An unknown SUT version
+    runs the scenario.
     """
     from otterdog_e2e.sut.version import predates
 
     if scenario.fixed_in and predates(sut_version, scenario.fixed_in):
-        return f"SUT {sut_version} predates otterdog {scenario.fixed_in}, the first version {scenario.id} asserts"
+        return f"SUT {sut_version} predates otterdog {scenario.fixed_in}, the first release {scenario.id} asserts"
     return None
 
 

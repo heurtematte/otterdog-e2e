@@ -14,11 +14,11 @@ description: |
     repositories (GitHub answers 422). Known-bad: v1.3.0.
   allow_forking false / has_wiki false: the template disables members_can_fork_private_repositories (validation
   error otherwise) and wikis on private repos need GitHub Team (warning on Free).
-  Not released yet: b5f7bb1 is otterdog 1.7.0.dev14 (v1.6.1 + 14 commits), so
-  fixed_in skips the scenario on older SUTs such as release:latest (ScenarioEngine.skip_reason).
+  Released in v1.7.0 (b5f7bb1 is v1.6.1 + 14 commits): fixed_in skips the scenario on older SUTs
+  (ScenarioEngine.skip_reason).
 priority: P1
 min_plan: free
-fixed_in: "1.7.0.dev14"
+fixed_in: "1.7.0"
 tags: [repo, rulesets, regression, private]
 references:
   - pr: 791

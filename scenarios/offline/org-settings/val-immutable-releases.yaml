@@ -12,7 +12,7 @@ description: >-
 priority: P2
 tags: [offline, org-settings, repo]
 observe: true
-fixed_in: 1.7.0.dev58
+fixed_in: 1.7.0
 variables: {plan: free}
 references:
   - pr: 665

@@ -59,7 +59,8 @@ The words of the harness and of this documentation. On the documentation site, t
 - **tag**: a label that selects scenarios and Python tests (`--tags`); the scenario explorer has a page per tag.
 - **known bug**: an otterdog bug of `scenarios/known_bugs.yaml` (`KB-<n>`), described in
   [known issues](known-issues.md); the tests it breaks are expected failures (xfail) until the version that fixes it.
-- **fixed_in**: the first otterdog version a scenario asserts; older SUTs skip it.
+- **fixed_in**: the first otterdog release (`X.Y.Z`, never a dev version) a scenario asserts; older SUTs skip it, a
+  dev build counts as the release it leads to.
 
 ## Differential testing
 
