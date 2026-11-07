@@ -23,6 +23,7 @@ browser = ["playwright (>=1.49,<2.0)"]
 
 [project.scripts]
 otterdog-acceptance = "otterdog_acceptance.cli:main"
+oda = "otterdog_acceptance.cli:main"  # short alias of otterdog-acceptance
 
 [project.entry-points.pytest11]
 otterdog_acceptance = "otterdog_acceptance.pytest_plugin"

@@ -47,7 +47,7 @@ request it compares base and head (differential observations) and reports expect
 Without any GitHub organization (offline tier only):
 
 ```bash
-make init        # poetry install --with dev -> .venv, and otterdog-acceptance on the PATH (~/.local/bin)
+make init        # poetry install --with dev -> .venv, and otterdog-acceptance (alias oda) on the PATH (~/.local/bin)
 make unit        # harness self-tests: no network, no docker, about 1 min
 make offline     # offline tier of the latest otterdog release (docker for the webapp part), about 6 min warm
 

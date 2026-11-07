@@ -26,8 +26,10 @@ VENV ?= .venv
 E2E := $(VENV)/bin/otterdog-acceptance
 PYTHON := $(VENV)/bin/python
 POETRY ?= poetry
-# `make init` links the command otterdog-acceptance of the venv here (a directory of the PATH), as otterdog's links otterdog
+# `make init` links the commands of the venv here (a directory of the PATH), as otterdog's links otterdog:
+# otterdog-acceptance and its short alias oda
 E2E_LINK ?= $(HOME)/.local/bin/otterdog-acceptance
+ODA_LINK ?= $(HOME)/.local/bin/oda
 # Python files outside the package: the staging of the documentation site (docs_site.py and its modules)
 HOOKS := docs_hooks.py docs_scenarios.py docs_site.py
 
@@ -72,16 +74,18 @@ help: ## Show this help
 	@echo "           TARGET=a,b|@all|@<list> runs several instances (run-based targets, pr, doctor, janitor);"
 	@echo "           PARALLEL=<n> runs up to n of them at once"
 
-init: ## Create .venv with the harness, its dev tools and Playwright's Firefox, link otterdog-acceptance into E2E_LINK
+init: ## Create .venv with the harness, its dev tools and Playwright's Firefox, link otterdog-acceptance and oda
 	$(POETRY) install --with dev --extras browser
 	$(PYTHON) -m playwright install firefox
-	@target="$(abspath $(VENV))/bin/otterdog-acceptance"; link="$(E2E_LINK)"; \
-	if [ -e "$$link" ] && [ ! -L "$$link" ]; then \
-		echo "$$link exists and is not a symlink: left alone (run $(VENV)/bin/otterdog-acceptance)"; \
-	elif [ "$$(readlink "$$link")" != "$$target" ]; then \
-		mkdir -p "$$(dirname "$$link")" && ln -sfn "$$target" "$$link" && echo "Updated symlink: $$link -> $$target"; \
-	fi; \
-	case ":$$PATH:" in *":$$(dirname "$$link"):"*) ;; *) echo "$$(dirname "$$link") is not on the PATH: add it to run otterdog-acceptance";; esac
+	@for pair in "otterdog-acceptance=$(E2E_LINK)" "oda=$(ODA_LINK)"; do \
+		name="$${pair%%=*}"; link="$${pair#*=}"; target="$(abspath $(VENV))/bin/$$name"; \
+		if [ -e "$$link" ] && [ ! -L "$$link" ]; then \
+			echo "$$link exists and is not a symlink: left alone (run $(VENV)/bin/$$name)"; \
+		elif [ "$$(readlink "$$link")" != "$$target" ]; then \
+			mkdir -p "$$(dirname "$$link")" && ln -sfn "$$target" "$$link" && echo "Updated symlink: $$link -> $$target"; \
+		fi; \
+		case ":$$PATH:" in *":$$(dirname "$$link"):"*) ;; *) echo "$$(dirname "$$link") is not on the PATH: add it to run $$name";; esac; \
+	done
 
 unit: ## Unit tier: harness self-tests (no network, no docker)
 	$(PYTHON) -m pytest -q -p no:cacheprovider tests/unit $(ARGS)

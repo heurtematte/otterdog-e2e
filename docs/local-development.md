@@ -3,7 +3,7 @@
 ## Setup
 
 ```bash
-make init          # poetry install --with dev: .venv with the harness, pytest, ruff, mypy; links otterdog-acceptance
+make init          # poetry install --with dev: .venv with the harness, pytest, ruff, mypy; links otterdog-acceptance, oda
 make check         # ruff check, ruff format --check, mypy, unit tier
 ```
 
@@ -11,6 +11,10 @@ make check         # ruff check, ruff format --check, mypy, unit tier
 `make init` also links it as `~/.local/bin/otterdog-acceptance` (`E2E_LINK=<path>` elsewhere), like otterdog's own
 `make init`, so `otterdog-acceptance` runs from any directory of a shell whose `PATH` holds `~/.local/bin` (it finds the
 project from its own location; a file that is not a symlink is left alone).
+
+`oda` is the short alias of `otterdog-acceptance`, the same command (`oda run --suite offline`, `oda assist check`),
+linked as `~/.local/bin/oda` (`ODA_LINK=<path>` elsewhere). The documentation, the Makefile and the workflows write
+`otterdog-acceptance`.
 
 ### `OTTERDOG_CONFIG_ROOT` pitfall
 
