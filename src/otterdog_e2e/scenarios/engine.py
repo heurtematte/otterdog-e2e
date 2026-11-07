@@ -14,6 +14,9 @@ through BaselineManager.guarded_apply (or reset() for org_level scenarios). When
 failed (BaselineManager.run_objects_left: an earlier scenario or test left objects behind), the scenario's cleanup
 runs first, so the run-wide needles of its plans never count another item's leftovers.
 
+``apply.api`` compares the requests of the apply (CliResult.api_usage, otterdog >= 1.7.0) with the endpoints the step
+expects sent and not sent; every apply notes the write requests it sent.
+
 Step options: the diff flags of a step's plan and apply (runner.DiffOptions: ``repo_filter``, update flags,
 ``only_secrets``, ``verbose``) reach ``plan``/``apply`` (offline: ``local-plan``); a live ``repo_filter`` must start
 with the run prefix unless org_level (SafetyError), the apply uses the plan's filter unless it has its own, and
@@ -48,6 +51,7 @@ from otterdog_e2e import waiting
 from otterdog_e2e.capabilities import plans_at_least
 from otterdog_e2e.naming import new_run_context
 from otterdog_e2e.otterdog import output as od_output
+from otterdog_e2e.otterdog.api_usage import API_USAGE_SINCE, api_problems
 from otterdog_e2e.otterdog.runner import DiffOptions
 from otterdog_e2e.redact import REDACTOR
 from otterdog_e2e.safety import SafetyError
@@ -896,7 +900,26 @@ class ScenarioEngine:
             return problems
         applied = result.apply()
         state.applied_ok = classify_apply(result, applied) == "ok"
-        return apply_problems(spec, result, applied, unknown_ok=state.unknown_ok)
+        problems = apply_problems(spec, result, applied, unknown_ok=state.unknown_ok)
+        if result.api_usage is not None:
+            state.outcome.notes.append(f"apply sent: {result.api_usage.summary()}")
+        return problems + self._api_problems(spec, result, state.outcome)
+
+    def _api_problems(self, spec: ApplySpec, result: CliResult, outcome: StepOutcome) -> list[str]:
+        """``apply.api`` against the requests the apply sent (checked whatever its outcome: a refused request was sent
+        too). A SUT older than API_USAGE_SINCE writes no statistics: the check is skipped with a note; a newer one
+        without a report fails it (the requests cannot be asserted)."""
+        from otterdog_e2e.sut.version import predates
+
+        if spec.api is None:
+            return []
+        if result.api_usage is None:
+            version = sut_version_of(self.cli)
+            if predates(version, API_USAGE_SINCE):
+                outcome.notes.append(f"apply.api not checked: SUT {version} predates otterdog {API_USAGE_SINCE} (#881)")
+                return []
+            return ["apply.api: otterdog wrote no request statistics (OTTERDOG_STATS_FILE), the requests are unknown"]
+        return api_problems(spec.api, result.api_usage)
 
     def _guard_plan(self, state: _LiveStep, options: DiffOptions) -> PlanResult:
         """The plan that guards an ``apply -d`` (DESTR-02): the step's plan when it ran with exactly the apply's diff

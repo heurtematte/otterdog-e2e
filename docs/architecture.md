@@ -223,7 +223,7 @@ The battery is organized by tier (one directory below `tests/` each) and by kind
 | shared jsonnet | `scenarios/fragments/`, `scenarios/lib/` | the scenarios and inject recipes | fragments and helper libraries inlined into the rendered configuration |
 | scenario references | `references` of a YAML scenario, `references=` of a `pytest.mark.scenario` marker (`src/otterdog_e2e/changes.py`) | `--change`, `pr` (default: N of a `pr:N@<sha>` SUT) | the otterdog PRs or named changes behind a behaviour: expected differential deltas, base, template; the referencing scenarios pass the tags filter |
 
-Three registries keep the battery honest:
+Four registries keep the battery honest:
 
 - **the coverage matrix** `scenarios/coverage.yaml`: every otterdog feature (CLI commands and flags, each property of
   the configuration model, validation rules, diff semantics, the webapp's events, commands, tasks and endpoints,
@@ -232,6 +232,11 @@ Three registries keep the battery honest:
   covering item exists, that the inventory is exhaustive (it parses the example template and pins every command,
   event, task and endpoint) and that [coverage-matrix.md](coverage-matrix.md), generated from the YAML, is current.
   Every run's `summary.md` reports the matrix shares and the features whose covering items ran;
+- **the HTTP request inventory** `scenarios/api_endpoints.yaml`: every write request otterdog sends to GitHub, named
+  as otterdog's request statistics name it, with its source and trigger. Live steps assert the requests of their
+  apply with `apply.api` (the runner sets `OTTERDOG_STATS_FILE`); `tests/unit/test_api_endpoints.py` refuses an
+  endpoint missing from the inventory and keeps [api-coverage.md](api-coverage.md) current, and every run's
+  `summary.md` lists the write endpoints its scenario commands sent;
 - **the known bugs** `scenarios/known_bugs.yaml` ([known-issues.md](known-issues.md)): an item linked to a bug is a
   non-strict xfail scoped to the exception that reports the bug (`KnownBugReproduced` for a YAML scenario,
   `AssertionError` for a Python test; setup and teardown errors are never covered), so a fix shows up as XPASS and a

@@ -1,10 +1,10 @@
 """How an installed otterdog CLI is executed: on the host or inside the SUT docker image (SPEC 10.7, 5.5).
 
 DockerRuntime confines untrusted SUTs: ``docker run --rm -i --read-only --tmpfs /tmp --user uid:gid -e HOME=/tmp``,
-the workspace bind-mounted at /ws, an 0600 env-file holding ONLY the E2E_OTTERDOG_* credentials, ``--network none``
-when offline, entrypoint /app/.venv/bin/otterdog; paths inside args are rewritten from the workdir to /ws. On top of
-the SPEC flags it drops every capability and forbids privilege escalation (the CLI needs neither). ``-i`` forwards
-stdin (the answer to a prompt; /dev/null when the command gets no input), without a TTY.
+the workspace bind-mounted at /ws, an 0600 env-file holding ONLY the E2E_OTTERDOG_* credentials (plus the non-secret
+OTTERDOG_CONFIG_ROOT and OTTERDOG_STATS_FILE paths), ``--network none`` when offline, entrypoint
+/app/.venv/bin/otterdog; paths inside args are rewritten from the workdir to /ws. On top of the SPEC flags it drops
+every capability and forbids privilege escalation (the CLI needs neither). ``-i`` forwards stdin (the answer to a prompt; /dev/null when the command gets no input), without a TTY.
 
 The images ship no bytecode and set PYTHONDONTWRITEBYTECODE, so on the read-only root every command compiled all the
 modules it imports (about 1.2 s of the 2 s of an offline validate). Offline commands of an image identified by its id

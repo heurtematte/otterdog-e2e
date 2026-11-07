@@ -27,6 +27,10 @@ steps:
         - "~ settings {"
         - "max_cache_size_gb"
         - "-> 5"
+    apply:
+      api:
+        sent:
+          - 'PUT /orgs/{org}/actions/cache/storage-limit'
     state:
       - kind: org_cache_storage_limit
         match: {max_cache_size_gb: 5}
@@ -39,6 +43,10 @@ steps:
       contains:
         - "~ settings {"
         - "5 -> 10"
+    apply:
+      api:
+        sent:
+          - 'PUT /orgs/{org}/actions/cache/storage-limit'
     state:
       - kind: org_cache_storage_limit
         match: {max_cache_size_gb: 10}

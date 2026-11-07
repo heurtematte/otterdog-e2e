@@ -74,6 +74,10 @@ steps:
       expect: changes
       contains:
         - '~ repository[name="{{ p }}-tp-repo"]'
+    apply:
+      api:
+        sent:
+          - 'DELETE /orgs/{org}/teams/{name}/repos/{owner}/{repo}'
     state:
       - {kind: team_repo_permission, slug: "{{ p }}-tp-a", repo: "{{ p }}-tp-repo", equals: push}
       - {kind: team_repo_permission, slug: "{{ p }}-tp-b", repo: "{{ p }}-tp-repo", absent: true}

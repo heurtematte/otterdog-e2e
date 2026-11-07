@@ -34,6 +34,10 @@ steps:
         - '+ add repository[name="{{ p }}-hooks"]'
         - '+ add repo_webhook[url="{{ hook_base }}repo-hook", repository={{ p }}-hooks]'
       counts: {add: 2, change: 0, delete: 0}
+    apply:
+      api:
+        sent:
+          - 'POST /repos/{owner}/{repo}/hooks'
     state:
       - kind: repo_webhook
         repo: "{{ p }}-hooks"
@@ -61,6 +65,10 @@ steps:
       contains:
         - '~ repo_webhook[url="{{ hook_base }}repo-hook", repository={{ p }}-hooks]'
       counts: {add: 0, delete: 0}
+    apply:
+      api:
+        sent:
+          - 'PATCH /repos/{owner}/{repo}/hooks/{id}'
     state:
       - kind: repo_webhook
         repo: "{{ p }}-hooks"
@@ -82,7 +90,11 @@ steps:
       contains:
         - '- remove repo_webhook[url="{{ hook_base }}repo-hook", repository={{ p }}-hooks]'
       counts: {add: 0, delete: 1}
-    apply: {delete: true}
+    apply:
+      delete: true
+      api:
+        sent:
+          - 'DELETE /repos/{owner}/{repo}/hooks/{id}'
     state:
       - kind: repo_webhook
         repo: "{{ p }}-hooks"

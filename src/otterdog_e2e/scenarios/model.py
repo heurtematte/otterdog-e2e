@@ -34,6 +34,10 @@ expected failures (engine.ScenarioOutcome.expected_failures) while the other ste
 ``workspace`` (otterdog.workspace.WorkspaceLayout) changes otterdog's own configuration for that step (otterdog.jsonnet,
 extra organizations, .otterdog-defaults.json, base_url, config_dir, no vendored template).
 
+``apply.api`` (api_usage.ApiSpec) asserts the HTTP requests of a live step's apply from otterdog's request statistics
+(``sent``: each endpoint got a request, ``not_sent``: none did), e.g. ``not_sent: [PATCH /repos/{owner}/{repo}]``
+when only team_permissions change (otterdog#924); every write endpoint named must be in scenarios/api_endpoints.yaml.
+
 ``references`` (changes.parse_references) name the changes behind the behaviour a scenario pins: otterdog pull
 requests (``pr: <n>``) or named changes without one (``change: <slug>``), each with an optional note, the deltas it is
 expected to cause in this scenario between base and head (``expected_deltas``; a ``step`` pattern must match a step of
@@ -88,6 +92,7 @@ from otterdog_e2e.inject import (
 )
 from otterdog_e2e.known_bugs import KNOWN_BUG_ID_RE
 from otterdog_e2e.naming import new_run_context
+from otterdog_e2e.otterdog.api_usage import ENDPOINT_RE, ApiSpec, endpoint_problem
 from otterdog_e2e.otterdog.render import FRAGMENT_KEYS, ConfigFragments, library_name_problem
 from otterdog_e2e.otterdog.workspace import (
     CONFIG_DIR,
@@ -119,7 +124,7 @@ E2E_SECRET_REFERENCE_RE = re.compile(r"^(?!(?:pass|bitwarden|vault):)[a-z][a-z0-
 # offline only: a reference with several ':' (KB-025, 'pass:a:b' crashes validation with a ValueError)
 OFFLINE_SECRET_RE = re.compile(r"^pass:[A-Za-z0-9._/-]+(?::[A-Za-z0-9._/-]+)+$")
 DUMMY_HINT = "'********', 'e2e-dummy-<8 chars [0-9a-z]>' or a 'pass:<path>' reference"
-IGNORED_FILES = ("known_bugs.yaml", "shards.yaml")
+IGNORED_FILES = ("known_bugs.yaml", "shards.yaml", "api_endpoints.yaml")
 SCENARIO_SUFFIXES = (".yaml", ".yml")
 
 # extra offline commands a step may run (observed by differential runs); each takes the vendored template (--local);
@@ -201,7 +206,9 @@ VALIDATE_KEYS = (
 DIFF_OPTION_KEYS = ("repo_filter", "update_secrets", "update_webhooks", "update_filter", "only_secrets", "verbose")
 DIFF_FLAG_KEYS = ("update_secrets", "update_webhooks", "only_secrets", "verbose")
 PLAN_KEYS = ("expect", "contains", "not_contains", "counts", "exit_code", *DIFF_OPTION_KEYS)
-APPLY_KEYS = ("expect", "delete", *DIFF_OPTION_KEYS, "contains", "not_contains")
+APPLY_KEYS = ("expect", "delete", *DIFF_OPTION_KEYS, "contains", "not_contains", "api")
+API_KEYS = ("sent", "not_sent")  # apply.api (api_usage.ApiSpec): endpoints of otterdog's request statistics
+ENDPOINT_PATTERN = ENDPOINT_RE.pattern
 COMMAND_KEYS = ("exit_code", "contains", "not_contains")
 COUNT_KEYS = ("add", "change", "delete")
 # offline step ``workspace`` (otterdog.workspace.WorkspaceLayout); its defaults override may only set these keys (no
@@ -278,7 +285,8 @@ class PlanSpec:
 
 @dataclass
 class ApplySpec:
-    """Expected ``apply`` outcome and its flags (``repo_filter`` None = the plan's filter)."""
+    """Expected ``apply`` outcome and its flags (``repo_filter`` None = the plan's filter); ``api``: the requests it
+    must (``sent``) and must not (``not_sent``) send, from otterdog's request statistics (api_usage.py)."""
 
     expect: str = "ok"
     delete: bool = False
@@ -290,6 +298,7 @@ class ApplySpec:
     only_secrets: bool = False
     repo_filter: str | None = None
     verbose: bool = False
+    api: ApiSpec | None = None
 
 
 @dataclass
@@ -1000,7 +1009,35 @@ def _parse_apply(value: Any, where: str, base: ApplySpec | None = None) -> Apply
         spec.contains = _str_list(data["contains"], f"{where}.contains")
     if "not_contains" in data:
         spec.not_contains = _str_list(data["not_contains"], f"{where}.not_contains")
+    if "api" in data:
+        spec.api = _parse_api(data["api"], f"{where}.api")
     _parse_diff_options(data, spec, where)
+    return spec
+
+
+def _parse_api(value: Any, where: str) -> ApiSpec | None:
+    """ApiSpec of ``apply.api`` (null -> None: not checked): endpoints as otterdog's statistics name them
+    (``PATCH /repos/{owner}/{repo}``, ``mutation createBranchProtectionRule``), never one in both lists."""
+    if value is None:
+        return None
+    data = _mapping(value, where)
+    _check_keys(data, API_KEYS, where)
+    spec = ApiSpec()
+    for key in API_KEYS:
+        if key in data:
+            endpoints = _str_list(data[key], f"{where}.{key}")
+            for endpoint in endpoints:
+                problem = endpoint_problem(endpoint)
+                if problem:
+                    raise ScenarioError(f"{where}.{key}: {problem}")
+            if len(set(endpoints)) != len(endpoints):
+                raise ScenarioError(f"{where}.{key}: duplicate endpoints")
+            setattr(spec, key, endpoints)
+    both = sorted(set(spec.sent) & set(spec.not_sent))
+    if both:
+        raise ScenarioError(f"{where}: {both} both sent and not_sent")
+    if not spec.sent and not spec.not_sent:
+        raise ScenarioError(f"{where}: give sent and/or not_sent endpoints (or null)")
     return spec
 
 
@@ -1864,7 +1901,14 @@ def json_schema() -> dict[str, Any]:
         "properties": {key: (plan_properties | diff_options | texts)[key] for key in PLAN_KEYS},
         "additionalProperties": False,
     }
-    apply_properties = {"expect": {"enum": list(APPLY_EXPECTS)}, "delete": {"type": "boolean"}}
+    endpoints = {"type": "array", "items": {"type": "string", "pattern": ENDPOINT_PATTERN}}
+    api = {
+        "type": ["object", "null"],
+        "description": "requests of the apply (otterdog >= 1.7.0 statistics): endpoints sent at least once / never",
+        "properties": {"sent": endpoints, "not_sent": endpoints},
+        "additionalProperties": False,
+    }
+    apply_properties = {"expect": {"enum": list(APPLY_EXPECTS)}, "delete": {"type": "boolean"}, "api": api}
     apply = {
         "type": ["object", "null"],
         "properties": {key: (apply_properties | diff_options | texts)[key] for key in APPLY_KEYS},

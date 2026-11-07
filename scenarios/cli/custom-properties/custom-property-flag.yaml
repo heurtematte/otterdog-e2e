@@ -64,6 +64,10 @@ steps:
         - '~ repository[name="{{ p }}-flag-repo"]'
         - '"true" -> "false"'
       counts: {add: 0, delete: 0}
+    apply:
+      api:
+        sent:
+          - 'PATCH /repos/{owner}/{repo}/properties/values'
     state:
       - kind: repo_custom_properties
         repo: "{{ p }}-flag-repo"
@@ -91,7 +95,11 @@ steps:
       not_contains:
         - '- remove custom_property[name="{{ p }}-flag"]'
       counts: {add: 0, delete: 1}
-    apply: {delete: true}
+    apply:
+      delete: true
+      api:
+        sent:
+          - 'DELETE /orgs/{org}/properties/schema/{name}'
     state:
       - kind: custom_property
         name: "{{ p }}-note"

@@ -46,6 +46,7 @@ nav = [
     { "Security" = "security.md" },
     { "Capability matrix" = "capability-matrix.md" },
     { "Coverage matrix" = "coverage-matrix.md" },
+    { "HTTP request coverage" = "api-coverage.md" },
     { "Scenario catalog" = "scenario-catalog.md" },
     { "Known otterdog issues" = "known-issues.md" },
     { "Glossary" = "glossary.md" },

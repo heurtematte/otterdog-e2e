@@ -33,6 +33,10 @@ steps:
       contains:
         - '+ add repository[name="{{ p }}-pages"]'
       counts: {add: 1, change: 0, delete: 0}
+    apply:
+      api:
+        sent:
+          - 'POST /repos/{owner}/{repo}/pages'
     state:
       - kind: pages
         repo: "{{ p }}-pages"
@@ -54,6 +58,9 @@ steps:
         - '~ repository[name="{{ p }}-pages"]'
       counts: {add: 0, change: 1, delete: 0}
     apply:
+      api:
+        sent:
+          - 'PUT /repos/{owner}/{repo}/pages'
       expect: ok
       not_contains:
         - "failed to update github pages config"
@@ -108,7 +115,12 @@ steps:
         - '~ repository[name="{{ p }}-pages"]'
         - '- remove environment[name="github-pages", repository={{ p }}-pages]'
       counts: {add: 0, delete: 1}
-    apply: {delete: true}
+    apply:
+      delete: true
+      api:
+        sent:
+          - 'DELETE /repos/{owner}/{repo}/pages'
+          - 'DELETE /repos/{owner}/{repo}/environments/{name}'
     state:
       - {kind: pages, repo: "{{ p }}-pages", absent: true}
       - {kind: environment, repo: "{{ p }}-pages", name: github-pages, absent: true}

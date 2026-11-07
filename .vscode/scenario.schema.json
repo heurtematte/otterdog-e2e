@@ -1940,6 +1940,30 @@
                 "items": {
                   "type": "string"
                 }
+              },
+              "api": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "description": "requests of the apply (otterdog >= 1.7.0 statistics): endpoints sent at least once / never",
+                "properties": {
+                  "sent": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^(?:(?P<method>GET|POST|PUT|PATCH|DELETE) (?P<path>/[A-Za-z0-9_.{}/-]*)|(?P<operation>query|mutation) (?P<name>[A-Za-z][A-Za-z0-9_-]*))$"
+                    }
+                  },
+                  "not_sent": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^(?:(?P<method>GET|POST|PUT|PATCH|DELETE) (?P<path>/[A-Za-z0-9_.{}/-]*)|(?P<operation>query|mutation) (?P<name>[A-Za-z][A-Za-z0-9_-]*))$"
+                    }
+                  }
+                },
+                "additionalProperties": false
               }
             },
             "additionalProperties": false
@@ -2235,6 +2259,30 @@
                     "items": {
                       "type": "string"
                     }
+                  },
+                  "api": {
+                    "type": [
+                      "object",
+                      "null"
+                    ],
+                    "description": "requests of the apply (otterdog >= 1.7.0 statistics): endpoints sent at least once / never",
+                    "properties": {
+                      "sent": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "pattern": "^(?:(?P<method>GET|POST|PUT|PATCH|DELETE) (?P<path>/[A-Za-z0-9_.{}/-]*)|(?P<operation>query|mutation) (?P<name>[A-Za-z][A-Za-z0-9_-]*))$"
+                        }
+                      },
+                      "not_sent": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "pattern": "^(?:(?P<method>GET|POST|PUT|PATCH|DELETE) (?P<path>/[A-Za-z0-9_.{}/-]*)|(?P<operation>query|mutation) (?P<name>[A-Za-z][A-Za-z0-9_-]*))$"
+                        }
+                      }
+                    },
+                    "additionalProperties": false
                   }
                 },
                 "additionalProperties": false

@@ -26,6 +26,7 @@ from otterdog_e2e.report import (
     manual_testing_block,
     rate_usage,
     scrub_artifacts,
+    summary_text,
     tier_of,
     write_summary,
 )
@@ -826,3 +827,29 @@ def test_the_project_matrix_loads() -> None:
     matrix = report.load_coverage(path)
     assert len(matrix.features) > 300 and {f.status for f in matrix.features} == set(report.COVERAGE_STATUSES)
     assert set(matrix.tiers) <= set(report.TIERS) and "web_ui" in matrix.tiers
+
+
+def test_summary_lists_the_write_requests_of_the_scenario_commands(live_run: Path, tmp_path: Path) -> None:
+    """The parsed api-usage.json copies of the SUT's commands give the write endpoints of the run (reset and base
+    commands excluded) and, next to the coverage matrix, the endpoints of the inventory no command sent."""
+    from otterdog_e2e.report import api_writes
+
+    def usage(relative: str, endpoints: dict[str, int]) -> None:
+        (live_run / relative / "api-usage.json").write_text(json.dumps({"endpoints": endpoints}))
+
+    usage("cli/0003-plan", {"GET /repos/{owner}/{repo}": 4})
+    usage("cli/0004-apply", {"PATCH /repos/{owner}/{repo}": 1, "PUT /orgs/{org}/x/{name}": 2})
+    usage("reset/cli/0001-apply", {"DELETE /repos/{owner}/{repo}": 1})
+    assert api_writes(live_run) == {"PATCH /repos/{owner}/{repo}": 1, "PUT /orgs/{org}/x/{name}": 1}
+    matrix = tmp_path / "project" / "scenarios" / "coverage.yaml"
+    matrix.parent.mkdir(parents=True)
+    matrix.write_text("features: []\n")
+    (matrix.parent / "api_endpoints.yaml").write_text(
+        "otterdog: {ref: " + "a" * 40 + "}\nendpoints:\n"
+        "  - {endpoint: 'PATCH /repos/{owner}/{repo}', source: s, trigger: t}\n"
+        "  - {endpoint: 'DELETE /repos/{owner}/{repo}', source: s, trigger: t}\n"
+    )
+    text = summary_text(RunData.load(live_run, coverage_file=matrix))
+    assert "## GitHub write requests" in text and "| `PATCH /repos/{owner}/{repo}` | 1 |" in text
+    assert "1 endpoint(s) of scenarios/api_endpoints.yaml sent by no command of this run." in text
+    assert "**Not in the inventory** (add them): `PUT /orgs/{org}/x/{name}`" in text

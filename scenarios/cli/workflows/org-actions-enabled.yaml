@@ -63,6 +63,11 @@ steps:
         - '+ "{{ p }}-act"'
       not_contains:
         - '+ "{{ p }}-act-off"'
+    apply:
+      api:
+        sent:
+          - 'PUT /orgs/{org}/actions/permissions'
+          - 'PUT /orgs/{org}/actions/permissions/repositories'
     state:
       - kind: org_actions
         match: {enabled_repositories: selected}
@@ -84,6 +89,10 @@ steps:
         - '"selected" -> "all"'
       not_contains:
         - "selected_repositories"
+    apply:
+      api:
+        sent:
+          - 'PUT /orgs/{org}/actions/permissions'
     state:
       # the policy match alone: the selection listing answers 409 (an empty list) for every policy but 'selected', so
       # an 'equals: []' could never fail (BAT-11); converge diffs a stale selection

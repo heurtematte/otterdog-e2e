@@ -78,6 +78,10 @@ steps:
         - '~ repository[name="{{ p }}-coerced"]'
       not_contains:
         - '+ add repository[name="{{ p }}-coerced"]'
+    apply:
+      api:
+        sent:
+          - 'PUT /repos/{owner}/{repo}/actions/permissions/workflow'
     state:
       - kind: repo
         name: "{{ p }}-coerced"

@@ -38,6 +38,7 @@ args = sys.argv[1:]
 command = args[0].lstrip("-") if args else ""
 link = Path(".cache/async_http")
 keys = ("HOME", "COLUMNS", "NO_COLOR", "TERM", "PYTHON_DOTENV_DISABLED", "E2E_CACHE_DIR", "E2E_LEAK")
+keys += ("OTTERDOG_STATS_FILE",)
 record = {{
     "argv": sys.argv,
     "cwd": os.getcwd(),
@@ -55,6 +56,8 @@ if (outputs / f"{{command}}.txt").exists():
     sys.stdout.write((outputs / f"{{command}}.txt").read_text())
 if (outputs / f"{{command}}.err").exists():
     sys.stderr.write((outputs / f"{{command}}.err").read_text())
+if os.environ.get("OTTERDOG_STATS_FILE") and (outputs / "api-usage.json").exists():  # otterdog >= 1.7.0
+    Path(os.environ["OTTERDOG_STATS_FILE"]).write_text((outputs / "api-usage.json").read_text())
 if command == "check-status" and (outputs / "check-status.json").exists():
     Path(args[args.index("-j") + 1]).write_text((outputs / "check-status.json").read_text())
 if (outputs / "plant.json").exists():  # what a malicious SUT leaves in its (mounted) cwd: links and FIFOs
@@ -460,6 +463,7 @@ def test_container_layout(env: Env) -> None:
         "E2E_OTTERDOG_USERNAME=unset",
         "E2E_OTTERDOG_PASSWORD=unset",
         "E2E_OTTERDOG_TOTP_SEED=unset",
+        "OTTERDOG_STATS_FILE=api-usage.json",  # not a secret: where otterdog writes its request statistics
     ]
     assert not seen["env_file"].exists()
     (call,) = env.calls()
@@ -719,3 +723,66 @@ def test_host_and_stand_in_runtimes_have_no_container(env: Env, monkeypatch: pyt
     monkeypatch.setattr(runner_module.procs, "run", fake_run)
     assert env.cli().validate().timed_out
     assert len(calls) == 1 and calls[0][0] == str(env.script)
+
+
+# --- the requests a live command sent (api_usage.py) -----------------------------------------------------------------
+API_REPORT = {
+    "command": "apply",
+    "outcome": "success",
+    "apis": {
+        "rest": {
+            "errors": {"403": 1},
+            "endpoints": {
+                "GET /repos/{owner}/{repo}": {"requests": 2, "quota_cost": 2},
+                "PUT /orgs/{org}/teams/{name}/repos/{owner}/{repo}": {"requests": 1, "quota_cost": 1},
+            },
+        },
+        "graphql": {"errors": {}, "endpoints": {}},
+    },
+}
+
+
+def test_live_commands_report_the_requests_they_sent(env: Env) -> None:
+    """Live commands get OTTERDOG_STATS_FILE relative to their cwd; the report is parsed and exported (parsed)."""
+    (env.outputs / "api-usage.json").write_text(json.dumps(API_REPORT))
+    result = env.cli().apply_with(runner_module.DiffOptions(repo_filter="e2e-x-*"))
+    (call,) = env.calls()
+    assert call["env"]["OTTERDOG_STATS_FILE"] == "api-usage.json"
+    assert result.api_usage is not None and result.api_usage.count("GET /repos/{owner}/{repo}") == 2
+    assert result.api_usage.summary() == "PUT /orgs/{org}/teams/{name}/repos/{owner}/{repo}"
+    exported = json.loads((env.artifacts / "cli" / result.cwd.name / "api-usage.json").read_text())
+    assert exported == {
+        "outcome": "success",
+        "endpoints": {
+            "GET /repos/{owner}/{repo}": 2,
+            "PUT /orgs/{org}/teams/{name}/repos/{owner}/{repo}": 1,
+        },
+        "errors": {"rest:403": 1},
+    }
+    assert "OTTERDOG_STATS_FILE" not in (env.artifacts / "cli" / result.cwd.name / "cmd.txt").read_text()
+
+
+def test_offline_commands_and_old_suts_have_no_report(env: Env) -> None:
+    """Offline commands never get the variable; a live command without a report (otterdog < 1.7.0) has none."""
+    (env.outputs / "api-usage.json").write_text(json.dumps(API_REPORT))
+    offline = env.cli(offline=True).validate(local=True)
+    assert "OTTERDOG_STATS_FILE" not in env.calls()[0]["env"] and offline.api_usage is None
+    (env.outputs / "api-usage.json").unlink()
+    live = env.cli().validate()
+    assert env.calls()[1]["env"]["OTTERDOG_STATS_FILE"] == "api-usage.json" and live.api_usage is None
+    assert not (env.artifacts / "cli" / live.cwd.name / "api-usage.json").exists()
+
+
+def test_an_invalid_report_is_noted_never_fatal(env: Env) -> None:
+    (env.outputs / "api-usage.json").write_text("{not json")
+    result = env.cli().validate()
+    assert result.api_usage is None and any(note.startswith("api usage: invalid report") for note in result.notes)
+
+
+def test_a_report_planted_as_a_link_is_never_followed(env: Env, tmp_path: Path) -> None:
+    """ISO-01: api-usage.json as a link to a host file is removed with the other planted links, never read."""
+    secret = tmp_path / "host-secret.json"
+    secret.write_text(json.dumps(API_REPORT))
+    plant(env, {"path": "api-usage.json", "link": str(secret)})
+    result = container_cli(env).validate()
+    assert result.api_usage is None

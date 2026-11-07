@@ -167,6 +167,17 @@ PUBLIC_NAMES: dict[str, list[str]] = {
     "otterdog_e2e.otterdog": [],
     "otterdog_e2e.otterdog.runtime": ["CliRuntime", "HostRuntime", "DockerRuntime", "runtime_for"],
     "otterdog_e2e.otterdog.runner": ["CliResult", "OtterdogCli", "DiffOptions", "WebOtterdogCli"],
+    # the requests of a live command (otterdog's OTTERDOG_STATS_FILE report), apply.api and the endpoint inventory
+    "otterdog_e2e.otterdog.api_usage": [
+        "ApiUsage",
+        "ApiSpec",
+        "ApiUsageError",
+        "parse_api_usage",
+        "api_problems",
+        "load_inventory",
+        "endpoint_problem",
+        "is_write",
+    ],
     "otterdog_e2e.otterdog.output": [
         "strip_ansi",
         "unbox",
@@ -333,6 +344,8 @@ PUBLIC_NAMES: dict[str, list[str]] = {
         "EXPECTED_INVENTORY",
         "REGENERATE",
     ],
+    # scenarios/api_endpoints.yaml against the apply.api of the live scenarios -> docs/api-coverage.md
+    "otterdog_e2e.api_coverage": ["ApiCoverageProject", "ApiAssertion", "collect_assertions", "REGENERATE"],
     "otterdog_e2e.known_bugs": ["KnownBug", "load"],
     "otterdog_e2e.inject": ["InjectError", "JsonnetFile", "SourceText", "FileContext", "load_source", "render_source"],
     "otterdog_e2e.appmanifest": [

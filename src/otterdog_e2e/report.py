@@ -19,6 +19,9 @@ build_summary reads a run directory ``<artifacts_root>/<run_id>/`` (every input 
   or whose ``# process:`` line is a network sandbox) never count as live CLI testing. A ``# web_ui: login gate
   admitted`` line marks a command that logged in to the GitHub web UI (web-UI tier).
 * ``run.json`` ``web_ui`` (web-UI tier: enabled, reason, session_logins, waited_seconds) when the session probed it.
+* ``cli/<seq>-<command>/api-usage.json`` (the requests a live command sent, otterdog >= 1.7.0): the "GitHub write
+  requests" section counts the write endpoints the scenario commands sent (reset and base commands excluded) and the
+  endpoints of scenarios/api_endpoints.yaml that none sent.
 
 Outside the run directory, the coverage matrix ``scenarios/coverage.yaml`` of the otterdog-e2e project (E2E_PROJECT_ROOT
 or the nearest project root, see default_coverage_file) gives the "Coverage matrix" section: covered, partial and gap
@@ -457,6 +460,29 @@ def cli_commands(artifacts_dir: Path) -> list[CliCommand]:
             command = next((token for token in argv if token in OTTERDOG_COMMANDS), command)
         offline = OFFLINE_DIR in parts or sandboxed(_split(process))
         found.append(CliCommand(command, "--local" in argv, role, argv, offline, web))
+    return found
+
+
+def api_writes(artifacts_dir: Path) -> Counter[str]:
+    """Write requests (REST methods other than GET, GraphQL mutations) of the scenario commands of a run: per endpoint,
+    the number of commands that sent it, from the parsed ``api-usage.json`` copies the runner exports next to each
+    live command (baseline reset and base commands excluded: they are not the scenarios' requests)."""
+    from otterdog_e2e.otterdog.api_usage import API_USAGE_FILE, is_write
+
+    found: Counter[str] = Counter()
+    for usage_file in sorted(artifacts_dir.rglob(API_USAGE_FILE)):
+        if usage_file.parent.parent.name != CLI_DIR or not _CLI_DIR_RE.match(usage_file.parent.name):
+            continue
+        parts = usage_file.relative_to(artifacts_dir).parts[:-3]
+        if "reset" in parts or "base" in parts:
+            continue
+        data = read_json(usage_file)
+        endpoints = data.get("endpoints") if isinstance(data, dict) else None
+        if not isinstance(endpoints, dict):
+            continue
+        for endpoint, count in endpoints.items():
+            if isinstance(endpoint, str) and is_write(endpoint) and isinstance(count, int) and count > 0:
+                found[endpoint] += 1
     return found
 
 
@@ -1136,6 +1162,44 @@ def section_budgets(data: RunData) -> str:
     return "\n".join(lines)
 
 
+def section_api_writes(data: RunData) -> str:
+    """The write requests the scenario commands sent (live runs of otterdog >= 1.7.0) and the endpoints of the
+    inventory (scenarios/api_endpoints.yaml, next to the coverage matrix) that no command of the run sent."""
+    sent = api_writes(data.directory) if data.directory.is_dir() else Counter()
+    if not sent:
+        return ""
+    lines = [
+        "## GitHub write requests",
+        "",
+        f"{len(sent)} write endpoint(s) sent by the scenario commands of this run (number of commands that sent each).",
+        "",
+        "| Endpoint | Commands |",
+        "|---|---:|",
+        *(f"| `{endpoint}` | {count} |" for endpoint, count in sorted(sent.items())),
+    ]
+    inventory = _api_inventory(data)
+    if inventory is not None:
+        missing = [e.endpoint for e in inventory.endpoints if e.scope == "cli" and e.endpoint not in sent]
+        unknown = sorted(endpoint for endpoint in sent if endpoint not in inventory.names())
+        lines += ["", f"{len(missing)} endpoint(s) of scenarios/api_endpoints.yaml sent by no command of this run."]
+        if unknown:
+            lines += ["", f"**Not in the inventory** (add them): {', '.join(f'`{e}`' for e in unknown)}"]
+    return "\n".join(lines)
+
+
+def _api_inventory(data: RunData) -> Any:
+    """The inventory of otterdog's write requests next to the coverage matrix (None when absent or invalid)."""
+    from otterdog_e2e.otterdog.api_usage import load_inventory
+
+    if data.coverage_file is None:
+        return None
+    path = data.coverage_file.parent / "api_endpoints.yaml"
+    try:
+        return load_inventory(path) if path.is_file() else None
+    except (OSError, ValueError):
+        return None
+
+
 def section_rate(data: RunData) -> str:
     """GitHub rate budget used per identity (from the rate samples of results.jsonl)."""
     stats = rate_usage(data.lines)
@@ -1340,6 +1404,7 @@ SECTIONS = (
     section_coverage,
     section_budgets,
     section_rate,
+    section_api_writes,
     section_differential,
     section_manual_testing,
     section_scrub,

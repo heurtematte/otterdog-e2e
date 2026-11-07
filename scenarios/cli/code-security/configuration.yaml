@@ -40,6 +40,10 @@ steps:
     plan:
       expect: changes
       contains: ['+ add org_code_security_configuration[name="{{ p }}-csc"]']
+    apply:
+      api:
+        sent:
+          - 'POST /orgs/{org}/code-security/configurations'
     state:
       - kind: code_security_configuration
         name: "{{ p }}-csc"
@@ -58,6 +62,11 @@ steps:
       expect: changes
       contains: ['+ add repository[name="{{ p }}-app"]', "code_security_configuration"]
       not_contains: ["dependabot_alerts_enabled"]
+    apply:
+      api:
+        sent:
+          - 'POST /orgs/{org}/repos'
+          - 'POST /orgs/{org}/code-security/configurations/{id}/attach'
     state:
       - kind: repo_code_security_configuration
         repo: "{{ p }}-app"
@@ -82,6 +91,10 @@ steps:
       contains:
         - '~ org_code_security_configuration[name="{{ p }}-csc"]'
         - '"disabled" -> "enabled"'
+    apply:
+      api:
+        sent:
+          - 'PATCH /orgs/{org}/code-security/configurations/{id}'
     state:
       - kind: code_security_configuration
         name: "{{ p }}-csc"
@@ -95,6 +108,10 @@ steps:
       expect: changes
       contains: ['- remove org_code_security_configuration[name="{{ p }}-csc"]']
       not_contains: ['~ repository[name="{{ p }}-app"]']
-    apply: {delete: true}
+    apply:
+      delete: true
+      api:
+        sent:
+          - 'DELETE /orgs/{org}/code-security/configurations/{id}'
     state:
       - {kind: code_security_configuration, name: "{{ p }}-csc", absent: true}

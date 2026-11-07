@@ -33,6 +33,10 @@ steps:
         - "~ settings {"
         - "security_managers"
         - '+ "{{ p }}-sec"'
+    apply:
+      api:
+        sent:
+          - 'PUT /orgs/{org}/organization-roles/teams/{name}/{id}'
     state:
       - kind: team
         slug: "{{ p }}-sec"
@@ -51,6 +55,10 @@ steps:
         - '- "{{ p }}-sec"'
       not_contains:
         - 'team[name="{{ p }}-sec"]'
+    apply:
+      api:
+        sent:
+          - 'DELETE /orgs/{org}/organization-roles/teams/{name}/{id}'
     state:
       - kind: team
         slug: "{{ p }}-sec"

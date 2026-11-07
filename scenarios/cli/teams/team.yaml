@@ -35,6 +35,12 @@ steps:
         - '+ add team[name="{{ p }}-team"]'
         - '+ add repository[name="{{ p }}-team-repo"]'
       counts: {add: 2, change: 0, delete: 0}
+    apply:
+      api:
+        sent:
+          - 'POST /orgs/{org}/teams'
+          - 'POST /orgs/{org}/repos'
+          - 'PUT /orgs/{org}/teams/{name}/repos/{owner}/{repo}'
     state:
       - kind: team
         slug: "{{ p }}-team"
@@ -70,6 +76,11 @@ steps:
         - '~ team[name="{{ p }}-team"]'
         - '~ repository[name="{{ p }}-team-repo"]'
       counts: {add: 0, delete: 0}
+    apply:
+      api:
+        sent:
+          - 'PATCH /orgs/{org}/teams/{name}'
+          - 'PUT /orgs/{org}/teams/{name}/repos/{owner}/{repo}'
     state:
       - kind: team
         slug: "{{ p }}-team"
@@ -89,7 +100,12 @@ steps:
         - '- remove team[name="{{ p }}-team"]'
         - '- remove repository[name="{{ p }}-team-repo"]'
       counts: {add: 0, delete: 2}
-    apply: {delete: true}
+    apply:
+      delete: true
+      api:
+        sent:
+          - 'DELETE /orgs/{org}/teams/{name}'
+          - 'DELETE /repos/{owner}/{repo}'
     state:
       - {kind: team, slug: "{{ p }}-team", absent: true}
       - {kind: repo, name: "{{ p }}-team-repo", absent: true}

@@ -32,6 +32,12 @@ steps:
       contains:
         - '+ add repository[name="{{ p }}-fork"]'
       counts: {add: 1, change: 0, delete: 0}
+    apply:
+      api:
+        sent:
+          - 'POST /repos/{owner}/{repo}/forks'
+        not_sent:
+          - 'POST /orgs/{org}/repos'
     state:
       - kind: repo
         name: "{{ p }}-fork"

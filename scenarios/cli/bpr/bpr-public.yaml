@@ -34,6 +34,11 @@ steps:
         - '+ add repository[name="{{ p }}-bpr"]'
         - '+ add branch_protection_rule[pattern="main", repository={{ p }}-bpr]'
       counts: {add: 2, change: 0, delete: 0}
+    apply:
+      api:
+        sent:
+          - 'POST /orgs/{org}/repos'
+          - 'mutation createBranchProtectionRule'
     state:
       - kind: bpr
         repo: "{{ p }}-bpr"
@@ -76,6 +81,10 @@ steps:
       contains:
         - '~ branch_protection_rule[pattern="main", repository={{ p }}-bpr]'
       counts: {add: 0, delete: 0}
+    apply:
+      api:
+        sent:
+          - 'mutation updateBranchProtectionRule'
     state:
       - kind: bpr
         repo: "{{ p }}-bpr"
@@ -98,6 +107,10 @@ steps:
       contains:
         - '- remove branch_protection_rule[pattern="main", repository={{ p }}-bpr]'
       counts: {add: 0, delete: 1}
-    apply: {delete: true}
+    apply:
+      delete: true
+      api:
+        sent:
+          - 'mutation deleteBranchProtectionRule'
     state:
       - {kind: bpr, repo: "{{ p }}-bpr", pattern: main, absent: true}

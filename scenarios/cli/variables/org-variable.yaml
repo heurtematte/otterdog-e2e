@@ -9,6 +9,9 @@ description: |
   repositories (GH-07: GET .../variables/{name}/repositories). The update step changes the value and widens the
   visibility to all repositories (otterdog 'public' == GitHub 'all'). Org-level object: the scenario is org_level, so
   its plans are not filtered with -r and its cleanup is a full baseline reset.
+  Every HTTP verb of the variable is asserted (apply.api): POST on creation, PUT .../repositories when the selection
+  grows while the visibility stays 'selected' (org_client.py update_variable sends it only then), PATCH on the value
+  change, and DELETE in the remove step, applied by the SUT with -d (the cleanup reset runs another CLI).
 priority: P1
 min_plan: free
 org_level: true
@@ -37,15 +40,24 @@ steps:
             visibility: "selected",
             selected_repositories: ["{{ p }}-orgvar"],
           }
-      repositories:
+      repositories: &repos
         - |
           orgs.newRepo('{{ p }}-orgvar') {
             description: "otterdog e2e: org variable consumer",
+          }
+        - |
+          orgs.newRepo('{{ p }}-orgvar2') {
+            description: "otterdog e2e: second org variable consumer",
           }
     plan:
       expect: changes
       contains:
         - '+ add org_variable[name="{{ P }}_ORG_VARIABLE"]'
+        - '+ add repository[name="{{ p }}-orgvar2"]'
+    apply:
+      api:
+        sent:
+          - 'POST /orgs/{org}/actions/variables'
     state:
       - kind: org_variable
         name: "{{ P }}_ORG_VARIABLE"
@@ -53,6 +65,30 @@ steps:
       - kind: org_variable_repos
         name: "{{ P }}_ORG_VARIABLE"
         equals: ["{{ p }}-orgvar"]
+
+  - name: selected-two
+    fragments:
+      variables:
+        - |
+          orgs.newOrgVariable('{{ P }}_ORG_VARIABLE') {
+            value: "org value one",
+            visibility: "selected",
+            selected_repositories: ["{{ p }}-orgvar", "{{ p }}-orgvar2"],
+          }
+      repositories: *repos
+    plan:
+      expect: changes
+      contains:
+        - '~ org_variable[name="{{ P }}_ORG_VARIABLE"]'
+        - '+ "{{ p }}-orgvar2"'
+    apply:
+      api:
+        sent:
+          - 'PUT /orgs/{org}/actions/variables/{name}/repositories'
+    state:
+      - kind: org_variable_repos
+        name: "{{ P }}_ORG_VARIABLE"
+        match: {$unordered: ["{{ p }}-orgvar", "{{ p }}-orgvar2"]}
 
   - name: update
     fragments:
@@ -62,16 +98,32 @@ steps:
             value: "org value two",
             visibility: "public",
           }
-      repositories:
-        - |
-          orgs.newRepo('{{ p }}-orgvar') {
-            description: "otterdog e2e: org variable consumer",
-          }
+      repositories: *repos
     plan:
       expect: changes
       contains:
         - '~ org_variable[name="{{ P }}_ORG_VARIABLE"]'
+    apply:
+      api:
+        sent:
+          - 'PATCH /orgs/{org}/actions/variables/{name}'
     state:
       - kind: org_variable
         name: "{{ P }}_ORG_VARIABLE"
         match: {value: "org value two", visibility: all}
+
+  - name: remove
+    fragments:
+      repositories: *repos
+    plan:
+      expect: changes
+      contains:
+        - '- remove org_variable[name="{{ P }}_ORG_VARIABLE"]'
+      counts: {add: 0, change: 0, delete: 1}
+    apply:
+      delete: true
+      api:
+        sent:
+          - 'DELETE /orgs/{org}/actions/variables/{name}'
+    state:
+      - {kind: org_variable, name: "{{ P }}_ORG_VARIABLE", absent: true}

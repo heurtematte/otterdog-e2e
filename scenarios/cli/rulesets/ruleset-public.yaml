@@ -38,6 +38,10 @@ steps:
         - '+ add repository[name="{{ p }}-rules"]'
         - '+ add repo_ruleset[name="{{ p }}-main", repository={{ p }}-rules]'
       counts: {add: 2, change: 0, delete: 0}
+    apply:
+      api:
+        sent:
+          - 'POST /repos/{owner}/{repo}/rulesets'
     state:
       - kind: repo_ruleset
         repo: "{{ p }}-rules"
@@ -84,6 +88,10 @@ steps:
       contains:
         - '~ repo_ruleset[name="{{ p }}-main", repository={{ p }}-rules]'
       counts: {add: 0, delete: 0}
+    apply:
+      api:
+        sent:
+          - 'PUT /repos/{owner}/{repo}/rulesets/{id}'
     state:
       - kind: repo_ruleset
         repo: "{{ p }}-rules"
@@ -113,6 +121,10 @@ steps:
       contains:
         - '- remove repo_ruleset[name="{{ p }}-main", repository={{ p }}-rules]'
       counts: {add: 0, delete: 1}
-    apply: {delete: true}
+    apply:
+      delete: true
+      api:
+        sent:
+          - 'DELETE /repos/{owner}/{repo}/rulesets/{id}'
     state:
       - {kind: repo_ruleset, repo: "{{ p }}-rules", name: "{{ p }}-main", absent: true}

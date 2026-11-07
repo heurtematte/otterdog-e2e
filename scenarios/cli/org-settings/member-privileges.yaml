@@ -71,6 +71,11 @@ steps:
         - "members_can_fork_private_repositories"
         - '+ add repository[name="{{ p }}-fork"]'
         - '- remove repository[name="{{ p }}-fork"]'
+    apply:
+      api:
+        sent:
+          - 'PATCH /orgs/{org}'
+          - 'PATCH /repos/{owner}/{repo}'
     state:
       - kind: org
         match:
@@ -108,6 +113,10 @@ steps:
         - '"none" -> "read"'
         - '~ repository[name="{{ p }}-fork"]'
         - "allow_forking"
+    apply:
+      api:
+        sent:
+          - 'PATCH /orgs/{org}'
     state:
       - kind: org
         match:

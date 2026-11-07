@@ -26,6 +26,10 @@ steps:
     plan:
       expect: changes
       contains: ['+ add repository[name="{{ p }}-immutable"]', "immutable_releases_enabled"]
+    apply:
+      api:
+        sent:
+          - 'PUT /repos/{owner}/{repo}/immutable-releases'
     state:
       - kind: repo_immutable_releases
         repo: "{{ p }}-immutable"
@@ -39,6 +43,10 @@ steps:
       expect: changes
       counts: {add: 0, change: 1, delete: 0}
       contains: ['~ immutable_releases_enabled = true -> false']
+    apply:
+      api:
+        sent:
+          - 'DELETE /repos/{owner}/{repo}/immutable-releases'
     state:
       - kind: repo_immutable_releases
         repo: "{{ p }}-immutable"

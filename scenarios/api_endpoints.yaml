@@ -1,0 +1,467 @@
+# Inventory of the HTTP write requests otterdog sends to GitHub (REST methods other than GET, GraphQL mutations).
+#
+# Each endpoint is written as otterdog's request statistics name it (otterdog >= 1.7.0, #881,
+# otterdog/providers/github/stats/__init__.py rest_endpoint): the method and the path with every name or id replaced
+# by a placeholder ({org}, {owner}/{repo}, {name}, {id}), or 'mutation <name>' for GraphQL. These are the strings a
+# live scenario step names in `apply.api.sent` / `apply.api.not_sent` (src/otterdog_e2e/otterdog/api_usage.py); every
+# write endpoint a scenario names must be listed here (tests/unit/test_api_endpoints.py), and docs/api-coverage.md,
+# generated from this file and the scenarios, shows which endpoints a step asserts and which none does yet:
+#   .venv/bin/python tests/unit/test_api_endpoints.py --write
+#
+# Fields:
+#   endpoint  METHOD /path (placeholders as above) or 'mutation <name>'
+#   source    otterdog file:line of the request at otterdog.ref
+#   trigger   the configuration change (or command) that makes otterdog send it
+#   feature   the coverage feature of scenarios/coverage.yaml it belongs to
+#   scope     cli (plan/apply/import) or webapp (only the webapp sends it; the cli tier cannot assert it)
+#   notes     caveats (object states, conditions, known bugs)
+#
+# Paths were normalized with otterdog's own rest_endpoint at otterdog.ref. The REST clients are
+# otterdog/providers/github/rest/*.py, the GraphQL mutations otterdog/providers/github/graphql.py. Settings that
+# otterdog changes through the web UI (otterdog/providers/github/web.py) are page loads, not endpoints: the web-UI
+# tier covers them (tests/web_ui).
+schema_version: 1
+otterdog:
+  repository: eclipse-csi/otterdog
+  ref: a1964948184689a022d21f482a2c555682340863  # main after #923 and #924
+
+endpoints:
+  # --- organization settings ----------------------------------------------------------------------------------------
+  - endpoint: PATCH /orgs/{org}
+    source: otterdog/providers/github/rest/org_client.py:92
+    trigger: an organization setting changes (update_settings)
+    feature: org-settings.profile
+  - endpoint: PUT /orgs/{org}/settings/immutable-releases
+    source: otterdog/providers/github/rest/org_client.py:162
+    trigger: settings.immutable_releases_enforced_repositories changes
+    feature: org-settings.immutable-releases
+  - endpoint: PUT /orgs/{org}/settings/immutable-releases/repositories
+    source: otterdog/providers/github/rest/org_client.py:188
+    trigger: settings.immutable_releases_selected_repositories changes (enforced_repositories 'selected')
+    feature: org-settings.immutable-releases
+  - endpoint: PUT /orgs/{org}/organization-roles/teams/{name}/{id}
+    source: otterdog/providers/github/rest/org_client.py:240
+    trigger: a team is added to settings.security_managers (security manager role)
+    feature: org-settings.security-managers
+  - endpoint: DELETE /orgs/{org}/organization-roles/teams/{name}/{id}
+    source: otterdog/providers/github/rest/org_client.py:262
+    trigger: a team is removed from settings.security_managers
+    feature: org-settings.security-managers
+
+  # --- organization Actions settings --------------------------------------------------------------------------------
+  - endpoint: PUT /orgs/{org}/actions/permissions
+    source: otterdog/providers/github/rest/org_client.py:754
+    trigger: workflows.enabled_repositories or workflows.allowed_actions changes
+    feature: org-workflows.enabled-repositories
+  - endpoint: PUT /orgs/{org}/actions/permissions/repositories
+    source: otterdog/providers/github/rest/org_client.py:834
+    trigger: workflows.selected_repositories changes (enabled_repositories 'selected')
+    feature: org-workflows.enabled-repositories
+  - endpoint: PUT /orgs/{org}/actions/permissions/selected-actions
+    source: otterdog/providers/github/rest/org_client.py:856
+    trigger: workflows.github_owned_allowed, verified_allowed or patterns_allowed changes
+    feature: org-workflows.allowed-actions
+  - endpoint: PUT /orgs/{org}/actions/permissions/workflow
+    source: otterdog/providers/github/rest/org_client.py:876
+    trigger: workflows.default_workflow_permissions or actions_can_approve_pull_request_reviews changes
+    feature: org-workflows.default-permissions
+  - endpoint: PUT /orgs/{org}/actions/permissions/fork-pr-contributor-approval
+    source: otterdog/providers/github/rest/org_client.py:898
+    trigger: workflows.approval_policy changes
+    feature: org-workflows.fork-pr-approval
+  - endpoint: PUT /orgs/{org}/actions/cache/storage-limit
+    source: otterdog/providers/github/rest/org_client.py:808
+    trigger: workflows.max_cache_size_gb changes
+    feature: org-workflows.cache-size
+    notes: the documented endpoint is /organizations/{org}/... (KB-006)
+
+  # --- custom organization roles ------------------------------------------------------------------------------------
+  - endpoint: POST /orgs/{org}/organization-roles
+    source: otterdog/providers/github/rest/org_client.py:306
+    trigger: a custom organization role is added (enterprise)
+    feature: org-roles.lifecycle
+  - endpoint: PATCH /orgs/{org}/organization-roles/{id}
+    source: otterdog/providers/github/rest/org_client.py:297
+    trigger: a custom organization role changes (enterprise)
+    feature: org-roles.lifecycle
+  - endpoint: DELETE /orgs/{org}/organization-roles/{id}
+    source: otterdog/providers/github/rest/org_client.py:314
+    trigger: a custom organization role is removed (apply -d, enterprise)
+    feature: org-roles.lifecycle
+
+  # --- code security configurations ---------------------------------------------------------------------------------
+  - endpoint: POST /orgs/{org}/code-security/configurations
+    source: otterdog/providers/github/rest/org_client.py:369
+    trigger: a code security configuration is added
+    feature: code-security.configuration.lifecycle
+  - endpoint: PATCH /orgs/{org}/code-security/configurations/{id}
+    source: otterdog/providers/github/rest/org_client.py:382
+    trigger: a setting of a code security configuration changes
+    feature: code-security.configuration.settings
+  - endpoint: PUT /orgs/{org}/code-security/configurations/{id}/defaults
+    source: otterdog/providers/github/rest/org_client.py:402
+    trigger: default_for_new_repos of a configuration changes; also settings.default_code_security_configurations_disabled (org_client.py:926)
+    feature: code-security.configuration.settings
+  - endpoint: DELETE /orgs/{org}/code-security/configurations/{id}
+    source: otterdog/providers/github/rest/org_client.py:415
+    trigger: a code security configuration is removed (apply -d)
+    feature: code-security.configuration.lifecycle
+  - endpoint: POST /orgs/{org}/code-security/configurations/{id}/attach
+    source: otterdog/providers/github/rest/org_client.py:509
+    trigger: a repository's code_security_configuration changes, or a repository is created with one
+    feature: code-security.repository-attachment
+
+  # --- custom properties --------------------------------------------------------------------------------------------
+  - endpoint: PUT /orgs/{org}/properties/schema/{name}
+    source: otterdog/providers/github/rest/org_client.py:529
+    trigger: a custom property definition is added or changes (add_custom_property, update_custom_property:538)
+    feature: custom-properties.definitions
+  - endpoint: DELETE /orgs/{org}/properties/schema/{name}
+    source: otterdog/providers/github/rest/org_client.py:546
+    trigger: a custom property definition is removed (apply -d)
+    feature: custom-properties.remove
+  - endpoint: PATCH /repos/{owner}/{repo}/properties/values
+    source: otterdog/providers/github/rest/repo_client.py:866
+    trigger: a repository's custom_properties change
+    feature: custom-properties.repository-values
+
+  # --- teams --------------------------------------------------------------------------------------------------------
+  - endpoint: POST /orgs/{org}/teams
+    source: otterdog/providers/github/rest/team_client.py:76
+    trigger: a team is added
+    feature: teams.lifecycle
+  - endpoint: PATCH /orgs/{org}/teams/{name}
+    source: otterdog/providers/github/rest/team_client.py:107
+    trigger: a team's description, privacy, notifications or parent changes
+    feature: teams.lifecycle
+  - endpoint: DELETE /orgs/{org}/teams/{name}
+    source: otterdog/providers/github/rest/team_client.py:180
+    trigger: a team is removed (apply -d)
+    feature: teams.lifecycle
+  - endpoint: PUT /orgs/{org}/teams/{name}/memberships/{name}
+    source: otterdog/providers/github/rest/team_client.py:156
+    trigger: a member is added to a team (or a maintainer's role changes)
+    feature: teams.members
+  - endpoint: DELETE /orgs/{org}/teams/{name}/memberships/{name}
+    source: otterdog/providers/github/rest/team_client.py:168
+    trigger: a member is removed from a team
+    feature: teams.members
+  - endpoint: PATCH /orgs/{org}/teams/{name}/team-sync/group-mappings
+    source: otterdog/providers/github/rest/team_client.py:232
+    trigger: a team's identity provider groups change (team sync, enterprise, #911)
+    feature: teams.lifecycle
+  - endpoint: PATCH /orgs/{org}/teams/{name}/external-groups
+    source: otterdog/providers/github/rest/team_client.py:328
+    trigger: a team's external group is set (enterprise managed users, #911)
+    feature: teams.lifecycle
+  - endpoint: DELETE /orgs/{org}/teams/{name}/external-groups
+    source: otterdog/providers/github/rest/team_client.py:340
+    trigger: a team's external group is removed (enterprise managed users, #911)
+    feature: teams.lifecycle
+  - endpoint: PUT /orgs/{org}/teams/{name}/repos/{owner}/{repo}
+    source: otterdog/providers/github/rest/repo_client.py:1026
+    trigger: a team is added to a repository's team_permissions or its permission changes
+    feature: teams.repository-permissions
+    notes: >-
+      #924: before it, a change of team_permissions alone also sent PATCH /repos/{owner}/{repo} with the field,
+      refused (403) on an archived repository before this request was sent.
+  - endpoint: DELETE /orgs/{org}/teams/{name}/repos/{owner}/{repo}
+    source: otterdog/providers/github/rest/repo_client.py:1044
+    trigger: a team is removed from a repository's team_permissions (KB-005 fixed in 1.7.0, #842)
+    feature: teams.repository-permissions
+
+  # --- organization webhooks ----------------------------------------------------------------------------------------
+  - endpoint: POST /orgs/{org}/hooks
+    source: otterdog/providers/github/rest/org_client.py:593
+    trigger: an organization webhook is added
+    feature: webhooks.org.lifecycle
+  - endpoint: PATCH /orgs/{org}/hooks/{id}
+    source: otterdog/providers/github/rest/org_client.py:580
+    trigger: an organization webhook changes, or --update-webhooks forces it
+    feature: webhooks.org.settings
+  - endpoint: DELETE /orgs/{org}/hooks/{id}
+    source: otterdog/providers/github/rest/org_client.py:601
+    trigger: an organization webhook is removed (apply -d)
+    feature: webhooks.org.lifecycle
+
+  # --- organization secrets and variables ---------------------------------------------------------------------------
+  - endpoint: PUT /orgs/{org}/actions/secrets/{name}
+    source: otterdog/providers/github/rest/secret_client.py:185
+    trigger: an organization secret is added or changes (visibility, selected repositories), or --update-secrets
+    feature: secrets-variables.org-secret.lifecycle
+  - endpoint: DELETE /orgs/{org}/actions/secrets/{name}
+    source: otterdog/providers/github/rest/secret_client.py:215
+    trigger: an organization secret is removed (apply -d)
+    feature: secrets-variables.org-secret.lifecycle
+  - endpoint: PUT /orgs/{org}/dependabot/secrets/{name}
+    source: otterdog/providers/github/rest/secret_client.py:185
+    trigger: an organization Dependabot secret is added or changes (#890)
+    feature: secrets-variables.org-dependabot-codespaces-secrets
+  - endpoint: DELETE /orgs/{org}/dependabot/secrets/{name}
+    source: otterdog/providers/github/rest/secret_client.py:215
+    trigger: an organization Dependabot secret is removed (apply -d)
+    feature: secrets-variables.org-dependabot-codespaces-secrets
+  - endpoint: PUT /orgs/{org}/codespaces/secrets/{name}
+    source: otterdog/providers/github/rest/secret_client.py:185
+    trigger: an organization Codespaces secret is added or changes (#890)
+    feature: secrets-variables.org-dependabot-codespaces-secrets
+  - endpoint: DELETE /orgs/{org}/codespaces/secrets/{name}
+    source: otterdog/providers/github/rest/secret_client.py:215
+    trigger: an organization Codespaces secret is removed (apply -d)
+    feature: secrets-variables.org-dependabot-codespaces-secrets
+  - endpoint: POST /orgs/{org}/actions/variables
+    source: otterdog/providers/github/rest/org_client.py:690
+    trigger: an organization variable is added
+    feature: secrets-variables.org-variable.lifecycle
+  - endpoint: PATCH /orgs/{org}/actions/variables/{name}
+    source: otterdog/providers/github/rest/org_client.py:676
+    trigger: an organization variable's value or visibility changes
+    feature: secrets-variables.org-variable.lifecycle
+  - endpoint: PUT /orgs/{org}/actions/variables/{name}/repositories
+    source: otterdog/providers/github/rest/org_client.py:653
+    trigger: the selected repositories of an organization variable change (visibility 'selected')
+    feature: secrets-variables.org-variable.selected-repositories
+  - endpoint: DELETE /orgs/{org}/actions/variables/{name}
+    source: otterdog/providers/github/rest/org_client.py:700
+    trigger: an organization variable is removed (apply -d)
+    feature: secrets-variables.org-variable.lifecycle
+
+  # --- organization rulesets ----------------------------------------------------------------------------------------
+  - endpoint: POST /orgs/{org}/rulesets
+    source: otterdog/providers/github/rest/org_client.py:1003
+    trigger: an organization ruleset is added
+    feature: rulesets.org.repository-conditions
+  - endpoint: PUT /orgs/{org}/rulesets/{id}
+    source: otterdog/providers/github/rest/org_client.py:993
+    trigger: an organization ruleset changes
+    feature: rulesets.org.repository-conditions
+  - endpoint: DELETE /orgs/{org}/rulesets/{id}
+    source: otterdog/providers/github/rest/org_client.py:1011
+    trigger: an organization ruleset is removed (apply -d)
+    feature: rulesets.org.repository-conditions
+
+  # --- repositories -------------------------------------------------------------------------------------------------
+  - endpoint: POST /orgs/{org}/repos
+    source: otterdog/providers/github/rest/repo_client.py:330
+    trigger: a repository is added (neither a fork nor from a template)
+    feature: repositories.lifecycle
+  - endpoint: POST /repos/{owner}/{repo}/generate
+    source: otterdog/providers/github/rest/repo_client.py:249
+    trigger: a repository is added with template_repository
+    feature: repositories.template-repositories
+  - endpoint: POST /repos/{owner}/{repo}/forks
+    source: otterdog/providers/github/rest/repo_client.py:218
+    trigger: a repository is added with forked_repository
+    feature: repositories.fork
+  - endpoint: PATCH /repos/{owner}/{repo}
+    source: otterdog/providers/github/rest/repo_client.py:165
+    trigger: >-
+      a repository setting changes (update_repo), archived included; also the settings of a new repository after its
+      creation, and default_branch when the branch exists (repo_client.py:739)
+    feature: repositories.lifecycle
+    notes: >-
+      Never sent when only sub-resources change (team_permissions since #924, code_security_configuration). GitHub
+      refuses it (403) on an archived repository: otterdog skips the fields of
+      Repository._unavailable_fields_in_archived_repos while archived.
+  - endpoint: DELETE /repos/{owner}/{repo}
+    source: otterdog/providers/github/rest/repo_client.py:527
+    trigger: a repository is removed (apply -d)
+    feature: repositories.lifecycle
+  - endpoint: POST /repos/{owner}/{repo}/branches/{name}/rename
+    source: otterdog/providers/github/rest/repo_client.py:99
+    trigger: default_branch names a branch that does not exist (the current default branch is renamed)
+    feature: repositories.default-branch
+  - endpoint: PUT /repos/{owner}/{repo}/topics
+    source: otterdog/providers/github/rest/repo_client.py:848
+    trigger: a repository's topics change
+    feature: repositories.lifecycle
+  - endpoint: POST /repos/{owner}/{repo}/pages
+    source: otterdog/providers/github/rest/repo_client.py:639
+    trigger: gh_pages_build_type is enabled on a repository without a pages site
+    feature: repositories.pages
+  - endpoint: PUT /repos/{owner}/{repo}/pages
+    source: otterdog/providers/github/rest/repo_client.py:644
+    trigger: a pages setting changes (source, build type; cname and https_enforced at repo_client.py:660-670)
+    feature: repositories.pages
+  - endpoint: DELETE /repos/{owner}/{repo}/pages
+    source: otterdog/providers/github/rest/repo_client.py:612
+    trigger: gh_pages_build_type becomes 'disabled'
+    feature: repositories.pages
+  - endpoint: PATCH /repos/{owner}/{repo}/code-scanning/default-setup
+    source: otterdog/providers/github/rest/repo_client.py:721
+    trigger: code_scanning_default_setup_enabled, _query_suite or _languages change
+    feature: repositories.code-scanning
+  - endpoint: PUT /repos/{owner}/{repo}/vulnerability-alerts
+    source: otterdog/providers/github/rest/repo_client.py:760
+    trigger: dependabot_alerts_enabled becomes true
+    feature: repositories.security
+  - endpoint: DELETE /repos/{owner}/{repo}/vulnerability-alerts
+    source: otterdog/providers/github/rest/repo_client.py:760
+    trigger: dependabot_alerts_enabled becomes false
+    feature: repositories.security
+  - endpoint: PUT /repos/{owner}/{repo}/private-vulnerability-reporting
+    source: otterdog/providers/github/rest/repo_client.py:823
+    trigger: private_vulnerability_reporting_enabled becomes true
+    feature: repositories.security
+  - endpoint: DELETE /repos/{owner}/{repo}/private-vulnerability-reporting
+    source: otterdog/providers/github/rest/repo_client.py:823
+    trigger: private_vulnerability_reporting_enabled becomes false
+    feature: repositories.security
+  - endpoint: PUT /repos/{owner}/{repo}/immutable-releases
+    source: otterdog/providers/github/rest/repo_client.py:800
+    trigger: immutable_releases_enabled becomes true
+    feature: repositories.immutable-releases
+  - endpoint: DELETE /repos/{owner}/{repo}/immutable-releases
+    source: otterdog/providers/github/rest/repo_client.py:800
+    trigger: immutable_releases_enabled becomes false
+    feature: repositories.immutable-releases
+
+  # --- repository Actions settings ----------------------------------------------------------------------------------
+  - endpoint: PUT /repos/{owner}/{repo}/actions/permissions
+    source: otterdog/providers/github/rest/repo_client.py:1215
+    trigger: workflows.enabled or workflows.allowed_actions of a repository changes
+    feature: repo-workflows.enabled
+  - endpoint: PUT /repos/{owner}/{repo}/actions/permissions/selected-actions
+    source: otterdog/providers/github/rest/repo_client.py:1297
+    trigger: workflows.github_owned_allowed, verified_allowed or patterns_allowed of a repository changes
+    feature: repo-workflows.allowed-actions
+  - endpoint: PUT /repos/{owner}/{repo}/actions/permissions/workflow
+    source: otterdog/providers/github/rest/repo_client.py:1319
+    trigger: workflows.default_workflow_permissions or actions_can_approve_pull_request_reviews of a repository changes
+    feature: repo-workflows.default-permissions
+  - endpoint: PUT /repos/{owner}/{repo}/actions/permissions/fork-pr-contributor-approval
+    source: otterdog/providers/github/rest/repo_client.py:1345
+    trigger: workflows.approval_policy of a repository changes
+    feature: repo-workflows.fork-pr-approval
+  - endpoint: PUT /repos/{owner}/{repo}/actions/cache/storage-limit
+    source: otterdog/providers/github/rest/repo_client.py:1271
+    trigger: workflows.max_cache_size_gb of a repository changes
+    feature: repo-workflows.cache-size
+    notes: also sent on repository creation and workflow changes although the GET reported it unavailable (KB-007)
+
+  # --- repository webhooks, secrets and variables --------------------------------------------------------------------
+  - endpoint: POST /repos/{owner}/{repo}/hooks
+    source: otterdog/providers/github/rest/repo_client.py:421
+    trigger: a repository webhook is added
+    feature: webhooks.repo.lifecycle
+  - endpoint: PATCH /repos/{owner}/{repo}/hooks/{id}
+    source: otterdog/providers/github/rest/repo_client.py:408
+    trigger: a repository webhook changes, or --update-webhooks forces it
+    feature: webhooks.repo.settings
+  - endpoint: DELETE /repos/{owner}/{repo}/hooks/{id}
+    source: otterdog/providers/github/rest/repo_client.py:429
+    trigger: a repository webhook is removed (apply -d)
+    feature: webhooks.repo.lifecycle
+  - endpoint: PUT /repos/{owner}/{repo}/actions/secrets/{name}
+    source: otterdog/providers/github/rest/secret_client.py:185
+    trigger: a repository secret is added, or --update-secrets forces it
+    feature: secrets-variables.repo-secret.lifecycle
+  - endpoint: DELETE /repos/{owner}/{repo}/actions/secrets/{name}
+    source: otterdog/providers/github/rest/secret_client.py:215
+    trigger: a repository secret is removed (apply -d)
+    feature: secrets-variables.repo-secret.lifecycle
+  - endpoint: PUT /repos/{owner}/{repo}/dependabot/secrets/{name}
+    source: otterdog/providers/github/rest/secret_client.py:185
+    trigger: a repository Dependabot secret is added or forced (#890)
+    feature: secrets-variables.repo-dependabot-codespaces-secrets
+  - endpoint: DELETE /repos/{owner}/{repo}/dependabot/secrets/{name}
+    source: otterdog/providers/github/rest/secret_client.py:215
+    trigger: a repository Dependabot secret is removed (apply -d)
+    feature: secrets-variables.repo-dependabot-codespaces-secrets
+  - endpoint: PUT /repos/{owner}/{repo}/codespaces/secrets/{name}
+    source: otterdog/providers/github/rest/secret_client.py:185
+    trigger: a repository Codespaces secret is added or forced (#890)
+    feature: secrets-variables.repo-dependabot-codespaces-secrets
+  - endpoint: DELETE /repos/{owner}/{repo}/codespaces/secrets/{name}
+    source: otterdog/providers/github/rest/secret_client.py:215
+    trigger: a repository Codespaces secret is removed (apply -d)
+    feature: secrets-variables.repo-dependabot-codespaces-secrets
+  - endpoint: POST /repos/{owner}/{repo}/actions/variables
+    source: otterdog/providers/github/rest/repo_client.py:1157
+    trigger: a repository variable is added
+    feature: secrets-variables.repo-variable.lifecycle
+  - endpoint: PATCH /repos/{owner}/{repo}/actions/variables/{name}
+    source: otterdog/providers/github/rest/repo_client.py:1143
+    trigger: a repository variable's value changes
+    feature: secrets-variables.repo-variable.lifecycle
+  - endpoint: DELETE /repos/{owner}/{repo}/actions/variables/{name}
+    source: otterdog/providers/github/rest/repo_client.py:1171
+    trigger: a repository variable is removed (apply -d)
+    feature: secrets-variables.repo-variable.lifecycle
+
+  # --- environments -------------------------------------------------------------------------------------------------
+  - endpoint: PUT /repos/{owner}/{repo}/environments/{name}
+    source: otterdog/providers/github/rest/repo_client.py:925
+    trigger: an environment is added or changes (wait timer, reviewers, deployment branch policy type)
+    feature: environments.lifecycle
+  - endpoint: DELETE /repos/{owner}/{repo}/environments/{name}
+    source: otterdog/providers/github/rest/repo_client.py:942
+    trigger: an environment is removed (apply -d)
+    feature: environments.lifecycle
+  - endpoint: POST /repos/{owner}/{repo}/environments/{name}/deployment-branch-policies
+    source: otterdog/providers/github/rest/repo_client.py:1106
+    trigger: a branch policy is added to an environment (deployment_branch_policy 'selected')
+    feature: environments.branch-policies
+  - endpoint: DELETE /repos/{owner}/{repo}/environments/{name}/deployment-branch-policies/{id}
+    source: otterdog/providers/github/rest/repo_client.py:1117
+    trigger: a branch policy is removed from an environment
+    feature: environments.branch-policies
+  - endpoint: PUT /repos/{owner}/{repo}/environments/{name}/secrets/{name}
+    source: otterdog/providers/github/rest/secret_client.py:185
+    trigger: an environment secret is added, or --update-secrets forces it
+    feature: secrets-variables.env-secret.lifecycle
+  - endpoint: DELETE /repos/{owner}/{repo}/environments/{name}/secrets/{name}
+    source: otterdog/providers/github/rest/secret_client.py:215
+    trigger: an environment secret is removed (apply -d)
+    feature: secrets-variables.env-secret.lifecycle
+  - endpoint: POST /repos/{owner}/{repo}/environments/{name}/variables
+    source: otterdog/providers/github/rest/repo_client.py:992
+    trigger: an environment variable is added
+    feature: secrets-variables.env-variable.lifecycle
+  - endpoint: PATCH /repos/{owner}/{repo}/environments/{name}/variables/{name}
+    source: otterdog/providers/github/rest/repo_client.py:976
+    trigger: an environment variable's value changes
+    feature: secrets-variables.env-variable.lifecycle
+  - endpoint: DELETE /repos/{owner}/{repo}/environments/{name}/variables/{name}
+    source: otterdog/providers/github/rest/repo_client.py:1008
+    trigger: an environment variable is removed (apply -d)
+    feature: secrets-variables.env-variable.lifecycle
+
+  # --- repository rulesets ------------------------------------------------------------------------------------------
+  - endpoint: POST /repos/{owner}/{repo}/rulesets
+    source: otterdog/providers/github/rest/repo_client.py:496
+    trigger: a repository ruleset is added
+    feature: rulesets.repo.lifecycle
+  - endpoint: PUT /repos/{owner}/{repo}/rulesets/{id}
+    source: otterdog/providers/github/rest/repo_client.py:486
+    trigger: a repository ruleset changes
+    feature: rulesets.repo.lifecycle
+  - endpoint: DELETE /repos/{owner}/{repo}/rulesets/{id}
+    source: otterdog/providers/github/rest/repo_client.py:504
+    trigger: a repository ruleset is removed (apply -d)
+    feature: rulesets.repo.lifecycle
+
+  # --- branch protection rules (GraphQL) -----------------------------------------------------------------------------
+  - endpoint: mutation createBranchProtectionRule
+    source: otterdog/providers/github/graphql.py:217
+    trigger: a branch protection rule is added
+    feature: branch-protection.lifecycle
+  - endpoint: mutation updateBranchProtectionRule
+    source: otterdog/providers/github/graphql.py:186
+    trigger: a branch protection rule changes
+    feature: branch-protection.lifecycle
+  - endpoint: mutation deleteBranchProtectionRule
+    source: otterdog/providers/github/graphql.py:240
+    trigger: a branch protection rule is removed (apply -d)
+    feature: branch-protection.lifecycle
+
+  # --- webapp only --------------------------------------------------------------------------------------------------
+  - endpoint: POST /repos/{owner}/{repo}/actions/workflows/{name}/dispatches
+    source: otterdog/providers/github/rest/repo_client.py:1362
+    trigger: the webapp dispatches a workflow (blueprints, policies)
+    scope: webapp
+  - endpoint: mutation minimizeComment
+    source: otterdog/providers/github/graphql.py:268
+    trigger: the webapp minimizes its outdated pull request comments
+    feature: webapp-automerge.comment
+    scope: webapp

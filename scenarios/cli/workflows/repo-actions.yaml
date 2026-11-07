@@ -35,6 +35,10 @@ steps:
       contains:
         - '+ add repository[name="{{ p }}-actions"]'
       counts: {add: 1, change: 0, delete: 0}
+    apply:
+      api:
+        sent:
+          - 'PUT /repos/{owner}/{repo}/actions/permissions'
     state:
       - kind: repo_actions
         name: "{{ p }}-actions"
@@ -60,6 +64,11 @@ steps:
       contains:
         - '~ repository[name="{{ p }}-actions"]'
       counts: {add: 0, change: 1, delete: 0}
+    apply:
+      api:
+        sent:
+          - 'PUT /repos/{owner}/{repo}/actions/permissions'
+          - 'PUT /repos/{owner}/{repo}/actions/permissions/selected-actions'
     state:
       - kind: repo_actions
         name: "{{ p }}-actions"
@@ -89,6 +98,11 @@ steps:
       contains:
         - '~ repository[name="{{ p }}-actions"]'
       counts: {add: 0, change: 1, delete: 0}
+    apply:
+      api:
+        sent:
+          - 'PUT /repos/{owner}/{repo}/actions/permissions'
+          - 'PUT /repos/{owner}/{repo}/actions/permissions/fork-pr-contributor-approval'
     state:
       - kind: repo_actions
         name: "{{ p }}-actions"

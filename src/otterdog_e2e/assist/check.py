@@ -15,6 +15,9 @@ Without paths, the files of the work tree under scenarios/ and tests/ that ``git
   ``offline``, ``observe: true``);
 * scenarios/coverage.yaml: every check of the coverage matrix tests (coverage_matrix.MatrixProject.all_problems,
   generated documentation included);
+* scenarios/api_endpoints.yaml: the inventory of otterdog's write requests loads, the write endpoints the live
+  scenarios name in ``apply.api`` are listed, its features exist and docs/api-coverage.md is up to date
+  (api_coverage.ApiCoverageProject.all_problems); a live scenario naming an unlisted write endpoint is a problem too;
 * scenarios/known_bugs.yaml: it loads, sorted by id, ``status: fixed`` exactly with ``fixed_in``, evidence, listed
   scenarios exist, scenario and step links (check_references), a docs/known-issues.md section per bug;
 * jsonnet files below scenarios/: the scenarios referencing them are checked (a file nobody references is noted);
@@ -44,6 +47,7 @@ if TYPE_CHECKING:
 GIT_PATHS = ("scenarios", "tests")
 COVERAGE_NAME = "coverage.yaml"
 KNOWN_BUGS_NAME = "known_bugs.yaml"
+API_ENDPOINTS_NAME = "api_endpoints.yaml"
 JSONNET_SUFFIXES = (".jsonnet", ".libsonnet")
 YAML_SUFFIXES = (".yaml", ".yml")
 LIVE_DIRS = ("cli", "enterprise")
@@ -139,7 +143,7 @@ def changed_files(project_root: Path) -> tuple[list[Path], list[str]]:
 
 
 def file_kind(path: Path, root: Path) -> str:
-    """Kind of a file: coverage, known-bugs, scenario, jsonnet, python or other."""
+    """Kind of a file: coverage, api-endpoints, known-bugs, scenario, jsonnet, python or other."""
     relative = _relative(path, root)
     parts = PurePosixPath(relative).parts
     in_scenarios = len(parts) > 1 and parts[0] == "scenarios"
@@ -151,6 +155,8 @@ def file_kind(path: Path, root: Path) -> str:
         return "other"
     if relative == f"scenarios/{COVERAGE_NAME}":
         return "coverage"
+    if relative == f"scenarios/{API_ENDPOINTS_NAME}":
+        return "api-endpoints"
     if path.name == KNOWN_BUGS_NAME:
         return "known-bugs"
     return "scenario"
@@ -231,6 +237,7 @@ class Checker:
             return
         handler = {
             "coverage": self.check_coverage,
+            "api-endpoints": self.check_api_endpoints,
             "known-bugs": self.check_known_bugs,
             "scenario": self.check_scenario,
             "jsonnet": self.check_jsonnet,
@@ -258,6 +265,7 @@ class Checker:
         self._scenario_bugs(path, scenario)
         self._references(path, scenario)
         self._conventions(path, scenario)
+        self._api_endpoints(path, scenario)
         if scenario.is_live:
             self.result.live[scenario.id] = _relative(path, self.root)
         return scenario
@@ -372,7 +380,42 @@ class Checker:
         if "Known-bad" not in scenario.description:
             self.problem(path, "description", "state the known-bad version ('Known-bad: ...')")
 
+    def _api_endpoints(self, path: Path, scenario: Scenario) -> None:
+        """The write endpoints of the scenario's ``apply.api`` are in scenarios/api_endpoints.yaml (a misspelt one
+        asserts nothing)."""
+        from otterdog_e2e.api_coverage import collect_assertions
+        from otterdog_e2e.otterdog.api_usage import INVENTORY_FILE, is_write, load_inventory
+
+        assertions = collect_assertions([scenario])
+        if not assertions:
+            return
+        try:
+            names = load_inventory(self.root / INVENTORY_FILE).names()
+        except (OSError, ValueError) as exc:
+            self.problem(path, "", f"{INVENTORY_FILE} cannot be read: {exc}")
+            return
+        for assertion in assertions:
+            if is_write(assertion.endpoint) and assertion.endpoint not in names:
+                self.problem(
+                    path,
+                    f"step {assertion.step}: apply.api.{assertion.expectation}",
+                    f"{assertion.endpoint} is not in {INVENTORY_FILE}: add it there (with its otterdog source) or fix it",
+                )
+
     # --- coverage matrix and known bugs ----------------------------------------------------------------------------
+    def check_api_endpoints(self, path: Path) -> None:
+        """scenarios/api_endpoints.yaml: the inventory, the scenarios naming its endpoints and docs/api-coverage.md."""
+        from otterdog_e2e.api_coverage import ApiCoverageProject
+        from otterdog_e2e.scenarios.model import ScenarioError
+
+        try:
+            problems = ApiCoverageProject(self.root).all_problems()
+        except (ValueError, OSError, ScenarioError) as exc:
+            self.problem(path, "", str(exc).removeprefix(f"{path}: "))
+            return
+        for problem in problems:
+            self.problem(path, "", problem)
+
     def check_coverage(self, path: Path) -> None:
         """scenarios/coverage.yaml: every check of the coverage matrix tests (the generated doc included)."""
         from otterdog_e2e.coverage_matrix import MatrixError, MatrixProject

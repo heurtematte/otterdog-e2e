@@ -29,6 +29,11 @@ steps:
       contains:
         - '+ add team[name="{{ p }}-m"]'
       counts: {add: 1, delete: 0}
+    apply:
+      api:
+        sent:
+          - 'POST /orgs/{org}/teams'
+          - 'PUT /orgs/{org}/teams/{name}/memberships/{name}'
     state:
       - kind: team_members
         slug: "{{ p }}-m"
@@ -56,6 +61,11 @@ steps:
         - '"{{ logins.author }}"'
         - '"{{ logins.approver }}"'
       counts: {add: 0, delete: 0}
+    apply:
+      api:
+        sent:
+          - 'PUT /orgs/{org}/teams/{name}/memberships/{name}'
+          - 'DELETE /orgs/{org}/teams/{name}/memberships/{name}'
     state:
       - kind: team_members
         slug: "{{ p }}-m"

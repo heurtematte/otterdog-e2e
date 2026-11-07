@@ -3,7 +3,9 @@
 Each command runs in a fresh private dir ``scratch/cli/<seq>-<command>`` whose ``.cache/async_http`` is a symlink to
 the per-SUT/identity HTTP cache (5.7; live caches stay in the run's scratch: they hold the token, see
 http_cache_dir); redacted cmd/stdout/stderr/exit_code copies go to ``artifacts_dir/cli/``.
-Live commands always use ``-n`` (no web UI) and never more than ``-v``.
+Live commands always use ``-n`` (no web UI) and never more than ``-v``. They also get ``OTTERDOG_STATS_FILE=api-usage.json``
+(relative to their cwd): otterdog >= 1.7.0 writes there the requests it sent per endpoint, kept as
+``CliResult.api_usage`` and, parsed, as ``api-usage.json`` next to the command's artifacts (api_usage.py).
 
 Flags (verified against otterdog/cli.py): ``-c`` is a per-command option (``--version`` is a group option and rejects
 it), ``list-projects`` takes no organization, ``plan``/``apply``/``import``/``check-status`` use ``-n`` = --no-web-ui
@@ -51,6 +53,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from otterdog_e2e import procs
+from otterdog_e2e.otterdog.api_usage import (
+    API_USAGE_ENV,
+    API_USAGE_FILE,
+    API_USAGE_LIMIT,
+    ApiUsage,
+    parse_api_usage,
+)
 from otterdog_e2e.otterdog.output import parse_apply, parse_plan, parse_validation, strip_ansi
 from otterdog_e2e.otterdog.runtime import (
     CONTAINER_WORKDIR,
@@ -166,6 +175,7 @@ class CliResult:
     timed_out: bool = False
     infra_error: str | None = None
     notes: list[str] = field(default_factory=list)
+    api_usage: ApiUsage | None = None  # live commands of otterdog >= 1.7.0: the requests sent (api_usage.py)
 
     @property
     def output(self) -> str:
@@ -538,8 +548,8 @@ class OtterdogCli:
         return []
 
     def _write_env_file(self, name: str, credentials: Mapping[str, str]) -> Path:
-        """0600 docker env-file with ONLY the E2E_OTTERDOG_* credentials (outside the mounted workdir), plus
-        OTTERDOG_CONFIG_ROOT for ``invoke(config_root=True)``."""
+        """0600 docker env-file with ONLY the E2E_OTTERDOG_* credentials (outside the mounted workdir), plus the
+        non-secret OTTERDOG_CONFIG_ROOT for ``invoke(config_root=True)`` and OTTERDOG_STATS_FILE for live commands."""
         directory = self.scratch / "env"
         directory.mkdir(mode=0o700, parents=True, exist_ok=True)
         path = directory / f"{name}.env"
@@ -594,9 +604,11 @@ class OtterdogCli:
             raise SafetyError("web-UI credentials never reach container runtimes or offline commands")
         credentials = self._credentials(web)
         extra = dict(extra_env or {})
+        notes: list[str] = [f"env: {key}={value}" for key, value in extra.items()]
+        if not self.offline:  # the requests it sends, relative to its cwd (api_usage.py; ignored before 1.7.0)
+            extra[API_USAGE_ENV] = API_USAGE_FILE
         env_file = self._write_env_file(name, {**credentials, **extra}) if self._in_container else None
         container = self._container(seq)
-        notes: list[str] = [f"env: {key}={value}" for key, value in extra.items()]
         started = time.monotonic()
         try:
             with self._login_gate(logical[0] if web else None, notes):
@@ -626,9 +638,28 @@ class OtterdogCli:
         duration = time.monotonic() - started
         infra = infra_error_line(stdout + "\n" + stderr)
         result = CliResult(["otterdog", *logical], exit_code, stdout, stderr, duration, cwd, timed_out, infra, notes)
+        if not self.offline:
+            result.api_usage = self._api_usage(result)
         if web:
             self._after_web_command(result)
         return result, argv
+
+    def _api_usage(self, result: CliResult) -> ApiUsage | None:
+        """The requests of a live command, from the report otterdog wrote into its cwd (None without a report: older
+        SUTs, commands without organization). The file may come from an untrusted container: read without following
+        links (read_untrusted_text) and parsed as data; an unreadable or invalid report is noted, never fatal."""
+        try:
+            text = read_untrusted_text(result.cwd / API_USAGE_FILE, within=result.cwd, limit=API_USAGE_LIMIT)
+        except (OSError, SafetyError) as exc:
+            result.notes.append(f"api usage: report not read: {exc}")
+            return None
+        if text is None:
+            return None
+        try:
+            return parse_api_usage(text)
+        except ValueError as exc:
+            result.notes.append(f"api usage: invalid report: {exc}")
+            return None
 
     def _credentials(self, web: bool) -> dict[str, str]:
         """E2E_OTTERDOG_* values: the identity's token, plus the web login for web commands ("unset" otherwise)."""
@@ -688,6 +719,9 @@ class OtterdogCli:
         )
         texts = {"cmd.txt": command + "\n", "stdout.txt": result.stdout, "stderr.txt": result.stderr}
         texts["exit_code.txt"] = f"{result.exit_code}\n"
+        if result.api_usage is not None:  # the parsed counts only: never the raw file of a possibly untrusted SUT
+            usage = {"outcome": result.api_usage.outcome, "endpoints": dict(sorted(result.api_usage.endpoints.items()))}
+            texts[API_USAGE_FILE] = json.dumps(usage | {"errors": dict(result.api_usage.errors)}, indent=2) + "\n"
         for file_name, text in texts.items():
             (directory / file_name).write_text(REDACTOR(text), encoding="utf-8")
 

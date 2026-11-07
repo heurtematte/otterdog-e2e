@@ -55,6 +55,11 @@ steps:
         - '+ add custom_property[name="{{ p }}-owner"]'
         - '+ add repository[name="{{ p }}-props"]'
       counts: {add: 4, delete: 0}
+    apply:
+      api:
+        sent:
+          - 'PUT /orgs/{org}/properties/schema/{name}'
+          - 'PATCH /repos/{owner}/{repo}/properties/values'
     state:
       - kind: custom_property
         name: "{{ p }}-tier"
@@ -114,6 +119,11 @@ steps:
         - '~ custom_property[name="{{ p }}-tier"]'
         - '~ repository[name="{{ p }}-props"]'
       counts: {add: 0, delete: 0}
+    apply:
+      api:
+        sent:
+          - 'PUT /orgs/{org}/properties/schema/{name}'
+          - 'PATCH /repos/{owner}/{repo}/properties/values'
     state:
       - kind: custom_property
         name: "{{ p }}-tier"

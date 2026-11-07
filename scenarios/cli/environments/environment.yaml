@@ -28,6 +28,11 @@ steps:
         - '+ add repository[name="{{ p }}-env"]'
         - '+ add environment[name="e2e-staging", repository={{ p }}-env]'
       counts: {add: 2, change: 0, delete: 0}
+    apply:
+      api:
+        sent:
+          - 'PUT /repos/{owner}/{repo}/environments/{name}'
+          - 'POST /repos/{owner}/{repo}/environments/{name}/deployment-branch-policies'
     state:
       - kind: environment
         repo: "{{ p }}-env"
@@ -50,6 +55,11 @@ steps:
       contains:
         - '~ environment[name="e2e-staging", repository={{ p }}-env]'
       counts: {add: 0, delete: 0}
+    apply:
+      api:
+        sent:
+          - 'PUT /repos/{owner}/{repo}/environments/{name}'
+          - 'DELETE /repos/{owner}/{repo}/environments/{name}/deployment-branch-policies/{id}'
     state:
       - kind: environment
         repo: "{{ p }}-env"

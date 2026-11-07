@@ -40,6 +40,10 @@ steps:
         - '+ add org_ruleset[name="{{ p }}-org-rules"]'
         - '+ add repository[name="{{ p }}-ors-target"]'
       counts: {add: 2, delete: 0}
+    apply:
+      api:
+        sent:
+          - 'POST /orgs/{org}/rulesets'
     state:
       - kind: org_ruleset
         name: "{{ p }}-org-rules"
@@ -79,6 +83,10 @@ steps:
       contains:
         - '~ org_ruleset[name="{{ p }}-org-rules"]'
       counts: {add: 0, delete: 0}
+    apply:
+      api:
+        sent:
+          - 'PUT /orgs/{org}/rulesets/{id}'
     state:
       - kind: org_ruleset
         name: "{{ p }}-org-rules"
@@ -113,6 +121,10 @@ steps:
         - '~ org_ruleset[name="{{ p }}-org-rules"]'
         - '+ add repository[name="{{ p }}-ors-skip"]'
       counts: {add: 1, change: 2, delete: 0}
+    apply:
+      api:
+        sent:
+          - 'PUT /orgs/{org}/rulesets/{id}'
     state:
       - kind: org_ruleset
         name: "{{ p }}-org-rules"
@@ -138,6 +150,10 @@ steps:
       contains:
         - '- remove org_ruleset[name="{{ p }}-org-rules"]'
       counts: {add: 0, delete: 1}
-    apply: {delete: true}
+    apply:
+      delete: true
+      api:
+        sent:
+          - 'DELETE /orgs/{org}/rulesets/{id}'
     state:
       - {kind: org_ruleset, name: "{{ p }}-org-rules", absent: true}

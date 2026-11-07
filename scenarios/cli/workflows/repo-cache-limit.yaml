@@ -51,6 +51,10 @@ steps:
       contains:
         - '~ repository[name="{{ p }}-cache"]'
       counts: {add: 0, change: 1, delete: 0}
+    apply:
+      api:
+        sent:
+          - 'PUT /repos/{owner}/{repo}/actions/cache/storage-limit'
     state:
       - kind: repo_cache_storage_limit
         repo: "{{ p }}-cache"

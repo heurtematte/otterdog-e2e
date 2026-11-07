@@ -53,6 +53,12 @@ steps:
         - '+ add repository[name="{{ p }}-allowed"]'
       # the approval policy is unmanaged by the baseline: its previous value (and so its plan line) is not asserted,
       # the oracle checks the applied value
+    apply:
+      api:
+        sent:
+          - 'PUT /orgs/{org}/actions/permissions'
+          - 'PUT /orgs/{org}/actions/permissions/selected-actions'
+          - 'PUT /orgs/{org}/actions/permissions/fork-pr-contributor-approval'
     state:
       - kind: org_actions
         match: {allowed_actions: selected}
@@ -92,6 +98,11 @@ steps:
       not_contains:
         - "allow_action_patterns"
         - "allow_verified_creator_actions"
+    apply:
+      api:
+        sent:
+          - 'PUT /orgs/{org}/actions/permissions'
+          - 'PUT /orgs/{org}/actions/permissions/fork-pr-contributor-approval'
     state:
       - kind: org_actions
         match: {allowed_actions: all}
