@@ -189,7 +189,7 @@ def load_inventory(path: Path) -> ApiInventory:
             problems.append(f"{where}: unknown key(s) {unknown}")
         endpoint = item.get("endpoint")
         problem = endpoint_problem(endpoint)
-        if problem:
+        if problem or not isinstance(endpoint, str):
             problems.append(f"{where}: {problem}")
             continue
         if not is_write(endpoint):
