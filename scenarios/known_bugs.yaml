@@ -722,6 +722,7 @@
     - otterdog/models/repository.py:782-790
     - otterdog/providers/github/rest/repo_client.py:119
     - otterdog/providers/github/rest/repo_client.py:139-140
+    - "e2e: scenarios/cli/repo/archive-side-requests.yaml (step archived-topics declares the bug)"
   upstream: null
   fixed_in: null
   scenarios: []
@@ -987,6 +988,18 @@
   evidence:
     - otterdog/models/ruleset.py:475-479
     - "e2e: scenarios/offline/rulesets/val-org-rulesets.yaml (step deployment-rule declares the bug)"
+  upstream: null
+  fixed_in: null
+  scenarios: []
+
+- id: KB-082
+  title: archiving a repository in the same apply as a change of its topics (or another setting sent by its own request) sends that request after the archiving PATCH, to a read-only repository
+  status: suspected
+  evidence:
+    - otterdog/providers/github/rest/repo_client.py:136-187
+    - otterdog/models/repository.py:956-964
+    - otterdog/operations/apply.py:139-141
+    - "e2e: scenarios/cli/repo/archive-side-requests.yaml (step archive-with-topics declares the bug)"
   upstream: null
   fixed_in: null
   scenarios: []

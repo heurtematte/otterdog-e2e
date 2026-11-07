@@ -1,0 +1,182 @@
+# Regression: team permissions of an archived repository go through the teams API only (#924, main e6ab19e).
+id: regression.archived-repo-team-permissions
+title: Change and remove the team permissions of an archived repository
+description: |
+  PR https://github.com/eclipse-csi/otterdog/pull/924 ("do not send team permissions when updating repository
+  settings"): team_permissions stayed in the provider mapping of a repository, so a change of the team permissions
+  alone sent PATCH /repos/{owner}/{repo} with {"team_permissions": ...} before the teams API. GitHub ignores the field
+  on a regular repository, but refuses any update of an archived one (403 "Repository was archived so is read-only."),
+  and the apply failed before the teams API was called: the permissions were never changed. Known-bad: v1.7.1 (and
+  main before e6ab19e); seen on adoptium (4 archived repositories with teams but no team_permissions).
+  The journey pins the HTTP requests (apply.api, otterdog's request statistics): a team-permission-only change of a
+  regular repository sends PUT /orgs/{org}/teams/{name}/repos/{owner}/{repo} and no repository PATCH; archiving sends
+  the PATCH; while the repository stays archived, changing a permission and adding a team send PUT, removing a team
+  sends DELETE, never the PATCH, and the state shows the new permissions on the archived repository. The cleanup
+  deletes the archived repository (allowed) and the two teams.
+  Released in the first release after v1.7.1: fixed_in skips the scenario on older SUTs (ScenarioEngine.skip_reason).
+priority: P1
+min_plan: free
+fixed_in: "1.8.0"
+tags: [repo, teams, regression]
+references:
+  - pr: 924
+    note: >-
+      "do not send team permissions when updating repository settings" (e6ab19e, after v1.7.1): team_permissions is
+      removed from the provider data of a repository, so a change of the team permissions alone sends no
+      PATCH /repos/{owner}/{repo} (403 on an archived repository) and repository creation no longer sends the field in
+      POST /orgs/{org}/repos; the teams API requests (PUT, DELETE) must not change
+steps:
+  - name: create
+    fragments:
+      teams: &teams
+        - |
+          orgs.newTeam('{{ p }}-arch-tp-a') {
+            description: "otterdog e2e: archived team permissions a",
+            privacy: "visible",
+            members: [],
+          }
+        - |
+          orgs.newTeam('{{ p }}-arch-tp-b') {
+            description: "otterdog e2e: archived team permissions b",
+            privacy: "visible",
+            members: [],
+          }
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-arch-tp') {
+            description: "otterdog e2e: archived team permissions",
+            team_permissions: {
+              "{{ p }}-arch-tp-a": "push",
+            },
+          }
+    plan:
+      expect: changes
+      contains:
+        - '+ add team[name="{{ p }}-arch-tp-a"]'
+        - '+ add team[name="{{ p }}-arch-tp-b"]'
+        - '+ add repository[name="{{ p }}-arch-tp"]'
+    apply:
+      api:
+        sent:
+          - POST /orgs/{org}/teams
+          - POST /orgs/{org}/repos
+          - PUT /orgs/{org}/teams/{name}/repos/{owner}/{repo}
+    state:
+      - kind: repo
+        name: "{{ p }}-arch-tp"
+        match: {archived: false}
+      - {kind: team_repo_permission, slug: "{{ p }}-arch-tp-a", repo: "{{ p }}-arch-tp", equals: push}
+
+  - name: permission-only
+    fragments:
+      teams: *teams
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-arch-tp') {
+            description: "otterdog e2e: archived team permissions",
+            team_permissions: {
+              "{{ p }}-arch-tp-a": "pull",
+            },
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ repository[name="{{ p }}-arch-tp"]'
+      counts: {add: 0, delete: 0}
+    apply:
+      api:
+        sent: ['PUT /orgs/{org}/teams/{name}/repos/{owner}/{repo}']
+        not_sent: ['PATCH /repos/{owner}/{repo}']
+    state:
+      - {kind: team_repo_permission, slug: "{{ p }}-arch-tp-a", repo: "{{ p }}-arch-tp", equals: pull}
+
+  - name: archive
+    fragments:
+      teams: *teams
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-arch-tp') {
+            description: "otterdog e2e: archived team permissions",
+            archived: true,
+            team_permissions: {
+              "{{ p }}-arch-tp-a": "pull",
+            },
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ repository[name="{{ p }}-arch-tp"]'
+      counts: {add: 0, change: 1, delete: 0}
+    apply:
+      api:
+        sent: ['PATCH /repos/{owner}/{repo}']
+        not_sent:
+          - PUT /orgs/{org}/teams/{name}/repos/{owner}/{repo}
+          - DELETE /orgs/{org}/teams/{name}/repos/{owner}/{repo}
+    state:
+      - kind: repo
+        name: "{{ p }}-arch-tp"
+        match: {archived: true}
+
+  - name: archived-change
+    fragments:
+      teams: *teams
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-arch-tp') {
+            description: "otterdog e2e: archived team permissions",
+            archived: true,
+            team_permissions: {
+              "{{ p }}-arch-tp-a": "push",
+              "{{ p }}-arch-tp-b": "pull",
+            },
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ repository[name="{{ p }}-arch-tp"]'
+      counts: {add: 0, delete: 0}
+    apply:
+      not_contains:
+        - Repository was archived so is read-only
+      api:
+        sent: ['PUT /orgs/{org}/teams/{name}/repos/{owner}/{repo}']
+        not_sent: ['PATCH /repos/{owner}/{repo}']
+    state:
+      - kind: repo
+        name: "{{ p }}-arch-tp"
+        match: {archived: true}
+      - {kind: team_repo_permission, slug: "{{ p }}-arch-tp-a", repo: "{{ p }}-arch-tp", equals: push}
+      - {kind: team_repo_permission, slug: "{{ p }}-arch-tp-b", repo: "{{ p }}-arch-tp", equals: pull}
+
+  - name: archived-remove
+    fragments:
+      teams: *teams
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-arch-tp') {
+            description: "otterdog e2e: archived team permissions",
+            archived: true,
+            team_permissions: {
+              "{{ p }}-arch-tp-b": "pull",
+            },
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ repository[name="{{ p }}-arch-tp"]'
+      counts: {add: 0, delete: 0}
+    apply:
+      not_contains:
+        - Repository was archived so is read-only
+      api:
+        sent: ['DELETE /orgs/{org}/teams/{name}/repos/{owner}/{repo}']
+        not_sent:
+          - PATCH /repos/{owner}/{repo}
+          - PUT /orgs/{org}/teams/{name}/repos/{owner}/{repo}
+    state:
+      - kind: repo
+        name: "{{ p }}-arch-tp"
+        match: {archived: true}
+      - {kind: team_repo_permission, slug: "{{ p }}-arch-tp-a", repo: "{{ p }}-arch-tp", absent: true}
+      - {kind: team_repo_permission, slug: "{{ p }}-arch-tp-b", repo: "{{ p }}-arch-tp", equals: pull}

@@ -132,7 +132,7 @@ shortened to the relevant lines.
 | KB-055 | nested ruleset messages name the repository twice | fixed (#891, main) | model | - |
 | KB-056 | local-plan diffs and forces dummy-secret objects that every apply skips | confirmed | CLI, webapp | `O-KB-LPLAN-DUMMY-SECRETS` |
 | KB-057 | webhook secrets: unknown providers validate, several `:` crash the apply | confirmed | model | - |
-| KB-058 | topics of an archived repository planned and sent | suspected | model | - |
+| KB-058 | topics of an archived repository planned and sent | suspected | model | step of `cli.repo.archive-side-requests` |
 | KB-059 | /myprojects answers 500 without OAuth configuration | confirmed | webapp | `O-KB-WEB-LOGIN-REQUIRED` |
 | KB-060 | form-encoded delivery without `payload` answers 500 | confirmed | webapp | `O-KB-WEB-FORM-WITHOUT-PAYLOAD` |
 | KB-061 | a refused boot configuration exits 0 | confirmed | webapp | `O-KB-WEB-BOOT-EXIT-STATUS` |
@@ -156,6 +156,7 @@ shortened to the relevant lines.
 | KB-079 | 403 with X-Accepted-OAuth-Scopes aborts a fine-grained session (InsufficientPermissionsException) | suspected | provider | - |
 | KB-080 | reads refused for lack of a permission taken as absent configuration | suspected | provider | - |
 | KB-081 | org ruleset requiring deployments: AttributeError 'environments' | confirmed | model | step of `O-VAL-ORG-RULESETS` |
+| KB-082 | archiving with a topics change: requests sent after the archiving PATCH | suspected | provider | step of `cli.repo.archive-side-requests` |
 
 ## Issues
 
@@ -2071,7 +2072,7 @@ $ otterdog validate -c otterdog.json --local e2e-test-org
 
 ### KB-058 — topics of an archived repository are planned and sent
 
-Status: **suspected** · Upstream: none · Scenarios: none
+Status: **suspected** · Upstream: none · Scenarios: step `archived-topics` of `cli.repo.archive-side-requests`
 
 Evidence: `otterdog/models/repository.py:137-163`, `otterdog/models/repository.py:782-790`,
 `otterdog/providers/github/rest/repo_client.py:119`, `otterdog/providers/github/rest/repo_client.py:139-140`.
@@ -2603,3 +2604,21 @@ orgs.newOrg('e2e-test-org') {
 $ otterdog validate -c otterdog.json --local e2e-test-org         # exit code 2
 │ Error:   'GitHubOrganization' object has no attribute 'environments'
 ```
+
+### KB-082 — archiving and a side request in one apply
+
+Status: **suspected** · Upstream: none · Scenarios: step `archive-with-topics` of `cli.repo.archive-side-requests`
+
+Evidence: `otterdog/providers/github/rest/repo_client.py:136-187`, `otterdog/models/repository.py:956-964`,
+`otterdog/operations/apply.py:139-141`.
+
+`apply` orders its patches so that the patch making an object read-only comes last (`changes_object_to_readonly`),
+but inside the patch of one repository `update_repo` first sends `PATCH /repos/{owner}/{repo}` with every plain
+setting, `archived: true` included, and only then the settings that have their own request: Dependabot alerts,
+private vulnerability reporting, immutable releases, topics, custom property values, Pages, code scanning default
+setup and the default branch. While a repository gets archived in this operation, the diff keeps every field
+(`is_key_valid_for_diff_computation`), so archiving a repository together with a change of its topics sends
+`PUT /repos/{owner}/{repo}/topics` to a repository that is already read-only, which GitHub presumably refuses (403
+"Repository was archived so is read-only."): the apply fails after the repository was archived and the topics are
+never changed. Same family as otterdog#924 (team permissions sent with the settings of an archived repository).
+A live run of `cli.repo.archive-side-requests` must confirm GitHub's answer before the status becomes confirmed.

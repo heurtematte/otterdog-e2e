@@ -42,7 +42,7 @@ Endpoints nobody asserts yet are the gaps of this page: a scenario that adds, ch
 | `PUT /orgs/{org}/properties/schema/{name}` | a custom property definition is added or changes (add_custom_property, update_custom_property:538) | `cli.custom-property/create`, `cli.custom-property/update` |  |
 | `DELETE /orgs/{org}/properties/schema/{name}` | a custom property definition is removed (apply -d) | `cli.custom-property.flag/remove-definition` |  |
 | `PATCH /repos/{owner}/{repo}/properties/values` | a repository's custom_properties change | `cli.custom-property.flag/flag-false`, `cli.custom-property/create`, `cli.custom-property/update` |  |
-| `POST /orgs/{org}/teams` | a team is added | `cli.team.members/author`, `cli.team/create` |  |
+| `POST /orgs/{org}/teams` | a team is added | `cli.team.members/author`, `cli.team/create`, `regression.archived-repo-team-permissions/create` |  |
 | `PATCH /orgs/{org}/teams/{name}` | a team's description, privacy, notifications or parent changes | `cli.team/update` |  |
 | `DELETE /orgs/{org}/teams/{name}` | a team is removed (apply -d) | `cli.team/remove` |  |
 | `PUT /orgs/{org}/teams/{name}/memberships/{name}` | a member is added to a team (or a maintainer's role changes) | `cli.team.members/approver`, `cli.team.members/author` |  |
@@ -50,8 +50,8 @@ Endpoints nobody asserts yet are the gaps of this page: a scenario that adds, ch
 | `PATCH /orgs/{org}/teams/{name}/team-sync/group-mappings` | a team's identity provider groups change (team sync, enterprise, | **none** |  |
 | `PATCH /orgs/{org}/teams/{name}/external-groups` | a team's external group is set (enterprise managed users, | **none** |  |
 | `DELETE /orgs/{org}/teams/{name}/external-groups` | a team's external group is removed (enterprise managed users, | **none** |  |
-| `PUT /orgs/{org}/teams/{name}/repos/{owner}/{repo}` | a team is added to a repository's team_permissions or its permission changes | `cli.team/create`, `cli.team/update` |  |
-| `DELETE /orgs/{org}/teams/{name}/repos/{owner}/{repo}` | a team is removed from a repository's team_permissions (KB-005 fixed in 1.7.0, | `cli.kb.team-permissions-removal/remove-permission` |  |
+| `PUT /orgs/{org}/teams/{name}/repos/{owner}/{repo}` | a team is added to a repository's team_permissions or its permission changes | `cli.team/create`, `cli.team/update`, `regression.archived-repo-team-permissions/archived-change`, `regression.archived-repo-team-permissions/create`, `regression.archived-repo-team-permissions/permission-only` | `regression.archived-repo-team-permissions/archive`, `regression.archived-repo-team-permissions/archived-remove` |
+| `DELETE /orgs/{org}/teams/{name}/repos/{owner}/{repo}` | a team is removed from a repository's team_permissions (KB-005 fixed in 1.7.0, | `cli.kb.team-permissions-removal/remove-permission`, `regression.archived-repo-team-permissions/archived-remove` | `regression.archived-repo-team-permissions/archive` |
 | `POST /orgs/{org}/hooks` | an organization webhook is added | **none** |  |
 | `PATCH /orgs/{org}/hooks/{id}` | an organization webhook changes, or --update-webhooks forces it | **none** |  |
 | `DELETE /orgs/{org}/hooks/{id}` | an organization webhook is removed (apply -d) | **none** |  |
@@ -68,13 +68,13 @@ Endpoints nobody asserts yet are the gaps of this page: a scenario that adds, ch
 | `POST /orgs/{org}/rulesets` | an organization ruleset is added | `enterprise.org-ruleset/create` |  |
 | `PUT /orgs/{org}/rulesets/{id}` | an organization ruleset changes | `enterprise.org-ruleset/evaluate`, `enterprise.org-ruleset/repo-conditions` |  |
 | `DELETE /orgs/{org}/rulesets/{id}` | an organization ruleset is removed (apply -d) | `enterprise.org-ruleset/remove-ruleset` |  |
-| `POST /orgs/{org}/repos` | a repository is added (neither a fork nor from a template) | `cli.bpr.public/create`, `cli.code-security.configuration/attach-new-repository`, `cli.repo.lifecycle/create`, `cli.team/create` | `cli.repo.fork/fork` |
+| `POST /orgs/{org}/repos` | a repository is added (neither a fork nor from a template) | `cli.bpr.public/create`, `cli.code-security.configuration/attach-new-repository`, `cli.repo.archive-side-requests/create`, `cli.repo.lifecycle/create`, `cli.team/create`, `regression.archived-repo-team-permissions/create` | `cli.repo.fork/fork` |
 | `POST /repos/{owner}/{repo}/generate` | a repository is added with template_repository | **none** |  |
 | `POST /repos/{owner}/{repo}/forks` | a repository is added with forked_repository | `cli.repo.fork/fork` |  |
-| `PATCH /repos/{owner}/{repo}` | a repository setting changes (update_repo), archived included; also the settings of a new repository after its creation, and default_branch when the branch exists (repo_client.py:739) | `cli.org.member-privileges/privileges`, `cli.repo.lifecycle/update`, `cli.repo.security/disable`, `cli.repo.security/enable` |  |
+| `PATCH /repos/{owner}/{repo}` | a repository setting changes (update_repo), archived included; also the settings of a new repository after its creation, and default_branch when the branch exists (repo_client.py:739) | `cli.org.member-privileges/privileges`, `cli.repo.archive-side-requests/archive-with-topics`, `cli.repo.lifecycle/update`, `cli.repo.security/disable`, `cli.repo.security/enable`, `regression.archived-repo-team-permissions/archive` | `regression.archived-repo-team-permissions/archived-change`, `regression.archived-repo-team-permissions/archived-remove`, `regression.archived-repo-team-permissions/permission-only` |
 | `DELETE /repos/{owner}/{repo}` | a repository is removed (apply -d) | `cli.repo.lifecycle/delete`, `cli.team/remove` |  |
 | `POST /repos/{owner}/{repo}/branches/{name}/rename` | default_branch names a branch that does not exist (the current default branch is renamed) | **none** |  |
-| `PUT /repos/{owner}/{repo}/topics` | a repository's topics change | `cli.repo.lifecycle/create`, `cli.repo.lifecycle/update` |  |
+| `PUT /repos/{owner}/{repo}/topics` | a repository's topics change | `cli.repo.archive-side-requests/archive-with-topics`, `cli.repo.archive-side-requests/create`, `cli.repo.lifecycle/create`, `cli.repo.lifecycle/update` |  |
 | `POST /repos/{owner}/{repo}/pages` | gh_pages_build_type is enabled on a repository without a pages site | `cli.repo.pages/legacy` |  |
 | `PUT /repos/{owner}/{repo}/pages` | a pages setting changes (source, build type; cname and https_enforced at repo_client.py:660-670) | `cli.repo.pages/source-path` |  |
 | `DELETE /repos/{owner}/{repo}/pages` | gh_pages_build_type becomes 'disabled' | `cli.repo.pages/disabled` |  |

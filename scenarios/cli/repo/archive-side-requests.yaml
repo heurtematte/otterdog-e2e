@@ -1,0 +1,93 @@
+# Archiving a repository together with settings sent by their own requests (coverage: repositories.archive).
+id: cli.repo.archive-side-requests
+title: Archive a repository together with a topics change, then change its topics while archived
+description: |
+  update_repo sends PATCH /repos/{owner}/{repo} with the plain settings first, then the settings that have their own
+  request (topics, custom property values, Pages, security toggles, default branch; repo_client.py:136-187). When a
+  repository is archived in the same apply as a topics change, the PUT /repos/{owner}/{repo}/topics follows the
+  archiving PATCH and reaches a read-only repository (KB-082, suspected). While the repository stays archived, topics
+  are not among the fields otterdog ignores (Repository._unavailable_fields_in_archived_repos), so a topics change is
+  still planned and sent (KB-058, suspected). The correct behaviour asserted here: archiving with a topics change
+  applies both (the topics before the archiving, or the topics in a request GitHub accepts), and a topics change of
+  a repository that stays archived plans nothing, like the other read-only fields. The same family as otterdog#924
+  (team permissions sent with the settings of an archived repository). Each step declares its own suspected bug, so
+  a live run tells which request GitHub refuses; the other steps stay strict. The cleanup deletes the archived
+  repository (allowed).
+priority: P1
+min_plan: free
+tags: [repo]
+steps:
+  - name: create
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-arch-side') {
+            description: "otterdog e2e: archive side requests",
+            topics: ["otterdog-e2e", "side-a"],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '+ add repository[name="{{ p }}-arch-side"]'
+      counts: {add: 1, change: 0, delete: 0}
+    apply:
+      api:
+        sent:
+          - 'POST /orgs/{org}/repos'
+          - 'PUT /repos/{owner}/{repo}/topics'
+    state:
+      - kind: repo
+        name: "{{ p }}-arch-side"
+        match: {archived: false}
+      - kind: repo_topics
+        name: "{{ p }}-arch-side"
+        match: {$unordered: [otterdog-e2e, side-a]}
+
+  - name: archive-with-topics
+    known_bug: KB-082
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-arch-side') {
+            description: "otterdog e2e: archive side requests",
+            topics: ["otterdog-e2e", "side-b"],
+            archived: true,
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ repository[name="{{ p }}-arch-side"]'
+      counts: {add: 0, change: 2, delete: 0}
+    apply:
+      not_contains:
+        - Repository was archived so is read-only
+      api:
+        sent:
+          - 'PATCH /repos/{owner}/{repo}'
+          - 'PUT /repos/{owner}/{repo}/topics'
+    state:
+      - kind: repo
+        name: "{{ p }}-arch-side"
+        match: {archived: true}
+      - kind: repo_topics
+        name: "{{ p }}-arch-side"
+        match: {$unordered: [otterdog-e2e, side-b]}
+
+  - name: archived-topics
+    known_bug: KB-058
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-arch-side') {
+            description: "otterdog e2e: archive side requests",
+            topics: ["otterdog-e2e", "side-c"],
+            archived: true,
+          }
+    plan:
+      expect: noop
+      not_contains:
+        - side-c
+    state:
+      - kind: repo
+        name: "{{ p }}-arch-side"
+        match: {archived: true}
