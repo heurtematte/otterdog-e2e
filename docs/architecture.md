@@ -1,6 +1,6 @@
 # Architecture
 
-otterdog-acceptance is a Python package (`src/otterdog_acceptance`) with two entry points that share one composition root:
+Otterdog Acceptance is a Python package (`src/otterdog_acceptance`) with two entry points that share one composition root:
 
 - the `otterdog-acceptance` command line (the `cli/` package, click; also `python -m otterdog_acceptance`), for operations
   (doctor, bootstrap, janitor, relay, reports, the onboarding commands `setup` and `ci-sync`) and for starting test

@@ -1,6 +1,6 @@
 # Security
 
-otterdog-acceptance gives a program that can create, change and delete GitHub resources (otterdog, possibly an unreviewed
+Otterdog Acceptance gives a program that can create, change and delete GitHub resources (otterdog, possibly an unreviewed
 pull request of it) organization-owner credentials. This document describes what can go wrong, which controls the
 harness enforces, what you must set up yourself, and what to do when something went wrong.
 

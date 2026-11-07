@@ -4,13 +4,13 @@
 # scenarios/ and tests/, the GitHub-flavored Markdown bridged to Python-Markdown) with a copy of this file pointing at
 # them. The pages stay GitHub-flavored Markdown that renders on github.com. See docs/local-development.md.
 [project]
-site_name = "otterdog-acceptance"
+site_name = "Otterdog Acceptance"
 site_description = "End-to-end test harness for otterdog (CLI, GitHub App webapp and webhooks) against real GitHub organizations."
 site_url = "https://heurtematte.github.io/otterdog-e2e/"
 repo_url = "https://github.com/heurtematte/otterdog-e2e"
 repo_name = "heurtematte/otterdog-e2e"
 edit_uri = "edit/main/docs/"
-copyright = "otterdog-acceptance is licensed under the Eclipse Public License 2.0"
+copyright = "Otterdog Acceptance is licensed under the Eclipse Public License 2.0"
 
 # installed by .github/workflows/docs.yml, not a page of the site
 exclude_docs = """
@@ -62,7 +62,7 @@ extra_javascript = ["assets/explorer.js"]
 [[project.extra.social]]
 icon = "fontawesome/brands/github"
 link = "https://github.com/heurtematte/otterdog-e2e"
-name = "otterdog-acceptance on GitHub"
+name = "Otterdog Acceptance on GitHub"
 
 [[project.extra.social]]
 icon = "octicons/repo-16"

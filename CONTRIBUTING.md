@@ -1,4 +1,4 @@
-# Contributing to otterdog-acceptance
+# Contributing to Otterdog Acceptance
 
 Contributions are welcome: new scenarios, fixes of the harness, documentation. By contributing, you agree that your
 contribution is licensed under the [Eclipse Public License 2.0](LICENSE), the license of the project.

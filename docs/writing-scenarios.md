@@ -282,7 +282,7 @@ steps:
 ```
 
 **Paths** are relative to the directory of the scenario file and must resolve, symlinks followed, inside the project
-(the directory holding otterdog-acceptance's `pyproject.toml`; for a scenario outside any project, its own directory):
+(the directory holding Otterdog Acceptance's `pyproject.toml`; for a scenario outside any project, its own directory):
 `../../lib/e2e.libsonnet` from `scenarios/cli/<domain>/` is fine, absolute paths and paths leaving the project are refused. Files are read once, when the scenario loads: UTF-8, not
 empty, at most 512 KiB.
 

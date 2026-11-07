@@ -1,4 +1,4 @@
-# otterdog-acceptance
+# Otterdog Acceptance
 
 <!-- github-only -->
 
