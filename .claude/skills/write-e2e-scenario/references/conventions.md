@@ -61,6 +61,7 @@ tags (`PATH_RULES` of `src/otterdog_e2e/selection.py`).
 | `tests/unit/test_yaml_cli.py` | live ids follow the directory (`cli.`, `regression.`, `enterprise.`); unique ids; a model-area tag; known-bug scenarios tagged `known-bug` and never P0; run-prefixed objects, no `extendRepo`; webhook URLs under `{{ hook_base }}`; regressions reference their PR(s) (`references`, no `pr-<n>` tag, no number in the id or file name) and link `otterdog/pull/<n>` (or issues) with a "Known-bad" version; enterprise scenarios `min_plan: enterprise`; probes; `UNRELEASED_FIXES`; private repositories not created by their first apply; `docs/known-issues.md` mirrors `scenarios/known_bugs.yaml` |
 | `tests/unit/test_known_bugs.py` | registry format, scenario and step links (a step-level bug never lists its scenario) |
 | `tests/unit/test_coverage_matrix.py` | `scenarios/coverage.yaml` schema, `covered_by` items exist, status rules, `docs/coverage-matrix.md` up to date |
+| `tests/unit/test_api_endpoints.py` | `scenarios/api_endpoints.yaml` loads, every write endpoint a live scenario names in `apply.api` is listed, its features exist, `docs/api-coverage.md` up to date |
 | `tests/unit/test_suite_webapp_static.py` | webapp and webhooks tests: one `scenario(id, priority=...)` marker, tags, markers matching fixtures, no `time.sleep` |
 
 ## Registries a new test touches
@@ -70,6 +71,7 @@ tags (`PATH_RULES` of `src/otterdog_e2e/selection.py`).
 | any test closing a coverage gap | `scenarios/coverage.yaml`, then `.venv/bin/python tests/unit/test_coverage_matrix.py --write` |
 | a new defect | `scenarios/known_bugs.yaml` and a `### KB-nnn` section plus a summary row in `docs/known-issues.md` |
 | a live regression with `fixed_in` | `UNRELEASED_FIXES` of `tests/unit/test_yaml_cli.py` |
+| a live step naming an endpoint in `apply.api` | the endpoint in `scenarios/api_endpoints.yaml` (write requests), then `.venv/bin/python tests/unit/test_api_endpoints.py --write` (docs/api-coverage.md; `tests/unit/test_api_endpoints.py` fails on a stale page or an unlisted endpoint) |
 | an offline step whose outcome depends on the SUT history | `SUT_EXPECTATIONS` of `tests/offline/test_scenarios.py` |
 | a live scenario with a probe | `PROBES` of `tests/cli/conftest.py` and the scenario's own `timeout` |
 | an otterdog PR with expected deltas | a `references` entry `{pr: <n>, expected_deltas}` in the scenario of the behaviour |

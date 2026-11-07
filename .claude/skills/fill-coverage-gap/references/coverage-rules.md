@@ -34,6 +34,13 @@ Beyond what the test can check: `covered` means every listed operation is exerci
 that only runs a command, or a record-only step, covers nothing). When one operation is missing, the status is
 `partial` and the outline names what is left.
 
+For the live operations `add`, `modify` and `remove`, the assertion covers the request as well as the state: the
+step names the endpoint of its verb in `apply.api.sent` (`scenarios/api_endpoints.yaml` maps every write endpoint to
+its feature, `docs/api-coverage.md` shows the steps asserting it). A `remove` reached only by a scenario's cleanup
+covers nothing: the cleanup runs the trusted reset CLI, not the SUT. The `archive` operation of a repository-level
+feature means its requests on an archived repository (and in the apply that archives it), where GitHub refuses
+every write of the repository's settings (otterdog#924, KB-082).
+
 ## Gap outline needs
 
 - `available: <API>`: the harness provides it (a fixture, a YAML key, a check kind, a Mutator call): use it;

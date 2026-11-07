@@ -53,17 +53,37 @@ requires: []                   # capabilities of otterdog_e2e.capabilities.Cap, 
 steps:
   - name: create
     fragments:
-      repositories: &repo
+      repositories:
         - "orgs.newRepo('{{ p }}-app') { description: 'e2e app', has_wiki: false }"
     plan: {expect: changes, counts: {add: 1}}
+    apply:
+      api: {sent: ['POST /orgs/{org}/repos']}       # quoted: '{' opens a YAML mapping in a flow list
     state:
       - {kind: repo, name: "{{ p }}-app", match: {description: e2e app, has_wiki: false}}
-  - name: remove
+  - name: change
+    fragments:
+      repositories:
+        - "orgs.newRepo('{{ p }}-app') { description: 'e2e app v2', has_wiki: false }"
+    plan: {expect: changes, counts: {add: 0, delete: 0}}
+    apply:
+      api: {sent: ['PATCH /repos/{owner}/{repo}']}
+    state:
+      - {kind: repo, name: "{{ p }}-app", match: {description: e2e app v2}}
+  - name: remove                 # removed by the SUT: the cleanup runs the trusted reset CLI, not the SUT
     plan: {expect: changes, counts: {delete: 1}}
-    apply: {delete: true}
+    apply:
+      delete: true
+      api: {sent: ['DELETE /repos/{owner}/{repo}']}
     state:
       - {kind: repo, name: "{{ p }}-app", absent: true}
 ```
+
+`apply.api` asserts the HTTP requests of the apply from otterdog's request statistics (otterdog >= 1.7.0; skipped
+with a note on older SUTs): `sent` (each endpoint got a request) and `not_sent` (none did). Endpoints are written as
+`METHOD /path` with `{org}`, `{owner}/{repo}`, `{name}`, `{id}` placeholders, or `mutation <name>` (GraphQL); every
+write endpoint must be listed in `scenarios/api_endpoints.yaml` (its source and trigger), and
+`docs/api-coverage.md` (generated: `.venv/bin/python tests/unit/test_api_endpoints.py --write`) shows which step
+asserts which endpoint.
 
 Per live step: render, `validate` (only when given), `plan -n -r e2e-<run>-*`, `apply -f -n` (when the plan expects
 changes), `state` checks through the read-only oracle (retried up to 60 s, `timeout:` extends it), converge (plan

@@ -53,7 +53,8 @@ missing or ambiguous (which behaviour, which otterdog version, offline or live).
    | the configuration as written: jsonnet, schema, `show-default`, `canonical-diff` | offline YAML | `scenarios/offline/template/` |
    | otterdog.json variants, defaults override | offline YAML `workspace`, else Python | `scenarios/offline/template/`, `tests/offline/` |
    | CLI flags, usage errors, exit codes, stdin | Python offline test | `tests/offline/` |
-   | live objects: create, change, converge, remove | live YAML with `state` checks | `scenarios/cli/<domain>/` |
+   | live objects: create, change, converge, remove | live YAML with `state` checks and `apply.api` | `scenarios/cli/<domain>/` |
+   | the HTTP requests of a change (verb, endpoint, a request that must not be sent) | live YAML `apply.api` | the live scenario of the object |
    | regression of an upstream fix | live YAML, tag `regression` | `scenarios/cli/<domain>/` of the feature it guards |
    | enterprise-only features | live YAML, `min_plan: enterprise` | `scenarios/enterprise/<domain>/` |
    | webapp, webhooks, web UI | Python tests | `tests/webapp/`, `tests/webhooks/`, `tests/web_ui/` |
@@ -84,6 +85,22 @@ missing or ambiguous (which behaviour, which otterdog version, offline or live).
      declare `requires`, `min_plan`, `identities`, or `expect_failure_without` with `on_missing_capability`; create a
      private repository public first, then make it private in a later step (#791), unless `fixed_in` is at least
      `1.7.0.dev14`;
+   - live journeys cover the three verbs of each object they manage: added, changed, then removed by the SUT in a
+     step with `apply: {delete: true}` (the cleanup runs the trusted reset CLI, never the SUT: a removal left to it
+     tests nothing). Each such step asserts its requests with `apply.api`: `sent` the endpoint of the verb
+     (`POST /orgs/{org}/repos`, `PATCH /repos/{owner}/{repo}`, `DELETE /repos/{owner}/{repo}/hooks/{id}`,
+     `mutation createBranchProtectionRule`), `not_sent` the neighbouring request the change must not cause (no
+     `PATCH /repos/{owner}/{repo}` when only `team_permissions` change, otterdog#924). Take the endpoint from
+     `scenarios/api_endpoints.yaml` (add it there, with its otterdog source and trigger, when otterdog sends a new
+     one), quote it in YAML (`'{'` opens a mapping in a flow list), and only assert what the otterdog source shows
+     the apply sends (`otterdog/providers/github/rest/*.py`, the models' `apply_live_patch`);
+   - state variants: the request that works on one object can be refused on another. For a repository-level
+     object, ask which of these the change can meet and cover the ones its code path treats differently: an
+     archived repository (read-only: GitHub answers 403 to every write of its settings), a private repository
+     (plan-gated features), a fork or a repository created from a template, an environment-level object, the
+     organization-level variant, and the same apply combining two changes (archiving together with a change sent by
+     its own request: KB-082). A variant that the code path does not distinguish needs no step; say so in the
+     description;
    - shared jsonnet goes to `scenarios/fragments/` or the library `scenarios/lib/e2e.libsonnet` (`{file, raw, vars}`
      entries, `libraries`, `overlay`); never `import`, `importstr`, `importbin`;
    - assert messages (`contains`), not only exit codes (otterdog exits with the error count, KB-034).
@@ -112,6 +129,8 @@ missing or ambiguous (which behaviour, which otterdog version, offline or live).
 
    `assist check` without paths checks the files changed in the work tree under `scenarios/` and `tests/`; add
    `--sut branch:main` (or the PR's SUT) when the behaviour only exists there, `--no-lint` for a fast schema pass.
+   After adding or changing `apply.api`, regenerate the HTTP request coverage:
+   `.venv/bin/python tests/unit/test_api_endpoints.py --write` (it prints the asserted share per method).
    The offline run prints its artifacts directory at the end: read `summary.md`
    (`.venv/bin/otterdog-e2e report artifacts/<run_id>`) and, for a failing step, the command outputs in
    `artifacts/<run_id>/offline/<nnn>-test_offline_scenario_<id>_<step>_/cli/<nnnn>-<command>/stdout.txt` and the rendered
@@ -119,7 +138,8 @@ missing or ambiguous (which behaviour, which otterdog version, offline or live).
    a new defect, step 4). Tighten loose expectations (`ok: false`) into exact messages and counts from these outputs.
 7. **Registries.** Closing a coverage gap: `scenarios/coverage.yaml` and the regenerated `docs/coverage-matrix.md`
    (the `fill-coverage-gap` skill); a probe: `PROBES` of `tests/cli/conftest.py` and a `timeout`; an expected
-   differential delta: a `references` entry of the scenario (the `otterdog-pr-tests` skill).
+   differential delta: a `references` entry of the scenario (the `otterdog-pr-tests` skill); a new write endpoint:
+   `scenarios/api_endpoints.yaml` and the regenerated `docs/api-coverage.md`.
 8. **Report** to the user (example below), including what you could not verify and the live command they may run.
 
 ## Done means
@@ -129,6 +149,8 @@ missing or ambiguous (which behaviour, which otterdog version, offline or live).
   `branch:main` when the behaviour depends on it (`make one SCENARIO=<id> SUT=branch:main`);
 - a live scenario passes `make lint-scenarios` (with `SUT=branch:main` for unreleased fixes); its live run is left to
   the user: `make one SCENARIO=<id> TARGET=<instance>`;
+- every live step that adds, changes or removes an object asserts its requests with `apply.api`, the journey
+  removes what it created in a step of its own, and the report names the state variants covered or left out;
 - `make unit` is green (metadata, naming, known-bug links, coverage matrix);
 - the report lists every file changed, every gate run with its result and every open question.
 

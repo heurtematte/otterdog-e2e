@@ -46,15 +46,39 @@ that commit only (a later push changes nothing).
    Flag to the user: a pin that is not the head, `risky_files` (`pyproject.toml`, `poetry.lock`, `docker/*`,
    `examples/template/*`, `otterdog/resources/defaults/*`: the run builds an image from them), a PR that does not target eclipse-csi/otterdog.
 2. **Understand the change.** For each changed source file, write down what behaviour changes: a validation message,
-   a plan or `local-plan` line, an exit code, a `show` output, a webapp reaction. The PR's own tests in the diff show
-   the intended behaviour. Separate what shows offline (validation, `local-plan`, `show`, `canonical-diff`, CLI
-   flags and exit codes) from what needs GitHub (apply, live read-back, webapp, webhooks).
+   a plan or `local-plan` line, an exit code, a `show` output, a webapp reaction, **an HTTP request**. The PR's own
+   tests in the diff show the intended behaviour. Separate what shows offline (validation, `local-plan`, `show`,
+   `canonical-diff`, CLI flags and exit codes) from what needs GitHub (apply, live read-back, webapp, webhooks).
+   - **The requests.** A change of `otterdog/providers/github/**`, of a model's `get_mapping_to_provider`,
+     `to_provider_data`, `apply_live_patch` or `generate_live_patch`, or of `operations/apply.py` changes what `apply`
+     sends. List each request the PR adds, removes, moves or changes the body of, as an endpoint of
+     `scenarios/api_endpoints.yaml` (`PATCH /repos/{owner}/{repo}`, `PUT /orgs/{org}/teams/{name}/repos/{owner}/{repo}`,
+     `mutation createBranchProtectionRule`); a new endpoint goes into that inventory with its source and trigger.
+     #924 is the example: it removed `team_permissions` from the body of `PATCH /repos/{owner}/{repo}`, so a
+     permission-only change sends no repository PATCH any more.
+   - **Known bugs it fixes.** Compare the changed files with the `evidence` of `scenarios/known_bugs.yaml`: a PR that
+     changes the code of a registered bug (KB-001 was fixed by #923, whose title says nothing about it) makes it
+     `status: fixed` with `fixed_in` (the release X.Y.Z that contains the merge, the next minor while unreleased) and
+     `upstream`, and its `docs/known-issues.md` section says how; its tests then run strict on the fixed SUTs.
 3. **Decide what to pin**, as a short list you will report:
    - the **intended change**: an expected delta (base and head differ, as the PR says);
    - **neighbouring behaviour that must not change**: strict control steps, identical on both sides (#790: a ruleset
      that does set `strict` must still validate);
    - **variants the PR may break**: the same code path on another object (#790 also changed organization rulesets,
-     where head crashes: KB-008).
+     where head crashes: KB-008);
+   - **the object states the request meets**: walk the matrix below for every request of step 2 and keep the
+     states its code path treats differently. #924 slipped through because the battery archived a repository and
+     changed team permissions, but never both: a write that GitHub accepts on a regular repository is refused on an
+     archived one.
+
+     | State | Why a request can behave differently |
+     |---|---|
+     | archived repository | read-only: GitHub refuses every write of its settings (403); otterdog skips some fields only (`_unavailable_fields_in_archived_repos`) |
+     | archived in the same apply | the archiving `PATCH` goes first, the requests of the other settings follow it (KB-082) |
+     | private repository, plan free/team/enterprise | plan-gated features answer 403/404/422 (rulesets, environments, fork PR approval) |
+     | fork, created from a template, empty repository | creation takes another request; settings read back differently; no branch yet |
+     | organization vs repository vs environment level | the same model with another endpoint and other permissions |
+     | add, change, remove | three requests (or three code paths of one request): each verb is its own case |
 4. **Find the scenario of the functionality.** Start from `referencing_scenarios`, the covering items of
    `touched_features` and `related_scenarios` (`grep -rl <field> scenarios/offline`). The scenario that pins the
    behaviour the PR changes is the one to EXTEND (a new step, a new expectation); write a new generic scenario only
@@ -67,7 +91,13 @@ that commit only (a later push changes nothing).
      `scenarios/offline/rulesets/val-ruleset-strict.yaml` (step `no-strict` records, step `with-strict` is strict);
    - live (`scenarios/cli/<domain>/`, regressions included) only when the behaviour needs GitHub: you can lint them, not
      run them; once the PR is merged, a regression scenario gets `fixed_in` (the release `X.Y.Z` that contains the merge commit,
-     the next minor while unreleased: never a dev version);
+     the next minor while unreleased: never a dev version) and an `UNRELEASED_FIXES` entry while unreleased. Every
+     request of step 2 is asserted by the `apply.api` of the step that causes it: `sent` for a request the PR adds
+     or must keep, `not_sent` for one it removes (pattern: `scenarios/cli/repo/archived-repo-team-permissions.yaml`,
+     the #924 regression: no `PATCH /repos/{owner}/{repo}` on a permission-only change, PUT and DELETE of the teams
+     API on an archived repository). A `not_sent` that the base SUT violates cannot go into a scenario that runs on
+     `release:latest`: put it in the regression scenario (skipped there by `fixed_in`) or behind the step's
+     `known_bug`;
    - webapp or webhooks behaviour: a Python test of `tests/webapp/` or `tests/webhooks/` whose
      `pytest.mark.scenario(<id>, references=[...])` marker carries the reference (pattern:
      `tests/webapp/test_stale_status.py`; new comment markers go in the note); unverifiable here, say so.
@@ -134,6 +164,10 @@ that commit only (a later push changes nothing).
 - every new offline scenario passes on `release:latest`;
 - the differential run completed: each unexpected delta is either declared with a note or reported as a suspected
   regression with evidence; no declared delta is left unobserved without an explanation;
+- every request the PR adds, removes or changes is asserted by an `apply.api` of a live step, in every object state
+  of the matrix of step 3 that its code path distinguishes (or the report says why a state is left out); new
+  endpoints are in `scenarios/api_endpoints.yaml` and `docs/api-coverage.md` is regenerated;
+- the known bugs the PR fixes are `status: fixed` with `fixed_in` and `upstream`;
 - the report names the pinned sha, the files, the deltas and their verdicts, the open questions and the live command.
 
 ## Safety
@@ -164,6 +198,8 @@ Run: otterdog-e2e run --sut pr:790@0cee9e3... --suite offline,differential   (ba
 | O-VAL-RULESET-STRICT / no-strict / cli / validate         | expected             | head: missing 'strict' is an error       |
 | O-VAL-RULESET-STRICT / no-strict / cli / local-plan       | expected             | head aborts; base planned 2 additions    |
 | O-VAL-ORG-RULESET-STRICT / org-no-strict / cli / validate | suspected regression | head exit 2 AttributeError get_model_header: KB-008 drafted |
+Requests: none changed (validation only); states: repository and organization rulesets (both covered)
+Known bugs fixed: none
 Open questions: should the org-level crash block the PR?
 Live (yours to run, needs a test org): .venv/bin/otterdog-e2e pr 790 --sha 0cee9e3... --target free
 ```

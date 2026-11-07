@@ -39,6 +39,18 @@ The text after the skill name (`$ARGUMENTS` in Claude Code): a feature id (`conf
    The output is sorted by priority then status (bundle `artifacts/assist/coverage/coverage.md`). Prefer P0, then
    P1; prefer features whose `tier` is `offline` (you can run their tests to completion); group features that share
    one suggested scenario in their outlines and cover them together.
+
+   The HTTP requests are a second list of gaps: the endpoints of `docs/api-coverage.md` asserted by no step
+   (**none**), each with the coverage feature it belongs to (`scenarios/api_endpoints.yaml`):
+
+   ```bash
+   .venv/bin/python tests/unit/test_api_endpoints.py          # asserted share per method (POST, PUT, PATCH, DELETE, mutation)
+   grep '\*\*none\*\*' docs/api-coverage.md                   # the endpoints no step asserts yet
+   ```
+
+   Such a gap is closed by a step of the feature's live scenario that makes otterdog send the request and names it
+   in `apply.api.sent` (a removal: a step with `apply: {delete: true}`, the cleanup runs another CLI); prefer
+   extending the journey of the object over a new scenario.
 2. **Open one feature:**
 
    ```bash
@@ -74,7 +86,9 @@ The text after the skill name (`$ARGUMENTS` in Claude Code): a feature id (`conf
    - `status`: `covered` only when every operation of the feature is exercised by an assertion AND at least one
      covering item runs strictly on the default SUT (not only a known-bug XFAIL, not skipped on `release:latest` by
      `fixed_in`); otherwise `partial`, with the `gap_outline` reduced to what is still missing; a `gap` with a
-     covering item becomes `partial` at least;
+     covering item becomes `partial` at least. For the live operations `add`, `modify` and `remove`, the assertion
+     includes the request: the step's `apply.api.sent` names the endpoint of the verb (`docs/api-coverage.md` lists
+     the endpoints of the feature), and `remove` is applied by the SUT in a step, never only by the cleanup;
    - `gap_outline`: removed for `covered`; `known_bugs`: the bugs the test hit; `notes`: the verified behaviour and
      the exact messages;
    - never add `verified_on`: it records a green live run (target, SUT, run id, date from `run.json`) that the user
@@ -100,6 +114,8 @@ The text after the skill name (`$ARGUMENTS` in Claude Code): a feature id (`conf
 - `scenarios/coverage.yaml` changed only as justified: each new `covered_by` item exists and asserts the feature, a
   `covered` status names the assertion that exercises every operation, `docs/coverage-matrix.md` regenerated, and
   `make unit` green;
+- the endpoints the new steps assert are in `docs/api-coverage.md` (regenerated with
+  `.venv/bin/python tests/unit/test_api_endpoints.py --write`);
 - live parts are listed with the exact commands for the user.
 
 ## Safety
