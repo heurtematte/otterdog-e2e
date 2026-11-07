@@ -18,6 +18,7 @@ Without paths, the files of the work tree under scenarios/ and tests/ that ``git
 * scenarios/api_endpoints.yaml: the inventory of otterdog's write requests loads, the write endpoints the live
   scenarios name in ``apply.api`` are listed, its features exist and docs/api-coverage.md is up to date
   (api_coverage.ApiCoverageProject.all_problems); a live scenario naming an unlisted write endpoint is a problem too;
+* scenarios/shards.yaml: the shard map of the live tiers loads (shards.load_shards);
 * scenarios/known_bugs.yaml: it loads, sorted by id, ``status: fixed`` exactly with ``fixed_in``, evidence, listed
   scenarios exist, scenario and step links (check_references), a docs/known-issues.md section per bug;
 * jsonnet files below scenarios/: the scenarios referencing them are checked (a file nobody references is noted);
@@ -48,6 +49,7 @@ GIT_PATHS = ("scenarios", "tests")
 COVERAGE_NAME = "coverage.yaml"
 KNOWN_BUGS_NAME = "known_bugs.yaml"
 API_ENDPOINTS_NAME = "api_endpoints.yaml"
+SHARDS_NAME = "shards.yaml"
 JSONNET_SUFFIXES = (".jsonnet", ".libsonnet")
 YAML_SUFFIXES = (".yaml", ".yml")
 LIVE_DIRS = ("cli", "enterprise")
@@ -143,7 +145,7 @@ def changed_files(project_root: Path) -> tuple[list[Path], list[str]]:
 
 
 def file_kind(path: Path, root: Path) -> str:
-    """Kind of a file: coverage, api-endpoints, known-bugs, scenario, jsonnet, python or other."""
+    """Kind of a file: coverage, api-endpoints, shards, known-bugs, scenario, jsonnet, python or other."""
     relative = _relative(path, root)
     parts = PurePosixPath(relative).parts
     in_scenarios = len(parts) > 1 and parts[0] == "scenarios"
@@ -157,6 +159,8 @@ def file_kind(path: Path, root: Path) -> str:
         return "coverage"
     if relative == f"scenarios/{API_ENDPOINTS_NAME}":
         return "api-endpoints"
+    if relative == f"scenarios/{SHARDS_NAME}":
+        return "shards"
     if path.name == KNOWN_BUGS_NAME:
         return "known-bugs"
     return "scenario"
@@ -238,6 +242,7 @@ class Checker:
         handler = {
             "coverage": self.check_coverage,
             "api-endpoints": self.check_api_endpoints,
+            "shards": self.check_shards,
             "known-bugs": self.check_known_bugs,
             "scenario": self.check_scenario,
             "jsonnet": self.check_jsonnet,
@@ -415,6 +420,15 @@ class Checker:
             return
         for problem in problems:
             self.problem(path, "", problem)
+
+    def check_shards(self, path: Path) -> None:
+        """scenarios/shards.yaml: the shard map of the live tiers loads."""
+        from otterdog_acceptance.shards import ShardError, load_shards
+
+        try:
+            load_shards(self.root)
+        except (ShardError, OSError) as exc:
+            self.problem(path, "", str(exc).removeprefix(f"{SHARDS_NAME}: "))
 
     def check_coverage(self, path: Path) -> None:
         """scenarios/coverage.yaml: every check of the coverage matrix tests (the generated doc included)."""

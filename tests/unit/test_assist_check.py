@@ -456,6 +456,28 @@ def test_known_bugs_problems(project: Path, text: str, doc: str, expected: tuple
     assert len(found) == 1 and found[0][0] == expected[0] and expected[1] in found[0][1], found
 
 
+SHARDS = """
+shards:
+  repos:
+    profile: free
+    match:
+      - %s: [repo]
+  rest:
+    profile: free
+    default: true
+"""
+
+
+def test_the_shard_map_is_checked_by_its_loader(project: Path) -> None:
+    """scenarios/shards.yaml is the shard map of the live tiers, not a scenario: a valid one passes, an invalid one is
+    reported by the loader's message."""
+    write(project, "scenarios/shards.yaml", SHARDS % "domains")
+    assert problems_of(project, "scenarios/shards.yaml") == []
+    write(project, "scenarios/shards.yaml", SHARDS % "colours")
+    found = messages(project, "scenarios/shards.yaml")
+    assert len(found) == 1 and "unknown key(s) colours" in found[0][1], found
+
+
 def test_a_broken_known_bugs_file_is_reported_once_for_scenarios(project: Path) -> None:
     """A scenario check cannot verify its bugs with an unreadable registry: one problem on the registry."""
     write(project, "scenarios/known_bugs.yaml", "- id: nope\n")
@@ -509,6 +531,8 @@ def test_other_and_missing_files(project: Path) -> None:
         ("scenarios/otterdog-prs/1.yaml", "scenario"),  # no PR manifest any more: a YAML file of scenarios/
         ("scenarios/coverage.yaml", "coverage"),
         ("scenarios/known_bugs.yaml", "known-bugs"),
+        ("scenarios/shards.yaml", "shards"),
+        ("scenarios/api_endpoints.yaml", "api-endpoints"),
         ("scenarios/cli/sub/x.yml", "scenario"),
         ("scenarios/lib/e2e.libsonnet", "jsonnet"),
         ("tests/cli/test_x.py", "python"),
