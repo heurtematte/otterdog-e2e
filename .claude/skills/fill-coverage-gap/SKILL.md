@@ -9,7 +9,7 @@ description: >-
   coverage of an area, a tier or a priority.
 license: EPL-2.0
 compatibility: >-
-  Requires the otterdog-acceptance checkout with .venv (make init), unshare and docker for the offline tier, network to
+  Requires the Otterdog Acceptance checkout with .venv (make init), unshare and docker for the offline tier, network to
   fetch SUTs. Features of live tiers need a test organization: their tests are written and linted here, run by the
   user.
 ---

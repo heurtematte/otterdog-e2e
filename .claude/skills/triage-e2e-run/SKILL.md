@@ -1,7 +1,7 @@
 ---
 name: triage-e2e-run
 description: >-
-  Triages the failures of an otterdog-acceptance run: builds a scrubbed triage bundle with otterdog-acceptance assist triage,
+  Triages the failures of an Otterdog Acceptance run: builds a scrubbed triage bundle with otterdog-acceptance assist triage,
   checks the deterministic pre-classification of every failed or errored item (known-bug, infrastructure, harness,
   sut, unknown) against the evidence files, reproduces otterdog failures offline when possible and drafts the
   follow-up: a scenarios/known_bugs.yaml entry with its docs/known-issues.md section, a scenario or harness fix, or
@@ -9,7 +9,7 @@ description: >-
   red run or CI job, an artifacts directory, or the latest run.
 license: EPL-2.0
 compatibility: >-
-  Requires the otterdog-acceptance checkout with .venv (make init) and a run artifacts directory (local, or downloaded from
+  Requires the Otterdog Acceptance checkout with .venv (make init) and a run artifacts directory (local, or downloaded from
   CI); unshare and docker to reproduce offline. Live reruns need a test organization and are only suggested.
 ---
 

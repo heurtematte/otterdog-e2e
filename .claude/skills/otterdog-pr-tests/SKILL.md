@@ -9,7 +9,7 @@ description: >-
   change of an otterdog pull request, given its number and optionally a 40-hex commit sha.
 license: EPL-2.0
 compatibility: >-
-  Requires the otterdog-acceptance checkout with .venv (make init), docker (a PR is untrusted code and only runs in its own
+  Requires the Otterdog Acceptance checkout with .venv (make init), docker (a PR is untrusted code and only runs in its own
   image), unshare, network for public GitHub reads and to fetch the PR. No test organization: live tiers are only
   suggested to the user.
 ---

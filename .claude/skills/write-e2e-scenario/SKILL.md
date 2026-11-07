@@ -1,19 +1,19 @@
 ---
 name: write-e2e-scenario
 description: >-
-  Writes, extends or fixes an otterdog-acceptance test in this repository: a YAML scenario (offline, cli (regressions included),
+  Writes, extends or fixes an Otterdog Acceptance test in this repository: a YAML scenario (offline, cli (regressions included),
   enterprise) or a Python test of a tier, following the harness model and its id, tag, naming, secret, capability and
   known-bug rules, then validates it with otterdog-acceptance assist check, the offline tier or the offline lint. Use when
   asked to write, add, extend, fix or review an e2e scenario or test for otterdog here, to reproduce an otterdog
   behaviour or bug as a test, and as the base of the otterdog-pr-tests and fill-coverage-gap skills.
 license: EPL-2.0
 compatibility: >-
-  Requires the otterdog-acceptance checkout with .venv (make init), unshare for the offline sandbox, docker for untrusted
+  Requires the Otterdog Acceptance checkout with .venv (make init), unshare for the offline sandbox, docker for untrusted
   SUTs and the offline webapp items, network to fetch SUTs. Live tiers need a test organization and are never run by
   this skill unless the user asks.
 ---
 
-# Write an otterdog-acceptance scenario
+# Write an Otterdog Acceptance scenario
 
 Paths are relative to the repository root; run every command from there. The harness never calls an AI: you write
 the files, the deterministic gates below decide whether they are valid, a human reviews them.
