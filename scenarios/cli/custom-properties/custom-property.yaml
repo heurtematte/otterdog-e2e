@@ -44,7 +44,7 @@ steps:
             custom_properties: {
               "{{ p }}-tier": "gold",
               "{{ p }}-tags": ["alpha", "beta"],
-              "{{ p }}-owner": "otterdog-e2e",
+              "{{ p }}-owner": "otterdog-acceptance",
             },
           }
     plan:
@@ -80,7 +80,7 @@ steps:
         match:
           "{{ p }}-tier": gold
           "{{ p }}-tags": {$unordered: [alpha, beta]}
-          "{{ p }}-owner": otterdog-e2e
+          "{{ p }}-owner": otterdog-acceptance
 
   - name: update
     fragments:

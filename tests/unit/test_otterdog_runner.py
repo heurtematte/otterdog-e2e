@@ -14,16 +14,16 @@ from typing import Any
 
 import pytest
 
-from otterdog_e2e.otterdog import runner as runner_module
-from otterdog_e2e.otterdog.runner import OtterdogCli, infra_error_line
-from otterdog_e2e.otterdog.runtime import DockerRuntime, set_container_scope
-from otterdog_e2e.otterdog.workspace import ConfigWorkspace
-from otterdog_e2e.safety import SafetyError
-from otterdog_e2e.settings import HarnessSettings, Identity
-from otterdog_e2e.sut.cli_install import IMAGE_OTTERDOG_BIN, InstalledCli
-from otterdog_e2e.sut.spec import ResolvedSut, SutSpec
-from otterdog_e2e.sut.template import offline_template
-from otterdog_e2e.testing.fakes import make_verified_org
+from otterdog_acceptance.otterdog import runner as runner_module
+from otterdog_acceptance.otterdog.runner import OtterdogCli, infra_error_line
+from otterdog_acceptance.otterdog.runtime import DockerRuntime, set_container_scope
+from otterdog_acceptance.otterdog.workspace import ConfigWorkspace
+from otterdog_acceptance.safety import SafetyError
+from otterdog_acceptance.settings import HarnessSettings, Identity
+from otterdog_acceptance.sut.cli_install import IMAGE_OTTERDOG_BIN, InstalledCli
+from otterdog_acceptance.sut.spec import ResolvedSut, SutSpec
+from otterdog_acceptance.sut.template import offline_template
+from otterdog_acceptance.testing.fakes import make_verified_org
 
 DATA = Path(__file__).parent / "data"
 ORG = "e2e-test-org"

@@ -17,17 +17,17 @@ import pytest
 import responses
 import yaml
 
-from otterdog_e2e import blueprints as bp
-from otterdog_e2e.blueprints import (
+from otterdog_acceptance import blueprints as bp
+from otterdog_acceptance.blueprints import (
     BlueprintDefinition,
     BlueprintError,
     BlueprintHelper,
     PolicyDefinition,
     RequiredFile,
 )
-from otterdog_e2e.config_repo import ConfigRepoFlow, DeliveryTimeoutError, ReactionTimeoutError
-from otterdog_e2e.safety import SafetyError
-from otterdog_e2e.testing.fakes import (
+from otterdog_acceptance.config_repo import ConfigRepoFlow, DeliveryTimeoutError, ReactionTimeoutError
+from otterdog_acceptance.safety import SafetyError
+from otterdog_acceptance.testing.fakes import (
     FAKE_ORG,
     FakeGitHubHttp,
     FakeOracle,
@@ -35,9 +35,9 @@ from otterdog_e2e.testing.fakes import (
     fake_sha,
     make_run_context,
 )
-from otterdog_e2e.waiting import WaitTimeoutError
-from otterdog_e2e.webapp.api import WebappApi
-from otterdog_e2e.webhooks.relay import RelayedDelivery
+from otterdog_acceptance.waiting import WaitTimeoutError
+from otterdog_acceptance.webapp.api import WebappApi
+from otterdog_acceptance.webhooks.relay import RelayedDelivery
 
 BASE = "http://127.0.0.1:5996"
 RUN_CTX = make_run_context()

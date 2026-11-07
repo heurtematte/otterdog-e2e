@@ -12,10 +12,10 @@ import click
 import pytest
 from click.testing import CliRunner
 
-from otterdog_e2e import cli
-from otterdog_e2e.cli import common as cli_common
-from otterdog_e2e.cli import run as cli_run
-from otterdog_e2e.testing.fakes import FakeGitHubHttp, fake_sha, make_settings
+from otterdog_acceptance import cli
+from otterdog_acceptance.cli import common as cli_common
+from otterdog_acceptance.cli import run as cli_run
+from otterdog_acceptance.testing.fakes import FakeGitHubHttp, fake_sha, make_settings
 
 PIN = fake_sha("pr-head")
 
@@ -26,7 +26,7 @@ PIN = fake_sha("pr-head")
         "--e2e-sut=pr:1@x",
         "--e2e-target",
         "-p",
-        "-pno:otterdog_e2e",
+        "-pno:otterdog_acceptance",
         "-vp",
         "-c",
         "-cpytest.ini",
@@ -65,7 +65,7 @@ def project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
         (tmp_path / "tests" / suite).mkdir(parents=True)
     settings = make_settings(tmp_path)
     captured: dict[str, Any] = {"code": 3}
-    monkeypatch.setattr("otterdog_e2e.settings.harness_settings", lambda environ=None: settings)
+    monkeypatch.setattr("otterdog_acceptance.settings.harness_settings", lambda environ=None: settings)
 
     def run_pytest(args: list[str], *, command: str | None = None) -> int:
         """Capture the pytest arguments and the recorded harness command."""
@@ -104,7 +104,7 @@ def test_run_builds_pytest_arguments(project: dict[str, Any]) -> None:
     ]
     assert "artifacts:" in result.output and "t3c7z8a5" in result.output
     assert project["command"] == (
-        "otterdog-e2e run --suite cli,webapp --target free --sut branch:main --tags smoke,repo --scenario 'cli.repo.*'"
+        "otterdog-acceptance run --suite cli,webapp --target free --sut branch:main --tags smoke,repo --scenario 'cli.repo.*'"
         " -k 'not slow' -x"
     )
 
@@ -214,11 +214,11 @@ def test_pr_plans_tags_change_and_base(project: dict[str, Any], monkeypatch: pyt
     --e2e-scenario restriction."""
     settings = project["settings"]
     write_reference(settings, REFERENCING_SCENARIO.replace("sha:b5f7bb1", "tag:v1.6.0"))
-    monkeypatch.setattr("otterdog_e2e.sut.spec.resolve_sut", lambda spec, settings, http=None: Resolved())
-    monkeypatch.setattr("otterdog_e2e.github.http.GitHubHttp", lambda token, **kw: FakeGitHubHttp())
+    monkeypatch.setattr("otterdog_acceptance.sut.spec.resolve_sut", lambda spec, settings, http=None: Resolved())
+    monkeypatch.setattr("otterdog_acceptance.github.http.GitHubHttp", lambda token, **kw: FakeGitHubHttp())
     selected: list[list[str]] = []
     monkeypatch.setattr(
-        "otterdog_e2e.selection.select_tags", lambda files: selected.append(files) or {"smoke", "webapp"}
+        "otterdog_acceptance.selection.select_tags", lambda files: selected.append(files) or {"smoke", "webapp"}
     )
     result = CliRunner().invoke(cli.main, ["pr", "790", "--sha", PIN.upper(), "--target", "free", "--strict-diff"])
     assert result.exit_code == 3, result.output
@@ -230,7 +230,7 @@ def test_pr_plans_tags_change_and_base(project: dict[str, Any], monkeypatch: pyt
     assert not [arg for arg in args if arg.startswith("--e2e-scenario")]
     assert "referencing scenarios O-VAL-EXAMPLE" in result.output
     assert "--e2e-strict-diff" in args and "--e2e-target=free" in args
-    assert project["command"] == f"otterdog-e2e pr 790 --sha {PIN} --target free --strict-diff"
+    assert project["command"] == f"otterdog-acceptance pr 790 --sha {PIN} --target free --strict-diff"
     dirs = [Path(arg).name for arg in args if not arg.startswith("-")]
     assert dirs == ["offline", "differential", "cli", "webhooks", "webapp", "enterprise"]
 
@@ -239,16 +239,16 @@ def test_pr_change_option(project: dict[str, Any], monkeypatch: pytest.MonkeyPat
     """pr --change: another change than the PR (its references give the base), recorded in the command; the PR's own
     number is the default and never repeated; without a base in the references the base is the merge base (auto)."""
     write_reference(project["settings"], REFERENCING_SCENARIO.replace("pr: 790", "change: check-merge"))
-    monkeypatch.setattr("otterdog_e2e.sut.spec.resolve_sut", lambda spec, settings, http=None: Resolved())
-    monkeypatch.setattr("otterdog_e2e.selection.select_tags", lambda files: {"smoke"})
+    monkeypatch.setattr("otterdog_acceptance.sut.spec.resolve_sut", lambda spec, settings, http=None: Resolved())
+    monkeypatch.setattr("otterdog_acceptance.selection.select_tags", lambda files: {"smoke"})
     result = CliRunner().invoke(cli.main, ["pr", "790", "--sha", PIN, "--change", "check-merge"])
     assert result.exit_code == 3, result.output
     assert "--e2e-change=check-merge" in project["args"] and "--e2e-base-sut=sha:b5f7bb1" in project["args"]
-    assert project["command"] == f"otterdog-e2e pr 790 --sha {PIN} --change check-merge"
+    assert project["command"] == f"otterdog-acceptance pr 790 --sha {PIN} --change check-merge"
     result = CliRunner().invoke(cli.main, ["pr", "790", "--sha", PIN, "--change", "#790"])
     assert result.exit_code == 3, result.output
     assert "--e2e-change=790" in project["args"] and "--e2e-base-sut=auto" in project["args"]
-    assert project["command"] == f"otterdog-e2e pr 790 --sha {PIN}"
+    assert project["command"] == f"otterdog-acceptance pr 790 --sha {PIN}"
     result = CliRunner().invoke(cli.main, ["pr", "790", "--sha", PIN, "--change", "bad change"])
     assert result.exit_code == 2 and "--change" in result.output
 
@@ -259,13 +259,13 @@ def test_pr_pins_the_current_head_without_sha(project: dict[str, Any], monkeypat
         monkeypatch.delenv(key, raising=False)
     heads: list[int] = []
     monkeypatch.setattr(cli_run, "current_pr_head", lambda settings, number: heads.append(number) or PIN)
-    monkeypatch.setattr("otterdog_e2e.sut.spec.resolve_sut", lambda spec, settings, http=None: Resolved())
-    monkeypatch.setattr("otterdog_e2e.selection.select_tags", lambda files: {"smoke"})
+    monkeypatch.setattr("otterdog_acceptance.sut.spec.resolve_sut", lambda spec, settings, http=None: Resolved())
+    monkeypatch.setattr("otterdog_acceptance.selection.select_tags", lambda files: {"smoke"})
     result = CliRunner().invoke(cli.main, ["pr", "790"])
     assert result.exit_code == 3, result.output
     assert heads == [790] and f"pinned its current head {PIN}" in result.output
     assert f"--e2e-sut=pr:790@{PIN}" in project["args"]
-    assert project["command"] == f"otterdog-e2e pr 790 --sha {PIN}"
+    assert project["command"] == f"otterdog-acceptance pr 790 --sha {PIN}"
     monkeypatch.setenv("CI", "true")
     result = CliRunner().invoke(cli.main, ["pr", "790"])
     assert result.exit_code == 2 and "--sha in CI" in result.output and heads == [790]
@@ -289,7 +289,7 @@ def test_current_pr_head_is_the_fetched_pull_ref(monkeypatch: pytest.MonkeyPatch
             return self.head
 
     mirror = Mirror(PIN.upper())
-    monkeypatch.setattr("otterdog_e2e.sut.spec.upstream_mirror", lambda settings: mirror)
+    monkeypatch.setattr("otterdog_acceptance.sut.spec.upstream_mirror", lambda settings: mirror)
     settings = SimpleNamespace(upstream_repo="eclipse-csi/otterdog")
     assert cli_run.current_pr_head(settings, 790) == PIN and mirror.calls == ["ensure", "fetch 790"]
     mirror.head = ValueError("cannot fetch refs/pull/790/head")
@@ -327,7 +327,7 @@ def test_classify_pr_reports_review_details(tmp_path: Path, monkeypatch: pytest.
     summary = tmp_path / "summary.md"
     monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary))
     monkeypatch.delenv("GITHUB_OUTPUT", raising=False)
-    monkeypatch.setattr("otterdog_e2e.settings.harness_settings", lambda environ=None: make_settings(tmp_path))
+    monkeypatch.setattr("otterdog_acceptance.settings.harness_settings", lambda environ=None: make_settings(tmp_path))
     http = FakeGitHubHttp(read_only=True)
     pull = {
         "title": "evil `title`\nnext",
@@ -337,7 +337,7 @@ def test_classify_pr_reports_review_details(tmp_path: Path, monkeypatch: pytest.
     http.add("GET", "/repos/eclipse-csi/otterdog/pulls/792", json=pull)
     files = [{"filename": "otterdog/webapp/x.py"}, {"filename": "poetry.lock"}, {"filename": "docker/Dockerfile"}]
     http.add("GET", "/repos/eclipse-csi/otterdog/pulls/792/files", json=files)
-    monkeypatch.setattr("otterdog_e2e.github.http.GitHubHttp", lambda token, **kw: http)
+    monkeypatch.setattr("otterdog_acceptance.github.http.GitHubHttp", lambda token, **kw: http)
     result = CliRunner().invoke(cli.main, ["sut", "classify", f"pr:792@{PIN}"])
     assert result.exit_code == 0, result.output
     info = json.loads(result.output)
@@ -367,7 +367,7 @@ def test_run_web_ui_suite_and_allow_flag(project: dict[str, Any]) -> None:
         "--e2e-run-id=t3c7z8a5",
         "--e2e-allow-web-ui",
     ]
-    assert project["command"] == "otterdog-e2e run --suite web_ui --target free --allow-web-ui"
+    assert project["command"] == "otterdog-acceptance run --suite web_ui --target free --allow-web-ui"
     result = CliRunner().invoke(cli.main, ["run", "--suite", "web_ui", "--target", "free"])
     assert result.exit_code == 3 and "--e2e-allow-web-ui" not in project["args"]
     assert "web_ui" in cli_run.SUITE_HELP and "--allow-web-ui" in CliRunner().invoke(cli.main, ["run", "--help"]).output
@@ -399,13 +399,13 @@ def test_pr_passes_allow_web_ui_and_explains_the_untrusted_sut(
 ) -> None:
     """pr --allow-web-ui maps to --e2e-allow-web-ui and says that a pr: SUT (untrusted) skips the web_ui items; the
     auto suites stay the regression suites."""
-    monkeypatch.setattr("otterdog_e2e.sut.spec.parse_sut_spec", lambda raw: raw)
-    monkeypatch.setattr("otterdog_e2e.sut.spec.resolve_sut", lambda spec, settings, http=None: Resolved())
-    monkeypatch.setattr("otterdog_e2e.selection.select_tags", lambda files: {"smoke"})
+    monkeypatch.setattr("otterdog_acceptance.sut.spec.parse_sut_spec", lambda raw: raw)
+    monkeypatch.setattr("otterdog_acceptance.sut.spec.resolve_sut", lambda spec, settings, http=None: Resolved())
+    monkeypatch.setattr("otterdog_acceptance.selection.select_tags", lambda files: {"smoke"})
     result = CliRunner().invoke(cli.main, ["pr", "790", "--sha", PIN, "--target", "free", "--allow-web-ui"])
     assert result.exit_code == 3, result.output
     assert "--e2e-allow-web-ui" in project["args"] and "untrusted" in result.output
-    assert project["command"] == f"otterdog-e2e pr 790 --sha {PIN} --target free --allow-web-ui"
+    assert project["command"] == f"otterdog-acceptance pr 790 --sha {PIN} --target free --allow-web-ui"
     assert "web_ui" not in [Path(arg).name for arg in project["args"] if not arg.startswith("-")]
     result = CliRunner().invoke(cli.main, ["pr", "790", "--sha", PIN, "--suite", "web_ui", "--allow-web-ui"])
     assert result.exit_code == 3, result.output

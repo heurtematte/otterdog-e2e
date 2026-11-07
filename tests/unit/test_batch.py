@@ -20,11 +20,11 @@ from typing import Any
 
 import pytest
 
-from otterdog_e2e import batch, naming, procs, settings
-from otterdog_e2e.batch import BatchEntry, BatchError, BatchPlan, BatchResult
-from otterdog_e2e.redact import Redactor
-from otterdog_e2e.settings import HarnessSettings
-from otterdog_e2e.testing.fakes import make_settings
+from otterdog_acceptance import batch, naming, procs, settings
+from otterdog_acceptance.batch import BatchEntry, BatchError, BatchPlan, BatchResult
+from otterdog_acceptance.redact import Redactor
+from otterdog_acceptance.settings import HarnessSettings
+from otterdog_acceptance.testing.fakes import make_settings
 
 PROJECT = Path(__file__).resolve().parents[2]
 TOKEN = "ghp_" + "b" * 36
@@ -40,7 +40,7 @@ class World:
     redactor: Redactor = field(default_factory=Redactor)
 
     def instance(self, name: str, profile: str | None, org_id: int, **extra: str) -> Path:
-        """Write ~/.config/otterdog-e2e/<name>.env (0600) of an instance of the org ``<name>-e2e``."""
+        """Write ~/.config/otterdog-acceptance/<name>.env (0600) of an instance of the org ``<name>-e2e``."""
         values = {
             "E2E_ORG": f"{name}-e2e",
             "E2E_ORG_ID": str(org_id),
@@ -63,7 +63,7 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
     (root / "targets").mkdir(parents=True)
     for profile in ("free", "team"):
         shutil.copy(PROJECT / "targets" / f"{profile}.yaml", root / "targets" / f"{profile}.yaml")
-    config = tmp_path / "home" / ".config" / "otterdog-e2e"
+    config = tmp_path / "home" / ".config" / "otterdog-acceptance"
     config.mkdir(parents=True)
     world = World(make_settings(root), {"HOME": str(tmp_path / "home"), "E2E_KEEP_ME": "parent"}, config)
     monkeypatch.setattr(settings, "REDACTOR", world.redactor)
@@ -91,7 +91,7 @@ def test_parse_targets_splits_repeats_and_deduplicates(world: World) -> None:
 
 
 def test_all_names_every_instance_env_file(world: World) -> None:
-    """@all: the stems of ~/.config/otterdog-e2e/*.env with a valid name, sorted; lists, directories, App credential
+    """@all: the stems of ~/.config/otterdog-acceptance/*.env with a valid name, sorted; lists, directories, App credential
     dirs and other files are not instances."""
     (world.config / "lists").mkdir()
     (world.config / "acme").mkdir()  # App credentials of acme
@@ -120,13 +120,13 @@ def test_all_skips_env_files_that_can_never_be_instances(world: World) -> None:
 
 def test_all_without_env_files_is_an_error(tmp_path: Path) -> None:
     """@all with no instance env file says how to create one."""
-    with pytest.raises(BatchError, match=r"no instance env file .*otterdog-e2e setup --target <instance>"):
+    with pytest.raises(BatchError, match=r"no instance env file .*otterdog-acceptance setup --target <instance>"):
         batch.parse_targets("@all", {"HOME": str(tmp_path)})
     assert batch.env_file_instances({"HOME": str(tmp_path)}) == []
 
 
 def test_target_list_files(world: World) -> None:
-    """@<list>: ~/.config/otterdog-e2e/lists/<list>, one instance per line, # comments (inline too), blank lines."""
+    """@<list>: ~/.config/otterdog-acceptance/lists/<list>, one instance per line, # comments (inline too), blank lines."""
     lists = world.config / "lists"
     lists.mkdir()
     (lists / "nightly").write_text("# the nightly orgs\nbeta\n\n  acme   # GHEC trial\n", encoding="utf-8")
@@ -357,7 +357,7 @@ def child_args(entry: BatchEntry) -> list[str]:
 
 
 def test_run_batch_runs_one_child_per_target_in_turn(world: World, tmp_path: Path) -> None:
-    """Sequential children with python -m otterdog_e2e, the parent's environment (no env-file value), prefixed lines,
+    """Sequential children with python -m otterdog_acceptance, the parent's environment (no env-file value), prefixed lines,
     one log per target and an exit line."""
     plan = batch.plan_batch(["acme", "beta"], world.settings, environ=world.environ)
     runner, echoed = FakeRunner(codes={"beta": 1}), []
@@ -366,7 +366,7 @@ def test_run_batch_runs_one_child_per_target_in_turn(world: World, tmp_path: Pat
     )
     assert [call["instance"] for call in runner.calls] == ["acme", "beta"]
     first = runner.calls[0]
-    assert first["argv"] == [sys.executable, "-P", "-m", "otterdog_e2e", *child_args(plan.entries[0])]
+    assert first["argv"] == [sys.executable, "-P", "-m", "otterdog_acceptance", *child_args(plan.entries[0])]
     assert first["env"] == {**world.environ, "PYTHONUNBUFFERED": "1"}  # E2E_ORG, E2E_PROFILE, tokens: never
     assert first["log_path"] == tmp_path / "logs" / f"batch-{plan.batch_id}-acme.log"
     assert stat.S_IMODE((tmp_path / "logs").stat().st_mode) == 0o700
@@ -484,29 +484,29 @@ def test_real_children_never_see_the_env_files_of_the_parent(world: World, tmp_p
         assert log.startswith("org None profile None\n")
 
 
-def test_python_m_otterdog_e2e_is_the_command_line() -> None:
-    """__main__: ``python -m otterdog_e2e`` (the batch child command) runs the click application."""
+def test_python_m_otterdog_acceptance_is_the_command_line() -> None:
+    """__main__: ``python -m otterdog_acceptance`` (the batch child command) runs the click application."""
     lines: list[str] = []
     assert procs.run_harness(batch.harness_argv(["--help"]), env=os.environ, on_line=lines.append) == 0
     text = "\n".join(lines)
-    assert "Usage: otterdog-e2e" in text and "targets" in text and "doctor" in text
+    assert "Usage: otterdog-acceptance" in text and "targets" in text and "doctor" in text
 
 
 def test_children_never_import_a_package_of_the_working_directory(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A batch started from a directory holding an ``otterdog_e2e`` package (src/ of a PR checkout) still runs this
+    """A batch started from a directory holding an ``otterdog_acceptance`` package (src/ of a PR checkout) still runs this
     harness installation: -P keeps the working directory off sys.path of the child, which holds every credential."""
-    shadow = tmp_path / "otterdog_e2e"
+    shadow = tmp_path / "otterdog_acceptance"
     shadow.mkdir()
     (shadow / "__init__.py").write_text("print('shadow package imported', flush=True)\nraise SystemExit(42)\n")
     (shadow / "__main__.py").write_text("raise SystemExit(43)\n")
     monkeypatch.chdir(tmp_path)
     argv = batch.harness_argv(["--help"])
-    assert argv[:4] == [sys.executable, "-P", "-m", "otterdog_e2e"]
+    assert argv[:4] == [sys.executable, "-P", "-m", "otterdog_acceptance"]
     lines: list[str] = []
     assert procs.run_harness(argv, env=os.environ, on_line=lines.append) == 0
-    assert "shadow package imported" not in lines and "Usage: otterdog-e2e" in "\n".join(lines)
+    assert "shadow package imported" not in lines and "Usage: otterdog-acceptance" in "\n".join(lines)
 
 
 @pytest.mark.parametrize(
@@ -541,7 +541,7 @@ def finished(world: World, tmp_path: Path) -> tuple[BatchPlan, list[BatchResult]
     run_dir.mkdir(parents=True)
     run = {
         "run_id": plan.entries[0].run_id,
-        "command": f"otterdog-e2e run --suite cli --target acme --sut {TOKEN}",
+        "command": f"otterdog-acceptance run --suite cli --target acme --sut {TOKEN}",
         "target": {"name": "acme", "profile": "free", "org": "acme-e2e", "plan": "free"},
     }
     (run_dir / "run.json").write_text(json.dumps(run), encoding="utf-8")
@@ -572,28 +572,28 @@ def test_write_batch_summary(finished: tuple[BatchPlan, list[BatchResult], Path]
         results,
         root,
         environ={"GITHUB_STEP_SUMMARY": str(step_summary)},
-        reproduce=lambda entry: f"otterdog-e2e run --target {entry.target}",
-        command="otterdog-e2e run --target acme,beta,free",
+        reproduce=lambda entry: f"otterdog-acceptance run --target {entry.target}",
+        command="otterdog-acceptance run --target acme,beta,free",
     )
     assert (markdown, data) == (root / f"batch-{plan.batch_id}.md", root / f"batch-{plan.batch_id}.json")
     assert {stat.S_IMODE(path.stat().st_mode) for path in (markdown, data)} == {0o600}
     text = markdown.read_text(encoding="utf-8")
     acme, beta, free = plan.entries
-    assert f"# otterdog-e2e batch `{plan.batch_id}`" in text
+    assert f"# otterdog-acceptance batch `{plan.batch_id}`" in text
     assert "**FAILED** (exit code 1): 2 of 3 target(s) did not pass (sequential)." in text
     assert (
         f"| `acme` | `free` | `acme-e2e` | `{acme.run_id}` | 0 | 3m 05s | 2 passed, 1 skipped |"
-        " `otterdog-e2e run --suite cli --target acme --sut ***` |"
+        " `otterdog-acceptance run --suite cli --target acme --sut ***` |"
     ) in text
     assert f"| `beta` | `team` | `beta-e2e` | `{beta.run_id}` | 1 | 12.3 s | no results |" in text
     assert f"| `free` | `free` | `free-e2e` | `{free.run_id}` | not started | - | no results |" in text
     assert TOKEN not in text and step_summary.read_text(encoding="utf-8") == "# previous\n" + text + "\n"
     document = json.loads(data.read_text(encoding="utf-8"))
     assert (document["batch_id"], document["exit_code"], document["mode"]) == (plan.batch_id, 1, "sequential")
-    assert document["command"] == "otterdog-e2e run --target acme,beta,free"
+    assert document["command"] == "otterdog-acceptance run --target acme,beta,free"
     rows = {row["instance"]: row for row in document["targets"]}
     assert rows["acme"]["tallies"] == {"passed": 2, "skipped": 1} and rows["acme"]["tests"] == 3
-    assert rows["beta"]["command"] == "otterdog-e2e run --target beta" and rows["beta"]["status"] == "failed"
+    assert rows["beta"]["command"] == "otterdog-acceptance run --target beta" and rows["beta"]["status"] == "failed"
     assert (rows["free"]["exit_code"], rows["free"]["status"], rows["free"]["duration_seconds"]) == (
         None,
         "not started",
@@ -633,7 +633,7 @@ def test_a_batch_without_run_ids_never_shows_one(world: World) -> None:
     )
 
 
-# --- otterdog-e2e targets ------------------------------------------------------------------------------------------------
+# --- otterdog-acceptance targets ------------------------------------------------------------------------------------------------
 def test_list_instances(world: World) -> None:
     """Env-file instances and the profiles of targets/ with profile, org and env file; unusable ones say why."""
     world.instance("gamma", None, 44)
@@ -648,7 +648,7 @@ def test_list_instances(world: World) -> None:
     assert infos["gamma"].profile is None and infos["gamma"].org == "gamma-e2e"
     assert "E2E_PROFILE" in str(infos["gamma"].problem)
     assert infos["team"].profile == "team" and infos["team"].env_file is None
-    assert infos["team"].problem == "not configured (otterdog-e2e setup --target team)"  # a profile, no env file
+    assert infos["team"].problem == "not configured (otterdog-acceptance setup --target team)"  # a profile, no env file
     assert world.environ == {"HOME": world.environ["HOME"], "E2E_KEEP_ME": "parent"}
 
 
@@ -658,11 +658,11 @@ def test_list_instances_without_anything(tmp_path: Path) -> None:
 
 
 def test_add_to_list_appends_an_instance_once(tmp_path: Path) -> None:
-    """setup lists the instance of a shard in ~/.config/otterdog-e2e/lists/<name> (0600 in a 0700 directory): created
+    """setup lists the instance of a shard in ~/.config/otterdog-acceptance/lists/<name> (0600 in a 0700 directory): created
     with a comment, appended to, never twice; @<name> then reads it."""
     environ = {"HOME": str(tmp_path)}
     path = batch.add_to_list("shards", "repos", environ)
-    assert path == tmp_path / ".config" / "otterdog-e2e" / "lists" / "shards"
+    assert path == tmp_path / ".config" / "otterdog-acceptance" / "lists" / "shards"
     assert stat.S_IMODE(path.stat().st_mode) == 0o600 and stat.S_IMODE(path.parent.stat().st_mode) == 0o700
     path.write_text(path.read_text() + "webapp  # added by hand")
     assert batch.add_to_list("shards", "enterprise", environ) == path

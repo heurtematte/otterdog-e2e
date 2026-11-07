@@ -27,16 +27,16 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from otterdog_e2e.context import env_flag, in_ci
-from otterdog_e2e.otterdog.output import normalize_text
-from otterdog_e2e.sut.cli_install import PLAYWRIGHT_BROWSERS_ENV
-from otterdog_e2e.webui.gate import classify_web_failure
+from otterdog_acceptance.context import env_flag, in_ci
+from otterdog_acceptance.otterdog.output import normalize_text
+from otterdog_acceptance.sut.cli_install import PLAYWRIGHT_BROWSERS_ENV
+from otterdog_acceptance.webui.gate import classify_web_failure
 
 if TYPE_CHECKING:
     from pathlib import Path
 
     from conftest import WebUiTier
-    from otterdog_e2e.otterdog.runner import CliResult, OtterdogCli
+    from otterdog_acceptance.otterdog.runner import CliResult, OtterdogCli
 
 pytestmark = [pytest.mark.web_ui, pytest.mark.tags("cli")]
 

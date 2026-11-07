@@ -11,9 +11,9 @@ import pytest
 import responses
 from responses import matchers
 
-from otterdog_e2e.github.http import GITHUB_API, GitHubError, GitHubHttp
-from otterdog_e2e.github.oracle import BPR_FIELDS, Oracle, normalize
-from otterdog_e2e.testing.fakes import FAKE_ORG
+from otterdog_acceptance.github.http import GITHUB_API, GitHubError, GitHubHttp
+from otterdog_acceptance.github.oracle import BPR_FIELDS, Oracle, normalize
+from otterdog_acceptance.testing.fakes import FAKE_ORG
 
 ORG = f"{GITHUB_API}/orgs/{FAKE_ORG}"
 REPO = f"{GITHUB_API}/repos/{FAKE_ORG}/r"
@@ -476,7 +476,7 @@ def test_deliveries_since_ignores_deliveries_logged_late() -> None:
     count: a creation ping or an earlier ping that shows up in the log later is never taken for the new one."""
     from datetime import UTC, datetime
 
-    from otterdog_e2e.github.oracle import deliveries_since
+    from otterdog_acceptance.github.oracle import deliveries_since
 
     pinged_at = datetime(2026, 10, 3, 10, 0, 0, tzinfo=UTC)
     deliveries = [

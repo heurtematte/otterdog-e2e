@@ -23,20 +23,20 @@ from typing import Any
 
 import pytest
 
-from otterdog_e2e import naming, procs, redact, waiting
-from otterdog_e2e.redact import Redactor
-from otterdog_e2e.webhooks import signing
+from otterdog_acceptance import naming, procs, redact, waiting
+from otterdog_acceptance.redact import Redactor
+from otterdog_acceptance.webhooks import signing
 
-SRC = Path(__file__).resolve().parents[2] / "src" / "otterdog_e2e"
+SRC = Path(__file__).resolve().parents[2] / "src" / "otterdog_acceptance"
 
 # ------------------------------------------------------------------------------------------------------------------
 # public names per module (SPEC sections 5-16)
 # ------------------------------------------------------------------------------------------------------------------
 PUBLIC_NAMES: dict[str, list[str]] = {
-    "otterdog_e2e": ["__version__", "resource", "read_resource", "RESOURCE_NAMES"],
-    # python -m otterdog_e2e: the command line (the child process of each target of a batch)
-    "otterdog_e2e.__main__": ["main"],
-    "otterdog_e2e.settings": [
+    "otterdog_acceptance": ["__version__", "resource", "read_resource", "RESOURCE_NAMES"],
+    # python -m otterdog_acceptance: the command line (the child process of each target of a batch)
+    "otterdog_acceptance.__main__": ["main"],
+    "otterdog_acceptance.settings": [
         "HarnessSettings",
         "harness_settings",
         "find_project_root",
@@ -62,7 +62,7 @@ PUBLIC_NAMES: dict[str, list[str]] = {
         "instance_name_problem",
         "profile_names",
     ],
-    "otterdog_e2e.safety": [
+    "otterdog_acceptance.safety": [
         "SafetyError",
         "FORBIDDEN_ORG_PATTERNS",
         "VerifiedOrg",
@@ -75,7 +75,7 @@ PUBLIC_NAMES: dict[str, list[str]] = {
         "FINE_GRAINED_OWNER_PROBES",
         "FINE_GRAINED_MEMBER_PROBE",
     ],
-    "otterdog_e2e.naming": [
+    "otterdog_acceptance.naming": [
         "RUN_ID_RE",
         "HOOK_HOST",
         "HOOK_BASE",
@@ -89,11 +89,24 @@ PUBLIC_NAMES: dict[str, list[str]] = {
         "BLUEPRINT_BRANCH_PREFIX",
         "branch_run_id",
     ],
-    "otterdog_e2e.capabilities": ["Cap", "PLAN_MATRIX", "PLANS", "Capabilities", "from_plan", "probe_capabilities"],
-    "otterdog_e2e.redact": ["Redactor", "REDACTOR", "install_logging_filter", "SECRET_KEY_RE", "RedactingFilter"],
-    "otterdog_e2e.waiting": ["WaitTimeoutError", "Deadline", "intervals", "poll", "wait_until", "retry"],
+    "otterdog_acceptance.capabilities": [
+        "Cap",
+        "PLAN_MATRIX",
+        "PLANS",
+        "Capabilities",
+        "from_plan",
+        "probe_capabilities",
+    ],
+    "otterdog_acceptance.redact": [
+        "Redactor",
+        "REDACTOR",
+        "install_logging_filter",
+        "SECRET_KEY_RE",
+        "RedactingFilter",
+    ],
+    "otterdog_acceptance.waiting": ["WaitTimeoutError", "Deadline", "intervals", "poll", "wait_until", "retry"],
     # secrets kept in an external vault: references resolved when the harness reads a secret variable
-    "otterdog_e2e.vaults": [
+    "otterdog_acceptance.vaults": [
         "PROVIDERS",
         "VaultError",
         "Reference",
@@ -105,7 +118,7 @@ PUBLIC_NAMES: dict[str, list[str]] = {
         "resolve",
         "store",
     ],
-    "otterdog_e2e.procs": [
+    "otterdog_acceptance.procs": [
         "sanitized_env",
         "run",
         "unshare_available",
@@ -115,7 +128,7 @@ PUBLIC_NAMES: dict[str, list[str]] = {
         "forward_signals",
     ],
     # several targets in one command: target lists, plans, one child process per target, batch summary
-    "otterdog_e2e.batch": [
+    "otterdog_acceptance.batch": [
         "BatchError",
         "is_target_list",
         "parse_targets",
@@ -133,18 +146,18 @@ PUBLIC_NAMES: dict[str, list[str]] = {
         "write_batch_summary",
         "EXIT_SEVERITY",
     ],
-    "otterdog_e2e.github": [],
-    "otterdog_e2e.github.http": ["GITHUB_API", "GitHubError", "GitHubHttp"],
-    "otterdog_e2e.github.app": ["AppAuth"],
-    "otterdog_e2e.github.oracle": ["VOLATILE_KEYS", "normalize", "Oracle"],
-    "otterdog_e2e.github.mutate": ["Mutator"],
-    "otterdog_e2e.github.janitor": ["JanitorItem", "Janitor"],
-    "otterdog_e2e.github.lease": ["LeaseBusy", "OrgLease"],
-    "otterdog_e2e.sut": [],
-    "otterdog_e2e.sut.spec": ["SutSpec", "parse_sut_spec", "ResolvedSut", "resolve_sut"],
-    "otterdog_e2e.sut.source": ["UpstreamMirror", "DIRTY_ALLOW", "DIRTY_DENY", "export_local_checkout"],
-    "otterdog_e2e.sut.version": ["compute_version", "image_version", "public_version", "validate_version"],
-    "otterdog_e2e.sut.cli_install": [
+    "otterdog_acceptance.github": [],
+    "otterdog_acceptance.github.http": ["GITHUB_API", "GitHubError", "GitHubHttp"],
+    "otterdog_acceptance.github.app": ["AppAuth"],
+    "otterdog_acceptance.github.oracle": ["VOLATILE_KEYS", "normalize", "Oracle"],
+    "otterdog_acceptance.github.mutate": ["Mutator"],
+    "otterdog_acceptance.github.janitor": ["JanitorItem", "Janitor"],
+    "otterdog_acceptance.github.lease": ["LeaseBusy", "OrgLease"],
+    "otterdog_acceptance.sut": [],
+    "otterdog_acceptance.sut.spec": ["SutSpec", "parse_sut_spec", "ResolvedSut", "resolve_sut"],
+    "otterdog_acceptance.sut.source": ["UpstreamMirror", "DIRTY_ALLOW", "DIRTY_DENY", "export_local_checkout"],
+    "otterdog_acceptance.sut.version": ["compute_version", "image_version", "public_version", "validate_version"],
+    "otterdog_acceptance.sut.cli_install": [
         "POETRY_VERSION",
         "PDV_VERSION",
         "InstalledCli",
@@ -152,8 +165,8 @@ PUBLIC_NAMES: dict[str, list[str]] = {
         "install_cli",
         "image_cli",
     ],
-    "otterdog_e2e.sut.image": ["BuiltImage", "build_webapp_image", "prebuilt_image", "docker_available"],
-    "otterdog_e2e.sut.template": [
+    "otterdog_acceptance.sut.image": ["BuiltImage", "build_webapp_image", "prebuilt_image", "docker_available"],
+    "otterdog_acceptance.sut.template": [
         "TemplateRef",
         "upstream_template",
         "url_template",
@@ -164,11 +177,11 @@ PUBLIC_NAMES: dict[str, list[str]] = {
         "template_source_dir",
         "hide_template_functions",
     ],
-    "otterdog_e2e.otterdog": [],
-    "otterdog_e2e.otterdog.runtime": ["CliRuntime", "HostRuntime", "DockerRuntime", "runtime_for"],
-    "otterdog_e2e.otterdog.runner": ["CliResult", "OtterdogCli", "DiffOptions", "WebOtterdogCli"],
+    "otterdog_acceptance.otterdog": [],
+    "otterdog_acceptance.otterdog.runtime": ["CliRuntime", "HostRuntime", "DockerRuntime", "runtime_for"],
+    "otterdog_acceptance.otterdog.runner": ["CliResult", "OtterdogCli", "DiffOptions", "WebOtterdogCli"],
     # the requests of a live command (otterdog's OTTERDOG_STATS_FILE report), apply.api and the endpoint inventory
-    "otterdog_e2e.otterdog.api_usage": [
+    "otterdog_acceptance.otterdog.api_usage": [
         "ApiUsage",
         "ApiSpec",
         "ApiUsageError",
@@ -178,7 +191,7 @@ PUBLIC_NAMES: dict[str, list[str]] = {
         "endpoint_problem",
         "is_write",
     ],
-    "otterdog_e2e.otterdog.output": [
+    "otterdog_acceptance.otterdog.output": [
         "strip_ansi",
         "unbox",
         "HEADER_RE",
@@ -196,14 +209,14 @@ PUBLIC_NAMES: dict[str, list[str]] = {
         "normalize_text",
         "UNKNOWN_PROPERTIES_RE",
     ],
-    "otterdog_e2e.otterdog.workspace": [
+    "otterdog_acceptance.otterdog.workspace": [
         "CREDENTIAL_ENV",
         "credentials_env",
         "ConfigWorkspace",
         "WorkspaceLayout",
         "webapp_otterdog_json",
     ],
-    "otterdog_e2e.otterdog.render": [
+    "otterdog_acceptance.otterdog.render": [
         "FRAGMENT_KEYS",
         "ConfigFragments",
         "BaselineSpec",
@@ -211,20 +224,20 @@ PUBLIC_NAMES: dict[str, list[str]] = {
         "OrgConfigRenderer",
         "build_baseline",
     ],
-    "otterdog_e2e.otterdog.baseline": ["BaselineManager"],
-    "otterdog_e2e.webapp": [],
-    "otterdog_e2e.webapp.stack": [
+    "otterdog_acceptance.otterdog.baseline": ["BaselineManager"],
+    "otterdog_acceptance.webapp": [],
+    "otterdog_acceptance.webapp.stack": [
         "WebappSettings",
         "WebappStack",
         "ExternalWebapp",
         "DtrackMock",
         "generate_dummy_app_credentials",
     ],
-    "otterdog_e2e.webapp.api": ["WebappApi"],
-    "otterdog_e2e.webhooks": [],
-    "otterdog_e2e.webhooks.signing": ["serialize_payload", "sign_sha1", "sign_sha256", "webhook_headers"],
-    "otterdog_e2e.webhooks.injector": ["WebhookInjector"],
-    "otterdog_e2e.webhooks.payloads": [
+    "otterdog_acceptance.webapp.api": ["WebappApi"],
+    "otterdog_acceptance.webhooks": [],
+    "otterdog_acceptance.webhooks.signing": ["serialize_payload", "sign_sha1", "sign_sha256", "webhook_headers"],
+    "otterdog_acceptance.webhooks.injector": ["WebhookInjector"],
+    "otterdog_acceptance.webhooks.payloads": [
         "ping_payload",
         "pull_request_payload",
         "issue_comment_payload",
@@ -239,8 +252,8 @@ PUBLIC_NAMES: dict[str, list[str]] = {
         "workflow_job_payload",
         "workflow_run_payload",
     ],
-    "otterdog_e2e.webhooks.relay": ["RelayedDelivery", "DeliveryRelay"],
-    "otterdog_e2e.config_repo": [
+    "otterdog_acceptance.webhooks.relay": ["RelayedDelivery", "DeliveryRelay"],
+    "otterdog_acceptance.config_repo": [
         "MARKERS",
         "APPLIED_TEXTS",
         "ConfigPr",
@@ -251,7 +264,7 @@ PUBLIC_NAMES: dict[str, list[str]] = {
         "check_forwarded",
     ],
     # blueprints, policies and workflow events of the webapp tier
-    "otterdog_e2e.blueprints": [
+    "otterdog_acceptance.blueprints": [
         "BLUEPRINT_TYPES",
         "POLICY_TYPES",
         "BLUEPRINT_STATUSES",
@@ -268,9 +281,16 @@ PUBLIC_NAMES: dict[str, list[str]] = {
         "uses_larger_runner",
     ],
     # the Dependency-Track mock: a standalone script run in its own container (compose profile dtrack)
-    "otterdog_e2e.resources.dtrack_mock": ["BOM_PATH", "MockState", "MockServer", "make_server", "decode_body", "main"],
-    "otterdog_e2e.scenarios": [],
-    "otterdog_e2e.scenarios.model": [
+    "otterdog_acceptance.resources.dtrack_mock": [
+        "BOM_PATH",
+        "MockState",
+        "MockServer",
+        "make_server",
+        "decode_body",
+        "main",
+    ],
+    "otterdog_acceptance.scenarios": [],
+    "otterdog_acceptance.scenarios.model": [
         "StepSpec",
         "Scenario",
         "ScenarioError",
@@ -278,31 +298,31 @@ PUBLIC_NAMES: dict[str, list[str]] = {
         "load_scenarios",
         "render_step",
     ],
-    "otterdog_e2e.scenarios.checks": [
+    "otterdog_acceptance.scenarios.checks": [
         "CHECK_KINDS",
         "CheckResult",
         "subset_mismatches",
         "evaluate_check",
         "evaluate_checks",
     ],
-    "otterdog_e2e.scenarios.engine": [
+    "otterdog_acceptance.scenarios.engine": [
         "StepOutcome",
         "ScenarioOutcome",
         "ScenarioEngine",
         "DifferentialRunner",
         "SutSide",
     ],
-    "otterdog_e2e.scenarios.offline": ["OfflineEngine"],
-    "otterdog_e2e.scenarios.collect": ["scenario_marks", "TIER_TIMEOUTS"],
-    "otterdog_e2e.observe": ["Observation", "ObservationRecorder", "load_observations"],
-    "otterdog_e2e.differential": [
+    "otterdog_acceptance.scenarios.offline": ["OfflineEngine"],
+    "otterdog_acceptance.scenarios.collect": ["scenario_marks", "TIER_TIMEOUTS"],
+    "otterdog_acceptance.observe": ["Observation", "ObservationRecorder", "load_observations"],
+    "otterdog_acceptance.differential": [
         "ExpectedDelta",
         "Delta",
         "DiffReport",
         "compare",
     ],
     # scenario references to otterdog PRs / named changes and the ChangeSpec of a differential run (SPEC 14)
-    "otterdog_e2e.changes": [
+    "otterdog_acceptance.changes": [
         "ChangeError",
         "ChangeId",
         "ChangeSpec",
@@ -316,9 +336,9 @@ PUBLIC_NAMES: dict[str, list[str]] = {
         "collect_references",
         "load_change",
     ],
-    "otterdog_e2e.selection": ["PATH_RULES", "ALWAYS_TAGS", "select_tags"],
+    "otterdog_acceptance.selection": ["PATH_RULES", "ALWAYS_TAGS", "select_tags"],
     # which test organization runs which live items (scenarios/shards.yaml)
-    "otterdog_e2e.shards": [
+    "otterdog_acceptance.shards": [
         "SHARDS_FILE",
         "SHARD_ENV",
         "ItemFacts",
@@ -330,9 +350,9 @@ PUBLIC_NAMES: dict[str, list[str]] = {
         "static_items",
         "shard_loads",
     ],
-    "otterdog_e2e.report": ["build_summary", "scrub_artifacts", "run_overview", "tally_text"],
+    "otterdog_acceptance.report": ["build_summary", "scrub_artifacts", "run_overview", "tally_text"],
     # the coverage matrix (scenarios/coverage.yaml): checks and rendering of tests/unit/test_coverage_matrix.py
-    "otterdog_e2e.coverage_matrix": [
+    "otterdog_acceptance.coverage_matrix": [
         "MatrixProject",
         "MatrixError",
         "load_matrix",
@@ -345,10 +365,17 @@ PUBLIC_NAMES: dict[str, list[str]] = {
         "REGENERATE",
     ],
     # scenarios/api_endpoints.yaml against the apply.api of the live scenarios -> docs/api-coverage.md
-    "otterdog_e2e.api_coverage": ["ApiCoverageProject", "ApiAssertion", "collect_assertions", "REGENERATE"],
-    "otterdog_e2e.known_bugs": ["KnownBug", "load"],
-    "otterdog_e2e.inject": ["InjectError", "JsonnetFile", "SourceText", "FileContext", "load_source", "render_source"],
-    "otterdog_e2e.appmanifest": [
+    "otterdog_acceptance.api_coverage": ["ApiCoverageProject", "ApiAssertion", "collect_assertions", "REGENERATE"],
+    "otterdog_acceptance.known_bugs": ["KnownBug", "load"],
+    "otterdog_acceptance.inject": [
+        "InjectError",
+        "JsonnetFile",
+        "SourceText",
+        "FileContext",
+        "load_source",
+        "render_source",
+    ],
+    "otterdog_acceptance.appmanifest": [
         "DEFAULT_PERMISSIONS",
         "DEFAULT_EVENTS",
         "build_manifest",
@@ -356,8 +383,8 @@ PUBLIC_NAMES: dict[str, list[str]] = {
         "exchange_code",
     ],
     # onboarding of a test org instance: setup and ci-sync (docs/onboarding.md)
-    "otterdog_e2e.onboard": [],
-    "otterdog_e2e.onboard.envfile": [
+    "otterdog_acceptance.onboard": [],
+    "otterdog_acceptance.onboard.envfile": [
         "INSTANCE_NAME_RE",
         "RESERVED_INSTANCE_SUFFIXES",
         "EnvFileError",
@@ -370,7 +397,7 @@ PUBLIC_NAMES: dict[str, list[str]] = {
         "read_env_file",
         "update_env_file",
     ],
-    "otterdog_e2e.onboard.tokens": [
+    "otterdog_acceptance.onboard.tokens": [
         "ROLE_TOKENS",
         "RoleTokens",
         "ADMIN_PERMISSIONS",
@@ -383,9 +410,9 @@ PUBLIC_NAMES: dict[str, list[str]] = {
         "token_url",
         "token_steps",
     ],
-    "otterdog_e2e.onboard.wizard": ["SetupWizard", "SetupOptions", "WizardIO", "SetupError", "COPYABLE_KEYS"],
+    "otterdog_acceptance.onboard.wizard": ["SetupWizard", "SetupOptions", "WizardIO", "SetupError", "COPYABLE_KEYS"],
     # the reference layout of an instance's secrets in a secret store (setup --store)
-    "otterdog_e2e.onboard.store": [
+    "otterdog_acceptance.onboard.store": [
         "STORE_ENV",
         "LAYOUT",
         "ENVIRONMENT_ITEMS",
@@ -394,8 +421,8 @@ PUBLIC_NAMES: dict[str, list[str]] = {
         "store_reference",
         "vault_policies",
     ],
-    "otterdog_e2e.onboard.cisync": ["CiSync", "CiSyncError", "Operation", "workflow_names", "environment_kinds"],
-    "otterdog_e2e.onboard.accounts": [
+    "otterdog_acceptance.onboard.cisync": ["CiSync", "CiSyncError", "Operation", "workflow_names", "environment_kinds"],
+    "otterdog_acceptance.onboard.accounts": [
         "AccountSetup",
         "AccountError",
         "AccountResult",
@@ -404,10 +431,10 @@ PUBLIC_NAMES: dict[str, list[str]] = {
         "load_accounts_config",
         "totp_code",
     ],
-    "otterdog_e2e.onboard.browser": ["PlaywrightBrowser", "PlaywrightSession"],
-    "otterdog_e2e.context": ["E2EContext", "E2EOptions", "get_context", "E2E_CONTEXT_KEY"],
+    "otterdog_acceptance.onboard.browser": ["PlaywrightBrowser", "PlaywrightSession"],
+    "otterdog_acceptance.context": ["E2EContext", "E2EOptions", "get_context", "E2E_CONTEXT_KEY"],
     # the facets E2EContext is assembled from (each over ContextState) and the small helpers
-    "otterdog_e2e.context.helpers": [
+    "otterdog_acceptance.context.helpers": [
         "split_csv",
         "text_or_none",
         "env_flag",
@@ -422,14 +449,14 @@ PUBLIC_NAMES: dict[str, list[str]] = {
         "printed_version",
         "workspace_literals",
     ],
-    "otterdog_e2e.context.state": ["ContextError", "ContextState", "E2EOptions", "OPTION_ENV", "AUTO_BASE"],
-    "otterdog_e2e.context.live": ["LiveFacet"],
-    "otterdog_e2e.context.sut": ["SutFacet", "SutPair"],
-    "otterdog_e2e.context.webui": ["WebUiFacet"],
-    "otterdog_e2e.context.webapp": ["WebappFacet", "WebappCase", "check_organization_overrides"],
-    "otterdog_e2e.context.rundata": ["RunDataFacet"],
-    "otterdog_e2e.context.core": ["E2EContext"],
-    "otterdog_e2e.pytest_plugin": [
+    "otterdog_acceptance.context.state": ["ContextError", "ContextState", "E2EOptions", "OPTION_ENV", "AUTO_BASE"],
+    "otterdog_acceptance.context.live": ["LiveFacet"],
+    "otterdog_acceptance.context.sut": ["SutFacet", "SutPair"],
+    "otterdog_acceptance.context.webui": ["WebUiFacet"],
+    "otterdog_acceptance.context.webapp": ["WebappFacet", "WebappCase", "check_organization_overrides"],
+    "otterdog_acceptance.context.rundata": ["RunDataFacet"],
+    "otterdog_acceptance.context.core": ["E2EContext"],
+    "otterdog_acceptance.pytest_plugin": [
         "pytest_addoption",
         "pytest_configure",
         "pytest_collection_modifyitems",
@@ -439,22 +466,22 @@ PUBLIC_NAMES: dict[str, list[str]] = {
         "MARKERS",
         "OPTIONS",
     ],
-    "otterdog_e2e.cli": ["main"],
+    "otterdog_acceptance.cli": ["main"],
     # the click group and shared helpers, then one module per command family
-    "otterdog_e2e.cli.common": ["main", "check_passthrough", "target_names", "TerminationGuard"],
-    "otterdog_e2e.cli.doctor": ["Doctor", "CheckRow", "render_rows", "doctor"],
-    "otterdog_e2e.cli.bootstrap": ["Bootstrap", "bootstrap"],
-    "otterdog_e2e.cli.sut": ["RISKY_PATHS", "sut"],
-    "otterdog_e2e.cli.run": ["RunRequest", "run_pytest", "run_targets", "plan_pr", "run", "pr"],
-    "otterdog_e2e.cli.ops": ["relay_loop", "janitor_filter", "relay", "janitor"],
-    "otterdog_e2e.cli.maintenance": ["register_environment_secrets", "prune_cache_dirs", "report", "cache"],
-    "otterdog_e2e.cli.app_manifest": ["ManifestFlow", "app_manifest"],
-    "otterdog_e2e.cli.inject": ["inject_request", "inject_command"],
-    "otterdog_e2e.cli.onboarding": ["setup_command", "ci_sync"],
-    "otterdog_e2e.cli.assist": ["assist"],
-    # AI-assisted test writing: context bundles and checks of ``otterdog-e2e assist`` (docs/ai-assistance.md)
-    "otterdog_e2e.assist": [],
-    "otterdog_e2e.assist.bundle": [
+    "otterdog_acceptance.cli.common": ["main", "check_passthrough", "target_names", "TerminationGuard"],
+    "otterdog_acceptance.cli.doctor": ["Doctor", "CheckRow", "render_rows", "doctor"],
+    "otterdog_acceptance.cli.bootstrap": ["Bootstrap", "bootstrap"],
+    "otterdog_acceptance.cli.sut": ["RISKY_PATHS", "sut"],
+    "otterdog_acceptance.cli.run": ["RunRequest", "run_pytest", "run_targets", "plan_pr", "run", "pr"],
+    "otterdog_acceptance.cli.ops": ["relay_loop", "janitor_filter", "relay", "janitor"],
+    "otterdog_acceptance.cli.maintenance": ["register_environment_secrets", "prune_cache_dirs", "report", "cache"],
+    "otterdog_acceptance.cli.app_manifest": ["ManifestFlow", "app_manifest"],
+    "otterdog_acceptance.cli.inject": ["inject_request", "inject_command"],
+    "otterdog_acceptance.cli.onboarding": ["setup_command", "ci_sync"],
+    "otterdog_acceptance.cli.assist": ["assist"],
+    # AI-assisted test writing: context bundles and checks of ``otterdog-acceptance assist`` (docs/ai-assistance.md)
+    "otterdog_acceptance.assist": [],
+    "otterdog_acceptance.assist.bundle": [
         "AssistError",
         "AssistUsageError",
         "UNTRUSTED_INTRO",
@@ -467,8 +494,8 @@ PUBLIC_NAMES: dict[str, list[str]] = {
         "code_span",
         "truncate_text",
     ],
-    "otterdog_e2e.assist.repo": ["ProjectIndex", "ScenarioRef", "read_scenario_ref", "python_scenario_refs"],
-    "otterdog_e2e.assist.pr_context": [
+    "otterdog_acceptance.assist.repo": ["ProjectIndex", "ScenarioRef", "read_scenario_ref", "python_scenario_refs"],
+    "otterdog_acceptance.assist.pr_context": [
         "PATCH_MAX_LINES",
         "PATCH_MAX_BYTES",
         "DIFF_MAX_BYTES",
@@ -479,7 +506,7 @@ PUBLIC_NAMES: dict[str, list[str]] = {
         "render_markdown",
         "write_pr_context",
     ],
-    "otterdog_e2e.assist.check": [
+    "otterdog_acceptance.assist.check": [
         "Problem",
         "CheckResult",
         "Checker",
@@ -491,7 +518,7 @@ PUBLIC_NAMES: dict[str, list[str]] = {
         "lint_result",
         "render_text",
     ],
-    "otterdog_e2e.assist.triage": [
+    "otterdog_acceptance.assist.triage": [
         "CATEGORIES",
         "RULES",
         "resolve_run_dir",
@@ -502,7 +529,7 @@ PUBLIC_NAMES: dict[str, list[str]] = {
         "render_markdown",
         "write_triage",
     ],
-    "otterdog_e2e.assist.coverage": [
+    "otterdog_acceptance.assist.coverage": [
         "CoverageQuery",
         "parse_query",
         "build_coverage",
@@ -510,13 +537,13 @@ PUBLIC_NAMES: dict[str, list[str]] = {
         "write_coverage",
     ],
     # web-UI tier (docs/web-ui-testing.md)
-    "otterdog_e2e.webui": [],
-    "otterdog_e2e.webui.mapping": ["WebSetting", "WEB_SETTINGS", "WEB_KEYS", "REST_FIELDS", "source_problems"],
-    "otterdog_e2e.webui.gate": ["LoginGate", "WebLoginBlockedError", "web_ui_problems", "classify_web_failure"],
-    "otterdog_e2e.webui.oracle": ["TrustedWebReader", "parse_settings_block", "rest_web_values"],
-    "otterdog_e2e.webui.roundtrip": ["WebSettingsRoundTrip", "plan_toggles", "combine_snapshot"],
-    "otterdog_e2e.testing": [],
-    "otterdog_e2e.testing.fakes": [
+    "otterdog_acceptance.webui": [],
+    "otterdog_acceptance.webui.mapping": ["WebSetting", "WEB_SETTINGS", "WEB_KEYS", "REST_FIELDS", "source_problems"],
+    "otterdog_acceptance.webui.gate": ["LoginGate", "WebLoginBlockedError", "web_ui_problems", "classify_web_failure"],
+    "otterdog_acceptance.webui.oracle": ["TrustedWebReader", "parse_settings_block", "rest_web_values"],
+    "otterdog_acceptance.webui.roundtrip": ["WebSettingsRoundTrip", "plan_toggles", "combine_snapshot"],
+    "otterdog_acceptance.testing": [],
+    "otterdog_acceptance.testing.fakes": [
         "FakeOracle",
         "FakeCli",
         "RecordingMutator",
@@ -532,9 +559,9 @@ PUBLIC_NAMES: dict[str, list[str]] = {
 
 # class members (methods/properties) per SPEC
 CLASS_MEMBERS: dict[str, list[str]] = {
-    "otterdog_e2e.settings.HarnessSettings": ["scratch"],
-    "otterdog_e2e.settings.Target": ["config_repo_for", "protected_repos"],
-    "otterdog_e2e.naming.RunContext": [
+    "otterdog_acceptance.settings.HarnessSettings": ["scratch"],
+    "otterdog_acceptance.settings.Target": ["config_repo_for", "protected_repos"],
+    "otterdog_acceptance.naming.RunContext": [
         "prefix",
         "const_prefix",
         "name",
@@ -546,9 +573,16 @@ CLASS_MEMBERS: dict[str, list[str]] = {
         "needles",
         "template_vars",
     ],
-    "otterdog_e2e.capabilities.Capabilities": ["has", "missing", "to_json"],
-    "otterdog_e2e.redact.Redactor": ["PATTERNS", "add", "__call__", "redact_bytes", "contains_secret", "redact_file"],
-    "otterdog_e2e.github.http.GitHubHttp": [
+    "otterdog_acceptance.capabilities.Capabilities": ["has", "missing", "to_json"],
+    "otterdog_acceptance.redact.Redactor": [
+        "PATTERNS",
+        "add",
+        "__call__",
+        "redact_bytes",
+        "contains_secret",
+        "redact_file",
+    ],
+    "otterdog_acceptance.github.http.GitHubHttp": [
         "request",
         "get",
         "paginate",
@@ -562,7 +596,7 @@ CLASS_MEMBERS: dict[str, list[str]] = {
         "rate_snapshot",
         "rate_limit",
     ],
-    "otterdog_e2e.github.app.AppAuth": [
+    "otterdog_acceptance.github.app.AppAuth": [
         "jwt",
         "app_http",
         "get_app",
@@ -578,7 +612,7 @@ CLASS_MEMBERS: dict[str, list[str]] = {
         "rate_remaining",
         "rate_reset",
     ],
-    "otterdog_e2e.github.oracle.Oracle": [
+    "otterdog_acceptance.github.oracle.Oracle": [
         "org",
         "plan_name",
         "org_actions_permissions",
@@ -639,7 +673,7 @@ CLASS_MEMBERS: dict[str, list[str]] = {
         "pr_comments",
         "lookup",
     ],
-    "otterdog_e2e.github.mutate.Mutator": [
+    "otterdog_acceptance.github.mutate.Mutator": [
         "create_branch",
         "delete_ref",
         "put_file",
@@ -692,8 +726,8 @@ CLASS_MEMBERS: dict[str, list[str]] = {
         "set_code_security_default",
         "delete_code_security_configuration",
     ],
-    "otterdog_e2e.github.janitor.Janitor": ["scan", "sweep"],
-    "otterdog_e2e.github.lease.OrgLease": [
+    "otterdog_acceptance.github.janitor.Janitor": ["scan", "sweep"],
+    "otterdog_acceptance.github.lease.OrgLease": [
         "acquire",
         "renew",
         "release",
@@ -701,9 +735,9 @@ CLASS_MEMBERS: dict[str, list[str]] = {
         "start_heartbeat",
         "stop_heartbeat",
     ],
-    "otterdog_e2e.sut.spec.SutSpec": ["trusted"],
-    "otterdog_e2e.sut.spec.ResolvedSut": ["to_json"],
-    "otterdog_e2e.sut.source.UpstreamMirror": [
+    "otterdog_acceptance.sut.spec.SutSpec": ["trusted"],
+    "otterdog_acceptance.sut.spec.ResolvedSut": ["to_json"],
+    "otterdog_acceptance.sut.source.UpstreamMirror": [
         "path",
         "git",
         "ensure",
@@ -717,12 +751,12 @@ CLASS_MEMBERS: dict[str, list[str]] = {
         "latest_release_tag",
         "export",
     ],
-    "otterdog_e2e.sut.template.TemplateRef": ["import_path"],
-    "otterdog_e2e.sut.template.TemplatePublisher": ["publish"],
-    "otterdog_e2e.otterdog.runtime.CliRuntime": ["command", "env"],
-    "otterdog_e2e.otterdog.runtime.HostRuntime": ["command", "env"],
-    "otterdog_e2e.otterdog.runtime.DockerRuntime": ["command", "env"],
-    "otterdog_e2e.otterdog.workspace.ConfigWorkspace": [
+    "otterdog_acceptance.sut.template.TemplateRef": ["import_path"],
+    "otterdog_acceptance.sut.template.TemplatePublisher": ["publish"],
+    "otterdog_acceptance.otterdog.runtime.CliRuntime": ["command", "env"],
+    "otterdog_acceptance.otterdog.runtime.HostRuntime": ["command", "env"],
+    "otterdog_acceptance.otterdog.runtime.DockerRuntime": ["command", "env"],
+    "otterdog_acceptance.otterdog.workspace.ConfigWorkspace": [
         "config_file",
         "org_dir",
         "org_config_file",
@@ -738,8 +772,8 @@ CLASS_MEMBERS: dict[str, list[str]] = {
         "org_dir_for",
         "org_config_file_for",
     ],
-    "otterdog_e2e.otterdog.runner.CliResult": ["output", "plan", "apply", "validation", "assert_ok"],
-    "otterdog_e2e.otterdog.runner.OtterdogCli": [
+    "otterdog_acceptance.otterdog.runner.CliResult": ["output", "plan", "apply", "validation", "assert_ok"],
+    "otterdog_acceptance.otterdog.runner.OtterdogCli": [
         "run",
         "version",
         "validate",
@@ -762,11 +796,17 @@ CLASS_MEMBERS: dict[str, list[str]] = {
         "apply_with",
         "local_plan_with",
     ],
-    "otterdog_e2e.otterdog.output.PlanResult": ["objects_for", "is_noop", "removals"],
-    "otterdog_e2e.otterdog.render.ConfigFragments": ["merged", "from_mapping"],
-    "otterdog_e2e.otterdog.render.OrgConfigRenderer": ["render"],
-    "otterdog_e2e.otterdog.baseline.BaselineManager": ["text", "check_removals", "guarded_apply", "reset", "push"],
-    "otterdog_e2e.webapp.stack.WebappStack": [
+    "otterdog_acceptance.otterdog.output.PlanResult": ["objects_for", "is_noop", "removals"],
+    "otterdog_acceptance.otterdog.render.ConfigFragments": ["merged", "from_mapping"],
+    "otterdog_acceptance.otterdog.render.OrgConfigRenderer": ["render"],
+    "otterdog_acceptance.otterdog.baseline.BaselineManager": [
+        "text",
+        "check_removals",
+        "guarded_apply",
+        "reset",
+        "push",
+    ],
+    "otterdog_acceptance.webapp.stack.WebappStack": [
         "project_name",
         "base_url",
         "webhook_url",
@@ -786,8 +826,8 @@ CLASS_MEMBERS: dict[str, list[str]] = {
         "enable_dtrack_mock",
         "dtrack",
     ],
-    "otterdog_e2e.webapp.stack.ExternalWebapp": ["api", "init", "wait_ready", "webhook_url"],
-    "otterdog_e2e.webapp.api.WebappApi": [
+    "otterdog_acceptance.webapp.stack.ExternalWebapp": ["api", "init", "wait_ready", "webhook_url"],
+    "otterdog_acceptance.webapp.api.WebappApi": [
         "health",
         "organizations",
         "organization",
@@ -805,8 +845,8 @@ CLASS_MEMBERS: dict[str, list[str]] = {
         "blueprint_statuses",
         "policy_status",
     ],
-    "otterdog_e2e.webhooks.injector.WebhookInjector": ["send", "build", "deliver", "replay", "last"],
-    "otterdog_e2e.webhooks.relay.DeliveryRelay": [
+    "otterdog_acceptance.webhooks.injector.WebhookInjector": ["send", "build", "deliver", "replay", "last"],
+    "otterdog_acceptance.webhooks.relay.DeliveryRelay": [
         "poll_once",
         "start",
         "stop",
@@ -817,7 +857,7 @@ CLASS_MEMBERS: dict[str, list[str]] = {
         "__enter__",
         "__exit__",
     ],
-    "otterdog_e2e.config_repo.ConfigRepoFlow": [
+    "otterdog_acceptance.config_repo.ConfigRepoFlow": [
         "config_path",
         "main_sha",
         "main_config",
@@ -845,7 +885,7 @@ CLASS_MEMBERS: dict[str, list[str]] = {
         "reopen",
         "adopt_pr",
     ],
-    "otterdog_e2e.blueprints.BlueprintHelper": [
+    "otterdog_acceptance.blueprints.BlueprintHelper": [
         "add_blueprint",
         "add_policy",
         "add_definition_text",
@@ -873,34 +913,40 @@ CLASS_MEMBERS: dict[str, list[str]] = {
         "wait_workflow_delivery",
         "cleanup",
     ],
-    "otterdog_e2e.scenarios.engine.ScenarioOutcome": ["ok"],
-    "otterdog_e2e.scenarios.engine.ScenarioEngine": ["run", "cleanup"],
-    "otterdog_e2e.scenarios.engine.DifferentialRunner": ["observe_offline", "observe_live"],
-    "otterdog_e2e.scenarios.offline.OfflineEngine": ["run"],
-    "otterdog_e2e.observe.ObservationRecorder": ["scope", "record"],
-    "otterdog_e2e.differential.DiffReport": ["unexpected", "expected", "to_markdown", "to_json"],
-    "otterdog_e2e.context.E2EContext": ["close", "ensure_live"],
+    "otterdog_acceptance.scenarios.engine.ScenarioOutcome": ["ok"],
+    "otterdog_acceptance.scenarios.engine.ScenarioEngine": ["run", "cleanup"],
+    "otterdog_acceptance.scenarios.engine.DifferentialRunner": ["observe_offline", "observe_live"],
+    "otterdog_acceptance.scenarios.offline.OfflineEngine": ["run"],
+    "otterdog_acceptance.observe.ObservationRecorder": ["scope", "record"],
+    "otterdog_acceptance.differential.DiffReport": ["unexpected", "expected", "to_markdown", "to_json"],
+    "otterdog_acceptance.context.E2EContext": ["close", "ensure_live"],
 }
 
 # parameter names of key callables (self included for methods)
 SIGNATURES: dict[str, list[str]] = {
-    "otterdog_e2e.procs.sanitized_env": ["extra", "home", "keep_home", "base"],
-    "otterdog_e2e.procs.run": ["argv", "cwd", "extra_env", "timeout", "input", "keep_home", "home", "check"],
-    "otterdog_e2e.procs.unshare_available": [],
-    "otterdog_e2e.procs.run_harness": ["argv", "env", "on_line", "log_path"],
-    "otterdog_e2e.settings.harness_settings": ["environ"],
-    "otterdog_e2e.settings.find_project_root": ["start"],
-    "otterdog_e2e.settings.load_env_files": ["target", "project_root", "environ"],
-    "otterdog_e2e.settings.expand_env": ["value", "environ"],
-    "otterdog_e2e.settings.load_target": ["name_or_path", "settings", "environ"],
-    "otterdog_e2e.settings.resolve_target_ref": ["name_or_path", "settings", "environ"],
-    "otterdog_e2e.settings.resolve_identities": ["target", "environ"],
-    "otterdog_e2e.settings.resolve_app_credentials": ["target", "environ"],
-    "otterdog_e2e.settings.HarnessSettings.scratch": ["self", "run_id"],
-    "otterdog_e2e.settings.Target.config_repo_for": ["self", "run_ctx"],
-    "otterdog_e2e.safety.check_org_allowed": ["login"],
-    "otterdog_e2e.safety.verify_target": ["admin_http", "target", "identities", "require_marker", "check_identities"],
-    "otterdog_e2e.safety.check_identity_isolation": [
+    "otterdog_acceptance.procs.sanitized_env": ["extra", "home", "keep_home", "base"],
+    "otterdog_acceptance.procs.run": ["argv", "cwd", "extra_env", "timeout", "input", "keep_home", "home", "check"],
+    "otterdog_acceptance.procs.unshare_available": [],
+    "otterdog_acceptance.procs.run_harness": ["argv", "env", "on_line", "log_path"],
+    "otterdog_acceptance.settings.harness_settings": ["environ"],
+    "otterdog_acceptance.settings.find_project_root": ["start"],
+    "otterdog_acceptance.settings.load_env_files": ["target", "project_root", "environ"],
+    "otterdog_acceptance.settings.expand_env": ["value", "environ"],
+    "otterdog_acceptance.settings.load_target": ["name_or_path", "settings", "environ"],
+    "otterdog_acceptance.settings.resolve_target_ref": ["name_or_path", "settings", "environ"],
+    "otterdog_acceptance.settings.resolve_identities": ["target", "environ"],
+    "otterdog_acceptance.settings.resolve_app_credentials": ["target", "environ"],
+    "otterdog_acceptance.settings.HarnessSettings.scratch": ["self", "run_id"],
+    "otterdog_acceptance.settings.Target.config_repo_for": ["self", "run_ctx"],
+    "otterdog_acceptance.safety.check_org_allowed": ["login"],
+    "otterdog_acceptance.safety.verify_target": [
+        "admin_http",
+        "target",
+        "identities",
+        "require_marker",
+        "check_identities",
+    ],
+    "otterdog_acceptance.safety.check_identity_isolation": [
         "http",
         "role",
         "allowed_org_ids",
@@ -908,11 +954,11 @@ SIGNATURES: dict[str, list[str]] = {
         "org",
         "token_type",
     ],
-    "otterdog_e2e.naming.new_run_context": ["run_id", "now"],
-    "otterdog_e2e.naming.run_id_timestamp": ["run_id"],
-    "otterdog_e2e.naming.extract_run_id": ["name"],
-    "otterdog_e2e.capabilities.from_plan": ["plan", "extra", "remove"],
-    "otterdog_e2e.capabilities.probe_capabilities": [
+    "otterdog_acceptance.naming.new_run_context": ["run_id", "now"],
+    "otterdog_acceptance.naming.run_id_timestamp": ["run_id"],
+    "otterdog_acceptance.naming.extract_run_id": ["name"],
+    "otterdog_acceptance.capabilities.from_plan": ["plan", "extra", "remove"],
+    "otterdog_acceptance.capabilities.probe_capabilities": [
         "admin_http",
         "verified",
         "identities",
@@ -921,10 +967,10 @@ SIGNATURES: dict[str, list[str]] = {
         "overrides",
         "fixture_repo",
     ],
-    "otterdog_e2e.redact.Redactor.__init__": ["self", "secrets"],
-    "otterdog_e2e.redact.Redactor.add": ["self", "values", "variants"],
-    "otterdog_e2e.redact.install_logging_filter": ["redactor"],
-    "otterdog_e2e.github.http.GitHubHttp.__init__": [
+    "otterdog_acceptance.redact.Redactor.__init__": ["self", "secrets"],
+    "otterdog_acceptance.redact.Redactor.add": ["self", "values", "variants"],
+    "otterdog_acceptance.redact.install_logging_filter": ["redactor"],
+    "otterdog_acceptance.github.http.GitHubHttp.__init__": [
         "self",
         "token",
         "base_url",
@@ -939,7 +985,7 @@ SIGNATURES: dict[str, list[str]] = {
         "min_write_interval",
         "identity",
     ],
-    "otterdog_e2e.github.http.GitHubHttp.request": [
+    "otterdog_acceptance.github.http.GitHubHttp.request": [
         "self",
         "method",
         "path",
@@ -950,8 +996,8 @@ SIGNATURES: dict[str, list[str]] = {
         "expected",
         "allow",
     ],
-    "otterdog_e2e.github.http.GitHubHttp.get": ["self", "path", "params", "headers", "allow_404"],
-    "otterdog_e2e.github.http.GitHubHttp.paginate": [
+    "otterdog_acceptance.github.http.GitHubHttp.get": ["self", "path", "params", "headers", "allow_404"],
+    "otterdog_acceptance.github.http.GitHubHttp.paginate": [
         "self",
         "path",
         "params",
@@ -960,33 +1006,41 @@ SIGNATURES: dict[str, list[str]] = {
         "max_pages",
         "allow_unavailable",
     ],
-    "otterdog_e2e.github.http.GitHubHttp.delete": ["self", "path", "allow_404", "kw"],
-    "otterdog_e2e.github.http.GitHubHttp.graphql": ["self", "query", "variables", "allow_errors"],
-    "otterdog_e2e.github.app.AppAuth.__init__": ["self", "creds", "base_url", "session", "clock"],
-    "otterdog_e2e.github.app.AppAuth.installation_http": ["self", "installation_id", "verified"],
-    "otterdog_e2e.github.app.AppAuth.list_deliveries": ["self", "per_page", "cursor"],
-    "otterdog_e2e.github.oracle.Oracle.__init__": ["self", "http", "org"],
-    "otterdog_e2e.github.oracle.Oracle.file_content": ["self", "repo", "path", "ref"],
-    "otterdog_e2e.github.oracle.Oracle.lookup": ["self", "kind", "params"],
-    "otterdog_e2e.github.mutate.Mutator.__init__": ["self", "http", "verified", "dry_run"],
-    "otterdog_e2e.github.mutate.Mutator.put_file": ["self", "repo", "path", "content", "message", "branch", "sha"],
-    "otterdog_e2e.github.mutate.Mutator.commit_files": ["self", "repo", "branch", "files", "message"],
-    "otterdog_e2e.github.mutate.Mutator.create_commit": ["self", "repo", "tree_sha", "parents", "message"],
-    "otterdog_e2e.github.mutate.Mutator.create_pull": ["self", "repo", "head", "base", "title", "body", "draft"],
-    "otterdog_e2e.github.mutate.Mutator.merge_pull": ["self", "repo", "number", "method", "sha"],
-    "otterdog_e2e.github.mutate.Mutator.create_repo": ["self", "name", "private", "description", "auto_init"],
-    "otterdog_e2e.github.mutate.Mutator.ensure_membership": ["self", "login", "role"],
-    "otterdog_e2e.github.mutate.Mutator.delete_org_ruleset": ["self", "ruleset_id", "name"],
+    "otterdog_acceptance.github.http.GitHubHttp.delete": ["self", "path", "allow_404", "kw"],
+    "otterdog_acceptance.github.http.GitHubHttp.graphql": ["self", "query", "variables", "allow_errors"],
+    "otterdog_acceptance.github.app.AppAuth.__init__": ["self", "creds", "base_url", "session", "clock"],
+    "otterdog_acceptance.github.app.AppAuth.installation_http": ["self", "installation_id", "verified"],
+    "otterdog_acceptance.github.app.AppAuth.list_deliveries": ["self", "per_page", "cursor"],
+    "otterdog_acceptance.github.oracle.Oracle.__init__": ["self", "http", "org"],
+    "otterdog_acceptance.github.oracle.Oracle.file_content": ["self", "repo", "path", "ref"],
+    "otterdog_acceptance.github.oracle.Oracle.lookup": ["self", "kind", "params"],
+    "otterdog_acceptance.github.mutate.Mutator.__init__": ["self", "http", "verified", "dry_run"],
+    "otterdog_acceptance.github.mutate.Mutator.put_file": [
+        "self",
+        "repo",
+        "path",
+        "content",
+        "message",
+        "branch",
+        "sha",
+    ],
+    "otterdog_acceptance.github.mutate.Mutator.commit_files": ["self", "repo", "branch", "files", "message"],
+    "otterdog_acceptance.github.mutate.Mutator.create_commit": ["self", "repo", "tree_sha", "parents", "message"],
+    "otterdog_acceptance.github.mutate.Mutator.create_pull": ["self", "repo", "head", "base", "title", "body", "draft"],
+    "otterdog_acceptance.github.mutate.Mutator.merge_pull": ["self", "repo", "number", "method", "sha"],
+    "otterdog_acceptance.github.mutate.Mutator.create_repo": ["self", "name", "private", "description", "auto_init"],
+    "otterdog_acceptance.github.mutate.Mutator.ensure_membership": ["self", "login", "role"],
+    "otterdog_acceptance.github.mutate.Mutator.delete_org_ruleset": ["self", "ruleset_id", "name"],
     # what ConfigRepoFlow and BlueprintHelper call (blueprints.py passes ref= and inputs= by keyword)
-    "otterdog_e2e.github.mutate.Mutator.reopen_pull": ["self", "repo", "number"],
-    "otterdog_e2e.github.mutate.Mutator.edit_comment": ["self", "repo", "comment_id", "body"],
-    "otterdog_e2e.github.mutate.Mutator.delete_comment": ["self", "repo", "comment_id"],
-    "otterdog_e2e.github.mutate.Mutator.dismiss_review": ["self", "repo", "number", "review_id", "message"],
-    "otterdog_e2e.github.mutate.Mutator.mark_pull_ready": ["self", "repo", "number"],
-    "otterdog_e2e.github.mutate.Mutator.convert_pull_to_draft": ["self", "repo", "number"],
-    "otterdog_e2e.github.mutate.Mutator.dispatch_workflow": ["self", "repo", "workflow_file", "ref", "inputs"],
-    "otterdog_e2e.github.mutate.Mutator.cancel_workflow_run": ["self", "repo", "run_id", "force_cancel"],
-    "otterdog_e2e.github.janitor.Janitor.__init__": [
+    "otterdog_acceptance.github.mutate.Mutator.reopen_pull": ["self", "repo", "number"],
+    "otterdog_acceptance.github.mutate.Mutator.edit_comment": ["self", "repo", "comment_id", "body"],
+    "otterdog_acceptance.github.mutate.Mutator.delete_comment": ["self", "repo", "comment_id"],
+    "otterdog_acceptance.github.mutate.Mutator.dismiss_review": ["self", "repo", "number", "review_id", "message"],
+    "otterdog_acceptance.github.mutate.Mutator.mark_pull_ready": ["self", "repo", "number"],
+    "otterdog_acceptance.github.mutate.Mutator.convert_pull_to_draft": ["self", "repo", "number"],
+    "otterdog_acceptance.github.mutate.Mutator.dispatch_workflow": ["self", "repo", "workflow_file", "ref", "inputs"],
+    "otterdog_acceptance.github.mutate.Mutator.cancel_workflow_run": ["self", "repo", "run_id", "force_cancel"],
+    "otterdog_acceptance.github.janitor.Janitor.__init__": [
         "self",
         "oracle",
         "mutator",
@@ -996,8 +1050,16 @@ SIGNATURES: dict[str, list[str]] = {
         "protected_repos",
         "purgeable",
     ],
-    "otterdog_e2e.github.lease.OrgLease.__init__": ["self", "mutator", "oracle", "repo", "run_ctx", "holder", "ttl"],
-    "otterdog_e2e.github.lease.OrgLease.acquire": [
+    "otterdog_acceptance.github.lease.OrgLease.__init__": [
+        "self",
+        "mutator",
+        "oracle",
+        "repo",
+        "run_ctx",
+        "holder",
+        "ttl",
+    ],
+    "otterdog_acceptance.github.lease.OrgLease.acquire": [
         "self",
         "wait",
         "steal_expired",
@@ -1005,32 +1067,32 @@ SIGNATURES: dict[str, list[str]] = {
         "force_takeover",
         "trusted_holder",
     ],
-    "otterdog_e2e.github.lease.OrgLease.start_heartbeat": ["self", "interval"],
-    "otterdog_e2e.sut.spec.parse_sut_spec": ["raw"],
-    "otterdog_e2e.sut.spec.resolve_sut": ["spec", "settings", "http"],
-    "otterdog_e2e.sut.source.UpstreamMirror.__init__": ["self", "cache_dir", "repo"],
-    "otterdog_e2e.sut.source.UpstreamMirror.git": ["self", "args", "timeout"],
-    "otterdog_e2e.sut.source.UpstreamMirror.export": ["self", "sha", "dest"],
-    "otterdog_e2e.sut.source.export_local_checkout": ["path", "dest", "dirty"],
-    "otterdog_e2e.sut.version.compute_version": ["tag", "distance", "sha", "dirty_hash"],
-    "otterdog_e2e.sut.version.validate_version": ["version", "minimum"],
-    "otterdog_e2e.sut.cli_install.ensure_poetry_tool": ["settings"],
-    "otterdog_e2e.sut.cli_install.install_cli": ["sut", "settings", "with_app", "force"],
-    "otterdog_e2e.sut.cli_install.image_cli": ["sut", "image"],
-    "otterdog_e2e.sut.image.build_webapp_image": ["sut", "force", "extra_args"],
-    "otterdog_e2e.sut.image.prebuilt_image": ["ref"],
-    "otterdog_e2e.sut.template.upstream_template": ["sut", "upstream_repo"],
-    "otterdog_e2e.sut.template.url_template": ["url"],
-    "otterdog_e2e.sut.template.TemplatePublisher.__init__": ["self", "http", "verified", "repo"],
-    "otterdog_e2e.sut.template.vendor_template": ["template_src_dir", "org_dir", "ref", "hooks"],
-    "otterdog_e2e.sut.template.resolve_template": ["mode", "sut", "upstream_repo", "publisher", "url"],
-    "otterdog_e2e.sut.template.template_source_dir": ["source_dir"],
-    "otterdog_e2e.sut.template.hide_template_functions": ["org_dir", "ref", "names"],
-    "otterdog_e2e.otterdog.runtime.CliRuntime.command": ["self", "args", "workdir", "env_file"],
-    "otterdog_e2e.otterdog.runtime.CliRuntime.env": ["self", "credentials"],
-    "otterdog_e2e.otterdog.runtime.runtime_for": ["installed", "offline", "pycache_root"],
-    "otterdog_e2e.otterdog.workspace.credentials_env": ["identity"],
-    "otterdog_e2e.otterdog.workspace.ConfigWorkspace.__init__": [
+    "otterdog_acceptance.github.lease.OrgLease.start_heartbeat": ["self", "interval"],
+    "otterdog_acceptance.sut.spec.parse_sut_spec": ["raw"],
+    "otterdog_acceptance.sut.spec.resolve_sut": ["spec", "settings", "http"],
+    "otterdog_acceptance.sut.source.UpstreamMirror.__init__": ["self", "cache_dir", "repo"],
+    "otterdog_acceptance.sut.source.UpstreamMirror.git": ["self", "args", "timeout"],
+    "otterdog_acceptance.sut.source.UpstreamMirror.export": ["self", "sha", "dest"],
+    "otterdog_acceptance.sut.source.export_local_checkout": ["path", "dest", "dirty"],
+    "otterdog_acceptance.sut.version.compute_version": ["tag", "distance", "sha", "dirty_hash"],
+    "otterdog_acceptance.sut.version.validate_version": ["version", "minimum"],
+    "otterdog_acceptance.sut.cli_install.ensure_poetry_tool": ["settings"],
+    "otterdog_acceptance.sut.cli_install.install_cli": ["sut", "settings", "with_app", "force"],
+    "otterdog_acceptance.sut.cli_install.image_cli": ["sut", "image"],
+    "otterdog_acceptance.sut.image.build_webapp_image": ["sut", "force", "extra_args"],
+    "otterdog_acceptance.sut.image.prebuilt_image": ["ref"],
+    "otterdog_acceptance.sut.template.upstream_template": ["sut", "upstream_repo"],
+    "otterdog_acceptance.sut.template.url_template": ["url"],
+    "otterdog_acceptance.sut.template.TemplatePublisher.__init__": ["self", "http", "verified", "repo"],
+    "otterdog_acceptance.sut.template.vendor_template": ["template_src_dir", "org_dir", "ref", "hooks"],
+    "otterdog_acceptance.sut.template.resolve_template": ["mode", "sut", "upstream_repo", "publisher", "url"],
+    "otterdog_acceptance.sut.template.template_source_dir": ["source_dir"],
+    "otterdog_acceptance.sut.template.hide_template_functions": ["org_dir", "ref", "names"],
+    "otterdog_acceptance.otterdog.runtime.CliRuntime.command": ["self", "args", "workdir", "env_file"],
+    "otterdog_acceptance.otterdog.runtime.CliRuntime.env": ["self", "credentials"],
+    "otterdog_acceptance.otterdog.runtime.runtime_for": ["installed", "offline", "pycache_root"],
+    "otterdog_acceptance.otterdog.workspace.credentials_env": ["identity"],
+    "otterdog_acceptance.otterdog.workspace.ConfigWorkspace.__init__": [
         "self",
         "root",
         "org",
@@ -1039,10 +1101,10 @@ SIGNATURES: dict[str, list[str]] = {
         "project",
         "base_url",
     ],
-    "otterdog_e2e.otterdog.workspace.ConfigWorkspace.export_to": ["self", "artifacts_dir"],
-    "otterdog_e2e.otterdog.workspace.webapp_otterdog_json": ["target", "template", "config_repo", "project"],
-    "otterdog_e2e.otterdog.runner.CliResult.assert_ok": ["self", "what"],
-    "otterdog_e2e.otterdog.runner.OtterdogCli.__init__": [
+    "otterdog_acceptance.otterdog.workspace.ConfigWorkspace.export_to": ["self", "artifacts_dir"],
+    "otterdog_acceptance.otterdog.workspace.webapp_otterdog_json": ["target", "template", "config_repo", "project"],
+    "otterdog_acceptance.otterdog.runner.CliResult.assert_ok": ["self", "what"],
+    "otterdog_acceptance.otterdog.runner.OtterdogCli.__init__": [
         "self",
         "installed",
         "workspace",
@@ -1057,7 +1119,7 @@ SIGNATURES: dict[str, list[str]] = {
         "http_cache",
         "http_cache_root",
     ],
-    "otterdog_e2e.otterdog.runner.OtterdogCli.run": [
+    "otterdog_acceptance.otterdog.runner.OtterdogCli.run": [
         "self",
         "command",
         "args",
@@ -1067,9 +1129,9 @@ SIGNATURES: dict[str, list[str]] = {
         "local",
         "observe",
     ],
-    "otterdog_e2e.otterdog.runner.OtterdogCli.validate": ["self", "local", "verbose", "observe"],
-    "otterdog_e2e.otterdog.runner.OtterdogCli.plan": ["self", "repo_filter", "local", "observe"],
-    "otterdog_e2e.otterdog.runner.OtterdogCli.apply": [
+    "otterdog_acceptance.otterdog.runner.OtterdogCli.validate": ["self", "local", "verbose", "observe"],
+    "otterdog_acceptance.otterdog.runner.OtterdogCli.plan": ["self", "repo_filter", "local", "observe"],
+    "otterdog_acceptance.otterdog.runner.OtterdogCli.apply": [
         "self",
         "repo_filter",
         "delete",
@@ -1078,11 +1140,17 @@ SIGNATURES: dict[str, list[str]] = {
         "local",
         "observe",
     ],
-    "otterdog_e2e.otterdog.runner.OtterdogCli.local_plan": ["self", "suffix", "local", "observe"],
-    "otterdog_e2e.otterdog.runner.OtterdogCli.plan_with": ["self", "options", "local", "observe"],
-    "otterdog_e2e.otterdog.runner.OtterdogCli.apply_with": ["self", "options", "delete", "local", "observe"],
-    "otterdog_e2e.otterdog.runner.OtterdogCli.local_plan_with": ["self", "options", "suffix", "local", "observe"],
-    "otterdog_e2e.otterdog.runner.OtterdogCli.invoke": [
+    "otterdog_acceptance.otterdog.runner.OtterdogCli.local_plan": ["self", "suffix", "local", "observe"],
+    "otterdog_acceptance.otterdog.runner.OtterdogCli.plan_with": ["self", "options", "local", "observe"],
+    "otterdog_acceptance.otterdog.runner.OtterdogCli.apply_with": ["self", "options", "delete", "local", "observe"],
+    "otterdog_acceptance.otterdog.runner.OtterdogCli.local_plan_with": [
+        "self",
+        "options",
+        "suffix",
+        "local",
+        "observe",
+    ],
+    "otterdog_acceptance.otterdog.runner.OtterdogCli.invoke": [
         "self",
         "args",
         "input",
@@ -1091,17 +1159,17 @@ SIGNATURES: dict[str, list[str]] = {
         "env",
         "observe",
     ],
-    "otterdog_e2e.otterdog.runner.OtterdogCli.import_config": ["self", "force"],
-    "otterdog_e2e.otterdog.runner.OtterdogCli.push_config": ["self", "message"],
-    "otterdog_e2e.otterdog.runner.OtterdogCli.fetch_config": ["self", "ref", "pull_request"],
-    "otterdog_e2e.otterdog.runner.OtterdogCli.open_pr": ["self", "branch", "title", "author"],
-    "otterdog_e2e.otterdog.runner.OtterdogCli.check_status": ["self", "json_file"],
-    "otterdog_e2e.otterdog.output.normalize_text": ["text", "ctx"],
-    "otterdog_e2e.otterdog.output.PlanResult.objects_for": ["self", "needles"],
-    "otterdog_e2e.otterdog.output.PlanResult.is_noop": ["self", "needles"],
-    "otterdog_e2e.otterdog.render.ConfigFragments.merged": ["self", "other"],
-    "otterdog_e2e.otterdog.render.ConfigFragments.from_mapping": ["data"],
-    "otterdog_e2e.otterdog.render.OrgConfigRenderer.__init__": [
+    "otterdog_acceptance.otterdog.runner.OtterdogCli.import_config": ["self", "force"],
+    "otterdog_acceptance.otterdog.runner.OtterdogCli.push_config": ["self", "message"],
+    "otterdog_acceptance.otterdog.runner.OtterdogCli.fetch_config": ["self", "ref", "pull_request"],
+    "otterdog_acceptance.otterdog.runner.OtterdogCli.open_pr": ["self", "branch", "title", "author"],
+    "otterdog_acceptance.otterdog.runner.OtterdogCli.check_status": ["self", "json_file"],
+    "otterdog_acceptance.otterdog.output.normalize_text": ["text", "ctx"],
+    "otterdog_acceptance.otterdog.output.PlanResult.objects_for": ["self", "needles"],
+    "otterdog_acceptance.otterdog.output.PlanResult.is_noop": ["self", "needles"],
+    "otterdog_acceptance.otterdog.render.ConfigFragments.merged": ["self", "other"],
+    "otterdog_acceptance.otterdog.render.ConfigFragments.from_mapping": ["data"],
+    "otterdog_acceptance.otterdog.render.OrgConfigRenderer.__init__": [
         "self",
         "template",
         "org",
@@ -1112,9 +1180,9 @@ SIGNATURES: dict[str, list[str]] = {
         "hide_cache_limit",
         "project",
     ],
-    "otterdog_e2e.otterdog.render.OrgConfigRenderer.render": ["self", "fragments", "include_baseline", "plan"],
-    "otterdog_e2e.otterdog.render.build_baseline": ["target", "run_ctx"],
-    "otterdog_e2e.otterdog.baseline.BaselineManager.__init__": [
+    "otterdog_acceptance.otterdog.render.OrgConfigRenderer.render": ["self", "fragments", "include_baseline", "plan"],
+    "otterdog_acceptance.otterdog.render.build_baseline": ["target", "run_ctx"],
+    "otterdog_acceptance.otterdog.baseline.BaselineManager.__init__": [
         "self",
         "reset_cli",
         "renderer",
@@ -1124,9 +1192,9 @@ SIGNATURES: dict[str, list[str]] = {
         "purgeable",
         "protected_repos",
     ],
-    "otterdog_e2e.otterdog.baseline.BaselineManager.guarded_apply": ["self", "cli", "repo_filter", "delete"],
-    "otterdog_e2e.otterdog.baseline.BaselineManager.push": ["self", "flow"],
-    "otterdog_e2e.webapp.stack.WebappStack.__init__": [
+    "otterdog_acceptance.otterdog.baseline.BaselineManager.guarded_apply": ["self", "cli", "repo_filter", "delete"],
+    "otterdog_acceptance.otterdog.baseline.BaselineManager.push": ["self", "flow"],
+    "otterdog_acceptance.webapp.stack.WebappStack.__init__": [
         "self",
         "settings",
         "verified",
@@ -1135,13 +1203,13 @@ SIGNATURES: dict[str, list[str]] = {
         "scratch",
         "artifacts_dir",
     ],
-    "otterdog_e2e.webapp.stack.WebappStack.up": ["self", "timeout"],
-    "otterdog_e2e.webapp.stack.WebappStack.logs": ["self", "tail"],
-    "otterdog_e2e.webapp.stack.ExternalWebapp.__init__": ["self", "base_url", "init_url", "allow_remote"],
-    "otterdog_e2e.webapp.stack.ExternalWebapp.wait_ready": ["self", "org", "timeout"],
-    "otterdog_e2e.webapp.api.WebappApi.__init__": ["self", "base_url", "timeout", "session"],
-    "otterdog_e2e.webapp.api.WebappApi.tasks": ["self", "org_id", "type_", "repo_name", "status", "page_size"],
-    "otterdog_e2e.webapp.api.WebappApi.wait_task": [
+    "otterdog_acceptance.webapp.stack.WebappStack.up": ["self", "timeout"],
+    "otterdog_acceptance.webapp.stack.WebappStack.logs": ["self", "tail"],
+    "otterdog_acceptance.webapp.stack.ExternalWebapp.__init__": ["self", "base_url", "init_url", "allow_remote"],
+    "otterdog_acceptance.webapp.stack.ExternalWebapp.wait_ready": ["self", "org", "timeout"],
+    "otterdog_acceptance.webapp.api.WebappApi.__init__": ["self", "base_url", "timeout", "session"],
+    "otterdog_acceptance.webapp.api.WebappApi.tasks": ["self", "org_id", "type_", "repo_name", "status", "page_size"],
+    "otterdog_acceptance.webapp.api.WebappApi.wait_task": [
         "self",
         "type_",
         "org_id",
@@ -1152,12 +1220,12 @@ SIGNATURES: dict[str, list[str]] = {
         "timeout",
         "interval",
     ],
-    "otterdog_e2e.webapp.api.WebappApi.pull_request": ["self", "org_id", "repo_name", "number"],
-    "otterdog_e2e.webapp.api.WebappApi.quiesce": ["self", "org_id", "quiet_for", "timeout"],
-    "otterdog_e2e.webhooks.signing.serialize_payload": ["payload"],
-    "otterdog_e2e.webhooks.signing.sign_sha1": ["secret", "body"],
-    "otterdog_e2e.webhooks.signing.sign_sha256": ["secret", "body"],
-    "otterdog_e2e.webhooks.signing.webhook_headers": [
+    "otterdog_acceptance.webapp.api.WebappApi.pull_request": ["self", "org_id", "repo_name", "number"],
+    "otterdog_acceptance.webapp.api.WebappApi.quiesce": ["self", "org_id", "quiet_for", "timeout"],
+    "otterdog_acceptance.webhooks.signing.serialize_payload": ["payload"],
+    "otterdog_acceptance.webhooks.signing.sign_sha1": ["secret", "body"],
+    "otterdog_acceptance.webhooks.signing.sign_sha256": ["secret", "body"],
+    "otterdog_acceptance.webhooks.signing.webhook_headers": [
         "event",
         "body",
         "secret",
@@ -1168,8 +1236,8 @@ SIGNATURES: dict[str, list[str]] = {
         "target_type",
         "target_id",
     ],
-    "otterdog_e2e.webhooks.injector.WebhookInjector.__init__": ["self", "endpoint_url", "secret", "session"],
-    "otterdog_e2e.webhooks.injector.WebhookInjector.send": [
+    "otterdog_acceptance.webhooks.injector.WebhookInjector.__init__": ["self", "endpoint_url", "secret", "session"],
+    "otterdog_acceptance.webhooks.injector.WebhookInjector.send": [
         "self",
         "event",
         "payload",
@@ -1178,7 +1246,7 @@ SIGNATURES: dict[str, list[str]] = {
         "signature",
         "timeout",
     ],
-    "otterdog_e2e.webhooks.relay.DeliveryRelay.__init__": [
+    "otterdog_acceptance.webhooks.relay.DeliveryRelay.__init__": [
         "self",
         "app",
         "forward_url",
@@ -1199,9 +1267,9 @@ SIGNATURES: dict[str, list[str]] = {
         "clock",
         "sleep",
     ],
-    "otterdog_e2e.webhooks.relay.DeliveryRelay.stop": ["self", "timeout"],
-    "otterdog_e2e.webhooks.relay.DeliveryRelay.wait_for": ["self", "predicate", "timeout"],
-    "otterdog_e2e.config_repo.ConfigRepoFlow.__init__": [
+    "otterdog_acceptance.webhooks.relay.DeliveryRelay.stop": ["self", "timeout"],
+    "otterdog_acceptance.webhooks.relay.DeliveryRelay.wait_for": ["self", "predicate", "timeout"],
+    "otterdog_acceptance.config_repo.ConfigRepoFlow.__init__": [
         "self",
         "org",
         "repo",
@@ -1216,8 +1284,8 @@ SIGNATURES: dict[str, list[str]] = {
         "delivery_timeout",
         "default_branch",
     ],
-    "otterdog_e2e.config_repo.ConfigRepoFlow.reset_main": ["self", "text", "message", "identity"],
-    "otterdog_e2e.config_repo.ConfigRepoFlow.open_pr": [
+    "otterdog_acceptance.config_repo.ConfigRepoFlow.reset_main": ["self", "text", "message", "identity"],
+    "otterdog_acceptance.config_repo.ConfigRepoFlow.open_pr": [
         "self",
         "slug",
         "config_texts",
@@ -1226,13 +1294,13 @@ SIGNATURES: dict[str, list[str]] = {
         "draft",
         "body",
     ],
-    "otterdog_e2e.config_repo.ConfigRepoFlow.push_commit": ["self", "pr", "text", "message", "identity"],
-    "otterdog_e2e.config_repo.ConfigRepoFlow.comment": ["self", "pr", "body", "identity"],
-    "otterdog_e2e.config_repo.ConfigRepoFlow.approve": ["self", "pr", "identity"],
-    "otterdog_e2e.config_repo.ConfigRepoFlow.merge": ["self", "pr", "method", "identity"],
-    "otterdog_e2e.config_repo.ConfigRepoFlow.wait_delivery": ["self", "pr", "event", "action", "after"],
-    "otterdog_e2e.config_repo.ConfigRepoFlow.wait_status": ["self", "pr", "context", "final", "timeout"],
-    "otterdog_e2e.config_repo.ConfigRepoFlow.wait_comment": [
+    "otterdog_acceptance.config_repo.ConfigRepoFlow.push_commit": ["self", "pr", "text", "message", "identity"],
+    "otterdog_acceptance.config_repo.ConfigRepoFlow.comment": ["self", "pr", "body", "identity"],
+    "otterdog_acceptance.config_repo.ConfigRepoFlow.approve": ["self", "pr", "identity"],
+    "otterdog_acceptance.config_repo.ConfigRepoFlow.merge": ["self", "pr", "method", "identity"],
+    "otterdog_acceptance.config_repo.ConfigRepoFlow.wait_delivery": ["self", "pr", "event", "action", "after"],
+    "otterdog_acceptance.config_repo.ConfigRepoFlow.wait_status": ["self", "pr", "context", "final", "timeout"],
+    "otterdog_acceptance.config_repo.ConfigRepoFlow.wait_comment": [
         "self",
         "pr",
         "marker",
@@ -1240,14 +1308,14 @@ SIGNATURES: dict[str, list[str]] = {
         "exclude_ids",
         "timeout",
     ],
-    "otterdog_e2e.config_repo.normalize_comment": ["body"],
-    "otterdog_e2e.scenarios.model.load_scenario": ["path"],
-    "otterdog_e2e.scenarios.model.load_scenarios": ["directory", "tier"],
-    "otterdog_e2e.scenarios.model.render_step": ["step", "variables"],
-    "otterdog_e2e.scenarios.checks.subset_mismatches": ["expected", "actual", "path"],
-    "otterdog_e2e.scenarios.checks.evaluate_check": ["oracle", "check"],
-    "otterdog_e2e.scenarios.checks.evaluate_checks": ["oracle", "checks", "timeout", "interval"],
-    "otterdog_e2e.scenarios.engine.ScenarioEngine.__init__": [
+    "otterdog_acceptance.config_repo.normalize_comment": ["body"],
+    "otterdog_acceptance.scenarios.model.load_scenario": ["path"],
+    "otterdog_acceptance.scenarios.model.load_scenarios": ["directory", "tier"],
+    "otterdog_acceptance.scenarios.model.render_step": ["step", "variables"],
+    "otterdog_acceptance.scenarios.checks.subset_mismatches": ["expected", "actual", "path"],
+    "otterdog_acceptance.scenarios.checks.evaluate_check": ["oracle", "check"],
+    "otterdog_acceptance.scenarios.checks.evaluate_checks": ["oracle", "checks", "timeout", "interval"],
+    "otterdog_acceptance.scenarios.engine.ScenarioEngine.__init__": [
         "self",
         "cli",
         "renderer",
@@ -1258,15 +1326,15 @@ SIGNATURES: dict[str, list[str]] = {
         "variables",
         "sleep",
     ],
-    "otterdog_e2e.scenarios.engine.ScenarioEngine.run": ["self", "scenario", "cleanup"],
-    "otterdog_e2e.scenarios.engine.DifferentialRunner.__init__": [
+    "otterdog_acceptance.scenarios.engine.ScenarioEngine.run": ["self", "scenario", "cleanup"],
+    "otterdog_acceptance.scenarios.engine.DifferentialRunner.__init__": [
         "self",
         "base",
         "head",
         "renderer_factory",
         "template_src_for",
     ],
-    "otterdog_e2e.scenarios.offline.OfflineEngine.__init__": [
+    "otterdog_acceptance.scenarios.offline.OfflineEngine.__init__": [
         "self",
         "cli",
         "workspace",
@@ -1274,24 +1342,30 @@ SIGNATURES: dict[str, list[str]] = {
         "run_ctx",
         "variables",
     ],
-    "otterdog_e2e.scenarios.collect.scenario_marks": ["scenario"],
-    "otterdog_e2e.observe.ObservationRecorder.__init__": ["self", "sut_label", "role", "out_file", "normalize_ctx"],
-    "otterdog_e2e.observe.ObservationRecorder.scope": ["self", "scenario", "step"],
-    "otterdog_e2e.observe.ObservationRecorder.record": ["self", "kind", "key", "content", "meta"],
-    "otterdog_e2e.observe.load_observations": ["path"],
-    "otterdog_e2e.changes.parse_references": ["value", "where", "steps"],
-    "otterdog_e2e.changes.default_change": ["option", "sut"],
-    "otterdog_e2e.changes.change_spec": ["change", "entries"],
-    "otterdog_e2e.changes.collect_references": ["scenarios_dir", "tests_dir"],
-    "otterdog_e2e.changes.load_change": ["scenarios_dir", "tests_dir", "change"],
-    "otterdog_e2e.differential.compare": ["base", "head", "base_label", "head_label", "expected"],
-    "otterdog_e2e.differential.DiffReport.to_markdown": ["self", "max_diff_lines"],
-    "otterdog_e2e.selection.select_tags": ["changed_files"],
-    "otterdog_e2e.report.build_summary": ["artifacts_dir", "redactor"],
-    "otterdog_e2e.report.scrub_artifacts": ["root", "redactor"],
-    "otterdog_e2e.coverage_matrix.MatrixProject.all_problems": ["self"],
-    "otterdog_e2e.assist.bundle.write_bundle": ["parent", "name", "files", "marker", "redactor"],
-    "otterdog_e2e.assist.pr_context.build_pr_context": [
+    "otterdog_acceptance.scenarios.collect.scenario_marks": ["scenario"],
+    "otterdog_acceptance.observe.ObservationRecorder.__init__": [
+        "self",
+        "sut_label",
+        "role",
+        "out_file",
+        "normalize_ctx",
+    ],
+    "otterdog_acceptance.observe.ObservationRecorder.scope": ["self", "scenario", "step"],
+    "otterdog_acceptance.observe.ObservationRecorder.record": ["self", "kind", "key", "content", "meta"],
+    "otterdog_acceptance.observe.load_observations": ["path"],
+    "otterdog_acceptance.changes.parse_references": ["value", "where", "steps"],
+    "otterdog_acceptance.changes.default_change": ["option", "sut"],
+    "otterdog_acceptance.changes.change_spec": ["change", "entries"],
+    "otterdog_acceptance.changes.collect_references": ["scenarios_dir", "tests_dir"],
+    "otterdog_acceptance.changes.load_change": ["scenarios_dir", "tests_dir", "change"],
+    "otterdog_acceptance.differential.compare": ["base", "head", "base_label", "head_label", "expected"],
+    "otterdog_acceptance.differential.DiffReport.to_markdown": ["self", "max_diff_lines"],
+    "otterdog_acceptance.selection.select_tags": ["changed_files"],
+    "otterdog_acceptance.report.build_summary": ["artifacts_dir", "redactor"],
+    "otterdog_acceptance.report.scrub_artifacts": ["root", "redactor"],
+    "otterdog_acceptance.coverage_matrix.MatrixProject.all_problems": ["self"],
+    "otterdog_acceptance.assist.bundle.write_bundle": ["parent", "name", "files", "marker", "redactor"],
+    "otterdog_acceptance.assist.pr_context.build_pr_context": [
         "number",
         "sha",
         "upstream",
@@ -1299,22 +1373,22 @@ SIGNATURES: dict[str, list[str]] = {
         "settings",
         "risky_patterns",
     ],
-    "otterdog_e2e.assist.check.check_files": ["project_root", "paths", "deleted"],
-    "otterdog_e2e.assist.check.lint_result": ["run_dir", "exit_code", "live", "sut"],
-    "otterdog_e2e.assist.triage.scrub_or_refuse": ["directory", "redactor"],
-    "otterdog_e2e.assist.triage.build_triage": ["directory", "project_root", "baseline", "scrub"],
-    "otterdog_e2e.assist.coverage.build_coverage": ["root", "query"],
-    "otterdog_e2e.known_bugs.load": ["path"],
-    "otterdog_e2e.onboard.envfile.update_env_file": ["path", "updates", "header"],
-    "otterdog_e2e.appmanifest.build_manifest": ["target", "webhook_url", "redirect_url"],
-    "otterdog_e2e.appmanifest.manifest_form_html": ["org", "manifest", "state"],
-    "otterdog_e2e.appmanifest.exchange_code": ["code", "out_dir"],
-    "otterdog_e2e.appmanifest.installation_url": ["slug", "org_id"],
+    "otterdog_acceptance.assist.check.check_files": ["project_root", "paths", "deleted"],
+    "otterdog_acceptance.assist.check.lint_result": ["run_dir", "exit_code", "live", "sut"],
+    "otterdog_acceptance.assist.triage.scrub_or_refuse": ["directory", "redactor"],
+    "otterdog_acceptance.assist.triage.build_triage": ["directory", "project_root", "baseline", "scrub"],
+    "otterdog_acceptance.assist.coverage.build_coverage": ["root", "query"],
+    "otterdog_acceptance.known_bugs.load": ["path"],
+    "otterdog_acceptance.onboard.envfile.update_env_file": ["path", "updates", "header"],
+    "otterdog_acceptance.appmanifest.build_manifest": ["target", "webhook_url", "redirect_url"],
+    "otterdog_acceptance.appmanifest.manifest_form_html": ["org", "manifest", "state"],
+    "otterdog_acceptance.appmanifest.exchange_code": ["code", "out_dir"],
+    "otterdog_acceptance.appmanifest.installation_url": ["slug", "org_id"],
 }
 
 # SPEC dataclass fields (actual fields must start with these, in this order; additive fields may follow)
 DATACLASS_FIELDS: dict[str, list[str]] = {
-    "otterdog_e2e.settings.HarnessSettings": [
+    "otterdog_acceptance.settings.HarnessSettings": [
         "project_root",
         "cache_dir",
         "artifacts_root",
@@ -1322,17 +1396,17 @@ DATACLASS_FIELDS: dict[str, list[str]] = {
         "targets_dir",
         "scenarios_dir",
     ],
-    "otterdog_e2e.settings.IdentitySpec": ["name", "login", "token_env"],
-    "otterdog_e2e.settings.Identity": ["name", "login", "token"],
-    "otterdog_e2e.settings.AppSpec": [
+    "otterdog_acceptance.settings.IdentitySpec": ["name", "login", "token_env"],
+    "otterdog_acceptance.settings.Identity": ["name", "login", "token"],
+    "otterdog_acceptance.settings.AppSpec": [
         "id_env",
         "private_key_env",
         "private_key_file_env",
         "webhook_secret_env",
         "slug",
     ],
-    "otterdog_e2e.settings.AppCredentials": ["app_id", "private_key_pem", "webhook_secret", "slug"],
-    "otterdog_e2e.settings.WebappSpec": [
+    "otterdog_acceptance.settings.AppCredentials": ["app_id", "private_key_pem", "webhook_secret", "slug"],
+    "otterdog_acceptance.settings.WebappSpec": [
         "transport",
         "external_url",
         "external_init_url",
@@ -1341,7 +1415,7 @@ DATACLASS_FIELDS: dict[str, list[str]] = {
         "workers",
         "port",
     ],
-    "otterdog_e2e.settings.Target": [
+    "otterdog_acceptance.settings.Target": [
         "name",
         "description",
         "org",
@@ -1366,13 +1440,13 @@ DATACLASS_FIELDS: dict[str, list[str]] = {
         "baseline_settings",
         "source_path",
     ],
-    "otterdog_e2e.settings.TargetRef": ["instance", "profile", "path"],
-    "otterdog_e2e.safety.VerifiedOrg": ["login", "org_id", "plan", "target", "verified_at", "org_json"],
-    "otterdog_e2e.naming.RunContext": ["run_id", "created_at"],
-    "otterdog_e2e.capabilities.Capabilities": ["plan", "caps", "probes"],
-    "otterdog_e2e.github.janitor.JanitorItem": ["kind", "name", "run_id", "scope", "detail"],
-    "otterdog_e2e.sut.spec.SutSpec": ["raw", "kind", "value", "pin_sha"],
-    "otterdog_e2e.sut.spec.ResolvedSut": [
+    "otterdog_acceptance.settings.TargetRef": ["instance", "profile", "path"],
+    "otterdog_acceptance.safety.VerifiedOrg": ["login", "org_id", "plan", "target", "verified_at", "org_json"],
+    "otterdog_acceptance.naming.RunContext": ["run_id", "created_at"],
+    "otterdog_acceptance.capabilities.Capabilities": ["plan", "caps", "probes"],
+    "otterdog_acceptance.github.janitor.JanitorItem": ["kind", "name", "run_id", "scope", "detail"],
+    "otterdog_acceptance.sut.spec.SutSpec": ["raw", "kind", "value", "pin_sha"],
+    "otterdog_acceptance.sut.spec.ResolvedSut": [
         "spec",
         "label",
         "sha",
@@ -1389,7 +1463,7 @@ DATACLASS_FIELDS: dict[str, list[str]] = {
         "changed_files",
         "dirty_files",
     ],
-    "otterdog_e2e.sut.cli_install.InstalledCli": [
+    "otterdog_acceptance.sut.cli_install.InstalledCli": [
         "sut",
         "runtime",
         "venv_dir",
@@ -1397,9 +1471,9 @@ DATACLASS_FIELDS: dict[str, list[str]] = {
         "image",
         "version_output",
     ],
-    "otterdog_e2e.sut.image.BuiltImage": ["tag", "image_id", "version", "revision", "trusted"],
-    "otterdog_e2e.sut.template.TemplateRef": ["url", "repo_name", "file", "ref", "tag"],
-    "otterdog_e2e.otterdog.runner.CliResult": [
+    "otterdog_acceptance.sut.image.BuiltImage": ["tag", "image_id", "version", "revision", "trusted"],
+    "otterdog_acceptance.sut.template.TemplateRef": ["url", "repo_name", "file", "ref", "tag"],
+    "otterdog_acceptance.otterdog.runner.CliResult": [
         "argv",
         "exit_code",
         "stdout",
@@ -1409,8 +1483,8 @@ DATACLASS_FIELDS: dict[str, list[str]] = {
         "timed_out",
         "infra_error",
     ],
-    "otterdog_e2e.otterdog.output.Message": ["level", "text", "source"],
-    "otterdog_e2e.otterdog.output.ValidationResult": [
+    "otterdog_acceptance.otterdog.output.Message": ["level", "text", "source"],
+    "otterdog_acceptance.otterdog.output.ValidationResult": [
         "ok",
         "infos",
         "warnings",
@@ -1419,7 +1493,7 @@ DATACLASS_FIELDS: dict[str, list[str]] = {
         "load_error",
         "raw",
     ],
-    "otterdog_e2e.otterdog.output.PlanObject": [
+    "otterdog_acceptance.otterdog.output.PlanObject": [
         "op",
         "kind",
         "key",
@@ -1429,7 +1503,7 @@ DATACLASS_FIELDS: dict[str, list[str]] = {
         "header",
         "body",
     ],
-    "otterdog_e2e.otterdog.output.PlanResult": [
+    "otterdog_acceptance.otterdog.output.PlanResult": [
         "add",
         "change",
         "delete",
@@ -1439,7 +1513,7 @@ DATACLASS_FIELDS: dict[str, list[str]] = {
         "messages",
         "raw",
     ],
-    "otterdog_e2e.otterdog.output.ApplyResult": [
+    "otterdog_acceptance.otterdog.output.ApplyResult": [
         "added",
         "changed",
         "deleted",
@@ -1451,8 +1525,8 @@ DATACLASS_FIELDS: dict[str, list[str]] = {
         "messages",
         "raw",
     ],
-    "otterdog_e2e.otterdog.output.NormalizeContext": ["literals"],
-    "otterdog_e2e.otterdog.render.ConfigFragments": [
+    "otterdog_acceptance.otterdog.output.NormalizeContext": ["literals"],
+    "otterdog_acceptance.otterdog.render.ConfigFragments": [
         "settings",
         "teams",
         "secrets",
@@ -1464,8 +1538,8 @@ DATACLASS_FIELDS: dict[str, list[str]] = {
         "repositories",
         "extra",
     ],
-    "otterdog_e2e.otterdog.render.BaselineSpec": ["settings", "teams", "repositories", "custom_properties"],
-    "otterdog_e2e.webapp.stack.WebappSettings": [
+    "otterdog_acceptance.otterdog.render.BaselineSpec": ["settings", "teams", "repositories", "custom_properties"],
+    "otterdog_acceptance.webapp.stack.WebappSettings": [
         "org",
         "configs_repo",
         "config_token",
@@ -1477,7 +1551,7 @@ DATACLASS_FIELDS: dict[str, list[str]] = {
         "workers",
         "port",
     ],
-    "otterdog_e2e.webhooks.relay.RelayedDelivery": [
+    "otterdog_acceptance.webhooks.relay.RelayedDelivery": [
         "id",
         "guid",
         "event",
@@ -1492,19 +1566,26 @@ DATACLASS_FIELDS: dict[str, list[str]] = {
         "relay_status",
         "error",
     ],
-    "otterdog_e2e.config_repo.ConfigPr": ["number", "branch", "head_sha", "url", "author", "comment_ids_before"],
-    "otterdog_e2e.scenarios.checks.CheckResult": ["ok", "check", "message", "actual"],
-    "otterdog_e2e.scenarios.engine.StepOutcome": ["name", "results", "checks", "negative", "notes", "durations"],
-    "otterdog_e2e.scenarios.engine.ScenarioOutcome": ["scenario", "steps", "failures", "skipped"],
-    "otterdog_e2e.scenarios.engine.SutSide": ["role", "installed", "cli", "recorder", "template"],
-    "otterdog_e2e.observe.Observation": ["sut", "role", "scenario", "step", "kind", "key", "content", "meta"],
-    "otterdog_e2e.differential.ExpectedDelta": ["scenario", "step", "kind", "key", "note"],
-    "otterdog_e2e.changes.ChangeId": ["pr", "slug"],
-    "otterdog_e2e.changes.DeltaPattern": ["step", "kind", "key", "note"],
-    "otterdog_e2e.changes.Reference": ["change", "note", "expected_deltas", "base", "template"],
-    "otterdog_e2e.changes.ReferencingScenario": ["scenario", "source", "kind", "reference", "test"],
-    "otterdog_e2e.changes.ChangeSpec": ["change", "base", "template", "scenarios", "expected_deltas", "referencing"],
-    "otterdog_e2e.differential.Delta": [
+    "otterdog_acceptance.config_repo.ConfigPr": ["number", "branch", "head_sha", "url", "author", "comment_ids_before"],
+    "otterdog_acceptance.scenarios.checks.CheckResult": ["ok", "check", "message", "actual"],
+    "otterdog_acceptance.scenarios.engine.StepOutcome": ["name", "results", "checks", "negative", "notes", "durations"],
+    "otterdog_acceptance.scenarios.engine.ScenarioOutcome": ["scenario", "steps", "failures", "skipped"],
+    "otterdog_acceptance.scenarios.engine.SutSide": ["role", "installed", "cli", "recorder", "template"],
+    "otterdog_acceptance.observe.Observation": ["sut", "role", "scenario", "step", "kind", "key", "content", "meta"],
+    "otterdog_acceptance.differential.ExpectedDelta": ["scenario", "step", "kind", "key", "note"],
+    "otterdog_acceptance.changes.ChangeId": ["pr", "slug"],
+    "otterdog_acceptance.changes.DeltaPattern": ["step", "kind", "key", "note"],
+    "otterdog_acceptance.changes.Reference": ["change", "note", "expected_deltas", "base", "template"],
+    "otterdog_acceptance.changes.ReferencingScenario": ["scenario", "source", "kind", "reference", "test"],
+    "otterdog_acceptance.changes.ChangeSpec": [
+        "change",
+        "base",
+        "template",
+        "scenarios",
+        "expected_deltas",
+        "referencing",
+    ],
+    "otterdog_acceptance.differential.Delta": [
         "scenario",
         "step",
         "kind",
@@ -1515,10 +1596,24 @@ DATACLASS_FIELDS: dict[str, list[str]] = {
         "expected",
         "note",
     ],
-    "otterdog_e2e.differential.DiffReport": ["base_label", "head_label", "deltas", "unchanged", "not_comparable"],
-    "otterdog_e2e.known_bugs.KnownBug": ["id", "title", "status", "evidence", "upstream", "fixed_in", "scenarios"],
-    "otterdog_e2e.assist.check.Problem": ["file", "location", "message"],
-    "otterdog_e2e.assist.repo.ScenarioRef": ["id", "kind", "path", "tier"],
+    "otterdog_acceptance.differential.DiffReport": [
+        "base_label",
+        "head_label",
+        "deltas",
+        "unchanged",
+        "not_comparable",
+    ],
+    "otterdog_acceptance.known_bugs.KnownBug": [
+        "id",
+        "title",
+        "status",
+        "evidence",
+        "upstream",
+        "fixed_in",
+        "scenarios",
+    ],
+    "otterdog_acceptance.assist.check.Problem": ["file", "location", "message"],
+    "otterdog_acceptance.assist.repo.ScenarioRef": ["id", "kind", "path", "tier"],
 }
 
 
@@ -1709,9 +1804,9 @@ def test_future_annotations_everywhere() -> None:
 
 def test_plugin_registers_markers_and_options(pytestconfig: pytest.Config) -> None:
     """SPEC 15 markers and --e2e-* options exist (plugin loaded via the pytest11 entry point)."""
-    from otterdog_e2e import pytest_plugin
+    from otterdog_acceptance import pytest_plugin
 
-    assert pytestconfig.pluginmanager.has_plugin("otterdog_e2e")
+    assert pytestconfig.pluginmanager.has_plugin("otterdog_acceptance")
     registered = {line.split(":")[0].split("(")[0] for line in pytestconfig.getini("markers")}
     expected = {
         "live",
@@ -1757,7 +1852,7 @@ def test_cli_entry_point_lists_commands() -> None:
     """The click group exposes the SPEC 16 commands."""
     from click.testing import CliRunner
 
-    from otterdog_e2e.cli import main
+    from otterdog_acceptance.cli import main
 
     result = CliRunner().invoke(main, ["--help"])
     assert result.exit_code == 0
@@ -2020,8 +2115,8 @@ def test_install_logging_filter(restore_record_factory: Any, caplog: pytest.LogC
     redactor = Redactor(["logged-secret-42"])
     redact.install_logging_filter(redactor)
     redact.install_logging_filter(redactor)  # idempotent
-    logger = logging.getLogger("otterdog_e2e.test")
-    with caplog.at_level(logging.INFO, logger="otterdog_e2e.test"):
+    logger = logging.getLogger("otterdog_acceptance.test")
+    with caplog.at_level(logging.INFO, logger="otterdog_acceptance.test"):
         logger.info("token %s", "logged-secret-42")
         try:
             raise ValueError("boom logged-secret-42")
@@ -2380,7 +2475,7 @@ def test_webhook_headers_modes() -> None:
 # ------------------------------------------------------------------------------------------------------------------
 def test_template_ref_import_path_and_offline_template() -> None:
     """TemplateRef.import_path is vendor/<repo>/<file>; the offline template matches SPEC 10.6."""
-    from otterdog_e2e.sut.template import TemplateRef, offline_template
+    from otterdog_acceptance.sut.template import TemplateRef, offline_template
 
     ref = TemplateRef(
         "https://github.com/o/r#examples/template/otterdog-defaults.libsonnet@abc",
@@ -2397,7 +2492,7 @@ def test_template_ref_import_path_and_offline_template() -> None:
 
 def test_capabilities_plan_matrix() -> None:
     """PLAN_MATRIX nests free < team < enterprise; probe/override-only caps are not plan caps."""
-    from otterdog_e2e.capabilities import PLAN_MATRIX, Cap
+    from otterdog_acceptance.capabilities import PLAN_MATRIX, Cap
 
     assert PLAN_MATRIX["free"] == {Cap.PUBLIC_REPOS, Cap.SECRET_SCANNING_PUBLIC}
     assert PLAN_MATRIX["free"] < PLAN_MATRIX["team"] < PLAN_MATRIX["enterprise"]
@@ -2411,7 +2506,7 @@ def test_capabilities_plan_matrix() -> None:
 
 def test_capabilities_from_plan_has_missing_to_json() -> None:
     """from_plan applies extra/remove; has/missing accept names; unknown names fail loudly."""
-    from otterdog_e2e.capabilities import Cap, from_plan, plans_at_least
+    from otterdog_acceptance.capabilities import Cap, from_plan, plans_at_least
 
     caps = from_plan("enterprise", extra=["ghas_private"], remove=[Cap.LARGER_RUNNERS])
     assert caps.has("ghas_private") and caps.has(Cap.INTERNAL_REPOS)
@@ -2440,7 +2535,7 @@ def _plan_object(
     parent: str | None = None,
 ) -> Any:
     """A PlanObject for tests."""
-    from otterdog_e2e.otterdog.output import PlanObject
+    from otterdog_acceptance.otterdog.output import PlanObject
 
     return PlanObject(
         op, "repository", "name", value, "repository" if parent else None, parent, header, body or [], notes or []
@@ -2451,7 +2546,7 @@ def _plan(
     objects: list[Any], counts: tuple[int | None, int | None, int | None] = (0, 0, 0), aborted: bool = False
 ) -> Any:
     """A PlanResult for tests."""
-    from otterdog_e2e.otterdog.output import PlanResult
+    from otterdog_acceptance.otterdog.output import PlanResult
 
     return PlanResult(counts[0], counts[1], counts[2], objects, aborted, None, [], "")
 
@@ -2558,7 +2653,7 @@ def test_plan_result_filters_and_noop() -> None:
 )
 def test_header_re_matches_real_headers(line: str, expected: tuple[str | None, ...]) -> None:
     """HEADER_RE parses the headers otterdog 1.7.0.dev19 printed offline (OC-10)."""
-    from otterdog_e2e.otterdog.output import HEADER_RE
+    from otterdog_acceptance.otterdog.output import HEADER_RE
 
     match = HEADER_RE.match(line)
     assert match is not None
@@ -2568,7 +2663,7 @@ def test_header_re_matches_real_headers(line: str, expected: tuple[str | None, .
 
 def test_logger_and_unknown_property_patterns() -> None:
     """LOGGER_LINE_RE and UNKNOWN_PROPERTIES_RE match otterdog's logger output (OC-08)."""
-    from otterdog_e2e.otterdog.output import LOGGER_LINE_RE, LOGGER_SOURCE_SUFFIX_RE, UNKNOWN_PROPERTIES_RE
+    from otterdog_acceptance.otterdog.output import LOGGER_LINE_RE, LOGGER_SOURCE_SUFFIX_RE, UNKNOWN_PROPERTIES_RE
 
     line = (
         "WARNING  ignoring unknown properties found while validating organization config: x"
@@ -2582,7 +2677,7 @@ def test_logger_and_unknown_property_patterns() -> None:
 
 def test_config_fragments() -> None:
     """from_mapping validates keys, merged concatenates per key, to_mapping feeds the template."""
-    from otterdog_e2e.otterdog.render import FRAGMENT_KEYS, ConfigFragments
+    from otterdog_acceptance.otterdog.render import FRAGMENT_KEYS, ConfigFragments
 
     first = ConfigFragments.from_mapping({"repositories": ["orgs.newRepo('a')"], "settings": "has_discussions: true"})
     assert first.settings == ["has_discussions: true"]
@@ -2600,7 +2695,7 @@ def test_config_fragments() -> None:
 
 def _target(**overrides: Any) -> Any:
     """A Target value object for tests."""
-    from otterdog_e2e.settings import IdentitySpec, Target, WebappSpec
+    from otterdog_acceptance.settings import IdentitySpec, Target, WebappSpec
 
     values: dict[str, Any] = {
         "name": "free",
@@ -2648,7 +2743,7 @@ def test_target_config_repo_and_protected_repos() -> None:
 
 def test_harness_settings_scratch(tmp_path: Path) -> None:
     """scratch() is cache_dir/run/<id>, created private."""
-    from otterdog_e2e.settings import HarnessSettings
+    from otterdog_acceptance.settings import HarnessSettings
 
     settings = HarnessSettings(
         tmp_path, tmp_path / "cache", tmp_path / "artifacts", "eclipse-csi/otterdog", tmp_path, tmp_path
@@ -2661,7 +2756,7 @@ def test_harness_settings_scratch(tmp_path: Path) -> None:
 
 def test_identity_and_credentials_hide_secrets() -> None:
     """Tokens, keys and webhook secrets never appear in repr."""
-    from otterdog_e2e.settings import AppCredentials, Identity
+    from otterdog_acceptance.settings import AppCredentials, Identity
 
     assert "tok-123456" not in repr(Identity("admin", "e2e-admin", "tok-123456"))
     creds = AppCredentials("1", "PEM-SECRET", "hook-secret", "slug")
@@ -2670,8 +2765,8 @@ def test_identity_and_credentials_hide_secrets() -> None:
 
 def test_verified_org_requires_verify_target() -> None:
     """VerifiedOrg cannot be forged by constructor or dataclasses.replace (SEC-08)."""
-    from otterdog_e2e.safety import SafetyError, VerifiedOrg
-    from otterdog_e2e.testing.fakes import make_verified_org
+    from otterdog_acceptance.safety import SafetyError, VerifiedOrg
+    from otterdog_acceptance.testing.fakes import make_verified_org
 
     with pytest.raises(SafetyError):
         VerifiedOrg("org", 1, "free", "t", datetime.now(UTC), {})
@@ -2684,7 +2779,7 @@ def test_verified_org_requires_verify_target() -> None:
 
 def test_safety_constants() -> None:
     """Denylist and scope allowlists of SPEC 5.1."""
-    from otterdog_e2e.safety import ALLOWED_SCOPES, FORBIDDEN_ORG_PATTERNS
+    from otterdog_acceptance.safety import ALLOWED_SCOPES, FORBIDDEN_ORG_PATTERNS
 
     def forbidden(login: str) -> bool:
         """Denylist match."""
@@ -2708,7 +2803,7 @@ def test_safety_constants() -> None:
 
 def test_cli_result_output_and_assert_ok() -> None:
     """output joins stdout/stderr; assert_ok raises a redacted, informative AssertionError."""
-    from otterdog_e2e.testing.fakes import cli_result
+    from otterdog_acceptance.testing.fakes import cli_result
 
     ok = cli_result("validate", "out\n", stderr="err")
     assert ok.output == "out\nerr"
@@ -2727,7 +2822,7 @@ def test_cli_result_output_and_assert_ok() -> None:
 
 def test_sut_spec_trust_and_resolved_to_json() -> None:
     """Spec-level trust (SPEC 5.5) and the JSON form of ResolvedSut."""
-    from otterdog_e2e.sut.spec import ResolvedSut, SutSpec
+    from otterdog_acceptance.sut.spec import ResolvedSut, SutSpec
 
     trusted = {"release": "latest", "tag": "v1.6.1", "path": "/x", "dirty": "/x"}
     for kind, value in trusted.items():
@@ -2753,7 +2848,7 @@ def test_sut_spec_trust_and_resolved_to_json() -> None:
 
 def test_differential_value_objects() -> None:
     """ExpectedDelta matching and DiffReport partitions."""
-    from otterdog_e2e.differential import Delta, DiffReport, ExpectedDelta
+    from otterdog_acceptance.differential import Delta, DiffReport, ExpectedDelta
 
     expected = ExpectedDelta("O-VAL-RULESET-STRICT", kind="cli")
     assert expected.matches("O-VAL-RULESET-STRICT", "s1", "cli", "validate")
@@ -2771,18 +2866,18 @@ def test_differential_value_objects() -> None:
 
 def test_small_value_objects() -> None:
     """Remaining simple behaviours of WP0 value objects."""
-    from otterdog_e2e.config_repo import MARKERS, comment_marker
-    from otterdog_e2e.github.http import GitHubError
-    from otterdog_e2e.github.lease import LeaseBusy
-    from otterdog_e2e.github.oracle import normalize
-    from otterdog_e2e.known_bugs import KnownBug
-    from otterdog_e2e.observe import Observation
-    from otterdog_e2e.otterdog.workspace import CREDENTIAL_ENV, ConfigWorkspace, credentials_env
-    from otterdog_e2e.scenarios.engine import ScenarioOutcome
-    from otterdog_e2e.settings import Identity
-    from otterdog_e2e.sut.source import UpstreamMirror
-    from otterdog_e2e.sut.template import offline_template
-    from otterdog_e2e.webhooks.relay import RelayedDelivery, default_accept
+    from otterdog_acceptance.config_repo import MARKERS, comment_marker
+    from otterdog_acceptance.github.http import GitHubError
+    from otterdog_acceptance.github.lease import LeaseBusy
+    from otterdog_acceptance.github.oracle import normalize
+    from otterdog_acceptance.known_bugs import KnownBug
+    from otterdog_acceptance.observe import Observation
+    from otterdog_acceptance.otterdog.workspace import CREDENTIAL_ENV, ConfigWorkspace, credentials_env
+    from otterdog_acceptance.scenarios.engine import ScenarioOutcome
+    from otterdog_acceptance.settings import Identity
+    from otterdog_acceptance.sut.source import UpstreamMirror
+    from otterdog_acceptance.sut.template import offline_template
+    from otterdog_acceptance.webhooks.relay import RelayedDelivery, default_accept
 
     assert MARKERS["validate"] == "<!-- Otterdog Comment: validate -->"
     assert comment_marker("x\n<!-- Otterdog Comment: check-sync -->\ny") == "check-sync"
@@ -2819,8 +2914,8 @@ def test_small_value_objects() -> None:
 
 def test_org_config_renderer_refuses_profiles_without_marker() -> None:
     """The renderer refuses to start from a description without the safety marker (OC-01)."""
-    from otterdog_e2e.otterdog.render import BaselineSpec, OrgConfigRenderer, RenderError
-    from otterdog_e2e.sut.template import offline_template
+    from otterdog_acceptance.otterdog.render import BaselineSpec, OrgConfigRenderer, RenderError
+    from otterdog_acceptance.sut.template import offline_template
 
     kwargs: dict[str, Any] = {
         "template": offline_template(),
@@ -2838,7 +2933,7 @@ def test_org_config_renderer_refuses_profiles_without_marker() -> None:
 
 def test_appmanifest_permissions() -> None:
     """GH-01: permission names are the parameterized App permission names."""
-    from otterdog_e2e.appmanifest import DEFAULT_EVENTS, DEFAULT_PERMISSIONS
+    from otterdog_acceptance.appmanifest import DEFAULT_EVENTS, DEFAULT_PERMISSIONS
 
     assert DEFAULT_PERMISSIONS["organization_custom_org_roles"] == "write"
     assert DEFAULT_PERMISSIONS["actions_variables"] == "write"

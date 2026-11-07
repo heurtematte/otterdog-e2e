@@ -34,16 +34,16 @@ from typing import Any
 import pytest
 import requests
 
-from otterdog_e2e import procs, waiting
-from otterdog_e2e.context import E2EContext
-from otterdog_e2e.naming import new_run_context
-from otterdog_e2e.scenarios.offline import OFFLINE_ORG
-from otterdog_e2e.sut.image import BuiltImage
-from otterdog_e2e.sut.source import UpstreamMirror
-from otterdog_e2e.webapp.api import local_session, parse_html
-from otterdog_e2e.webapp.stack import WEBHOOK_PATH, WebappStack, WebappStackError, dummy_webapp_settings
-from otterdog_e2e.webhooks.injector import WebhookInjector
-from otterdog_e2e.webhooks.payloads import ping_payload, pull_request_payload, stable_id, synthetic_pull_request
+from otterdog_acceptance import procs, waiting
+from otterdog_acceptance.context import E2EContext
+from otterdog_acceptance.naming import new_run_context
+from otterdog_acceptance.scenarios.offline import OFFLINE_ORG
+from otterdog_acceptance.sut.image import BuiltImage
+from otterdog_acceptance.sut.source import UpstreamMirror
+from otterdog_acceptance.webapp.api import local_session, parse_html
+from otterdog_acceptance.webapp.stack import WEBHOOK_PATH, WebappStack, WebappStackError, dummy_webapp_settings
+from otterdog_acceptance.webhooks.injector import WebhookInjector
+from otterdog_acceptance.webhooks.payloads import ping_payload, pull_request_payload, stable_id, synthetic_pull_request
 
 pytestmark = [
     pytest.mark.offline,
@@ -157,7 +157,7 @@ def test_database_outage(runtime_stack: WebappStack, has_fix_775: bool | None) -
     requests succeed without restarting the webapp."""
     stack = runtime_stack
     injector = injector_for(stack)
-    installation = stable_id("otterdog-e2e offline: database outage", base=900_000_000)
+    installation = stable_id("otterdog-acceptance offline: database outage", base=900_000_000)
     failed_id = delivery_id("outage")
     pages, internal = local_session(), local_session()
     stack.stop_service("mongodb")

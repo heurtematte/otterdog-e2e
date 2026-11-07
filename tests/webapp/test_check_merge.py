@@ -27,11 +27,11 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from otterdog_e2e.config_repo import comment_contains
+from otterdog_acceptance.config_repo import comment_contains
 
 if TYPE_CHECKING:
     from conftest import WebappScenario
-    from otterdog_e2e.github.mutate import Mutator
+    from otterdog_acceptance.github.mutate import Mutator
 
 pytestmark = [pytest.mark.webapp]
 
@@ -52,7 +52,7 @@ def _skip_without_feature(s: WebappScenario) -> None:
         pytest.skip(f"webapp under test {known} the /otterdog check-merge command ({FEATURE_FILE})")
 
 
-# the local change behind the command (no upstream PR): `otterdog-e2e run --sut dirty:../otterdog --change check-merge
+# the local change behind the command (no upstream PR): `otterdog-acceptance run --sut dirty:../otterdog --change check-merge
 # --suite offline,differential[,webapp --target free]`
 CHECK_MERGE_REFERENCES = [
     {

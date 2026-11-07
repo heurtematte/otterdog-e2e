@@ -22,15 +22,15 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from otterdog_e2e.otterdog.output import normalize_text
-from otterdog_e2e.webui import mapping
-from otterdog_e2e.webui.oracle import parse_settings_block, rest_web_values, web_values
+from otterdog_acceptance.otterdog.output import normalize_text
+from otterdog_acceptance.webui import mapping
+from otterdog_acceptance.webui.oracle import parse_settings_block, rest_web_values, web_values
 
 if TYPE_CHECKING:
     from conftest import WebUiTier
-    from otterdog_e2e.context import E2EContext
-    from otterdog_e2e.github.oracle import Oracle
-    from otterdog_e2e.otterdog.runner import CliResult, WebOtterdogCli
+    from otterdog_acceptance.context import E2EContext
+    from otterdog_acceptance.github.oracle import Oracle
+    from otterdog_acceptance.otterdog.runner import CliResult, WebOtterdogCli
 
 pytestmark = [pytest.mark.web_ui, pytest.mark.tags("org-settings", "cli")]
 

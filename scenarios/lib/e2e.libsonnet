@@ -1,4 +1,4 @@
-// otterdog-e2e scenario helpers (docs/writing-scenarios.md, "Injecting jsonnet from files").
+// otterdog-acceptance scenario helpers (docs/writing-scenarios.md, "Injecting jsonnet from files").
 //
 // A scenario inlines this file with
 //

@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from otterdog_e2e.naming import RunContext
-from otterdog_e2e.otterdog.output import (
+from otterdog_acceptance.naming import RunContext
+from otterdog_acceptance.otterdog.output import (
     HEADER_RE,
     UNKNOWN_PROPERTIES_RE,
     Message,

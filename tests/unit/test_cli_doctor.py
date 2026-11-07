@@ -11,13 +11,13 @@ from typing import Any
 import pytest
 from click.testing import CliRunner
 
-from otterdog_e2e import cli
-from otterdog_e2e.cli import doctor as cli_doctor
-from otterdog_e2e.onboard.accounts import AccountsConfig
-from otterdog_e2e.onboard.tokens import ROLE_TOKENS
-from otterdog_e2e.safety import SafetyError
-from otterdog_e2e.settings import AppCredentials, IdentitySpec, Target, TargetError
-from otterdog_e2e.testing.fakes import (
+from otterdog_acceptance import cli
+from otterdog_acceptance.cli import doctor as cli_doctor
+from otterdog_acceptance.onboard.accounts import AccountsConfig
+from otterdog_acceptance.onboard.tokens import ROLE_TOKENS
+from otterdog_acceptance.safety import SafetyError
+from otterdog_acceptance.settings import AppCredentials, IdentitySpec, Target, TargetError
+from otterdog_acceptance.testing.fakes import (
     FAKE_LOGINS,
     FAKE_MARKER,
     FAKE_ORG,
@@ -31,7 +31,7 @@ from otterdog_e2e.testing.fakes import (
     make_target,
     make_verified_org,
 )
-from otterdog_e2e.vaults import VaultError
+from otterdog_acceptance.vaults import VaultError
 
 ROLES = ("admin", "author", "approver", "outsider", "config_reader")
 
@@ -112,20 +112,20 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
         return make_verified_org(org_json={**default_org_json(), "description": world.description})
 
     credentials = AppCredentials("1", "-----BEGIN PRIVATE KEY-----\nx\n-----END PRIVATE KEY-----", "hook-secret", None)
-    monkeypatch.setattr("otterdog_e2e.settings.harness_settings", lambda environ=None: make_settings(tmp_path))
-    monkeypatch.setattr("otterdog_e2e.settings.load_env_files", lambda *a, **k: [])
-    monkeypatch.setattr("otterdog_e2e.settings.load_target", load_target)
-    monkeypatch.setattr("otterdog_e2e.settings.resolve_identities", lambda *a, **k: dict(world.identities))
-    monkeypatch.setattr("otterdog_e2e.settings.resolve_app_credentials", lambda *a, **k: credentials)
-    monkeypatch.setattr("otterdog_e2e.github.http.GitHubHttp", lambda token, **kw: world.https[kw["identity"]])
-    monkeypatch.setattr("otterdog_e2e.safety.check_identity_isolation", isolation)
-    monkeypatch.setattr("otterdog_e2e.safety.verify_target", verify)
-    monkeypatch.setattr("otterdog_e2e.github.oracle.Oracle", lambda http, org: world.oracle)
-    monkeypatch.setattr("otterdog_e2e.github.app.AppAuth", lambda creds, **kw: world.app)
-    monkeypatch.setattr("otterdog_e2e.sut.image.docker_available", lambda: world.docker)
-    monkeypatch.setattr("otterdog_e2e.procs.unshare_available", lambda: world.unshare)
-    monkeypatch.setattr("otterdog_e2e.onboard.accounts.load_accounts_config", lambda environ: world.accounts)
-    monkeypatch.setattr("otterdog_e2e.vaults.resolve", world.resolve)
+    monkeypatch.setattr("otterdog_acceptance.settings.harness_settings", lambda environ=None: make_settings(tmp_path))
+    monkeypatch.setattr("otterdog_acceptance.settings.load_env_files", lambda *a, **k: [])
+    monkeypatch.setattr("otterdog_acceptance.settings.load_target", load_target)
+    monkeypatch.setattr("otterdog_acceptance.settings.resolve_identities", lambda *a, **k: dict(world.identities))
+    monkeypatch.setattr("otterdog_acceptance.settings.resolve_app_credentials", lambda *a, **k: credentials)
+    monkeypatch.setattr("otterdog_acceptance.github.http.GitHubHttp", lambda token, **kw: world.https[kw["identity"]])
+    monkeypatch.setattr("otterdog_acceptance.safety.check_identity_isolation", isolation)
+    monkeypatch.setattr("otterdog_acceptance.safety.verify_target", verify)
+    monkeypatch.setattr("otterdog_acceptance.github.oracle.Oracle", lambda http, org: world.oracle)
+    monkeypatch.setattr("otterdog_acceptance.github.app.AppAuth", lambda creds, **kw: world.app)
+    monkeypatch.setattr("otterdog_acceptance.sut.image.docker_available", lambda: world.docker)
+    monkeypatch.setattr("otterdog_acceptance.procs.unshare_available", lambda: world.unshare)
+    monkeypatch.setattr("otterdog_acceptance.onboard.accounts.load_accounts_config", lambda environ: world.accounts)
+    monkeypatch.setattr("otterdog_acceptance.vaults.resolve", world.resolve)
     monkeypatch.delenv("CI", raising=False)
     for spec in ROLE_TOKENS.values():
         monkeypatch.delenv(spec.login_env, raising=False)
@@ -201,7 +201,7 @@ def test_missing_marker_fails_with_bootstrap_hint(world: World) -> None:
     assert code == 1 and rows["org:marker"]["status"] == "FAIL"
     assert "bootstrap --target fake --apply" in rows["org:marker"]["remediation"]
     table = CliRunner().invoke(cli.main, ["doctor", "--target", "fake"])
-    assert table.exit_code == 1 and "fix: run `otterdog-e2e bootstrap" in table.output
+    assert table.exit_code == 1 and "fix: run `otterdog-acceptance bootstrap" in table.output
 
 
 def test_identity_problems(world: World) -> None:
@@ -430,7 +430,8 @@ def test_accounts_of_the_accounts_store(world: World) -> None:
         and outsider["detail"] == "otterdog-e2e-fake-outsider: flagged by GitHub, or not created"
     )
     assert (
-        outsider["remediation"] == "otterdog-e2e web-login otterdog-e2e-fake-outsider: a flagged account sees a banner"
+        outsider["remediation"]
+        == "otterdog-acceptance web-login otterdog-e2e-fake-outsider: a flagged account sees a banner"
     )
     assert rows["account:approver"]["detail"] == "otterdog-e2e-fake-approver: exists, not flagged"
     assert fake_token("stored") not in json.dumps(rows)

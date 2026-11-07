@@ -15,7 +15,7 @@ from typing import Any
 import pytest
 import yaml
 
-from otterdog_e2e.scenarios.model import (
+from otterdog_acceptance.scenarios.model import (
     SCENARIO_KEYS,
     SCHEMA_FILE,
     STEP_KEYS,
@@ -26,7 +26,7 @@ from otterdog_e2e.scenarios.model import (
 ROOT = Path(__file__).resolve().parents[2]
 SCENARIOS = ROOT / "scenarios"
 REGENERATE = (
-    ".venv/bin/python -c 'import json; from otterdog_e2e.scenarios.model import json_schema; "
+    ".venv/bin/python -c 'import json; from otterdog_acceptance.scenarios.model import json_schema; "
     f"print(json.dumps(json_schema(), indent=2))' > {SCHEMA_FILE}"
 )
 JSON_TYPES: dict[str, tuple[type, ...]] = {

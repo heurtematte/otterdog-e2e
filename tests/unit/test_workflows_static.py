@@ -4,7 +4,7 @@ actionlint is not a dependency of the project: every workflow is parsed with PyY
 asserted directly (empty top-level permissions, read-only jobs, pinned actions, no persisted credentials, no
 expressions inside ``run:``, secrets only on harness steps, scrub before upload, environments and concurrency for
 jobs holding secrets). Commands and options used in workflows and in the Makefile are checked against the real
-``otterdog-e2e`` click application, and the variables of targets/*.yaml against the workflows and .env.example.
+``otterdog-acceptance`` click application, and the variables of targets/*.yaml against the workflows and .env.example.
 
 Instances: the ``target`` input of e2e.yml, e2e-webui.yml and e2e-otterdog-pr.yml is one instance or a comma list; the
 validation scripts and the instance check of every job running in the environment of an instance are executed here
@@ -33,8 +33,8 @@ import click
 import pytest
 import yaml
 
-from otterdog_e2e import cli
-from otterdog_e2e.redact import SECRET_KEY_RE
+from otterdog_acceptance import cli
+from otterdog_acceptance.redact import SECRET_KEY_RE
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS_DIR = ROOT / ".github" / "workflows"
@@ -62,8 +62,8 @@ SECRET_REF_RE = re.compile(r"secrets\.([A-Za-z0-9_]+)")
 GITHUB_TOKEN_RE = re.compile(r"\$\{\{\s*(github\.token|secrets\.GITHUB_TOKEN)\s*\}\}")
 VARS_REF_RE = re.compile(r"^\$\{\{\s*vars\.([A-Za-z0-9_]+)\s*\}\}$")
 SECRETS_REF_RE = re.compile(r"^\$\{\{\s*secrets\.([A-Za-z0-9_]+)\s*\}\}$")
-HARNESS = ".venv/bin/otterdog-e2e"
-SUBCOMMAND_RE = re.compile(r"(?:bin/otterdog-e2e\s+|\bargs=\()([a-z][a-z-]*)(?:\s+([a-z][a-z-]*))?")
+HARNESS = ".venv/bin/otterdog-acceptance"
+SUBCOMMAND_RE = re.compile(r"(?:bin/otterdog-acceptance\s+|\bargs=\()([a-z][a-z-]*)(?:\s+([a-z][a-z-]*))?")
 LONG_OPTION_RE = re.compile(r"(?<![\w$-])--[a-z][a-z0-9-]*")
 TARGET_VAR_RE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)")
 ENV_NAME_KEY_SUFFIX = "_env"
@@ -133,8 +133,8 @@ DOCS_PATHS = [
     "docs_scenarios.py",
     "scenarios/**",
     "tests/**/*.py",
-    "src/otterdog_e2e/scenarios/checks.py",
-    "src/otterdog_e2e/github/oracle.py",
+    "src/otterdog_acceptance/scenarios/checks.py",
+    "src/otterdog_acceptance/github/oracle.py",
     ".github/workflows/docs.yml",
 ]
 MAKE_TARGETS = (
@@ -259,7 +259,7 @@ def target_variables() -> set[str]:
 
 
 def click_commands() -> dict[str, click.Command]:
-    """Every otterdog-e2e command by path (``run``, ``sut classify``, ``cache prune``)."""
+    """Every otterdog-acceptance command by path (``run``, ``sut classify``, ``cache prune``)."""
     found: dict[str, click.Command] = {}
 
     def walk(group: click.Group, prefix: str) -> None:
@@ -275,7 +275,7 @@ def click_commands() -> dict[str, click.Command]:
 
 
 def known_long_options() -> set[str]:
-    """Long options of every otterdog-e2e command (and of the main group)."""
+    """Long options of every otterdog-acceptance command (and of the main group)."""
     options = {"--help", "--version"}
     for command in [cli.main, *click_commands().values()]:
         for param in command.params:
@@ -287,7 +287,7 @@ def known_long_options() -> set[str]:
 def harness_lines(script: str) -> list[str]:
     """Script lines (comments excluded) that invoke the harness or build its argument list."""
     lines = [line for line in script.splitlines() if not line.lstrip().startswith("#")]
-    return [line for line in lines if "bin/otterdog-e2e" in line or re.search(r"\bargs(\+)?=\(", line)]
+    return [line for line in lines if "bin/otterdog-acceptance" in line or re.search(r"\bargs(\+)?=\(", line)]
 
 
 def run_step(step: dict[str, Any], env: dict[str, str], cwd: Path) -> tuple[int, dict[str, str], str]:
@@ -450,7 +450,7 @@ def test_multi_line_scripts_fail_fast() -> None:
 
 
 def test_harness_commands_and_options_exist() -> None:
-    """Every otterdog-e2e command and long option used by a workflow exists in src/otterdog_e2e/cli/."""
+    """Every otterdog-acceptance command and long option used by a workflow exists in src/otterdog_acceptance/cli/."""
     commands, options = click_commands(), known_long_options()
     seen: set[str] = set()
     for name, job_id, index, step in all_steps():
@@ -532,7 +532,7 @@ def test_jobs_with_secrets_declare_environment_and_concurrency() -> None:
 
 
 def test_uploads_follow_a_successful_scrub() -> None:
-    """upload-artifact runs only after ``otterdog-e2e scrub-artifacts`` succeeded, with a 7-day retention."""
+    """upload-artifact runs only after ``otterdog-acceptance scrub-artifacts`` succeeded, with a 7-day retention."""
     uploads = [entry for entry in all_steps() if str(entry[3].get("uses", "")).startswith("actions/upload-artifact@")]
     assert uploads
     for name, job_id, index, step in uploads:
@@ -620,7 +620,7 @@ def test_e2e_workflow_contract() -> None:
     assert e2e["env"]["E2E_LANE"] == "${{ inputs.lane }}"
     run_index, run = step_by_id(e2e, "run")
     assert run["timeout-minutes"] == 120
-    assert "otterdog-e2e" in run["run"]
+    assert "otterdog-acceptance" in run["run"]
     janitor_index, janitor = step_by_id(e2e, "janitor")
     assert janitor_index > run_index
     assert "always()" in str(janitor.get("if"))
@@ -958,13 +958,13 @@ def test_makefile_targets() -> None:
     """The Makefile provides the documented targets, uses the project venv and never exports OTTERDOG_CONFIG_ROOT."""
     defined = set(re.findall(r"^([a-z][a-z0-9-]*):", makefile(), flags=re.MULTILINE))
     assert set(MAKE_TARGETS) <= defined, sorted(set(MAKE_TARGETS) - defined)
-    assert ".venv/bin/otterdog-e2e" in makefile()
+    assert ".venv/bin/otterdog-acceptance" in makefile()
     assert re.search(r"^unexport OTTERDOG_CONFIG_ROOT$", makefile(), flags=re.MULTILINE)
     assert re.search(r"^\.PHONY:", makefile(), flags=re.MULTILINE)
 
 
 def test_makefile_harness_commands_and_options_exist() -> None:
-    """Commands and long options of the ``$(E2E)`` recipe lines exist in the otterdog-e2e command line."""
+    """Commands and long options of the ``$(E2E)`` recipe lines exist in the otterdog-acceptance command line."""
     commands, options = click_commands(), known_long_options()
     lines = [line for line in makefile().splitlines() if line.startswith("\t") and "$(E2E)" in line]
     assert lines

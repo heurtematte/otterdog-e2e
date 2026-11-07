@@ -1,6 +1,6 @@
 # Security policy
 
-## Reporting a vulnerability of otterdog-e2e
+## Reporting a vulnerability of otterdog-acceptance
 
 Please report a vulnerability of the harness privately, through
 [GitHub private vulnerability reporting](https://github.com/heurtematte/otterdog-e2e/security/advisories/new).
@@ -12,7 +12,7 @@ Please include what you can of:
 
 - the kind of issue, e.g. a secret written to an artifact or a log, untrusted pull request code reaching the host or
   a credential, a write to an organization that is not a test organization;
-- the commit of otterdog-e2e and the command, scenario or workflow involved;
+- the commit of otterdog-acceptance and the command, scenario or workflow involved;
 - the steps to reproduce it and its impact;
 - the files and lines of the source concerned.
 

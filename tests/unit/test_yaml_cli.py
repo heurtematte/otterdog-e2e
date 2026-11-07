@@ -25,18 +25,23 @@ from typing import Any
 import pytest
 import yaml
 
-from otterdog_e2e import procs
-from otterdog_e2e.capabilities import PLANS
-from otterdog_e2e.known_bugs import KnownBug, load
-from otterdog_e2e.naming import is_e2e_name, new_run_context
-from otterdog_e2e.otterdog.render import OrgConfigRenderer, build_baseline, org_profile
-from otterdog_e2e.scenarios.collect import ORG_LEVEL_EXTRA_TIMEOUT, TIER_TIMEOUTS, collect_scenarios, scenario_timeout
-from otterdog_e2e.scenarios.engine import fixed_in_skip_reason
-from otterdog_e2e.scenarios.model import Scenario, domain_problem, load_scenarios, render_step, scenario_files
-from otterdog_e2e.selection import SCENARIO_TAGS
-from otterdog_e2e.settings import IDENTITY_ROLES
-from otterdog_e2e.sut.template import offline_template
-from otterdog_e2e.testing.fakes import FAKE_MARKER, FAKE_ORG, default_org_json, make_target
+from otterdog_acceptance import procs
+from otterdog_acceptance.capabilities import PLANS
+from otterdog_acceptance.known_bugs import KnownBug, load
+from otterdog_acceptance.naming import is_e2e_name, new_run_context
+from otterdog_acceptance.otterdog.render import OrgConfigRenderer, build_baseline, org_profile
+from otterdog_acceptance.scenarios.collect import (
+    ORG_LEVEL_EXTRA_TIMEOUT,
+    TIER_TIMEOUTS,
+    collect_scenarios,
+    scenario_timeout,
+)
+from otterdog_acceptance.scenarios.engine import fixed_in_skip_reason
+from otterdog_acceptance.scenarios.model import Scenario, domain_problem, load_scenarios, render_step, scenario_files
+from otterdog_acceptance.selection import SCENARIO_TAGS
+from otterdog_acceptance.settings import IDENTITY_ROLES
+from otterdog_acceptance.sut.template import offline_template
+from otterdog_acceptance.testing.fakes import FAKE_MARKER, FAKE_ORG, default_org_json, make_target
 
 ROOT = Path(__file__).resolve().parents[2]
 SCENARIOS = ROOT / "scenarios"
@@ -217,7 +222,7 @@ def load_cli_conftest() -> ModuleType:
     The module is registered in sys.modules under a private name before it runs: dataclasses resolve the string
     annotations of ``from __future__ import annotations`` through it.
     """
-    name = "otterdog_e2e_cli_conftest_under_test"
+    name = "otterdog_acceptance_cli_conftest_under_test"
     spec = importlib.util.spec_from_file_location(name, CLI_CONFTEST)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -495,7 +500,7 @@ def test_private_repositories_are_never_created_by_their_first_apply(tmp_path: P
     Enterprise without it): the apply fails. A live scenario that runs on release:latest therefore creates its
     repositories public and makes them private in a later step (cli.repo.visibility); only scenarios that skip such
     SUTs (fixed_in >= 1.7.0, e.g. regression.private-repo-template-defaults) may create a private repository directly."""
-    from otterdog_e2e.sut.version import predates
+    from otterdog_acceptance.sut.version import predates
 
     target = make_target()
     problems = []
@@ -625,7 +630,7 @@ def test_known_issues_doc_mirrors_the_registry() -> None:
 
 def load_test_module(relative: str) -> ModuleType:
     """A tests/cli module as a standalone module (like load_cli_conftest)."""
-    name = "otterdog_e2e_" + relative.replace("/", "_").removesuffix(".py") + "_under_test"
+    name = "otterdog_acceptance_" + relative.replace("/", "_").removesuffix(".py") + "_under_test"
     spec = importlib.util.spec_from_file_location(name, ROOT / relative)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)

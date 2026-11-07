@@ -22,17 +22,17 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from otterdog_e2e import waiting
-from otterdog_e2e.scenarios.model import load_scenario
+from otterdog_acceptance import waiting
+from otterdog_acceptance.scenarios.model import load_scenario
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from otterdog_e2e.github.mutate import Mutator
-    from otterdog_e2e.github.oracle import Oracle
-    from otterdog_e2e.naming import RunContext
-    from otterdog_e2e.scenarios.engine import ScenarioEngine
-    from otterdog_e2e.scenarios.model import Scenario
+    from otterdog_acceptance.github.mutate import Mutator
+    from otterdog_acceptance.github.oracle import Oracle
+    from otterdog_acceptance.naming import RunContext
+    from otterdog_acceptance.scenarios.engine import ScenarioEngine
+    from otterdog_acceptance.scenarios.model import Scenario
 
 logger = logging.getLogger(__name__)
 
@@ -142,7 +142,9 @@ def test_advisory_fork_is_ignored(
 
     def create_advisory_fork() -> None:
         """A draft advisory (e2e summary) and its temporary private fork '<repo>-ghsa-...', private and existing."""
-        advisory = mutator.create_security_advisory(repo, summary=f"{run_ctx.prefix}-advisory: otterdog-e2e probe")
+        advisory = mutator.create_security_advisory(
+            repo, summary=f"{run_ctx.prefix}-advisory: otterdog-acceptance probe"
+        )
         created["ghsa_id"] = ghsa_id = str(advisory["ghsa_id"])
         fork = mutator.create_advisory_fork(repo, ghsa_id)
         created["fork"] = name = str(fork["name"])

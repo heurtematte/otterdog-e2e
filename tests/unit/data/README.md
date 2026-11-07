@@ -3,11 +3,11 @@
 REAL output of otterdog **1.7.0.dev19** (the offline CLI of the research notes,
 `notes/deploy-runtime/venv-local/bin/otterdog`), captured OFFLINE: every command ran inside
 `unshare -rn` (new user + network namespace, no network at all) with the dummy token of the offline tier.
-They are the ground truth of `otterdog_e2e/otterdog/output.py` and its tests (`tests/unit/test_otterdog_output.py`).
+They are the ground truth of `otterdog_acceptance/otterdog/output.py` and its tests (`tests/unit/test_otterdog_output.py`).
 
 ## How they were captured
 
-* One workspace per case, written with `ConfigWorkspace` (`otterdog_e2e/otterdog/workspace.py`): `otterdog.json` with
+* One workspace per case, written with `ConfigWorkspace` (`otterdog_acceptance/otterdog/workspace.py`): `otterdog.json` with
   `defaults.base_url = https://otterdog.invalid`, `defaults.jsonnet.base_template =
   https://github.com/e2e-offline/template#otterdog-defaults.libsonnet@offline` (`sut.template.offline_template()`),
   `config_dir = orgs`, `github.config_repo = .otterdog`, and one organization `e2e-test-org` with the `env` credential
@@ -15,7 +15,7 @@ They are the ground truth of `otterdog_e2e/otterdog/output.py` and its tests (`t
 * The upstream example template (`examples/template/*.libsonnet` of otterdog main @9bdeb75) is vendored into
   `orgs/e2e-test-org/vendor/template/`, so every command runs with `--local` (no template clone).
 * Org configs (and `-BASE` files for local-plan/local-apply) are rendered with `OrgConfigRenderer`
-  (`otterdog_e2e/otterdog/render.py`, two layers, live-like profile `[otterdog-e2e] Dedicated otterdog e2e test
+  (`otterdog_acceptance/otterdog/render.py`, two layers, live-like profile `[otterdog-e2e] Dedicated otterdog e2e test
   organization`, run id `t3c7z8a5`); the exact files are in `configs/` (`<case>.jsonnet`, `<case>.jsonnet-BASE`).
 * Environment: `procs.sanitized_env` (`COLUMNS=4096 LINES=1000 NO_COLOR=1 TERM=dumb PYTHON_DOTENV_DISABLED=1`, scratch
   HOME, no `OTTERDOG_*`/`E2E_*` from the caller) plus `credentials_env(None)`

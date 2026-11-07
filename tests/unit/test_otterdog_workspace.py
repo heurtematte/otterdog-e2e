@@ -9,15 +9,15 @@ from typing import Any
 
 import pytest
 
-from otterdog_e2e.otterdog.workspace import (
+from otterdog_acceptance.otterdog.workspace import (
     CREDENTIAL_ENV,
     ConfigWorkspace,
     credentials_env,
     webapp_otterdog_json,
 )
-from otterdog_e2e.redact import REDACTOR
-from otterdog_e2e.settings import Identity, Target, WebappSpec
-from otterdog_e2e.sut.template import TemplateRef, offline_template
+from otterdog_acceptance.redact import REDACTOR
+from otterdog_acceptance.settings import Identity, Target, WebappSpec
+from otterdog_acceptance.sut.template import TemplateRef, offline_template
 
 TEMPLATE = TemplateRef(
     url="https://github.com/eclipse-csi/otterdog#examples/template/otterdog-defaults.libsonnet@" + "a" * 40,
@@ -160,8 +160,8 @@ def test_read_untrusted_text_refuses_links_special_files_and_escapes(tmp_path: P
 
     import pytest
 
-    from otterdog_e2e.otterdog.workspace import read_untrusted_text
-    from otterdog_e2e.safety import SafetyError
+    from otterdog_acceptance.otterdog.workspace import read_untrusted_text
+    from otterdog_acceptance.safety import SafetyError
 
     root, outside = tmp_path / "ws", tmp_path / "host"
     root.mkdir()
@@ -193,8 +193,8 @@ def test_write_private_text_replaces_planted_links(tmp_path: Path) -> None:
 
     import pytest
 
-    from otterdog_e2e.otterdog.workspace import write_private_text
-    from otterdog_e2e.safety import SafetyError
+    from otterdog_acceptance.otterdog.workspace import write_private_text
+    from otterdog_acceptance.safety import SafetyError
 
     root, outside = tmp_path / "ws", tmp_path / "host"
     root.mkdir()
@@ -217,7 +217,7 @@ def test_neutralize_untrusted_tree(tmp_path: Path) -> None:
     are kept, link targets are never entered, and a directory the container made unreadable is opened again."""
     import os
 
-    from otterdog_e2e.otterdog.workspace import neutralize_untrusted_tree
+    from otterdog_acceptance.otterdog.workspace import neutralize_untrusted_tree
 
     root, outside = tmp_path / "ws", tmp_path / "host"
     (root / "orgs" / "o").mkdir(parents=True)
@@ -249,7 +249,7 @@ def test_neutralize_untrusted_tree_does_not_depend_on_the_listing_order(
     differs between filesystems: chain was kept on a GitHub runner when abs came first)."""
     import os
 
-    from otterdog_e2e.otterdog import workspace as workspace_module
+    from otterdog_acceptance.otterdog import workspace as workspace_module
 
     root, outside = tmp_path / "ws", tmp_path / "host"
     root.mkdir()
@@ -271,7 +271,7 @@ def test_workspace_reads_and_cleanups_stay_inside_the_root(tmp_path: Path) -> No
     """read_org_config refuses a planted link; clean_template_cache refuses to delete through a parent link."""
     import pytest
 
-    from otterdog_e2e.safety import SafetyError
+    from otterdog_acceptance.safety import SafetyError
 
     workspace = ConfigWorkspace(tmp_path / "ws", org="o", template=offline_template(), config_repo=".otterdog")
     workspace.write_otterdog_json()

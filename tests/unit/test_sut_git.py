@@ -16,11 +16,11 @@ from pathlib import Path
 
 import pytest
 
-from otterdog_e2e import procs
-from otterdog_e2e.safety import SafetyError
-from otterdog_e2e.settings import HarnessSettings
-from otterdog_e2e.sut import spec as spec_mod
-from otterdog_e2e.sut.source import (
+from otterdog_acceptance import procs
+from otterdog_acceptance.safety import SafetyError
+from otterdog_acceptance.settings import HarnessSettings
+from otterdog_acceptance.sut import spec as spec_mod
+from otterdog_acceptance.sut.source import (
     DIRTY_ALLOW,
     DIRTY_DENY,
     UpstreamMirror,
@@ -28,8 +28,8 @@ from otterdog_e2e.sut.source import (
     extract_tar,
     path_allowed,
 )
-from otterdog_e2e.sut.spec import resolve_sut
-from otterdog_e2e.testing.fakes import FakeGitHubHttp
+from otterdog_acceptance.sut.spec import resolve_sut
+from otterdog_acceptance.testing.fakes import FakeGitHubHttp
 
 GIT_ENV = {
     "GIT_AUTHOR_NAME": "e2e",

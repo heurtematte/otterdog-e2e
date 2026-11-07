@@ -3,7 +3,7 @@
 Some otterdog features are only reachable through the GitHub web UI: otterdog drives github.com with Playwright
 (Firefox), logged in as a bot owner with a username, a password and a TOTP code. The token tiers never see them:
 every live command of the harness uses `-n` (`--no-web-ui`) and the webapp always applies with `no_web_ui=True`. The
-web-UI tier (`tests/web_ui`, package `otterdog_e2e.webui`) covers them.
+web-UI tier (`tests/web_ui`, package `otterdog_acceptance.webui`) covers them.
 
 | Feature | otterdog | How the harness tests it |
 |---|---|---|
@@ -170,7 +170,7 @@ only):
 | `E2E_WEB_LOGIN` | process environment only: `1` lets the `web-login` test open a visible browser |
 | `E2E_WEB_READER` | process environment only: `import` makes the trusted reader use `import` + `show --local` instead of `show-live` (keys the import leaves at the template default are dropped) |
 
-Put the secrets in `~/.config/otterdog-e2e/<instance>.env` (chmod 600) like the tokens: `setup` asks for the
+Put the secrets in `~/.config/otterdog-acceptance/<instance>.env` (chmod 600) like the tokens: `setup` asks for the
 password and the setup key in hidden prompts and writes both (`setup --target <instance> --rotate web` replaces them;
 [onboarding.md](onboarding.md#the-web-login-step)). Other variable names can be declared in a custom profile:
 `identities.admin.username_env`, `password_env` (must end with `_PASSWORD`) and `totp_seed_env` (must end with
@@ -215,7 +215,7 @@ code runs). `doctor` reports the installed builds.
 * each job checks first that its environment configures the instance (a missing environment is created by GitHub
   on the fly, empty: the job then fails before any SUT code runs);
 * it joins the concurrency group `e2e-<instance>` (never in parallel with another session of the org) and runs
-  `otterdog-e2e run --target <instance> --sut <s> --suite cli --scenario 'webui.*' tests/web_ui` with
+  `otterdog-acceptance run --target <instance> --sut <s> --suite cli --scenario 'webui.*' tests/web_ui` with
   `E2E_ALLOW_WEB_UI=true`, then the janitor, the scrub and the upload, like `e2e.yml`.
 
 ```bash
@@ -229,12 +229,12 @@ tier of `e2e.yml`.
 ## Running it locally
 
 ```bash
-.venv/bin/otterdog-e2e doctor --target free                       # web:* rows (never logs in)
-E2E_ALLOW_WEB_UI=1 .venv/bin/otterdog-e2e run --target free --suite cli --scenario 'webui.*' tests/web_ui
+.venv/bin/otterdog-acceptance doctor --target free                       # web:* rows (never logs in)
+E2E_ALLOW_WEB_UI=1 .venv/bin/otterdog-acceptance run --target free --suite cli --scenario 'webui.*' tests/web_ui
 # one scenario
-E2E_ALLOW_WEB_UI=1 .venv/bin/otterdog-e2e run --target free --suite cli --scenario webui.settings.round-trip tests/web_ui
+E2E_ALLOW_WEB_UI=1 .venv/bin/otterdog-acceptance run --target free --suite cli --scenario webui.settings.round-trip tests/web_ui
 # the bot's browser session (visible window, closes at once)
-E2E_WEB_LOGIN=1 E2E_ALLOW_WEB_UI=1 .venv/bin/otterdog-e2e run --target free --suite cli --scenario webui.cmd.web-login tests/web_ui
+E2E_WEB_LOGIN=1 E2E_ALLOW_WEB_UI=1 .venv/bin/otterdog-acceptance run --target free --suite cli --scenario webui.cmd.web-login tests/web_ui
 # pytest directly works too
 .venv/bin/pytest tests/web_ui --e2e-target free --e2e-allow-web-ui -p no:cacheprovider
 ```

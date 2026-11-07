@@ -23,11 +23,11 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from otterdog_e2e.config_repo import comment_contains
+from otterdog_acceptance.config_repo import comment_contains
 
 if TYPE_CHECKING:
     from conftest import WebappScenario
-    from otterdog_e2e.config_repo import ConfigPr
+    from otterdog_acceptance.config_repo import ConfigPr
 
 pytestmark = [pytest.mark.webapp]
 
@@ -46,8 +46,8 @@ def _behind(base: str, commits: int) -> str:
 
 def _advance_main(s: WebappScenario, step: str) -> str:
     """One more commit on main: a jsonnet comment on top of the baseline (no model change); returns its sha."""
-    text = f"// otterdog-e2e {s.run_ctx.run_id} {s.sid}: main advanced ({step})\n{s.baseline_text()}"
-    return s.flow.reset_main(text, message=f"otterdog-e2e {s.run_ctx.run_id}: {s.sid} advances main ({step})")
+    text = f"// otterdog-acceptance {s.run_ctx.run_id} {s.sid}: main advanced ({step})\n{s.baseline_text()}"
+    return s.flow.reset_main(text, message=f"otterdog-acceptance {s.run_ctx.run_id}: {s.sid} advances main ({step})")
 
 
 def _wait_new_head(s: WebappScenario, pr: ConfigPr, what: str) -> ConfigPr:

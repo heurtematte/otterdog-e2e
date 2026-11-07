@@ -1,4 +1,4 @@
-"""otterdog_e2e.vaults: vault references (HashiCorp Vault KV v2 with token, ~/.vault-token and GitHub OIDC logins; pass
+"""otterdog_acceptance.vaults: vault references (HashiCorp Vault KV v2 with token, ~/.vault-token and GitHub OIDC logins; pass
 and gopass; Bitwarden) resolved once and redacted, and their use by settings, the scrubber and ci-sync's callers.
 
 Vault runs as a loopback HTTP server (KV v2 reads, the JWT login, GitHub's OIDC token endpoint); pass and bw are stub
@@ -19,11 +19,11 @@ from typing import Any
 import click
 import pytest
 
-from otterdog_e2e import vaults
-from otterdog_e2e.cli.maintenance import register_environment_secrets
-from otterdog_e2e.redact import REDACTOR, Redactor
-from otterdog_e2e.settings import TargetError, _env_value, load_env_files
-from otterdog_e2e.vaults import Reference, Resolver, VaultError, is_reference, parse
+from otterdog_acceptance import vaults
+from otterdog_acceptance.cli.maintenance import register_environment_secrets
+from otterdog_acceptance.redact import REDACTOR, Redactor
+from otterdog_acceptance.settings import TargetError, _env_value, load_env_files
+from otterdog_acceptance.vaults import Reference, Resolver, VaultError, is_reference, parse
 
 ADMIN_TOKEN = "ghp_vaultAdminToken0123456789abcdef0123"
 SEED = "JBSWY3DPEHPK3PXP"

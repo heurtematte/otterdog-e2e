@@ -1,8 +1,8 @@
 # Architecture
 
-otterdog-e2e is a Python package (`src/otterdog_e2e`) with two entry points that share one composition root:
+otterdog-acceptance is a Python package (`src/otterdog_acceptance`) with two entry points that share one composition root:
 
-- the `otterdog-e2e` command line (the `cli/` package, click; also `python -m otterdog_e2e`), for operations
+- the `otterdog-acceptance` command line (the `cli/` package, click; also `python -m otterdog_acceptance`), for operations
   (doctor, bootstrap, janitor, relay, reports, the onboarding commands `setup` and `ci-sync`) and for starting test
   sessions (`run`, `pr`, which call `pytest.main` in-process for one target, and start one child process per target
   for several); `cli/common.py` holds the click group and the helpers every command shares, and each command family
@@ -19,7 +19,7 @@ GitHub clients, App, org lease), `sut` (SUTs, otterdog drivers, differential sid
 
 **Instances and profiles.** A target file `targets/<profile>.yaml` is a profile (`free`, `team`, `enterprise`) and
 holds no org-specific value; an instance is one test organization, named by `--target <instance>`, whose env file
-`~/.config/otterdog-e2e/<instance>.env` holds its organization, ids, logins, tokens and `E2E_PROFILE`.
+`~/.config/otterdog-acceptance/<instance>.env` holds its organization, ids, logins, tokens and `E2E_PROFILE`.
 `settings.resolve_target_ref` maps a `--target` value to the instance, its profile and the file; `Target.name` is the
 instance and `Target.profile` the profile. A session serves one instance: env files fill the environment without
 overriding it, so `batch.py` runs several targets as one child process each (`procs.run_harness`, the parent's
@@ -33,7 +33,7 @@ and its CI environments through the operator's `gh` login (`ci-sync`); see [onbo
 ```mermaid
 flowchart LR
   subgraph entry["entry points"]
-    CLI["otterdog-e2e CLI<br/>cli/"]
+    CLI["otterdog-acceptance CLI<br/>cli/"]
     PLUGIN["pytest plugin<br/>pytest_plugin.py"]
   end
   CTX["E2EContext<br/>context/"]
@@ -115,7 +115,7 @@ flowchart LR
 | GitHub | `github/http`, `oracle`, `mutate`, `lease`, `janitor`, `app` | one HTTP client with retries, rate-limit handling and write guards; independent read-only ground truth; harness writes; the GitHub-side org lease and run ledger; leftovers cleanup; GitHub App authentication |
 | webapp and webhooks | `webapp/stack`, `webapp/api`, `webhooks/*`, `config_repo`, `blueprints`, `resources/dtrack_mock` | the compose stack of the webapp under test (services stopped and started, environment overrides, the Dependency-Track mock of profile `dtrack`), its REST API and pages, webhook signing and injection (raw bodies, omitted headers, replays), the pull relay of App deliveries, the config-repo PR workflow driver (drafts, reviews, comment edits, adopted run PRs), blueprint and policy definitions with their remediation PRs and workflow runs |
 | web UI | `webui/mapping`, `webui/gate`, `webui/oracle`, `webui/roundtrip` (with the web mode of `otterdog/runner`: `WebOtterdogCli`) | the table of the 12 web-only organization settings and its drift check against the SUT's source; the login gate (one bot login at a time per machine, a TOTP window apart, blocked after a failure that retries would make worse); the oracles (REST for 7 settings, a trusted otterdog's `show-live` for the others); the settings round trip (snapshot, set, verify, converge, restore) |
-| scenarios | `scenarios/model`, `checks`, `engine`, `offline`, `collect`, `known_bugs`, `selection`, `inject` | YAML scenarios, oracle checks, the live/offline/differential engines, pytest collection, known otterdog bugs, tag selection from changed files, ad-hoc injection of jsonnet files (`otterdog-e2e inject`, `tests/adhoc`) |
+| scenarios | `scenarios/model`, `checks`, `engine`, `offline`, `collect`, `known_bugs`, `selection`, `inject` | YAML scenarios, oracle checks, the live/offline/differential engines, pytest collection, known otterdog bugs, tag selection from changed files, ad-hoc injection of jsonnet files (`otterdog-acceptance inject`, `tests/adhoc`) |
 | reporting | `observe`, `differential`, `report`, `appmanifest` | observations, base vs head comparison, run summaries (with the coverage matrix of the run), the artifact scrubber, the GitHub App manifest flow |
 
 Rules every module follows: subprocesses only through `procs.run()` (and `procs.run_harness()` for the children of a
@@ -172,7 +172,7 @@ A live item belongs to the first shard one of whose `match` entries it satisfies
 plan, required capabilities, `org_level`), else to the default shard, so it has exactly one; `tests/unit/test_shards.py`
 checks that no item lands on a shard whose plan lacks what it requires. Offline and unit items are never filtered, an
 explicit scenario selection (`--e2e-scenario`) runs on any instance, and an instance without `E2E_SHARD` runs every
-live item. `otterdog-e2e shards` shows the share of each (scenarios, steps, test functions) and the instances that
+live item. `otterdog-acceptance shards` shows the share of each (scenarios, steps, test functions) and the instances that
 select it; `run --target <the five instances> --parallel 5` runs them at once, and CI does the same with its matrix of
 instances (`E2E_INSTANCES`). The organizations share one set of machine accounts, an organization keeping its own
 when `set:` of the accounts store says so ([onboarding](onboarding.md#the-organizations-of-the-shards)).
@@ -219,9 +219,9 @@ The battery is organized by tier (one directory below `tests/` each) and by kind
 |---|---|---|---|
 | YAML scenarios | `scenarios/{offline,cli,enterprise}/<domain>/` | `tests/<tier>/test_scenarios.py` (the scenario engines), `tests/offline/test_scenario_lint.py` (every live step validated offline), `tests/differential/` (`observe: true`) | declarative configuration changes: validate, plan, apply, oracle state, convergence ([writing-scenarios.md](writing-scenarios.md)) |
 | Python tests | `tests/<tier>/test_*.py` | pytest with the plugin's fixtures | flows YAML cannot express: CLI commands, the webapp PR workflow, App deliveries, the web UI |
-| ad-hoc injection | `tests/adhoc/` | `otterdog-e2e inject` | trying jsonnet files without writing a scenario |
+| ad-hoc injection | `tests/adhoc/` | `otterdog-acceptance inject` | trying jsonnet files without writing a scenario |
 | shared jsonnet | `scenarios/fragments/`, `scenarios/lib/` | the scenarios and inject recipes | fragments and helper libraries inlined into the rendered configuration |
-| scenario references | `references` of a YAML scenario, `references=` of a `pytest.mark.scenario` marker (`src/otterdog_e2e/changes.py`) | `--change`, `pr` (default: N of a `pr:N@<sha>` SUT) | the otterdog PRs or named changes behind a behaviour: expected differential deltas, base, template; the referencing scenarios pass the tags filter |
+| scenario references | `references` of a YAML scenario, `references=` of a `pytest.mark.scenario` marker (`src/otterdog_acceptance/changes.py`) | `--change`, `pr` (default: N of a `pr:N@<sha>` SUT) | the otterdog PRs or named changes behind a behaviour: expected differential deltas, base, template; the referencing scenarios pass the tags filter |
 
 Four registries keep the battery honest:
 
@@ -367,7 +367,7 @@ The details are in [security.md](security.md). In short:
 ## Repository layout
 
 ```
-src/otterdog_e2e/        the harness package (resources/: org.jsonnet.j2, compose.e2e.yaml, hypercorn.toml.j2)
+src/otterdog_acceptance/        the harness package (resources/: org.jsonnet.j2, compose.e2e.yaml, hypercorn.toml.j2)
 targets/                 one YAML profile per kind of test organization (free, team, enterprise)
 scenarios/offline/       offline scenarios          scenarios/cli/                           live CLI scenarios
 scenarios/enterprise/    enterprise scenarios       (each tier: one directory per domain, regressions included;
@@ -376,7 +376,7 @@ scenarios/fragments/     shared jsonnet fragments   scenarios/lib/              
 scenarios/known_bugs.yaml                           known otterdog defects (non-strict xfail)
 scenarios/coverage.yaml                             the coverage matrix (docs/coverage-matrix.md is generated from it)
 tests/unit/              harness self-tests         tests/{offline,cli,webhooks,webapp,web_ui,enterprise,differential}/
-tests/adhoc/             otterdog-e2e inject
+tests/adhoc/             otterdog-acceptance inject
 .github/workflows/       ci, e2e, e2e-otterdog-pr, e2e-webui, nightly, janitor
 docs/                    this documentation
 ```

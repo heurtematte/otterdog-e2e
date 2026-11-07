@@ -1,4 +1,4 @@
-# otterdog-e2e @RUN@: a workflow that also references a docker:// action (W-BP-PIN); never dispatched.
+# otterdog-acceptance @RUN@: a workflow that also references a docker:// action (W-BP-PIN); never dispatched.
 # The checkout reference must be pinned like in any other workflow; a docker:// reference cannot be pinned to a commit
 # and has to stay as it is.
 name: @NAME@

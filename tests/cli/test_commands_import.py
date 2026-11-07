@@ -27,22 +27,22 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from otterdog_e2e import waiting
-from otterdog_e2e.otterdog.render import ConfigFragments
-from otterdog_e2e.otterdog.workspace import read_untrusted_text
-from otterdog_e2e.webui.mapping import WEB_SETTINGS
+from otterdog_acceptance import waiting
+from otterdog_acceptance.otterdog.render import ConfigFragments
+from otterdog_acceptance.otterdog.workspace import read_untrusted_text
+from otterdog_acceptance.webui.mapping import WEB_SETTINGS
 
 if TYPE_CHECKING:
     from conftest import ShownObject
-    from otterdog_e2e.context import E2EContext
-    from otterdog_e2e.github.oracle import Oracle
-    from otterdog_e2e.naming import RunContext
-    from otterdog_e2e.otterdog.baseline import BaselineManager
-    from otterdog_e2e.otterdog.render import OrgConfigRenderer
-    from otterdog_e2e.otterdog.runner import CliResult, OtterdogCli
-    from otterdog_e2e.otterdog.workspace import ConfigWorkspace
-    from otterdog_e2e.sut.cli_install import InstalledCli
-    from otterdog_e2e.sut.template import TemplateRef
+    from otterdog_acceptance.context import E2EContext
+    from otterdog_acceptance.github.oracle import Oracle
+    from otterdog_acceptance.naming import RunContext
+    from otterdog_acceptance.otterdog.baseline import BaselineManager
+    from otterdog_acceptance.otterdog.render import OrgConfigRenderer
+    from otterdog_acceptance.otterdog.runner import CliResult, OtterdogCli
+    from otterdog_acceptance.otterdog.workspace import ConfigWorkspace
+    from otterdog_acceptance.sut.cli_install import InstalledCli
+    from otterdog_acceptance.sut.template import TemplateRef
 
 pytestmark = [pytest.mark.tags("cli", "repo", "secrets", "webhooks")]
 
@@ -109,7 +109,7 @@ def overlay(repo: str, secret: str, value: str, plain_url: str, masked_url: str)
 
 def shown_config(cli: OtterdogCli, parse: Callable[[str], list[ShownObject]], what: str) -> list[ShownObject]:
     """Objects of ``show --local`` (the imported file evaluated offline with the vendored template)."""
-    from otterdog_e2e.otterdog.output import normalize_text
+    from otterdog_acceptance.otterdog.output import normalize_text
 
     result = cli.show(local=True).assert_ok(f"show --local of {what}")
     return parse(normalize_text(result.output))

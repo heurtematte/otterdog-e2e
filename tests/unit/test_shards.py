@@ -13,9 +13,9 @@ from typing import Any
 import pytest
 from click.testing import CliRunner
 
-from otterdog_e2e.capabilities import PLAN_MATRIX
-from otterdog_e2e.settings import profile_names
-from otterdog_e2e.shards import (
+from otterdog_acceptance.capabilities import PLAN_MATRIX
+from otterdog_acceptance.settings import profile_names
+from otterdog_acceptance.shards import (
     SHARDS_FILE,
     ItemFacts,
     ShardError,
@@ -24,7 +24,7 @@ from otterdog_e2e.shards import (
     shard_loads,
     static_items,
 )
-from otterdog_e2e.testing.fakes import make_settings
+from otterdog_acceptance.testing.fakes import make_settings
 
 ROOT = Path(__file__).resolve().parents[2]
 MAP = {
@@ -132,15 +132,15 @@ def test_the_enterprise_shard_takes_every_capability_a_free_organization_lacks()
     assert above_free <= taken, sorted(above_free - taken)
 
 
-# --- otterdog-e2e shards --------------------------------------------------------------------------------------------------
+# --- otterdog-acceptance shards --------------------------------------------------------------------------------------------------
 def test_shards_command_shows_what_each_shard_runs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Sizes per shard, the instances whose env file selects one, and the domains and modules of each."""
-    from otterdog_e2e import cli
+    from otterdog_acceptance import cli
 
-    config = tmp_path / ".config" / "otterdog-e2e"
+    config = tmp_path / ".config" / "otterdog-acceptance"
     config.mkdir(parents=True)
     (config / "repos.env").write_text("E2E_PROFILE=free\nE2E_SHARD=repos\nE2E_ORG=otterdog-e2e-repos\n")
-    monkeypatch.setattr("otterdog_e2e.cli.maintenance._settings", lambda: make_settings(ROOT))
+    monkeypatch.setattr("otterdog_acceptance.cli.maintenance._settings", lambda: make_settings(ROOT))
     result = CliRunner().invoke(cli.main, ["shards"], env={"HOME": str(tmp_path), "XDG_CONFIG_HOME": None})
     assert result.exit_code == 0, result.output
     lines = result.output.splitlines()

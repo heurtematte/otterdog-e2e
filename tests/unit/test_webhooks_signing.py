@@ -16,7 +16,7 @@ from typing import Any
 
 import pytest
 
-from otterdog_e2e.webhooks.signing import (
+from otterdog_acceptance.webhooks.signing import (
     FORM_CONTENT_TYPE,
     JSON_CONTENT_TYPE,
     SIGNATURE_MODES,

@@ -3,7 +3,7 @@
 The webapp under test is a GitHub App backend: it authenticates with an App id and private key, receives the App's
 webhook deliveries at `/github-webhook/receive`, and acts on the organization with installation tokens. The harness
 therefore needs its own GitHub App per test organization (per instance), created from a manifest by
-`otterdog-e2e setup` ([onboarding.md](onboarding.md#the-app-step)) or `otterdog-e2e app-manifest`.
+`otterdog-acceptance setup` ([onboarding.md](onboarding.md#the-app-step)) or `otterdog-acceptance app-manifest`.
 
 ## Permissions and events
 
@@ -60,14 +60,14 @@ Prerequisites: the organization passed `bootstrap --apply` (`app-manifest` refus
 safety marker, setup postpones the App until its bootstrap added it), and you have a browser session as an
 organization owner (the admin machine account).
 
-**With setup** (`otterdog-e2e setup --target <instance>`, the App step): setup runs the same manifest flow, then
+**With setup** (`otterdog-acceptance setup --target <instance>`, the App step): setup runs the same manifest flow, then
 
 - takes the webhook sink URL from `--webhook-url`, the stored `E2E_APP_WEBHOOK_URL`, else asks it, and stores it as
   `E2E_APP_WEBHOOK_URL` (reused by its re-runs and copied by `setup --from`);
 - writes `E2E_APP_ID`, `E2E_APP_SLUG`, `E2E_APP_PRIVATE_KEY_FILE` and `E2E_APP_WEBHOOK_SECRET` into the instance env
   file itself (no snippet to append);
 - verifies the App first, a new one or the one stored (`safety.verify_app`, above): an App that fails gets no
-  installation link, setup stops with the reason and `otterdog-e2e setup --target <instance> --rotate app`;
+  installation link, setup stops with the reason and `otterdog-acceptance setup --target <instance> --rotate app`;
 - prints the installation URL and polls `GET /orgs/{org}/installation` (App JWT) every 10 s until the App is
   installed (`--wait-timeout`, default `30m`), then checks the installation;
 - on a fresh organization without the marker, offers the App right after the bootstrap it runs;
@@ -76,7 +76,7 @@ organization owner (the admin machine account).
 **With app-manifest**, step by step:
 
 ```bash
-.venv/bin/otterdog-e2e app-manifest --target free --webhook-url https://<sink>/otterdog-e2e
+.venv/bin/otterdog-acceptance app-manifest --target free --webhook-url https://<sink>/otterdog-e2e
 ```
 
 1. The command verifies the organization, then serves an auto-submitting form on `http://127.0.0.1:8765/`
@@ -85,7 +85,7 @@ organization owner (the admin machine account).
 2. Confirm the creation on GitHub. GitHub redirects to `http://127.0.0.1:8765/callback?code=...&state=...`; the
    listener accepts only the `state` it generated, and never logs the request (it carries the code).
 3. The command exchanges the code (`POST /app-manifests/<code>/conversions`, valid one hour) and writes, with mode
-   0600 in `~/.config/otterdog-e2e/<instance>/` (mode 0700, below the `HOME` of the command's environment):
+   0600 in `~/.config/otterdog-acceptance/<instance>/` (mode 0700, below the `HOME` of the command's environment):
     - `app-<id>.private-key.pem`,
     - `app-<id>.webhook-secret`,
     - `app-<id>.env`: `E2E_APP_ID`, `E2E_APP_SLUG`, `E2E_APP_PRIVATE_KEY_FILE`, `E2E_APP_WEBHOOK_SECRET`.
@@ -95,7 +95,7 @@ organization owner (the admin machine account).
 4. Append the env snippet and install the App:
 
     ```bash
-    cat ~/.config/otterdog-e2e/free/app-<id>.env >> ~/.config/otterdog-e2e/free.env
+    cat ~/.config/otterdog-acceptance/free/app-<id>.env >> ~/.config/otterdog-acceptance/free.env
     ```
 
     Install it on the organization with **All repositories** with the printed URL
@@ -108,7 +108,7 @@ organization owner (the admin machine account).
    the deliveries.
 
 If the browser step cannot reach the local listener (remote machine), copy the `code` parameter of the redirect URL
-and run `otterdog-e2e app-manifest --target free --webhook-url <same URL> --exchange <code>` within the hour (setup has
+and run `otterdog-acceptance app-manifest --target free --webhook-url <same URL> --exchange <code>` within the hour (setup has
 no such fallback: use this command, add its lines to the env file, then run setup again, which keeps the App).
 
 Installing the App stays a click of an organization owner, and registering it a confirmation on github.com
@@ -157,7 +157,7 @@ sequenceDiagram
   signature is never exercised (the relay re-signs with the local secret); at most about 300 deliveries are paged
   back on the first poll; the JWT rate budget is guarded.
 - During a test session the relay runs inside the session (compose and external transports). For manual work,
-  `otterdog-e2e relay --target free --forward-to http://127.0.0.1:5000/github-webhook/receive` runs it standalone;
+  `otterdog-acceptance relay --target free --forward-to http://127.0.0.1:5000/github-webhook/receive` runs it standalone;
   it takes the org lease, so do not start a test session at the same time.
 
 ## Rotating credentials

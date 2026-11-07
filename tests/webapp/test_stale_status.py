@@ -26,11 +26,11 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from otterdog_e2e.webhooks.payloads import pull_request_payload
+from otterdog_acceptance.webhooks.payloads import pull_request_payload
 
 if TYPE_CHECKING:
     from conftest import WebappScenario
-    from otterdog_e2e.webhooks.injector import WebhookInjector
+    from otterdog_acceptance.webhooks.injector import WebhookInjector
 
 pytestmark = [pytest.mark.webapp]
 
@@ -57,7 +57,7 @@ REFERENCES = [
             " within the same second. Bug on the base: a task scheduled with a webhook snapshot stores the snapshot's"
             " lifecycle fields when it finishes, so a late snapshot (the backed-off sync check, any stale 'open' event)"
             " turns a merged PR back to 'open' (incident osgi/.eclipsefdn#25). No base: the differential compares with"
-            " the merge base of the PR head (9bdeb75, `otterdog-e2e pr 792 --sha d0d3b08...`, --base-sut auto); the"
+            " the merge base of the PR head (9bdeb75, `otterdog-acceptance pr 792 --sha d0d3b08...`, --base-sut auto); the"
             " head is an untrusted pr: SUT (docker image) and the webapp tier needs a config_reader identity. The PR"
             " changes the webapp's database layer only: the CLI is identical, so every offline scenario must be"
             " unchanged between base and head (any offline delta is unexpected); no bot comment or commit status may"

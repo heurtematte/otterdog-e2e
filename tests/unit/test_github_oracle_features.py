@@ -11,8 +11,8 @@ import pytest
 import responses
 from responses import matchers
 
-from otterdog_e2e.github.http import GITHUB_API, GitHubError, GitHubHttp
-from otterdog_e2e.github.oracle import (
+from otterdog_acceptance.github.http import GITHUB_API, GitHubError, GitHubHttp
+from otterdog_acceptance.github.oracle import (
     BPR_ALLOWANCES,
     BPR_DETAIL_QUERY,
     BPR_FIELDS,
@@ -20,7 +20,7 @@ from otterdog_e2e.github.oracle import (
     SECURITY_MANAGER_ROLE,
     Oracle,
 )
-from otterdog_e2e.testing.fakes import FAKE_ORG
+from otterdog_acceptance.testing.fakes import FAKE_ORG
 
 ORG = f"{GITHUB_API}/orgs/{FAKE_ORG}"
 ORGANIZATIONS = f"{GITHUB_API}/organizations/{FAKE_ORG}"

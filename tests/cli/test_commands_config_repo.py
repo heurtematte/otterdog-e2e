@@ -31,20 +31,20 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from otterdog_e2e.otterdog.render import ConfigFragments
-from otterdog_e2e.otterdog.workspace import read_untrusted_text
+from otterdog_acceptance.otterdog.render import ConfigFragments
+from otterdog_acceptance.otterdog.workspace import read_untrusted_text
 
 if TYPE_CHECKING:
     from conftest import ConfigRepo, LiveConfig
-    from otterdog_e2e.context import E2EContext
-    from otterdog_e2e.github.mutate import Mutator
-    from otterdog_e2e.github.oracle import Oracle
-    from otterdog_e2e.naming import RunContext
-    from otterdog_e2e.otterdog.baseline import BaselineManager
-    from otterdog_e2e.otterdog.runner import CliResult, OtterdogCli
-    from otterdog_e2e.otterdog.workspace import ConfigWorkspace
-    from otterdog_e2e.settings import Target
-    from otterdog_e2e.sut.template import TemplateRef
+    from otterdog_acceptance.context import E2EContext
+    from otterdog_acceptance.github.mutate import Mutator
+    from otterdog_acceptance.github.oracle import Oracle
+    from otterdog_acceptance.naming import RunContext
+    from otterdog_acceptance.otterdog.baseline import BaselineManager
+    from otterdog_acceptance.otterdog.runner import CliResult, OtterdogCli
+    from otterdog_acceptance.otterdog.workspace import ConfigWorkspace
+    from otterdog_acceptance.settings import Target
+    from otterdog_acceptance.sut.template import TemplateRef
 
 pytestmark = [pytest.mark.tags("cli")]
 
@@ -60,7 +60,7 @@ ABORTED_TEXT = "Planning aborted due to validation errors."
 
 def variant(text: str, run_ctx: RunContext, purpose: str) -> str:
     """The configuration with one more trailing jsonnet comment (a content change, no model change)."""
-    return text.rstrip("\n") + f"\n// otterdog-e2e {purpose} of run {run_ctx.run_id}\n"
+    return text.rstrip("\n") + f"\n// otterdog-acceptance {purpose} of run {run_ctx.run_id}\n"
 
 
 def with_repo(baseline: BaselineManager, name: str, description: str) -> str:
@@ -96,7 +96,9 @@ def test_fetch_config_from_a_pull_request_and_a_ref(
     plain fetch the default branch, each to its own file; an unknown pull request fails without writing."""
     pr_text = variant(baseline.text(), run_ctx, "fetch-config -p")
     ref_text = variant(baseline.text(), run_ctx, "fetch-config -r")
-    number = config_repo.pull(config_repo.branch("fetch-pr", pr_text), f"otterdog-e2e {run_ctx.run_id}: fetch -p")
+    number = config_repo.pull(
+        config_repo.branch("fetch-pr", pr_text), f"otterdog-acceptance {run_ctx.run_id}: fetch -p"
+    )
     ref_branch = config_repo.branch("fetch-ref", ref_text)
     cli = make_cli(fresh_workspace)
 
@@ -183,7 +185,7 @@ def test_push_config_shows_the_diff_and_asks(
     text = with_repo(baseline, repo_name, "otterdog e2e: push-config diff")
     fresh_workspace.write_org_config(text)
     cli = make_cli(fresh_workspace)
-    message = f"otterdog-e2e {run_ctx.run_id}: push-config with a diff"
+    message = f"otterdog-acceptance {run_ctx.run_id}: push-config with a diff"
     before = config_repo.head()
     refused = cli.run("push-config", "-m", message, input="n\n")
     output = cli_lines(refused)
@@ -239,7 +241,7 @@ def test_push_config_refuses_an_invalid_configuration(
     errors and the definition stays as it was."""
     fresh_workspace.write_org_config(invalid(baseline, run_ctx.name("push-invalid")))
     before = config_repo.head()
-    result = make_cli(fresh_workspace).run("push-config", "-f", "-m", f"otterdog-e2e {run_ctx.run_id}: invalid")
+    result = make_cli(fresh_workspace).run("push-config", "-f", "-m", f"otterdog-acceptance {run_ctx.run_id}: invalid")
     output = cli_lines(result)
     assert ABORTED_TEXT in output, f"no validation abort:\n{output[-3000:]}"
     assert PUSHED_TEXT not in output, output[-2000:]
@@ -261,7 +263,7 @@ def test_push_config_of_an_invalid_configuration_fails(
     """Refusing to push an invalid configuration is a failure: a non-zero exit and no 'no changes' claim (KB-046:
     exit 0 and 'no changes, nothing pushed')."""
     fresh_workspace.write_org_config(invalid(baseline, run_ctx.name("push-invalid-exit")))
-    result = make_cli(fresh_workspace).run("push-config", "-f", "-m", f"otterdog-e2e {run_ctx.run_id}: invalid")
+    result = make_cli(fresh_workspace).run("push-config", "-f", "-m", f"otterdog-acceptance {run_ctx.run_id}: invalid")
     output = cli_lines(result)
     assert ABORTED_TEXT in output, output[-3000:]
     assert NOTHING_PUSHED not in output, "an invalid configuration was reported as 'no changes'"
@@ -290,7 +292,7 @@ def test_push_config_to_a_repository_without_definition(
     workspace.write_otterdog_json()
     workspace.write_org_config(baseline.text())
     path = f"otterdog/{target.org}.jsonnet"
-    message = f"otterdog-e2e {run_ctx.run_id}: first definition"
+    message = f"otterdog-acceptance {run_ctx.run_id}: first definition"
     refused = live_config.cli.run("push-config", "-m", message, input="n\n")
     output = cli_lines(refused)
     for expected in ("No configuration yet available.", PUSH_QUESTION, "push cancelled.", NOTHING_PUSHED):
@@ -340,7 +342,7 @@ def test_open_pr_opens_nothing_when_it_must_not(
         config_repo.track_ref(f"heads/otterdog/{branch}")
         fresh_workspace.write_org_config(text)
         result = cli.run(
-            "open-pr", "-b", branch, "-t", f"otterdog-e2e {run_ctx.run_id}: {slug}", "-a", who, input=answer
+            "open-pr", "-b", branch, "-t", f"otterdog-acceptance {run_ctx.run_id}: {slug}", "-a", who, input=answer
         )
         output = cli_lines(result)
         assert expected in output, f"{slug}: {expected!r} missing:\n{output[-3000:]}"
@@ -368,7 +370,7 @@ def test_open_pr_title_and_body(
     assert author, "the target declares no admin login"
     repo_name = run_ctx.name("opr-body")
     fresh_workspace.write_org_config(with_repo(baseline, repo_name, "otterdog e2e: open-pr body"))
-    branch, title = run_ctx.name("opr-body"), f"otterdog-e2e {run_ctx.run_id}: open-pr title and body"
+    branch, title = run_ctx.name("opr-body"), f"otterdog-acceptance {run_ctx.run_id}: open-pr title and body"
     config_repo.track_ref(f"heads/otterdog/{branch}")
     result = make_cli(fresh_workspace).open_pr(branch=branch, title=title, author=author).assert_ok("open-pr")
     output = cli_lines(result)
@@ -411,12 +413,12 @@ def test_config_repo_commands_report_a_missing_repository(
     commands = (
         (("fetch-config", "-f", "-s", "-FETCHED"), None, f"failed to fetch definition from repo '{missing}'"),
         (
-            ("push-config", "-f", "-m", "otterdog-e2e"),
+            ("push-config", "-f", "-m", "otterdog-acceptance"),
             None,
             f"failed to push definition to repo '{target.org}/{missing}'",
         ),
         (
-            ("open-pr", "-b", run_ctx.name("missing-pr"), "-t", "otterdog-e2e", "-a", author),
+            ("open-pr", "-b", run_ctx.name("missing-pr"), "-t", "otterdog-acceptance", "-a", author),
             "y\n",
             f"failed to open pull request in repo '{target.org}/{missing}'",
         ),

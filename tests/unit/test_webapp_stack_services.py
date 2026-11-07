@@ -18,11 +18,11 @@ from typing import Any
 import pytest
 import yaml
 
-from otterdog_e2e.settings import AppCredentials
-from otterdog_e2e.testing.fakes import FAKE_ORG, make_run_context, make_verified_org
-from otterdog_e2e.webapp import stack as stack_module
-from otterdog_e2e.webapp.api import WebappApi
-from otterdog_e2e.webapp.stack import (
+from otterdog_acceptance.settings import AppCredentials
+from otterdog_acceptance.testing.fakes import FAKE_ORG, make_run_context, make_verified_org
+from otterdog_acceptance.webapp import stack as stack_module
+from otterdog_acceptance.webapp.api import WebappApi
+from otterdog_acceptance.webapp.stack import (
     COMPOSE_VARIABLES,
     DTRACK_INTERNAL_URL,
     SERVICES,

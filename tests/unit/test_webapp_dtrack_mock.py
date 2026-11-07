@@ -18,10 +18,10 @@ from typing import Any
 import pytest
 import requests
 
-from otterdog_e2e.resources import dtrack_mock
-from otterdog_e2e.waiting import WaitTimeoutError
-from otterdog_e2e.webapp.api import RemoteEndpointError, WebappApiError
-from otterdog_e2e.webapp.stack import DtrackMock
+from otterdog_acceptance.resources import dtrack_mock
+from otterdog_acceptance.waiting import WaitTimeoutError
+from otterdog_acceptance.webapp.api import RemoteEndpointError, WebappApiError
+from otterdog_acceptance.webapp.stack import DtrackMock
 
 BOM = {"bomFormat": "CycloneDX", "specVersion": "1.5", "components": []}
 TOKEN = "e2e-dummy-token"

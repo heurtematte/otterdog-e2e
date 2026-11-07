@@ -68,8 +68,8 @@ from typing import TYPE_CHECKING, Any
 import pytest
 import yaml
 
-from otterdog_e2e import waiting
-from otterdog_e2e.blueprints import (
+from otterdog_acceptance import waiting
+from otterdog_acceptance.blueprints import (
     BLUEPRINT,
     DISMISSAL_MARKER,
     GLOBAL,
@@ -77,15 +77,20 @@ from otterdog_e2e.blueprints import (
     RequiredFile,
     scorecard_workflow,
 )
-from otterdog_e2e.config_repo import DeliveryTimeoutError, ReactionTimeoutError, check_forwarded, comment_contains
-from otterdog_e2e.webapp.api import HtmlNode, WebappApiError, floor_to_millis, parse_html, parse_timestamp
+from otterdog_acceptance.config_repo import (
+    DeliveryTimeoutError,
+    ReactionTimeoutError,
+    check_forwarded,
+    comment_contains,
+)
+from otterdog_acceptance.webapp.api import HtmlNode, WebappApiError, floor_to_millis, parse_html, parse_timestamp
 
 if TYPE_CHECKING:
     from conftest import WebappScenario
-    from otterdog_e2e.blueprints import BlueprintHelper
-    from otterdog_e2e.github.mutate import Mutator
-    from otterdog_e2e.webapp.stack import ExternalWebapp, WebappStack
-    from otterdog_e2e.webhooks.relay import DeliveryRelay, RelayedDelivery
+    from otterdog_acceptance.blueprints import BlueprintHelper
+    from otterdog_acceptance.github.mutate import Mutator
+    from otterdog_acceptance.webapp.stack import ExternalWebapp, WebappStack
+    from otterdog_acceptance.webhooks.relay import DeliveryRelay, RelayedDelivery
 
 pytestmark = [pytest.mark.webapp]
 
@@ -806,7 +811,9 @@ def test_required_file_remediation(
 
     # a changed definition forces a recheck: the strict file is rewritten, the non-strict one keeps the maintainer edit
     edit = MAINTAINER_EDIT.format(repo=repo)
-    mutator.commit_files(repo, branch, {STRICT_FILE: edit, LAX_FILE: edit}, f"otterdog-e2e {s.run_ctx.run_id}: edit")
+    mutator.commit_files(
+        repo, branch, {STRICT_FILE: edit, LAX_FILE: edit}, f"otterdog-acceptance {s.run_ctx.run_id}: edit"
+    )
     changed = dataclasses.replace(definition, description=s.describe("required_file blueprint, changed"))
     bp.add_blueprint(changed)
     fetch = _push_fetch(s, bp, relay)  # exactly one fetch: it sets the recheck flag of the changed definition
@@ -833,7 +840,9 @@ def test_required_file_remediation(
 
     # a push to the default branch touching a required file re-evaluates the repository without /internal/check
     removed_at = bp.now()
-    mutator.commit_files(repo, "main", {STRICT_FILE: None}, f"otterdog-e2e {s.run_ctx.run_id}: remove {STRICT_FILE}")
+    mutator.commit_files(
+        repo, "main", {STRICT_FILE: None}, f"otterdog-acceptance {s.run_ctx.run_id}: remove {STRICT_FILE}"
+    )
     task = _wait_task(s, CHECK_FILES_TASK, repo, after=removed_at)
     assert task.get("status") == "finished", f"push-triggered {CHECK_FILES_TASK} failed (SUT): {task}"
     renewed = bp.wait_remediation_pr(repo, definition)

@@ -7,10 +7,10 @@ from typing import Any
 
 import pytest
 
-from otterdog_e2e.github.oracle import Oracle
-from otterdog_e2e.safety import SafetyError
-from otterdog_e2e.scenarios.checks import CHECK_KINDS, LIST_KINDS, CheckError, evaluate_check, validate_check
-from otterdog_e2e.testing.fakes import (
+from otterdog_acceptance.github.oracle import Oracle
+from otterdog_acceptance.safety import SafetyError
+from otterdog_acceptance.scenarios.checks import CHECK_KINDS, LIST_KINDS, CheckError, evaluate_check, validate_check
+from otterdog_acceptance.testing.fakes import (
     FAKE_ORG,
     FAKE_RUN_ID,
     FakeGitHubHttp,

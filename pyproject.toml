@@ -1,5 +1,5 @@
 [project]
-name = "otterdog-e2e"
+name = "otterdog-acceptance"
 description = "End-to-end test harness for otterdog (CLI, GitHub App webapp and webhooks) against real GitHub organizations."
 requires-python = ">=3.11,<4.0"
 license = { text = "EPL-2.0" }
@@ -18,20 +18,20 @@ dependencies = [
 
 [project.optional-dependencies]
 mongo = ["pymongo (>=4.8,<5.0)"]
-# `otterdog-e2e accounts` and `setup --browser`: machine accounts set up in Firefox (onboard/browser.py)
+# `otterdog-acceptance accounts` and `setup --browser`: machine accounts set up in Firefox (onboard/browser.py)
 browser = ["playwright (>=1.49,<2.0)"]
 
 [project.scripts]
-otterdog-e2e = "otterdog_e2e.cli:main"
+otterdog-acceptance = "otterdog_acceptance.cli:main"
 
 [project.entry-points.pytest11]
-otterdog_e2e = "otterdog_e2e.pytest_plugin"
+otterdog_acceptance = "otterdog_acceptance.pytest_plugin"
 
 [tool.poetry]
 version = "0.1.0"
-packages = [{ include = "otterdog_e2e", from = "src" }]
-# package data loaded with importlib.resources.files("otterdog_e2e") / "resources" / name
-include = [{ path = "src/otterdog_e2e/resources/*", format = ["sdist", "wheel"] }]
+packages = [{ include = "otterdog_acceptance", from = "src" }]
+# package data loaded with importlib.resources.files("otterdog_acceptance") / "resources" / name
+include = [{ path = "src/otterdog_acceptance/resources/*", format = ["sdist", "wheel"] }]
 
 [tool.poetry.group.dev.dependencies]
 ruff = ">=0.6"
@@ -61,7 +61,7 @@ addopts = "-ra --strict-markers --import-mode=importlib"
 log_cli = false
 log_level = "INFO"
 timeout = 1800
-# markers are registered by otterdog_e2e.pytest_plugin
+# markers are registered by otterdog_acceptance.pytest_plugin
 
 [tool.ruff]
 line-length = 120
@@ -77,7 +77,7 @@ ignore = ["S101", "S603", "S607", "S311", "RUF012"]
 
 [tool.mypy]
 python_version = "3.11"
-packages = ["otterdog_e2e"]
+packages = ["otterdog_acceptance"]
 mypy_path = "src"
 ignore_missing_imports = true
 warn_unused_ignores = true

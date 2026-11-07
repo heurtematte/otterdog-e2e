@@ -13,8 +13,8 @@ from pathlib import Path
 
 import pytest
 
-from otterdog_e2e import redact
-from otterdog_e2e.redact import MASK, SECRET_KEY_RE, RedactingFilter, Redactor
+from otterdog_acceptance import redact
+from otterdog_acceptance.redact import MASK, SECRET_KEY_RE, RedactingFilter, Redactor
 
 SECRET = "wpa$secret/value+1"
 PEM = (

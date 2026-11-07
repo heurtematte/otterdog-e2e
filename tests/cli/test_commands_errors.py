@@ -22,16 +22,16 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from otterdog_e2e.otterdog.workspace import CREDENTIAL_ENV, WorkspaceLayout
+from otterdog_acceptance.otterdog.workspace import CREDENTIAL_ENV, WorkspaceLayout
 
 if TYPE_CHECKING:
     from conftest import LiveConfig
-    from otterdog_e2e.github.oracle import Oracle
-    from otterdog_e2e.naming import RunContext
-    from otterdog_e2e.otterdog.baseline import BaselineManager
-    from otterdog_e2e.otterdog.runner import CliResult, OtterdogCli
-    from otterdog_e2e.otterdog.workspace import ConfigWorkspace
-    from otterdog_e2e.settings import Target
+    from otterdog_acceptance.github.oracle import Oracle
+    from otterdog_acceptance.naming import RunContext
+    from otterdog_acceptance.otterdog.baseline import BaselineManager
+    from otterdog_acceptance.otterdog.runner import CliResult, OtterdogCli
+    from otterdog_acceptance.otterdog.workspace import ConfigWorkspace
+    from otterdog_acceptance.settings import Target
 
 pytestmark = [pytest.mark.tags("cli")]
 
@@ -63,8 +63,8 @@ CONFIG_COMMANDS: tuple[tuple[tuple[str, ...], str], ...] = (
     (("list-members",), FILE_MISSING),
     (("delete-file", "-r", "{name}", "--path", "E2E.md"), FILE_MISSING),
     (("sync-template", "-r", "{name}"), FILE_MISSING),
-    (("push-config", "-f", "-m", "otterdog-e2e"), FILE_MISSING),
-    (("open-pr", "-b", "{name}", "-t", "otterdog-e2e", "-a", "{name}"), FILE_MISSING),
+    (("push-config", "-f", "-m", "otterdog-acceptance"), FILE_MISSING),
+    (("open-pr", "-b", "{name}", "-t", "otterdog-acceptance", "-a", "{name}"), FILE_MISSING),
 )
 
 

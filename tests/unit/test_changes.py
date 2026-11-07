@@ -1,4 +1,4 @@
-"""Unit tests of otterdog_e2e.changes: scenario references to otterdog PRs and named changes, change identifiers, the
+"""Unit tests of otterdog_acceptance.changes: scenario references to otterdog PRs and named changes, change identifiers, the
 references of YAML scenarios and Python tests, conflicts and the ChangeSpec of a differential run."""
 
 from __future__ import annotations
@@ -9,7 +9,7 @@ from typing import Any
 
 import pytest
 
-from otterdog_e2e.changes import (
+from otterdog_acceptance.changes import (
     ChangeError,
     ChangeId,
     DeltaPattern,
@@ -24,9 +24,9 @@ from otterdog_e2e.changes import (
     python_references,
     yaml_references,
 )
-from otterdog_e2e.differential import ExpectedDelta
-from otterdog_e2e.scenarios.collect import collect_scenarios
-from otterdog_e2e.scenarios.model import ScenarioError, load_scenario
+from otterdog_acceptance.differential import ExpectedDelta
+from otterdog_acceptance.scenarios.collect import collect_scenarios
+from otterdog_acceptance.scenarios.model import ScenarioError, load_scenario
 
 SHA = "a" * 40
 STEPS = ("no-strict", "with-strict")

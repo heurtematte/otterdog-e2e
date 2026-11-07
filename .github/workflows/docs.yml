@@ -20,8 +20,8 @@ on:
       - "docs_scenarios.py"
       - "scenarios/**"
       - "tests/**/*.py"
-      - "src/otterdog_e2e/scenarios/checks.py"
-      - "src/otterdog_e2e/github/oracle.py"
+      - "src/otterdog_acceptance/scenarios/checks.py"
+      - "src/otterdog_acceptance/github/oracle.py"
       - ".github/workflows/docs.yml"
   pull_request:
     paths:
@@ -35,8 +35,8 @@ on:
       - "docs_scenarios.py"
       - "scenarios/**"
       - "tests/**/*.py"
-      - "src/otterdog_e2e/scenarios/checks.py"
-      - "src/otterdog_e2e/github/oracle.py"
+      - "src/otterdog_acceptance/scenarios/checks.py"
+      - "src/otterdog_acceptance/github/oracle.py"
       - ".github/workflows/docs.yml"
   workflow_dispatch:
 

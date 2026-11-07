@@ -12,12 +12,12 @@ from typing import Any
 
 import pytest
 
-from otterdog_e2e.capabilities import from_plan
-from otterdog_e2e.context import E2EContext
-from otterdog_e2e.known_bugs import KnownBug
-from otterdog_e2e.redact import REDACTOR
-from otterdog_e2e.scenarios import collect  # imported before any inner session (see kept())
-from otterdog_e2e.testing.fakes import (
+from otterdog_acceptance.capabilities import from_plan
+from otterdog_acceptance.context import E2EContext
+from otterdog_acceptance.known_bugs import KnownBug
+from otterdog_acceptance.redact import REDACTOR
+from otterdog_acceptance.scenarios import collect  # imported before any inner session (see kept())
+from otterdog_acceptance.testing.fakes import (
     FAKE_RUN_ID,
     FakeGitHubHttp,
     FakeLease,
@@ -26,8 +26,8 @@ from otterdog_e2e.testing.fakes import (
     make_target,
     make_verified_org,
 )
-from otterdog_e2e.webapp import stack as _webapp_stack  # noqa: F401 - like collect: the plugin imports it lazily
-from otterdog_e2e.webhooks import relay as _relay  # noqa: F401 - like collect: the plugin imports it lazily
+from otterdog_acceptance.webapp import stack as _webapp_stack  # noqa: F401 - like collect: the plugin imports it lazily
+from otterdog_acceptance.webhooks import relay as _relay  # noqa: F401 - like collect: the plugin imports it lazily
 
 pytest_plugins = ["pytester"]
 
@@ -68,10 +68,10 @@ class Inner:
         self.settings = make_settings(pytester.path / "harness")
         self.summaries: list[Path] = []
         self.leaks: list[Path] = []
-        monkeypatch.setattr("otterdog_e2e.settings.harness_settings", lambda environ=None: self.settings)
-        monkeypatch.setattr("otterdog_e2e.redact.install_logging_filter", lambda *a: None)
-        monkeypatch.setattr("otterdog_e2e.report.build_summary", self._summary)
-        monkeypatch.setattr("otterdog_e2e.report.scrub_artifacts", lambda root, redactor=None: list(self.leaks))
+        monkeypatch.setattr("otterdog_acceptance.settings.harness_settings", lambda environ=None: self.settings)
+        monkeypatch.setattr("otterdog_acceptance.redact.install_logging_filter", lambda *a: None)
+        monkeypatch.setattr("otterdog_acceptance.report.build_summary", self._summary)
+        monkeypatch.setattr("otterdog_acceptance.report.scrub_artifacts", lambda root, redactor=None: list(self.leaks))
         for name in PREPARATION_STEPS:  # a test that needs one patches it again
             monkeypatch.setattr(E2EContext, name, no_preparation)
         for name in CLEARED_ENV:
@@ -261,7 +261,7 @@ def test_add_mask_lines_bypass_pytest_capture(inner: Inner, monkeypatch: pytest.
     stdout as ``::add-mask::``; the previous sink is restored after the session."""
     import os
 
-    from otterdog_e2e import pytest_plugin, redact
+    from otterdog_acceptance import pytest_plugin, redact
 
     read_fd, write_fd = os.pipe()
     monkeypatch.setattr(pytest_plugin, "_RUNNER_STDOUT_FD", write_fd)
@@ -269,7 +269,7 @@ def test_add_mask_lines_bypass_pytest_capture(inner: Inner, monkeypatch: pytest.
     before = redact.mask_sink()
     inner.pytester.makepyfile(
         test_mask="""
-        from otterdog_e2e.redact import REDACTOR
+        from otterdog_acceptance.redact import REDACTOR
 
         def test_registers_a_secret():
             REDACTOR.add("iso03-minted-token-0123456789", variants=False)
@@ -354,7 +354,7 @@ def test_known_bugs_become_non_strict_xfails(inner: Inner, monkeypatch: pytest.M
     scenarios_dir.mkdir(parents=True)
     (scenarios_dir / "known_bugs.yaml").write_text("- {id: KB-001, title: apply exits 0 on validation errors}\n")
     bug = KnownBug("KB-001", "apply exits 0 on validation errors", scenarios=["cli.plan.validation"])
-    monkeypatch.setattr("otterdog_e2e.known_bugs.load", lambda path: {"KB-001": bug})
+    monkeypatch.setattr("otterdog_acceptance.known_bugs.load", lambda path: {"KB-001": bug})
     inner.pytester.makepyfile(
         test_bugs="""
         import pytest
@@ -393,7 +393,7 @@ def test_known_bug_xfails_never_hide_fixture_errors(inner: Inner, monkeypatch: p
     scenarios_dir.mkdir(parents=True)
     (scenarios_dir / "known_bugs.yaml").write_text("- {id: KB-001, title: t}\n")
     bug = KnownBug("KB-001", "apply exits 0 on validation errors")
-    monkeypatch.setattr("otterdog_e2e.known_bugs.load", lambda path: {"KB-001": bug})
+    monkeypatch.setattr("otterdog_acceptance.known_bugs.load", lambda path: {"KB-001": bug})
     inner.pytester.makepyfile(
         test_fixture_errors="""
         import pytest
@@ -438,7 +438,7 @@ def test_python_known_bug_xfails_accept_only_assertions(inner: Inner, monkeypatc
     scenarios_dir = inner.settings.scenarios_dir
     scenarios_dir.mkdir(parents=True)
     (scenarios_dir / "known_bugs.yaml").write_text("- {id: KB-001, title: t}\n")
-    monkeypatch.setattr("otterdog_e2e.known_bugs.load", lambda path: {"KB-001": KnownBug("KB-001", "t")})
+    monkeypatch.setattr("otterdog_acceptance.known_bugs.load", lambda path: {"KB-001": KnownBug("KB-001", "t")})
     inner.pytester.makepyfile(
         test_scoped="""
         import pytest
@@ -483,7 +483,7 @@ from pathlib import Path
 
 import pytest
 
-from otterdog_e2e.scenarios.model import Scenario, StepSpec
+from otterdog_acceptance.scenarios.model import Scenario, StepSpec
 
 
 def make(name):
@@ -517,7 +517,7 @@ def test_yaml_scenario_items_xfail_only_on_their_engines_expected_failures(
     scenarios_dir = inner.settings.scenarios_dir
     scenarios_dir.mkdir(parents=True)
     (scenarios_dir / "known_bugs.yaml").write_text("- {id: KB-001, title: t}\n")
-    monkeypatch.setattr("otterdog_e2e.known_bugs.load", lambda path: {"KB-001": KnownBug("KB-001", "t")})
+    monkeypatch.setattr("otterdog_acceptance.known_bugs.load", lambda path: {"KB-001": KnownBug("KB-001", "t")})
     inner.pytester.makepyfile(test_scenario_items=SCENARIO_ITEMS)
     result = inner.run("-rA")
     found = {line["nodeid"].split("::")[-1]: line["outcome"] for line in inner.results()}
@@ -544,7 +544,7 @@ def test_fixed_known_bugs_only_xfail_on_older_suts(
     scenarios_dir.mkdir(parents=True)
     (scenarios_dir / "known_bugs.yaml").write_text("- {id: KB-008, title: t}\n")
     bug = KnownBug("KB-008", "org ruleset crash", status="fixed", fixed_in="1.7.0")
-    monkeypatch.setattr("otterdog_e2e.known_bugs.load", lambda path: {"KB-008": bug})
+    monkeypatch.setattr("otterdog_acceptance.known_bugs.load", lambda path: {"KB-008": bug})
     monkeypatch.setattr(E2EContext, "sut_version", lambda self: sut_version)
     inner.pytester.makepyfile(
         test_fixed_bugs="""
@@ -734,7 +734,7 @@ def test_scenario_parameters_get_scenario_marks(inner: Inner, monkeypatch: pytes
         item.add_marker(pytest.mark.scenario(scenario.id))
         item.add_marker(pytest.mark.tags(*scenario.tags))
 
-    monkeypatch.setattr("otterdog_e2e.scenarios.collect.apply_scenario_marks", apply_scenario_marks)
+    monkeypatch.setattr("otterdog_acceptance.scenarios.collect.apply_scenario_marks", apply_scenario_marks)
     inner.pytester.makepyfile(
         test_scenarios="""
         from types import SimpleNamespace
@@ -834,7 +834,7 @@ def test_live_session_setup_is_not_timed_by_the_first_item(inner: Inner, tmp_pat
     )
     result = inner.run("-rA")
     result.assert_outcomes(passed=2)
-    result.stdout.fnmatch_lines(["*otterdog-e2e: verifying the target fake and taking the org lease ...*"])
+    result.stdout.fnmatch_lines(["*otterdog-acceptance: verifying the target fake and taking the org lease ...*"])
     assert calls[0] == "ensure_live"
 
 
@@ -929,7 +929,7 @@ def test_trust_code_refused_in_ci(inner: Inner, monkeypatch: pytest.MonkeyPatch)
 @pytest.mark.parametrize("target", ["free,team", "@all", "@nightly"])
 def test_a_live_session_has_one_target(inner: Inner, monkeypatch: pytest.MonkeyPatch, target: str) -> None:
     """--e2e-target (or E2E_TARGET) naming several targets is a usage error when live items are selected: a session
-    loads the env files of one org (otterdog-e2e run starts one session per target); sessions without live items
+    loads the env files of one org (otterdog-acceptance run starts one session per target); sessions without live items
     (unit, offline: an exported list for make) are not affected."""
     inner.pytester.makepyfile(
         test_live="""
@@ -943,7 +943,7 @@ def test_a_live_session_has_one_target(inner: Inner, monkeypatch: pytest.MonkeyP
     )
     result = inner.run(f"--e2e-target={target}")
     assert result.ret == pytest.ExitCode.USAGE_ERROR
-    assert "names one target" in result.stderr.str() and "otterdog-e2e run --target a,b" in result.stderr.str()
+    assert "names one target" in result.stderr.str() and "otterdog-acceptance run --target a,b" in result.stderr.str()
     monkeypatch.setenv("E2E_TARGET", target)
     assert inner.run().ret == pytest.ExitCode.USAGE_ERROR
     inner.run("test_plain.py").assert_outcomes(passed=1)  # no live item selected
@@ -978,7 +978,7 @@ def test_untrusted_sha_suts_skip_webapp_items_without_config_reader(
         resolved.append(spec.raw)
         return SimpleNamespace(trusted=False)
 
-    monkeypatch.setattr("otterdog_e2e.sut.spec.resolve_sut", resolve_sut)
+    monkeypatch.setattr("otterdog_acceptance.sut.spec.resolve_sut", resolve_sut)
     inner.live(identities=("admin",), app_ok=True)
     inner.pytester.makepyfile(test_webapp=WEBAPP_ITEM)
     sha = secrets.token_hex(20)
@@ -997,7 +997,7 @@ def test_pr_suts_skip_webapp_items_without_resolution(inner: Inner, monkeypatch:
         """The gate must not resolve."""
         raise AssertionError(f"resolved {spec.raw}")
 
-    monkeypatch.setattr("otterdog_e2e.sut.spec.resolve_sut", resolve_sut)
+    monkeypatch.setattr("otterdog_acceptance.sut.spec.resolve_sut", resolve_sut)
     inner.live(identities=("admin",), app_ok=True)
     inner.pytester.makepyfile(test_webapp=WEBAPP_ITEM)
     result = inner.run("-rs", f"--e2e-sut=pr:792@{secrets.token_hex(20)}")
@@ -1198,7 +1198,7 @@ def test_session_context_is_closed(inner: Inner, monkeypatch: pytest.MonkeyPatch
 @pytest.fixture
 def wired(inner: Inner, monkeypatch: pytest.MonkeyPatch) -> list[str]:
     """Fake live session whose context factories record setup/teardown events."""
-    from otterdog_e2e.testing.fakes import FakeBaselineManager, FakeOracle, RecordingMutator
+    from otterdog_acceptance.testing.fakes import FakeBaselineManager, FakeOracle, RecordingMutator
 
     events: list[str] = []
     inner.live(plan="free", identities=("admin", "author"), app_ok=True)
@@ -1372,7 +1372,7 @@ def test_suts_are_prepared_before_the_first_item(inner: Inner, monkeypatch: pyte
     # both roles before the first item (the fake is not memoized like E2EContext.installed: fixtures call it again)
     assert lines[:2] == ["prepare head", "prepare base"] and lines.index("item test_first") > 1, lines
     result.stdout.fnmatch_lines(
-        ["*otterdog-e2e: preparing the head SUT (release:latest)*", "*base SUT unavailable: RuntimeError*"],
+        ["*otterdog-acceptance: preparing the head SUT (release:latest)*", "*base SUT unavailable: RuntimeError*"],
         consecutive=False,
     )
     run = json.loads((inner.artifacts / "run.json").read_text())
@@ -1399,7 +1399,7 @@ def live_session(
     app_ok: bool = True,
 ) -> None:
     """Like Inner.live, with the webapp transport of the target chosen."""
-    from otterdog_e2e.settings import WebappSpec
+    from otterdog_acceptance.settings import WebappSpec
 
     inner.live(identities=identities, docker_ok=docker_ok, app_ok=app_ok)
     original = E2EContext.ensure_live
@@ -1417,7 +1417,7 @@ def live_session(
 def test_identity_mutator_fixtures_are_gated_like_identities(inner: Inner, monkeypatch: pytest.MonkeyPatch) -> None:
     """outsider_mutator / approver_mutator / contributor_mutator (= author) skip before any fixture without their
     identity and give that identity's Mutator otherwise."""
-    from otterdog_e2e.context import E2EContext as Context
+    from otterdog_acceptance.context import E2EContext as Context
 
     monkeypatch.setattr(Context, "mutator", lambda self, name="admin": f"mutator:{name}")
     inner.pytester.makepyfile(
@@ -1475,7 +1475,7 @@ def test_compose_only_fixtures_are_gated(inner: Inner, transport: str, docker_ok
 
 
 class StackStandIn:
-    """Compose WebappStack stand-in (installed as otterdog_e2e.webapp.stack.WebappStack for isinstance)."""
+    """Compose WebappStack stand-in (installed as otterdog_acceptance.webapp.stack.WebappStack for isinstance)."""
 
     events: list[str] = []
 
@@ -1493,7 +1493,7 @@ class StackStandIn:
 
 def test_webapp_stack_and_webapp_env(inner: Inner, wired: list[str], monkeypatch: pytest.MonkeyPatch) -> None:
     """webapp_stack is the compose stack; webapp_env applies overrides and restores the defaults after the test."""
-    from otterdog_e2e.webapp import stack as stack_module
+    from otterdog_acceptance.webapp import stack as stack_module
 
     StackStandIn.events = wired
     monkeypatch.setattr(stack_module, "WebappStack", StackStandIn)
@@ -1547,7 +1547,7 @@ def test_dtrack_mock_fixture_resets_the_mock_and_requests_it_early(
     inner.pytester.makepyfile(
         test_mock="""
         import pytest
-        from otterdog_e2e.context import get_context
+        from otterdog_acceptance.context import get_context
 
         @pytest.mark.live
         def test_flag_is_set_before_the_first_item(request):
@@ -1575,7 +1575,7 @@ def test_no_dtrack_flag_without_dtrack_items(inner: Inner) -> None:
     inner.pytester.makepyfile(
         test_plain="""
         import pytest
-        from otterdog_e2e.context import get_context
+        from otterdog_acceptance.context import get_context
 
         @pytest.mark.live
         def test_flag(request):
@@ -1628,8 +1628,8 @@ def test_blueprints_fixture_sweeps_first_and_cleans_up_before_the_case(
 
 
 def test_adhoc_items_have_their_own_tier() -> None:
-    """tests/adhoc (otterdog-e2e inject) is a tier directory of its own in results.jsonl."""
-    from otterdog_e2e.pytest_plugin import TIER_DIRS, item_tier
+    """tests/adhoc (otterdog-acceptance inject) is a tier directory of its own in results.jsonl."""
+    from otterdog_acceptance.pytest_plugin import TIER_DIRS, item_tier
 
     assert "adhoc" in TIER_DIRS
     assert item_tier(SimpleNamespace(path=Path("/p/tests/adhoc/test_adhoc.py"))) == "adhoc"  # type: ignore[arg-type]

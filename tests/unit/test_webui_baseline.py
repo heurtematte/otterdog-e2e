@@ -8,19 +8,19 @@ from typing import Any
 
 import pytest
 
-from otterdog_e2e import procs
-from otterdog_e2e.otterdog.baseline import BaselineManager
-from otterdog_e2e.otterdog.render import OrgConfigRenderer, build_baseline, org_profile
-from otterdog_e2e.safety import SafetyError
-from otterdog_e2e.sut.cli_install import (
+from otterdog_acceptance import procs
+from otterdog_acceptance.otterdog.baseline import BaselineManager
+from otterdog_acceptance.otterdog.render import OrgConfigRenderer, build_baseline, org_profile
+from otterdog_acceptance.safety import SafetyError
+from otterdog_acceptance.sut.cli_install import (
     InstalledCli,
     ensure_playwright_firefox,
     firefox_installed,
     playwright_browsers_path,
 )
-from otterdog_e2e.sut.spec import ResolvedSut, SutSpec
-from otterdog_e2e.sut.template import offline_template
-from otterdog_e2e.testing.fakes import (
+from otterdog_acceptance.sut.spec import ResolvedSut, SutSpec
+from otterdog_acceptance.sut.template import offline_template
+from otterdog_acceptance.testing.fakes import (
     FakeCli,
     FakeOracle,
     default_org_json,

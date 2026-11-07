@@ -29,18 +29,18 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from otterdog_e2e import waiting
-from otterdog_e2e.github.http import GitHubError
+from otterdog_acceptance import waiting
+from otterdog_acceptance.github.http import GitHubError
 
 if TYPE_CHECKING:
     from conftest import LiveConfig
-    from otterdog_e2e.github.mutate import Mutator
-    from otterdog_e2e.github.oracle import Oracle
-    from otterdog_e2e.naming import RunContext
-    from otterdog_e2e.otterdog.baseline import BaselineManager
-    from otterdog_e2e.otterdog.runner import CliResult, OtterdogCli
-    from otterdog_e2e.otterdog.workspace import ConfigWorkspace
-    from otterdog_e2e.settings import Target
+    from otterdog_acceptance.github.mutate import Mutator
+    from otterdog_acceptance.github.oracle import Oracle
+    from otterdog_acceptance.naming import RunContext
+    from otterdog_acceptance.otterdog.baseline import BaselineManager
+    from otterdog_acceptance.otterdog.runner import CliResult, OtterdogCli
+    from otterdog_acceptance.otterdog.workspace import ConfigWorkspace
+    from otterdog_acceptance.settings import Target
 
 logger = logging.getLogger(__name__)
 
@@ -116,7 +116,7 @@ def test_dispatch_workflow_starts_a_run(
     assert live_config.wait_repo(repo) is not None, f"{repo} was not created"
     branch = oracle.default_branch(repo) or "main"
     mutator.commit_files(
-        repo, branch, {WORKFLOW_PATH: WORKFLOW}, f"otterdog-e2e {live_config.run_ctx.run_id}: workflow"
+        repo, branch, {WORKFLOW_PATH: WORKFLOW}, f"otterdog-acceptance {live_config.run_ctx.run_id}: workflow"
     )
     indexed = waiting.poll(
         lambda: oracle.workflow(repo, WORKFLOW_FILE),
@@ -218,12 +218,14 @@ def test_delete_file_removes_a_configured_file(
         "E2E.md": "otterdog e2e: deleted with -m\n",
         "E2E-2.md": "otterdog e2e: deleted with the default message\n",
     }
-    mutator.commit_files(repo, "main", dict(files), f"otterdog-e2e {live_config.run_ctx.run_id}: files to delete")
+    mutator.commit_files(
+        repo, "main", dict(files), f"otterdog-acceptance {live_config.run_ctx.run_id}: files to delete"
+    )
     for path, content in files.items():
         assert live_config.wait_file(repo, path, content) == content, f"{repo}:{path} was not committed"
     cli = live_config.cli
     before = head_commit(oracle, repo)
-    message = f"otterdog-e2e {live_config.run_ctx.run_id}: delete E2E.md"
+    message = f"otterdog-acceptance {live_config.run_ctx.run_id}: delete E2E.md"
     deleted = delete_file(cli, repo, "E2E.md", message).assert_ok("delete-file -m")
     output = cli_lines(deleted)
     assert "Deleting file 'E2E.md' in organization repository" in output, output[-2000:]
@@ -295,7 +297,7 @@ def test_delete_file_reports_a_refused_deletion(
     live_config.apply(repo_config(live_config, plain), what="apply the repository")
     assert live_config.wait_repo(repo) is not None, f"{repo} was not created"
     content = "otterdog e2e: a protected file\n"
-    mutator.commit_files(repo, "main", {"E2E.md": content}, f"otterdog-e2e {live_config.run_ctx.run_id}: file")
+    mutator.commit_files(repo, "main", {"E2E.md": content}, f"otterdog-acceptance {live_config.run_ctx.run_id}: file")
     assert live_config.wait_file(repo, "E2E.md", content) == content, "E2E.md was not committed"
     protected = (
         f"orgs.newRepo('{repo}') {{ description: 'otterdog e2e: refused delete-file', branch_protection_rules: ["
@@ -311,7 +313,7 @@ def test_delete_file_reports_a_refused_deletion(
         raise_on_timeout=False,
     )
     assert rule and rule.get("isAdminEnforced") is True, f"main of {repo} is not protected: {rule}"
-    result = delete_file(live_config.cli, repo, "E2E.md", "otterdog-e2e: refused delete")
+    result = delete_file(live_config.cli, repo, "E2E.md", "otterdog-acceptance: refused delete")
     text = cli_lines(result)
     assert oracle.file_content(repo, "E2E.md") == content, "the protected file was deleted"
     assert not UNBOUND_RE.search(text), f"delete-file crashed:\n{text[-2000:]}"
@@ -342,7 +344,7 @@ def test_sync_template_recopies_the_template(
     live_config.apply(repo_config(live_config, template_repo), what="apply the template repository")
     assert live_config.wait_repo(template) is not None, f"{template} was not created"
     first = {"README.md": "# {{org}}/{{repo}} template v1\n", "TEMPLATE.txt": "static {{org}} v1\n"}
-    mutator.commit_files(template, "main", dict(first), f"otterdog-e2e {run_id}: template v1")
+    mutator.commit_files(template, "main", dict(first), f"otterdog-acceptance {run_id}: template v1")
     for path, content in first.items():
         assert live_config.wait_file(template, path, content) == content, f"{template}:{path} was not committed"
     copy_repo = (
@@ -359,7 +361,7 @@ def test_sync_template_recopies_the_template(
         "TEMPLATE.txt": "static {{org}} v2\n",
         "NEW.txt": "otterdog e2e: added to the template\n",
     }
-    mutator.commit_files(template, "main", dict(second), f"otterdog-e2e {run_id}: template v2")
+    mutator.commit_files(template, "main", dict(second), f"otterdog-acceptance {run_id}: template v2")
     for path, content in second.items():
         assert live_config.wait_file(template, path, content) == content, f"{template}:{path} was not committed"
     cli = live_config.cli

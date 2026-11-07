@@ -15,8 +15,8 @@ from typing import Any
 
 import pytest
 
-from otterdog_e2e import procs
-from otterdog_e2e.redact import Redactor
+from otterdog_acceptance import procs
+from otterdog_acceptance.redact import Redactor
 
 SPEC_REMOVED = {
     "E2E_ADMIN_TOKEN": "x",
@@ -267,7 +267,7 @@ def test_run_check_raises_with_a_redacted_command(tmp_path: Path, redactor: Reda
 def test_run_logs_a_redacted_command(tmp_path: Path, redactor: Redactor, caplog: pytest.LogCaptureFixture) -> None:
     """The DEBUG log line of every command is redacted."""
     redactor.add("wpa-argv-secret-2")
-    with caplog.at_level(logging.DEBUG, logger="otterdog_e2e.procs"):
+    with caplog.at_level(logging.DEBUG, logger="otterdog_acceptance.procs"):
         procs.run([*python("pass"), "--token=wpa-argv-secret-2"], home=tmp_path)
     assert "--token=***" in caplog.text and "wpa-argv-secret-2" not in caplog.text
 

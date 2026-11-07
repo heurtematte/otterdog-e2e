@@ -10,9 +10,9 @@ from typing import Any
 
 import pytest
 
-from otterdog_e2e.naming import new_run_context
-from otterdog_e2e.otterdog.workspace import WorkspaceLayout
-from otterdog_e2e.scenarios.model import (
+from otterdog_acceptance.naming import new_run_context
+from otterdog_acceptance.otterdog.workspace import WorkspaceLayout
+from otterdog_acceptance.scenarios.model import (
     APPLY_KEYS,
     PLAN_KEYS,
     STEP_KEYS,

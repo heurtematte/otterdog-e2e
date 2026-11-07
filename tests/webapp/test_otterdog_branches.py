@@ -23,10 +23,10 @@ import pytest
 
 if TYPE_CHECKING:
     from conftest import WebappScenario
-    from otterdog_e2e.context import E2EContext
-    from otterdog_e2e.github.mutate import Mutator
-    from otterdog_e2e.otterdog.workspace import ConfigWorkspace
-    from otterdog_e2e.sut.cli_install import InstalledCli
+    from otterdog_acceptance.context import E2EContext
+    from otterdog_acceptance.github.mutate import Mutator
+    from otterdog_acceptance.otterdog.workspace import ConfigWorkspace
+    from otterdog_acceptance.sut.cli_install import InstalledCli
 
 pytestmark = [pytest.mark.webapp]
 

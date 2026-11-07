@@ -15,13 +15,13 @@ import pytest
 
 if TYPE_CHECKING:
     from conftest import WebhookHelpers
-    from otterdog_e2e.config_repo import ConfigRepoFlow
-    from otterdog_e2e.context import WebappCase
-    from otterdog_e2e.naming import RunContext
-    from otterdog_e2e.otterdog.render import OrgConfigRenderer
-    from otterdog_e2e.settings import Target
-    from otterdog_e2e.webapp.api import WebappApi
-    from otterdog_e2e.webhooks.relay import DeliveryRelay
+    from otterdog_acceptance.config_repo import ConfigRepoFlow
+    from otterdog_acceptance.context import WebappCase
+    from otterdog_acceptance.naming import RunContext
+    from otterdog_acceptance.otterdog.render import OrgConfigRenderer
+    from otterdog_acceptance.settings import Target
+    from otterdog_acceptance.webapp.api import WebappApi
+    from otterdog_acceptance.webhooks.relay import DeliveryRelay
 
 pytestmark = [pytest.mark.webapp]
 

@@ -34,12 +34,12 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from otterdog_e2e.config_repo import comment_contains, normalize_comment
+from otterdog_acceptance.config_repo import comment_contains, normalize_comment
 
 if TYPE_CHECKING:
     from conftest import WebappScenario
-    from otterdog_e2e.config_repo import ConfigPr
-    from otterdog_e2e.github.mutate import Mutator
+    from otterdog_acceptance.config_repo import ConfigPr
+    from otterdog_acceptance.github.mutate import Mutator
 
 pytestmark = [pytest.mark.webapp]
 
@@ -300,7 +300,9 @@ def test_validation_warnings(request: pytest.FixtureRequest, webapp_scenario: We
         strict=True,  # merged upstream and released in v1.6.1
     )
     pin = s.patch(s.harmless_repo, s.cache(10))  # main and every head manage the cache size: the diffs are exact
-    s.flow.reset_main(s.render(repositories=[pin]), message=f"otterdog-e2e {s.run_ctx.run_id}: {s.sid} pins cache")
+    s.flow.reset_main(
+        s.render(repositories=[pin]), message=f"otterdog-acceptance {s.run_ctx.run_id}: {s.sid} pins cache"
+    )
     secret = s.patch(s.harmless_repo, s.secret(s.run_ctx.const("w-warn"), f"e2e-dummy-{s.run_ctx.run_id}"))
     cost = s.patch(s.harmless_repo, s.cache(5))
     new = s.new_repo(s.run_repo("default-cache"), s.describe("new repository, default cache size"), s.cache(10))

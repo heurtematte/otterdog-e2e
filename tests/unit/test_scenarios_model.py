@@ -8,9 +8,9 @@ from typing import Any
 
 import pytest
 
-from otterdog_e2e.naming import new_run_context
-from otterdog_e2e.otterdog.render import ConfigFragments
-from otterdog_e2e.scenarios.model import (
+from otterdog_acceptance.naming import new_run_context
+from otterdog_acceptance.otterdog.render import ConfigFragments
+from otterdog_acceptance.scenarios.model import (
     ApplySpec,
     PlanSpec,
     ScenarioError,

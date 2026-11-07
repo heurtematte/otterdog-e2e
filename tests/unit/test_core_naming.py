@@ -6,8 +6,8 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from otterdog_e2e import naming
-from otterdog_e2e.naming import (
+from otterdog_acceptance import naming
+from otterdog_acceptance.naming import (
     E2E_NAME_RE,
     HOOK_BASE,
     RUN_ID_RE,

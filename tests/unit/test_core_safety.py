@@ -12,9 +12,9 @@ import pytest
 import responses
 from responses import matchers
 
-from otterdog_e2e import safety
-from otterdog_e2e.github.http import GitHubError, GitHubHttp
-from otterdog_e2e.safety import (
+from otterdog_acceptance import safety
+from otterdog_acceptance.github.http import GitHubError, GitHubHttp
+from otterdog_acceptance.safety import (
     ALLOWED_SCOPES,
     SafetyError,
     VerifiedOrg,
@@ -22,8 +22,8 @@ from otterdog_e2e.safety import (
     check_org_allowed,
     verify_target,
 )
-from otterdog_e2e.settings import Identity, IdentitySpec, Target, WebappSpec
-from otterdog_e2e.testing.fakes import FAKE_ORG, FAKE_ORG_ID, FakeGitHubHttp, default_org_json
+from otterdog_acceptance.settings import Identity, IdentitySpec, Target, WebappSpec
+from otterdog_acceptance.testing.fakes import FAKE_ORG, FAKE_ORG_ID, FakeGitHubHttp, default_org_json
 
 API = "https://api.github.com"
 ADMIN_SCOPES = {"repo", "workflow", "admin:org", "admin:org_hook", "delete_repo", "read:org"}
@@ -666,7 +666,7 @@ def org_installation(org: Mapping[str, Any], *, kind: str = "Organization", **fi
 
 def fake_app(**kw: Any) -> Any:
     """A FakeAppAuth owned by and installed on the fake test org (overridable)."""
-    from otterdog_e2e.testing.fakes import FakeAppAuth
+    from otterdog_acceptance.testing.fakes import FakeAppAuth
 
     return FakeAppAuth(**kw)
 

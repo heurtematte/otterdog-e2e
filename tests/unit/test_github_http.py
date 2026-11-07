@@ -11,10 +11,10 @@ import requests
 import responses
 from responses import matchers
 
-from otterdog_e2e.github.http import GITHUB_API, GitHubError, GitHubHttp, is_graphql_query
-from otterdog_e2e.redact import REDACTOR
-from otterdog_e2e.safety import SafetyError
-from otterdog_e2e.testing.fakes import FAKE_ORG, make_verified_org
+from otterdog_acceptance.github.http import GITHUB_API, GitHubError, GitHubHttp, is_graphql_query
+from otterdog_acceptance.redact import REDACTOR
+from otterdog_acceptance.safety import SafetyError
+from otterdog_acceptance.testing.fakes import FAKE_ORG, make_verified_org
 
 TOKEN = "ghp_" + "T0kenForHttpTests0123456789abcdefghij"
 ORG_URL = f"{GITHUB_API}/orgs/{FAKE_ORG}"
@@ -50,7 +50,7 @@ def test_default_headers_auth_and_trust_env(api: responses.RequestsMock, sleeps:
     assert headers["X-GitHub-Api-Version"] == "2022-11-28"
     assert headers["X-Github-Next-Global-ID"] == "1"
     assert headers["Authorization"] == f"Bearer {TOKEN}"
-    assert headers["User-Agent"] == "otterdog-e2e"
+    assert headers["User-Agent"] == "otterdog-acceptance"
     assert http.session.trust_env is False
     assert TOKEN in REDACTOR.literals
 

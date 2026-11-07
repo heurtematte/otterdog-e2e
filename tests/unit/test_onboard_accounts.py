@@ -13,8 +13,8 @@ from typing import Any
 import click
 import pytest
 
-from otterdog_e2e.onboard import accounts as accounts_module
-from otterdog_e2e.onboard.accounts import (
+from otterdog_acceptance.onboard import accounts as accounts_module
+from otterdog_acceptance.onboard.accounts import (
     DEFAULT_ITEMS,
     AccountError,
     AccountsConfig,
@@ -27,8 +27,8 @@ from otterdog_e2e.onboard.accounts import (
     totp_code,
     web_login,
 )
-from otterdog_e2e.testing.fakes import FakeGitHubHttp
-from otterdog_e2e.vaults import VaultError, parse
+from otterdog_acceptance.testing.fakes import FakeGitHubHttp
+from otterdog_acceptance.vaults import VaultError, parse
 
 STORE = "pass:bots/technology.csi/github.com"
 CONFIG = parse_accounts_config({"store": STORE}, "setup.yaml")
@@ -125,10 +125,10 @@ def test_an_instance_can_keep_its_own_accounts() -> None:
 
 
 def test_the_setup_configuration_file(tmp_path: Path) -> None:
-    """~/.config/otterdog-e2e/setup.yaml of the environment's HOME, or E2E_SETUP_CONFIG; no file or no section:
+    """~/.config/otterdog-acceptance/setup.yaml of the environment's HOME, or E2E_SETUP_CONFIG; no file or no section:
     None; a named file that does not exist and an invalid file are errors."""
     environ = {"HOME": str(tmp_path)}
-    path = tmp_path / ".config" / "otterdog-e2e" / "setup.yaml"
+    path = tmp_path / ".config" / "otterdog-acceptance" / "setup.yaml"
     assert setup_config_path(environ) == path and load_accounts_config(environ) is None
     path.parent.mkdir(parents=True)
     path.write_text("# nothing yet\n")
@@ -333,7 +333,7 @@ def test_fresh_account_gets_2fa_and_its_token(world: World) -> None:
     code = next(event for event in world.events if event[0] == "submit code")[1]
     assert code.isdigit() and len(code) == 6
     _, note, url, days = next(event for event in world.events if event[0] == "token")
-    assert note.startswith("otterdog-e2e admin of the test organization e2e-test-org (instance free)")
+    assert note.startswith("otterdog-acceptance admin of the test organization e2e-test-org (instance free)")
     assert url.startswith("https://github.com/settings/tokens/new?scopes=repo,workflow,admin:org,admin:org_hook,")
     assert days is None and browser.opened == 1  # no expiration
     assert "classic token created (no expiration)" in world.output
@@ -470,15 +470,15 @@ def test_classic_expirations_only(world: World) -> None:
     assert "classic token created (30 days)" in world.output
 
 
-# --- otterdog-e2e accounts ------------------------------------------------------------------------------------------
+# --- otterdog-acceptance accounts ------------------------------------------------------------------------------------------
 @pytest.fixture
 def cli_env(world: World, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, str | None]:
     """A tmp HOME with the setup configuration file, no CI, and the fake browser instead of Firefox."""
-    from otterdog_e2e.cli import onboarding as cli_onboarding
+    from otterdog_acceptance.cli import onboarding as cli_onboarding
 
     monkeypatch.setattr(cli_onboarding, "_open_browser", lambda stack: FakeBrowser(FakeSession(world.events)))
     monkeypatch.setattr(accounts_module, "_default_http", world.http)
-    config = tmp_path / "home" / ".config" / "otterdog-e2e" / "setup.yaml"
+    config = tmp_path / "home" / ".config" / "otterdog-acceptance" / "setup.yaml"
     config.parent.mkdir(parents=True)
     config.write_text(f"accounts:\n  store: {STORE}\n")
     logins = [f"E2E_{role}_LOGIN" for role in ("ADMIN", "ORACLE", "AUTHOR", "APPROVER", "OUTSIDER", "CONFIG_READER")]
@@ -487,10 +487,10 @@ def cli_env(world: World, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> di
 
 
 def invoke(env: dict[str, str | None], *args: str) -> Any:
-    """Run ``otterdog-e2e accounts``."""
+    """Run ``otterdog-acceptance accounts``."""
     from click.testing import CliRunner
 
-    from otterdog_e2e import cli
+    from otterdog_acceptance import cli
 
     return CliRunner().invoke(cli.main, ["accounts", *args], env=env)
 
@@ -503,8 +503,8 @@ def test_accounts_command_sets_up_the_accounts_of_the_store(world: World, cli_en
     assert world.entries[TOKEN_REF] == NEW_TOKEN
     assert f"admin: {LOGIN}: token created at {TOKEN_REF}, 2FA enrolled" in result.output
     assert "author" not in result.output.split("next:")[0]
-    assert "next: otterdog-e2e setup --target free" in result.output
-    assert not (Path(str(cli_env["HOME"])) / ".config" / "otterdog-e2e" / "free.env").exists()
+    assert "next: otterdog-acceptance setup --target free" in result.output
+    assert not (Path(str(cli_env["HOME"])) / ".config" / "otterdog-acceptance" / "free.env").exists()
     assert_no_secret(result.output)
     world.tokens[NEW_TOKEN] = (LOGIN, set(ADMIN_SCOPES))
     again = invoke(cli_env, "--target", "free")
@@ -574,10 +574,10 @@ def test_web_login_signs_in_shows_the_page_and_waits(world: World) -> None:
 
 
 def invoke_web_login(env: dict[str, str | None], *args: str, input: str = "\n") -> Any:
-    """Run ``otterdog-e2e web-login`` (``input``: the terminal's answers)."""
+    """Run ``otterdog-acceptance web-login`` (``input``: the terminal's answers)."""
     from click.testing import CliRunner
 
-    from otterdog_e2e import cli
+    from otterdog_acceptance import cli
 
     return CliRunner().invoke(cli.main, ["web-login", *args], env=env, input=input)
 
@@ -599,9 +599,9 @@ def test_web_login_command_admin_from_the_env_file(
 ) -> None:
     """The admin signs in with the web credentials of the env file (resolved as runs resolve them), on the page of the
     organization; the accounts store is not read."""
-    from otterdog_e2e import settings as settings_module
+    from otterdog_acceptance import settings as settings_module
 
-    env_file = Path(str(cli_env["HOME"])) / ".config" / "otterdog-e2e" / "free.env"
+    env_file = Path(str(cli_env["HOME"])) / ".config" / "otterdog-acceptance" / "free.env"
     env_file.write_text("E2E_ORG=e2e-test-org\nE2E_ADMIN_PASSWORD=pass:web/password\n")
     web = settings_module.WebCredentials("admin", LOGIN, LOGIN, "web password", SEED)
     monkeypatch.setattr(settings_module, "load_target", lambda name, settings, environ: object())
@@ -664,7 +664,7 @@ def test_web_login_command_is_refused_in_ci(cli_env: dict[str, str | None]) -> N
 # --- setup: the web steps in the browser, --shards ------------------------------------------------------------------
 def web_steps(cli_env: dict[str, str | None], stack: contextlib.ExitStack) -> Any:
     """The web steps of setup for the instance free, with the fake browser and the accounts store of cli_env."""
-    from otterdog_e2e.cli import onboarding
+    from otterdog_acceptance.cli import onboarding
 
     return onboarding._WebSteps(stack, "free", {key: value for key, value in cli_env.items() if value is not None})
 
@@ -699,7 +699,7 @@ def test_automatic_web_steps_ask_nothing(
     world: World, cli_env: dict[str, str | None], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """automatic (setup with the accounts store): each step is done without a confirmation."""
-    from otterdog_e2e.cli import onboarding
+    from otterdog_acceptance.cli import onboarding
 
     monkeypatch.setattr("click.confirm", lambda text, default: pytest.fail(f"asked: {text}"))
     environ = {key: value for key, value in cli_env.items() if value is not None}
@@ -716,8 +716,8 @@ def test_bootstrap_alone_accepts_the_invitations_in_one_firefox(
     all, nothing asked); without the store or in CI, no browser."""
     import types
 
-    from otterdog_e2e.cli import bootstrap as cli_bootstrap
-    from otterdog_e2e.cli import onboarding
+    from otterdog_acceptance.cli import bootstrap as cli_bootstrap
+    from otterdog_acceptance.cli import onboarding
 
     opened: list[int] = []
     monkeypatch.setattr(
@@ -745,10 +745,10 @@ def test_bootstrap_alone_accepts_the_invitations_in_one_firefox(
 
 
 def invoke_setup(env: dict[str, str | None], *args: str, input: str = "") -> Any:
-    """Run ``otterdog-e2e setup``."""
+    """Run ``otterdog-acceptance setup``."""
     from click.testing import CliRunner
 
-    from otterdog_e2e import cli
+    from otterdog_acceptance import cli
 
     return CliRunner().invoke(cli.main, ["setup", *args], env=env, input=input)
 
@@ -760,8 +760,8 @@ def test_setup_shards_sets_up_every_shard_instance(
     set up already runs again until its setup finished (it is then in @shards); without it (--no-browser), an
     instance set up already runs again only when confirmed; a stopped one names how to resume; --target and --shards
     exclude each other."""
-    from otterdog_e2e.batch import list_file
-    from otterdog_e2e.cli import onboarding
+    from otterdog_acceptance.batch import list_file
+    from otterdog_acceptance.cli import onboarding
 
     done: list[tuple[str, str | None]] = []
     monkeypatch.setattr(
@@ -776,7 +776,7 @@ def test_setup_shards_sets_up_every_shard_instance(
     assert done == [("enterprise", "enterprise"), ("free", "repos")]  # enterprise never finished its setup
     assert "\u2501\u2501 [1/2] enterprise \u2501" in result.output
     assert "\u2501\u2501 [2/2] free (shard repos) \u2501" in result.output
-    assert "otterdog-e2e run --target @shards --parallel 2" in result.output
+    assert "otterdog-acceptance run --target @shards --parallel 2" in result.output
     shards = list_file("shards", {"HOME": str(cli_env["HOME"])})
     shards.parent.mkdir(parents=True)
     shards.write_text("# the instances of @shards\nenterprise\n")
@@ -803,7 +803,7 @@ def test_setup_shards_sets_up_every_shard_instance(
 def test_setup_lines_get_their_marks_in_colour(monkeypatch: pytest.MonkeyPatch) -> None:
     """In a terminal: titles bold, the done mark green, the attention mark yellow, skipped and saved lines dim, the
     rest as it is (click drops the styles when the output is no terminal)."""
-    from otterdog_e2e.cli import onboarding
+    from otterdog_acceptance.cli import onboarding
 
     printed: list[str] = []
     monkeypatch.setattr(click, "echo", printed.append)
@@ -822,9 +822,9 @@ def test_setup_lines_get_their_marks_in_colour(monkeypatch: pytest.MonkeyPatch) 
 def test_the_instance_of_a_shard_is_the_one_that_selects_it(cli_env: dict[str, str | None], tmp_path: Path) -> None:
     """An instance whose E2E_SHARD names a shard serves it (the existing free organization as repos), the others are
     named after their shard."""
-    from otterdog_e2e.cli import onboarding
+    from otterdog_acceptance.cli import onboarding
 
-    config = Path(str(cli_env["HOME"])) / ".config" / "otterdog-e2e"
+    config = Path(str(cli_env["HOME"])) / ".config" / "otterdog-acceptance"
     (config / "free.env").write_text("E2E_PROFILE=free\nE2E_SHARD=repos\n")
     environ = {key: value for key, value in cli_env.items() if value is not None}
     instances = onboarding._shard_instances(environ)
@@ -847,7 +847,7 @@ def test_browser_without_playwright_names_the_install(tmp_path: Path, monkeypatc
     install commands, Firefox going to PLAYWRIGHT_BROWSERS_PATH when it is set, else to Playwright's own cache."""
     import sys
 
-    from otterdog_e2e.onboard.browser import CLASSIC_TOKEN_RE, PlaywrightBrowser
+    from otterdog_acceptance.onboard.browser import CLASSIC_TOKEN_RE, PlaywrightBrowser
 
     monkeypatch.setitem(sys.modules, "playwright", None)
     monkeypatch.setitem(sys.modules, "playwright.sync_api", None)
@@ -882,7 +882,7 @@ def test_firefox_gets_the_font_keys_gnome_46_moved(tmp_path: Path, monkeypatch: 
     """GNOME 46 moved antialiasing to a deprecated schema, where Playwright's Firefox does not look (it aborts): the
     compat directory has the xsettings schema with the key back, compiled once; nothing when the system schema has it,
     or has no such schema, or glib-compile-schemas is missing."""
-    from otterdog_e2e.onboard import browser as browser_module
+    from otterdog_acceptance.onboard import browser as browser_module
 
     system, target = tmp_path / "system", tmp_path / "compat"
     system.mkdir()
@@ -912,7 +912,7 @@ def test_firefox_gets_the_font_keys_gnome_46_moved(tmp_path: Path, monkeypatch: 
 
 def test_a_firefox_that_stops_names_what_it_printed() -> None:
     """A launch failure names Firefox's last error line; a missing Firefox is told apart (the install hint)."""
-    from otterdog_e2e.onboard.browser import MISSING_FIREFOX_RE, _launch_error
+    from otterdog_acceptance.onboard.browser import MISSING_FIREFOX_RE, _launch_error
 
     error = Exception(
         "BrowserType.launch: Failed to launch the browser process.\nBrowser logs:\n"
@@ -941,14 +941,14 @@ def test_a_firefox_that_stops_names_what_it_printed() -> None:
 def test_the_setup_key_is_read_from_what_the_dialog_shows(shown: str) -> None:
     """The key in the texts of the setup key dialog: grouped or not, between invisible characters, dashes, words or
     in an otpauth:// URI."""
-    from otterdog_e2e.onboard.browser import setup_key_in
+    from otterdog_acceptance.onboard.browser import setup_key_in
 
     assert setup_key_in(["", "Loading", shown]) == SEED
 
 
 def test_texts_without_a_setup_key_are_described_not_quoted() -> None:
     """No key in short, lower-case or non base32 texts; the description gives lengths and kinds, never the text."""
-    from otterdog_e2e.onboard.browser import describe_key_texts, setup_key_in
+    from otterdog_acceptance.onboard.browser import describe_key_texts, setup_key_in
 
     assert setup_key_in(["", "123456", "Your two-factor secret", SEED[:-1] + "0", SEED.lower()]) is None
     text = describe_key_texts([SEED[:4] + "\u200b" + SEED[4:8] + "!", ""])
@@ -989,7 +989,7 @@ class KeyPage:
 
     def locator(self, selector: str) -> Any:
         """The key element, else the dialog around it."""
-        from otterdog_e2e.onboard.browser import SETUP_KEY_SELECTOR
+        from otterdog_acceptance.onboard.browser import SETUP_KEY_SELECTOR
 
         return KeyLocator(self.key_texts if selector == SETUP_KEY_SELECTOR else list)
 
@@ -1032,7 +1032,7 @@ def test_the_setup_key_is_read_again_until_github_filled_it_in(monkeypatch: pyte
     import sys
     import types
 
-    from otterdog_e2e.onboard import browser as browser_module
+    from otterdog_acceptance.onboard import browser as browser_module
 
     monkeypatch.setitem(sys.modules, "playwright.sync_api", types.SimpleNamespace(Error=RuntimeError))  # no extra
     asked: list[str] = []

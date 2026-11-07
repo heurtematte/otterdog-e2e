@@ -181,7 +181,7 @@ jobs:
           [[ "$older_than" =~ ^[0-9]+(\.[0-9]+)?[smhd]?$ ]] || { echo "::error::invalid older_than"; exit 1; }
           args=(janitor --target "$TARGET" --older-than "$older_than")
           if [[ "$APPLY" == true ]]; then args+=(--apply); fi
-          .venv/bin/otterdog-e2e "${args[@]}"
+          .venv/bin/otterdog-acceptance "${args[@]}"
       - name: Locate the run artifacts
         if: always()
         env:
@@ -215,7 +215,7 @@ jobs:
             echo "no artifacts to scrub"
             exit 0
           fi
-          .venv/bin/otterdog-e2e scrub-artifacts "$E2E_ARTIFACTS"
+          .venv/bin/otterdog-acceptance scrub-artifacts "$E2E_ARTIFACTS"
       - name: Upload the artifacts
         if: always() && steps.scrub.outcome == 'success'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -232,7 +232,7 @@ jobs:
         run: |
           set -euo pipefail
           {
-            echo "### otterdog-e2e janitor: \`$TARGET\`"
+            echo "### otterdog-acceptance janitor: \`$TARGET\`"
             echo
             echo "- outcome: $JANITOR_OUTCOME"
             echo "- artifact: \`${E2E_ARTIFACT_NAME:-none}\` (kept 7 days)"

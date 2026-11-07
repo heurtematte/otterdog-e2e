@@ -1,7 +1,7 @@
 # Scenario references and the differential report
 
 Reference: `docs/testing-an-otterdog-pr.md` ("Scenario references", "Reading the differential report"); parser and
-loader `src/otterdog_e2e/changes.py`, model `src/otterdog_e2e/scenarios/model.py`.
+loader `src/otterdog_acceptance/changes.py`, model `src/otterdog_acceptance/scenarios/model.py`.
 
 ## Organisation: by functionality, never by PR
 
@@ -52,8 +52,8 @@ with `--base-sut auto` and report that no delta was expected.
 
 ## Selecting a change
 
-`otterdog-e2e run --change <n|#n|slug>` (pytest `--e2e-change`, `E2E_CHANGE`); default: N of a `pr:N@<sha>` SUT, and
-`otterdog-e2e pr N` uses N. The scenarios referencing the change pass the `--tags` filter, their expected deltas feed
+`otterdog-acceptance run --change <n|#n|slug>` (pytest `--e2e-change`, `E2E_CHANGE`); default: N of a `pr:N@<sha>` SUT, and
+`otterdog-acceptance pr N` uses N. The scenarios referencing the change pass the `--tags` filter, their expected deltas feed
 `differential.md`, their `base` is the default `--base-sut` and their `template` picks the templates.
 
 ## Expected deltas
@@ -88,11 +88,11 @@ under the run directory (`base/`, `head/`).
 
 ## Reproducing a delta by hand
 
-The scenario and its rendered configuration are in the artifacts (`.../workspace/`); `otterdog-e2e inject` re-runs
+The scenario and its rendered configuration are in the artifacts (`.../workspace/`); `otterdog-acceptance inject` re-runs
 jsonnet against a SUT offline, for example with the base:
 
 ```bash
-.venv/bin/otterdog-e2e inject --sut sha:b5f7bb1c79ad29cdcde8506f5fa7ec4c070ffda8 \
+.venv/bin/otterdog-acceptance inject --sut sha:b5f7bb1c79ad29cdcde8506f5fa7ec4c070ffda8 \
   --library e2e=scenarios/lib/e2e.libsonnet --fragment repositories=scenarios/fragments/ruleset-repo.jsonnet --print
 ```
 
@@ -104,7 +104,7 @@ run-prefixed names apply there too), and delete it afterwards.
 The full PR run (offline tiers, differential, and the live tiers on a test organization they own) is theirs to start:
 
 ```bash
-.venv/bin/otterdog-e2e pr 790 --sha 0cee9e302282fefa092b4e0767248a997a9272ea --target free
+.venv/bin/otterdog-acceptance pr 790 --sha 0cee9e302282fefa092b4e0767248a997a9272ea --target free
 make pr PR=790 SHA=0cee9e302282fefa092b4e0767248a997a9272ea TARGET=free
 ```
 

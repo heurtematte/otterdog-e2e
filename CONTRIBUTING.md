@@ -1,4 +1,4 @@
-# Contributing to otterdog-e2e
+# Contributing to otterdog-acceptance
 
 Contributions are welcome: new scenarios, fixes of the harness, documentation. By contributing, you agree that your
 contribution is licensed under the [Eclipse Public License 2.0](LICENSE), the license of the project.
@@ -6,7 +6,7 @@ contribution is licensed under the [Eclipse Public License 2.0](LICENSE), the li
 ## Set up
 
 ```bash
-make init        # .venv with the harness and its dev tools, otterdog-e2e in ~/.local/bin
+make init        # .venv with the harness and its dev tools, otterdog-acceptance in ~/.local/bin
 make check       # ruff, mypy and the unit tier: no network, no docker
 make offline     # the offline tier against an otterdog release (docker, no GitHub)
 ```
@@ -31,7 +31,7 @@ the [coverage matrix](docs/coverage-matrix.md), update `scenarios/coverage.yaml`
 ## Before opening a pull request
 
 - `make check` passes, and `make offline` for a change of the offline tier or the scenarios;
-- `.venv/bin/otterdog-e2e assist check <files>` reports no problem for the scenarios and tests you wrote;
+- `.venv/bin/otterdog-acceptance assist check <files>` reports no problem for the scenarios and tests you wrote;
 - `make docs` builds the documentation site without warning when you changed `docs/`, `README.md` or `zensical.toml`;
 - no secret anywhere: not in scenarios, fixtures, artifacts you attach or pull request text (dummy values only; see
   [security](docs/security.md));

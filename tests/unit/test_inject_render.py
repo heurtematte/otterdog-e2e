@@ -17,15 +17,15 @@ from typing import Any
 
 import pytest
 
-from otterdog_e2e import procs
-from otterdog_e2e.otterdog.render import (
+from otterdog_acceptance import procs
+from otterdog_acceptance.otterdog.render import (
     BaselineSpec,
     ConfigFragments,
     OrgConfigRenderer,
     RenderError,
     library_name_problem,
 )
-from otterdog_e2e.sut.template import offline_template
+from otterdog_acceptance.sut.template import offline_template
 
 TEMPLATE_DIR = Path(__file__).parent / "data" / "template"
 ORG = "e2e-offline"
@@ -161,12 +161,12 @@ def test_overlays_see_the_baseline_layer(tmp_path: Path) -> None:
 @pytest.mark.skipif(not OTTERDOG, reason="set E2E_TEST_OTTERDOG to an otterdog executable to validate with otterdog")
 def test_otterdog_validates_libraries_and_overlays(tmp_path: Path) -> None:
     """``otterdog validate --local`` accepts a render with a library and an overlay (offline CLI, dummy token)."""
-    from otterdog_e2e.otterdog.runner import OtterdogCli
-    from otterdog_e2e.otterdog.workspace import ConfigWorkspace
-    from otterdog_e2e.settings import HarnessSettings
-    from otterdog_e2e.sut.cli_install import InstalledCli
-    from otterdog_e2e.sut.spec import ResolvedSut, SutSpec
-    from otterdog_e2e.sut.template import vendor_template
+    from otterdog_acceptance.otterdog.runner import OtterdogCli
+    from otterdog_acceptance.otterdog.workspace import ConfigWorkspace
+    from otterdog_acceptance.settings import HarnessSettings
+    from otterdog_acceptance.sut.cli_install import InstalledCli
+    from otterdog_acceptance.sut.spec import ResolvedSut, SutSpec
+    from otterdog_acceptance.sut.template import vendor_template
 
     workspace = ConfigWorkspace(tmp_path / "ws", org=ORG, template=offline_template(), config_repo=".otterdog")
     workspace.write_otterdog_json()

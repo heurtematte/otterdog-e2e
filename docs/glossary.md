@@ -9,7 +9,7 @@ The words of the harness and of this documentation. On the documentation site, t
   template. A run names it with `--sut` (`SUT=` for `make`), `release:latest` by default.
 - **SUT spec**: the text that names a SUT: `release:latest`, `tag:v1.7.1`, `branch:main`, `sha:<hex>`,
   `pr:<N>@<40-hex>`, `path:<dir>`, `dirty:<dir>` (the [README](../README.md#systems-under-test-sut-specs) lists
-  them); `otterdog-e2e sut resolve SPEC` resolves one to a commit.
+  them); `otterdog-acceptance sut resolve SPEC` resolves one to a commit.
 - **trusted and untrusted SUTs**: a release, a tag, upstream `main`, a commit reachable from them and a local checkout
   are trusted, their CLI may run in a virtualenv on the host. A pull request, or another commit, is untrusted: it only
   runs in its own docker image, without network for offline commands, and never receives web-UI credentials
@@ -30,14 +30,14 @@ The words of the harness and of this documentation. On the documentation site, t
   dummy credentials); live tests apply configurations to a test organization and check the result on GitHub.
 - **lane**: the selection of a CI job: `pr-fast` (at most 45 minutes) and `nightly-full` (everything).
 - **priority**: `P0` runs in the `pr-fast` lane, `P1` in `nightly-full`, `P2` when time allows.
-- **run**: one `otterdog-e2e run` (or `pr`) session, named by its run id; its reports are in `artifacts/<run id>/`
+- **run**: one `otterdog-acceptance run` (or `pr`) session, named by its run id; its reports are in `artifacts/<run id>/`
   (`summary.md`, `run.json`, `differential.md`).
 
 ## Targets
 
 - **target**: the dedicated GitHub test organization the live tiers write to, never a real one.
-- **instance**: a configured target, `~/.config/otterdog-e2e/<instance>.env` (the organization and its tokens),
-  written by `otterdog-e2e setup`; `--target <instance>` (`TARGET=` for `make`) selects it ([onboarding](onboarding.md)).
+- **instance**: a configured target, `~/.config/otterdog-acceptance/<instance>.env` (the organization and its tokens),
+  written by `otterdog-acceptance setup`; `--target <instance>` (`TARGET=` for `make`) selects it ([onboarding](onboarding.md)).
 - **profile**: what a target is expected to be (`targets/<profile>.yaml`: its plan and features), shared by instances.
 - **role**: an account of a target and its token: `admin`, `oracle`, `author`, `approver`, `outsider`,
   `config_reader` ([roles](roles.md)).

@@ -11,11 +11,11 @@ from pathlib import Path
 
 import pytest
 
-from otterdog_e2e import procs
-from otterdog_e2e.safety import SafetyError
-from otterdog_e2e.settings import HarnessSettings
-from otterdog_e2e.sut import cli_install
-from otterdog_e2e.sut.cli_install import (
+from otterdog_acceptance import procs
+from otterdog_acceptance.safety import SafetyError
+from otterdog_acceptance.settings import HarnessSettings
+from otterdog_acceptance.sut import cli_install
+from otterdog_acceptance.sut.cli_install import (
     IMAGE_OTTERDOG_BIN,
     INSTALL_MARKER,
     PDV_VERSION,
@@ -26,8 +26,8 @@ from otterdog_e2e.sut.cli_install import (
     install_cli,
     installed_version,
 )
-from otterdog_e2e.sut.image import BuiltImage
-from otterdog_e2e.sut.spec import ResolvedSut, parse_sut_spec
+from otterdog_acceptance.sut.image import BuiltImage
+from otterdog_acceptance.sut.spec import ResolvedSut, parse_sut_spec
 
 SHA = "9bdeb75f3e82a6cbd107d6bc3c9ec90392475c08"
 VERSION = "1.7.0.dev15+e2e.g9bdeb75"

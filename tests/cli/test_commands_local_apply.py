@@ -23,13 +23,13 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from otterdog_e2e import waiting
+from otterdog_acceptance import waiting
 
 if TYPE_CHECKING:
     from conftest import LiveConfig
-    from otterdog_e2e.github.mutate import Mutator
-    from otterdog_e2e.github.oracle import Oracle
-    from otterdog_e2e.otterdog.runner import CliResult
+    from otterdog_acceptance.github.mutate import Mutator
+    from otterdog_acceptance.github.oracle import Oracle
+    from otterdog_acceptance.otterdog.runner import CliResult
 
 pytestmark = [pytest.mark.tags("cli", "repo")]
 

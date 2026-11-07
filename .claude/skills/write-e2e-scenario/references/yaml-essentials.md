@@ -1,8 +1,8 @@
 # YAML scenario essentials
 
 A condensed view of `docs/writing-scenarios.md`, which stays the reference (every key, every loading rule). The
-loader (`src/otterdog_e2e/scenarios/model.py`) refuses unknown keys, wrong types and every rule broken below, with
-the file and the place in the message: `otterdog-e2e assist check` shows those messages.
+loader (`src/otterdog_acceptance/scenarios/model.py`) refuses unknown keys, wrong types and every rule broken below, with
+the file and the place in the message: `otterdog-acceptance assist check` shows those messages.
 
 ## Offline skeleton
 
@@ -49,7 +49,7 @@ description: >-
   Why it exists and what each step proves.
 priority: P1
 tags: [<model-area tag>]
-requires: []                   # capabilities of otterdog_e2e.capabilities.Cap, else skipped
+requires: []                   # capabilities of otterdog_acceptance.capabilities.Cap, else skipped
 steps:
   - name: create
     fragments:
@@ -115,7 +115,7 @@ fragment must not end with a `//` or `#` comment (the renderer appends a comma).
 
 ## State checks (live)
 
-`{kind: <kind>, <parameters>, <one form>}`, kinds in `otterdog_e2e.scenarios.checks.CHECK_KINDS` and in the tables of
+`{kind: <kind>, <parameters>, <one form>}`, kinds in `otterdog_acceptance.scenarios.checks.CHECK_KINDS` and in the tables of
 `docs/writing-scenarios.md` ("State checks"). Forms: `match: {...}` (subset), `absent: true|false`, `equals: <value>`,
 `contains: [...]`, `unavailable: true`; operators `{$regex}`, `{$exists}`, `{$unordered}`, `{$len}` inside values. An
 `absent: true` answered by an unavailable listing fails (add `unavailable_ok: true` when that is acceptable).
@@ -150,7 +150,7 @@ everything else with `tojson`. Overlays merge settings (`settings+:`), never set
 ## Trying jsonnet before it becomes a scenario
 
 ```bash
-.venv/bin/otterdog-e2e inject --fragment repositories=scenarios/fragments/repo-basic.jsonnet --print   # offline
+.venv/bin/otterdog-acceptance inject --fragment repositories=scenarios/fragments/repo-basic.jsonnet --print   # offline
 ```
 
 `inject` runs offline by default (validate and local-plan with the SUT, `--sut`, `--plan`, `--var NAME=VALUE`,

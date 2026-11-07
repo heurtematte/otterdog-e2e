@@ -15,7 +15,7 @@ import pytest
 import responses
 from responses import matchers
 
-from otterdog_e2e.webapp.api import (
+from otterdog_acceptance.webapp.api import (
     WebappApi,
     WebappApiError,
     anchored,
@@ -275,7 +275,7 @@ def status_row(repo: str, status: str, pr: int | None) -> dict[str, Any]:
 @responses.activate
 def test_blueprint_listings_use_anchored_id_filters_and_pages(api: WebappApi, monkeypatch: pytest.MonkeyPatch) -> None:
     """remediations / dismissed / scorecard: id[...] filters as anchored regexes, every page followed."""
-    monkeypatch.setattr("otterdog_e2e.webapp.api.BLUEPRINT_PAGE_SIZE", 1)
+    monkeypatch.setattr("otterdog_acceptance.webapp.api.BLUEPRINT_PAGE_SIZE", 1)
     first = {"id[org_id]": anchored(ORG), "id[blueprint_id]": anchored(BLUEPRINT), "pageSize": "1", "pageIndex": "1"}
     second = {**first, "pageIndex": "2"}
     url = f"{BASE}/api/blueprints/remediations"

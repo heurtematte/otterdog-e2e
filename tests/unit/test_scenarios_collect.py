@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 
-from otterdog_e2e.scenarios.collect import (
+from otterdog_acceptance.scenarios.collect import (
     ORG_LEVEL_EXTRA_TIMEOUT,
     TAGS_EXEMPT_TIERS,
     TIER_TIMEOUTS,
@@ -22,7 +22,7 @@ from otterdog_e2e.scenarios.collect import (
     scenario_selected,
     split_option,
 )
-from otterdog_e2e.scenarios.model import Scenario, ScenarioError, load_scenario
+from otterdog_acceptance.scenarios.model import Scenario, ScenarioError, load_scenario
 
 LIVE = """
 id: cli.team.basic
@@ -253,8 +253,8 @@ def test_every_e2e_tier_directory_has_a_timeout() -> None:
     """The plugin gives each item of a tier directory its tier timeout (scenario items: their scenario's): every e2e
     tier has one; a web_ui item outlives one web command at the runner's own timeout (Firefox, page loads, two bot
     logins)."""
-    from otterdog_e2e.otterdog.runner import WEB_TIMEOUT
-    from otterdog_e2e.pytest_plugin import TIER_DIRS
+    from otterdog_acceptance.otterdog.runner import WEB_TIMEOUT
+    from otterdog_acceptance.pytest_plugin import TIER_DIRS
 
     tiers = {"offline", "cli", "webhooks", "webapp", "enterprise", "differential", "web_ui"}
     assert tiers <= set(TIER_TIMEOUTS) <= set(TIER_DIRS) - {"unit"}

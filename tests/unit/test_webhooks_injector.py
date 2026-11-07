@@ -15,10 +15,10 @@ from typing import Any
 import pytest
 import requests
 
-from otterdog_e2e.redact import REDACTOR
-from otterdog_e2e.webhooks import payloads
-from otterdog_e2e.webhooks.injector import WebhookInjector
-from otterdog_e2e.webhooks.signing import FORM_CONTENT_TYPE, sign_sha1, sign_sha256
+from otterdog_acceptance.redact import REDACTOR
+from otterdog_acceptance.webhooks import payloads
+from otterdog_acceptance.webhooks.injector import WebhookInjector
+from otterdog_acceptance.webhooks.signing import FORM_CONTENT_TYPE, sign_sha1, sign_sha256
 
 SECRET = "e2e-injector-secret-0123456789"
 

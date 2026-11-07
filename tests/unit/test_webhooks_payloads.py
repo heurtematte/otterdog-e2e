@@ -15,9 +15,9 @@ from typing import Any
 
 import pytest
 
-from otterdog_e2e.webhooks import payloads as p
-from otterdog_e2e.webhooks.relay import payload_head_sha, payload_pull_number
-from otterdog_e2e.webhooks.signing import serialize_payload
+from otterdog_acceptance.webhooks import payloads as p
+from otterdog_acceptance.webhooks.relay import payload_head_sha, payload_pull_number
+from otterdog_acceptance.webhooks.signing import serialize_payload
 
 ORG = "e2e-test-org"
 REPO = "e2e-t3c7z8a5-config"

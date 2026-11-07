@@ -16,13 +16,13 @@ from typing import Any
 
 import pytest
 
-from otterdog_e2e.redact import REDACTOR
-from otterdog_e2e.testing.fakes import FAKE_ORG, FakeAppAuth
-from otterdog_e2e.waiting import WaitTimeoutError
-from otterdog_e2e.webapp.api import RemoteEndpointError
-from otterdog_e2e.webhooks import payloads
-from otterdog_e2e.webhooks.relay import DELIVERIES_FILE, DeliveryRelay, RelayedDelivery
-from otterdog_e2e.webhooks.signing import sign_sha1, sign_sha256
+from otterdog_acceptance.redact import REDACTOR
+from otterdog_acceptance.testing.fakes import FAKE_ORG, FakeAppAuth
+from otterdog_acceptance.waiting import WaitTimeoutError
+from otterdog_acceptance.webapp.api import RemoteEndpointError
+from otterdog_acceptance.webhooks import payloads
+from otterdog_acceptance.webhooks.relay import DELIVERIES_FILE, DeliveryRelay, RelayedDelivery
+from otterdog_acceptance.webhooks.signing import sign_sha1, sign_sha256
 
 SECRET = "e2e-relay-secret-0123456789abcdef"
 INSTALLATION = 4242

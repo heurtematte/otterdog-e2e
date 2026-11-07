@@ -1,4 +1,4 @@
-"""The requests of an otterdog command (otterdog_e2e.otterdog.api_usage): otterdog's statistics report, the
+"""The requests of an otterdog command (otterdog_acceptance.otterdog.api_usage): otterdog's statistics report, the
 ``apply.api`` expectations of a scenario step (model and engine) and the inventory of write requests."""
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ from typing import Any
 
 import pytest
 
-from otterdog_e2e.otterdog.api_usage import (
+from otterdog_acceptance.otterdog.api_usage import (
     ApiSpec,
     ApiUsage,
     api_problems,
@@ -21,7 +21,7 @@ from otterdog_e2e.otterdog.api_usage import (
     parse_api_usage,
     unknown_endpoints,
 )
-from otterdog_e2e.scenarios.model import ScenarioError, load_scenario
+from otterdog_acceptance.scenarios.model import ScenarioError, load_scenario
 
 # the shape otterdog 1.7.0 writes (otterdog/providers/github/stats/report.py ApiUsageReport.to_json), trimmed
 REPORT: dict[str, Any] = {
@@ -147,7 +147,7 @@ def test_model_refuses_invalid_apply_api(tmp_path: Path, api: str, message: str)
 # --- the engine --------------------------------------------------------------------------------------------------------
 def engine_problems(spec: ApiSpec | None, usage: ApiUsage | None, version: str | None) -> tuple[list[str], list[str]]:
     """ScenarioEngine._api_problems over a stand-in engine whose SUT has ``version``; (problems, notes)."""
-    from otterdog_e2e.scenarios.engine import ScenarioEngine, StepOutcome
+    from otterdog_acceptance.scenarios.engine import ScenarioEngine, StepOutcome
 
     installed = SimpleNamespace(sut=SimpleNamespace(version=version))
     engine = SimpleNamespace(cli=SimpleNamespace(installed=installed))

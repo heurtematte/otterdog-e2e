@@ -14,8 +14,8 @@ from pathlib import Path
 
 import pytest
 
-from otterdog_e2e import procs
-from otterdog_e2e.redact import Redactor
+from otterdog_acceptance import procs
+from otterdog_acceptance.redact import Redactor
 
 SECRET = "e2e-harness-child-secret-value-42"
 

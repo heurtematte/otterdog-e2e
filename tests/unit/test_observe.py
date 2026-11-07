@@ -1,4 +1,4 @@
-"""Unit tests of otterdog_e2e.observe: recorder scopes, normalization, duplicate keys and the JSONL format."""
+"""Unit tests of otterdog_acceptance.observe: recorder scopes, normalization, duplicate keys and the JSONL format."""
 
 from __future__ import annotations
 
@@ -11,8 +11,8 @@ from typing import Any
 
 import pytest
 
-from otterdog_e2e import observe
-from otterdog_e2e.observe import (
+from otterdog_acceptance import observe
+from otterdog_acceptance.observe import (
     Observation,
     ObservationRecorder,
     base_key,
@@ -20,8 +20,8 @@ from otterdog_e2e.observe import (
     iter_observations,
     load_observations,
 )
-from otterdog_e2e.otterdog.output import NormalizeContext
-from otterdog_e2e.redact import REDACTOR
+from otterdog_acceptance.otterdog.output import NormalizeContext
+from otterdog_acceptance.redact import REDACTOR
 
 SECRET = "e2e-observe-secret-0123456789abcdef"
 
@@ -246,7 +246,7 @@ def test_load_observations_skips_missing_files_and_malformed_lines(
         json.dumps({**good.to_json(), "meta": "not a dict", "extra": 1}),
     ]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    with caplog.at_level(logging.WARNING, logger="otterdog_e2e.observe"):
+    with caplog.at_level(logging.WARNING, logger="otterdog_acceptance.observe"):
         loaded = load_observations(path)
     assert loaded == [good, good]
     assert loaded[1].meta == {}

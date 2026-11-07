@@ -10,21 +10,21 @@ from typing import Any
 
 import pytest
 
-from otterdog_e2e.otterdog.runner import (
+from otterdog_acceptance.otterdog.runner import (
     WEB_LOGIN_COMMANDS,
     OtterdogCli,
     WebMode,
     WebOtterdogCli,
     check_web_runtime,
 )
-from otterdog_e2e.otterdog.workspace import CREDENTIAL_ENV, ConfigWorkspace, web_credentials_env
-from otterdog_e2e.safety import SafetyError
-from otterdog_e2e.settings import HarnessSettings, Identity, WebCredentials
-from otterdog_e2e.sut.cli_install import InstalledCli
-from otterdog_e2e.sut.spec import ResolvedSut, SutSpec
-from otterdog_e2e.sut.template import offline_template
-from otterdog_e2e.testing.fakes import make_verified_org
-from otterdog_e2e.webui.gate import LoginGate, WebLoginBlockedError
+from otterdog_acceptance.otterdog.workspace import CREDENTIAL_ENV, ConfigWorkspace, web_credentials_env
+from otterdog_acceptance.safety import SafetyError
+from otterdog_acceptance.settings import HarnessSettings, Identity, WebCredentials
+from otterdog_acceptance.sut.cli_install import InstalledCli
+from otterdog_acceptance.sut.spec import ResolvedSut, SutSpec
+from otterdog_acceptance.sut.template import offline_template
+from otterdog_acceptance.testing.fakes import make_verified_org
+from otterdog_acceptance.webui.gate import LoginGate, WebLoginBlockedError
 
 ORG = "e2e-test-org"
 TOKEN = "ghp_" + "Wq7" * 12

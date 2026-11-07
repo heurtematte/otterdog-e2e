@@ -87,7 +87,7 @@ custom profile being `capabilities: {add: [ghas_private], remove: [larger_runner
 
 | Capability | Granted when |
 |---|---|
-| `web_ui` | all of: web credentials of the admin bot (`E2E_ADMIN_PASSWORD` and `E2E_ADMIN_TOTP_SEED`, complete and valid), `--e2e-allow-web-ui` (or `E2E_ALLOW_WEB_UI=1` in the process environment; `otterdog-e2e run --allow-web-ui`), a trusted [SUT](glossary.md#systems-under-test) under test (never `pr:` or an untrusted `sha:`, even with `--e2e-trust-code`), `github.saml_sso: false`, and web logins not blocked by the login gate |
+| `web_ui` | all of: web credentials of the admin bot (`E2E_ADMIN_PASSWORD` and `E2E_ADMIN_TOTP_SEED`, complete and valid), `--e2e-allow-web-ui` (or `E2E_ALLOW_WEB_UI=1` in the process environment; `otterdog-acceptance run --allow-web-ui`), a trusted [SUT](glossary.md#systems-under-test) under test (never `pr:` or an untrusted `sha:`, even with `--e2e-trust-code`), `github.saml_sso: false`, and web logins not blocked by the login gate |
 
 `E2EContext.probe` derives it from `web_ui_problems()` and records the decision with its reason in `run.json`
 (`web_ui`); `summary.md` shows it in the run table. Every item of `tests/web_ui` carries the `web_ui` marker, which

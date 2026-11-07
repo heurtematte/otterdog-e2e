@@ -20,17 +20,17 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from otterdog_e2e import waiting
-from otterdog_e2e.otterdog.render import ConfigFragments
-from otterdog_e2e.otterdog.workspace import read_untrusted_text
+from otterdog_acceptance import waiting
+from otterdog_acceptance.otterdog.render import ConfigFragments
+from otterdog_acceptance.otterdog.workspace import read_untrusted_text
 
 if TYPE_CHECKING:
     from conftest import LiveConfig
-    from otterdog_e2e.github.oracle import Oracle
-    from otterdog_e2e.otterdog.baseline import BaselineManager
-    from otterdog_e2e.otterdog.runner import CliResult, OtterdogCli
-    from otterdog_e2e.otterdog.workspace import ConfigWorkspace
-    from otterdog_e2e.safety import VerifiedOrg
+    from otterdog_acceptance.github.oracle import Oracle
+    from otterdog_acceptance.otterdog.baseline import BaselineManager
+    from otterdog_acceptance.otterdog.runner import CliResult, OtterdogCli
+    from otterdog_acceptance.otterdog.workspace import ConfigWorkspace
+    from otterdog_acceptance.safety import VerifiedOrg
 
 pytestmark = [pytest.mark.tags("cli", "repo", "org-settings")]
 

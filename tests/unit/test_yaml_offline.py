@@ -16,11 +16,18 @@ from types import SimpleNamespace
 
 import pytest
 
-from otterdog_e2e.changes import ChangeId, ChangeSpec, ReferencingScenario, change_spec, collect_references, conflicts
-from otterdog_e2e.differential import compare
-from otterdog_e2e.observe import Observation
-from otterdog_e2e.scenarios.collect import scenario_marks
-from otterdog_e2e.scenarios.model import (
+from otterdog_acceptance.changes import (
+    ChangeId,
+    ChangeSpec,
+    ReferencingScenario,
+    change_spec,
+    collect_references,
+    conflicts,
+)
+from otterdog_acceptance.differential import compare
+from otterdog_acceptance.observe import Observation
+from otterdog_acceptance.scenarios.collect import scenario_marks
+from otterdog_acceptance.scenarios.model import (
     Scenario,
     domain_problem,
     load_scenario,
@@ -28,10 +35,10 @@ from otterdog_e2e.scenarios.model import (
     render_step,
     scenario_files,
 )
-from otterdog_e2e.scenarios.offline import OFFLINE_ORG, OfflineEngine, offline_run_context
-from otterdog_e2e.selection import SCENARIO_TAGS
-from otterdog_e2e.sut.template import offline_template
-from otterdog_e2e.testing.fakes import FakeCli
+from otterdog_acceptance.scenarios.offline import OFFLINE_ORG, OfflineEngine, offline_run_context
+from otterdog_acceptance.selection import SCENARIO_TAGS
+from otterdog_acceptance.sut.template import offline_template
+from otterdog_acceptance.testing.fakes import FakeCli
 
 PROJECT = Path(__file__).resolve().parents[2]
 OFFLINE_DIR = PROJECT / "scenarios" / "offline"

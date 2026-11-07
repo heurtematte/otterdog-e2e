@@ -1,9 +1,9 @@
-# otterdog-e2e: the shards of the live tiers (src/otterdog_e2e/shards.py, docs/architecture.md "Organizations and
+# otterdog-acceptance: the shards of the live tiers (src/otterdog_acceptance/shards.py, docs/architecture.md "Organizations and
 # shards").
 #
 # One test organization serves one live session at a time (its org lease): a run over several organizations only saves
 # time when each runs its share of the live items. A shard names that share; the instance of an organization selects
-# it with E2E_SHARD in its env file (`otterdog-e2e setup` writes it), and `run --target @all --parallel 5` then runs the
+# it with E2E_SHARD in its env file (`otterdog-acceptance setup` writes it), and `run --target @all --parallel 5` then runs the
 # shards at once. Offline and unit items are never filtered, an explicit scenario selection (SCENARIO=, --scenario)
 # runs on any instance, and an instance without E2E_SHARD runs every live item.
 #
@@ -15,7 +15,7 @@
 #   plans      the plan it needs (a scenario's min_plan, a test's plan marker)
 #   requires   one of the capabilities it requires (docs/capability-matrix.md)
 #   org_level  whether it changes the whole organization (full baseline reset, unfiltered plans)
-# `otterdog-e2e shards` shows what each shard runs.
+# `otterdog-acceptance shards` shows what each shard runs.
 shards:
   enterprise:
     profile: enterprise

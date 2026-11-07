@@ -13,11 +13,11 @@ from __future__ import annotations
 
 import pytest
 
-from otterdog_e2e.otterdog.output import normalize_text
-from otterdog_e2e.otterdog.render import BaselineSpec, ConfigFragments
-from otterdog_e2e.otterdog.runner import CliResult, OtterdogCli
-from otterdog_e2e.otterdog.workspace import ConfigWorkspace
-from otterdog_e2e.scenarios.offline import (
+from otterdog_acceptance.otterdog.output import normalize_text
+from otterdog_acceptance.otterdog.render import BaselineSpec, ConfigFragments
+from otterdog_acceptance.otterdog.runner import CliResult, OtterdogCli
+from otterdog_acceptance.otterdog.workspace import ConfigWorkspace
+from otterdog_acceptance.scenarios.offline import (
     OFFLINE_DEFAULT_PLAN,
     OFFLINE_MARKER,
     OFFLINE_PROFILE,

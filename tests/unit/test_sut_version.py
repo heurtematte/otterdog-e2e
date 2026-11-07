@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from otterdog_e2e.sut.version import (
+from otterdog_acceptance.sut.version import (
     bump_version,
     compute_version,
     image_version,
@@ -137,7 +137,7 @@ def test_version_key_orders_like_pep440() -> None:
 def test_predates_compares_releases() -> None:
     """predates: release parts only (a dev, pre-release or local build counts as its release); None when a side is
     missing or not a version."""
-    from otterdog_e2e.sut.version import predates
+    from otterdog_acceptance.sut.version import predates
 
     assert predates("1.6.1", "1.7.0") is True
     assert predates("1.7.0.dev15+e2e.g9bdeb75", "1.7.0") is False
@@ -162,7 +162,7 @@ def test_predates_compares_releases() -> None:
     ],
 )
 def test_release_error_accepts_x_y_z_only(text: str, error: str | None) -> None:
-    from otterdog_e2e.sut.version import release_error
+    from otterdog_acceptance.sut.version import release_error
 
     if error is None:
         assert release_error(text) is None

@@ -24,14 +24,14 @@ from typing import Protocol
 
 import pytest
 
-from otterdog_e2e.context import get_context
-from otterdog_e2e.otterdog.output import normalize_text
-from otterdog_e2e.otterdog.runner import CliResult
-from otterdog_e2e.scenarios.collect import collect_scenarios, generate_scenario_tests
-from otterdog_e2e.scenarios.engine import StepOutcome
-from otterdog_e2e.scenarios.model import Scenario
-from otterdog_e2e.scenarios.offline import OfflineEngine, offline_run_context
-from otterdog_e2e.sut.template import PUBLISHED_TEMPLATE_FILE
+from otterdog_acceptance.context import get_context
+from otterdog_acceptance.otterdog.output import normalize_text
+from otterdog_acceptance.otterdog.runner import CliResult
+from otterdog_acceptance.scenarios.collect import collect_scenarios, generate_scenario_tests
+from otterdog_acceptance.scenarios.engine import StepOutcome
+from otterdog_acceptance.scenarios.model import Scenario
+from otterdog_acceptance.scenarios.offline import OfflineEngine, offline_run_context
+from otterdog_acceptance.sut.template import PUBLISHED_TEMPLATE_FILE
 
 # eclipse-csi/otterdog#790 "fix: validate required status checks of rulesets" (squash commit on main)
 FIX_790 = "9bdeb75f3e82a6cbd107d6bc3c9ec90392475c08"

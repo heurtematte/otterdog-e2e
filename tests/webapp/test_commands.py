@@ -28,14 +28,14 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from otterdog_e2e.config_repo import MARKERS, comment_contains, normalize_comment
-from otterdog_e2e.webhooks.payloads import issue_comment_payload
+from otterdog_acceptance.config_repo import MARKERS, comment_contains, normalize_comment
+from otterdog_acceptance.webhooks.payloads import issue_comment_payload
 
 if TYPE_CHECKING:
     from conftest import WebappScenario
-    from otterdog_e2e.config_repo import ConfigPr
-    from otterdog_e2e.github.mutate import Mutator
-    from otterdog_e2e.webhooks.injector import WebhookInjector
+    from otterdog_acceptance.config_repo import ConfigPr
+    from otterdog_acceptance.github.mutate import Mutator
+    from otterdog_acceptance.webhooks.injector import WebhookInjector
 
 pytestmark = [pytest.mark.webapp]
 
@@ -291,7 +291,7 @@ def test_sync_check_crash(webapp_scenario: WebappScenario) -> None:
     failure description must not claim detected out-of-sync changes (KB-040)."""
     s = webapp_scenario
     broken = s.render(repositories=[s.patch(s.harmless_repo, s.schema_error())])
-    s.flow.reset_main(broken, message=f"otterdog-e2e {s.run_ctx.run_id}: {s.sid} main raises while it loads")
+    s.flow.reset_main(broken, message=f"otterdog-acceptance {s.run_ctx.run_id}: {s.sid} main raises while it loads")
     opened_at = s.now()
     pr = s.open_pr(s.harmless_text())
 
@@ -331,7 +331,7 @@ def test_sync_check_of_an_invalid_main(webapp_scenario: WebappScenario) -> None:
     s, texts = webapp_scenario, webapp_scenario.texts
     invalid = s.run_repo("invalid-topic")
     main = s.render(repositories=[s.new_repo(invalid, s.describe("invalid topic, never applied"), s.invalid_topic())])
-    s.flow.reset_main(main, message=f"otterdog-e2e {s.run_ctx.run_id}: {s.sid} main fails validation")
+    s.flow.reset_main(main, message=f"otterdog-acceptance {s.run_ctx.run_id}: {s.sid} main fails validation")
     pr = s.open_pr(s.harmless_text())  # valid head: removes the invalid repository again, changes a description
 
     status = s.wait_validation(pr)

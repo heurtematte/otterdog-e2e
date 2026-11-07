@@ -11,10 +11,10 @@ from typing import Any
 import pytest
 from click.testing import CliRunner
 
-from otterdog_e2e import cli
-from otterdog_e2e.cli import doctor as cli_doctor
-from otterdog_e2e.settings import AppCredentials, Target
-from otterdog_e2e.testing.fakes import (
+from otterdog_acceptance import cli
+from otterdog_acceptance.cli import doctor as cli_doctor
+from otterdog_acceptance.settings import AppCredentials, Target
+from otterdog_acceptance.testing.fakes import (
     FAKE_LOGINS,
     FAKE_MARKER,
     FAKE_ORG,
@@ -27,7 +27,7 @@ from otterdog_e2e.testing.fakes import (
     make_target,
     make_verified_org,
 )
-from otterdog_e2e.webui.gate import GATE_DIR, LoginGate
+from otterdog_acceptance.webui.gate import GATE_DIR, LoginGate
 
 SEED = "JBSWY3DPEHPK3PXP"
 
@@ -72,20 +72,22 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
     """Doctor collaborators replaced by fakes (only the admin identity is configured)."""
     world = World(tmp_path)
     credentials = AppCredentials("1", "-----BEGIN PRIVATE KEY-----\nx\n-----END PRIVATE KEY-----", "hook-secret", None)
-    monkeypatch.setattr("otterdog_e2e.settings.harness_settings", lambda environ=None: make_settings(tmp_path))
-    monkeypatch.setattr("otterdog_e2e.settings.load_env_files", lambda *a, **k: [])
-    monkeypatch.setattr("otterdog_e2e.settings.load_target", lambda *a, **k: world.target)
-    monkeypatch.setattr("otterdog_e2e.settings.resolve_identities", lambda *a, **k: make_identities("admin"))
-    monkeypatch.setattr("otterdog_e2e.settings.resolve_app_credentials", lambda *a, **k: credentials)
-    monkeypatch.setattr("otterdog_e2e.github.http.GitHubHttp", world.http)
-    monkeypatch.setattr("otterdog_e2e.onboard.accounts.load_accounts_config", lambda environ: None)
-    monkeypatch.setattr("otterdog_e2e.safety.check_identity_isolation", lambda *a, **k: None)
+    monkeypatch.setattr("otterdog_acceptance.settings.harness_settings", lambda environ=None: make_settings(tmp_path))
+    monkeypatch.setattr("otterdog_acceptance.settings.load_env_files", lambda *a, **k: [])
+    monkeypatch.setattr("otterdog_acceptance.settings.load_target", lambda *a, **k: world.target)
+    monkeypatch.setattr("otterdog_acceptance.settings.resolve_identities", lambda *a, **k: make_identities("admin"))
+    monkeypatch.setattr("otterdog_acceptance.settings.resolve_app_credentials", lambda *a, **k: credentials)
+    monkeypatch.setattr("otterdog_acceptance.github.http.GitHubHttp", world.http)
+    monkeypatch.setattr("otterdog_acceptance.onboard.accounts.load_accounts_config", lambda environ: None)
+    monkeypatch.setattr("otterdog_acceptance.safety.check_identity_isolation", lambda *a, **k: None)
     org_json = {**default_org_json(), "description": f"{FAKE_MARKER} test org"}
-    monkeypatch.setattr("otterdog_e2e.safety.verify_target", lambda *a, **k: make_verified_org(org_json=org_json))
-    monkeypatch.setattr("otterdog_e2e.github.oracle.Oracle", lambda http, org: world.oracle)
-    monkeypatch.setattr("otterdog_e2e.github.app.AppAuth", lambda creds, **kw: world.app)
-    monkeypatch.setattr("otterdog_e2e.sut.image.docker_available", lambda: True)
-    monkeypatch.setattr("otterdog_e2e.procs.unshare_available", lambda: True)
+    monkeypatch.setattr(
+        "otterdog_acceptance.safety.verify_target", lambda *a, **k: make_verified_org(org_json=org_json)
+    )
+    monkeypatch.setattr("otterdog_acceptance.github.oracle.Oracle", lambda http, org: world.oracle)
+    monkeypatch.setattr("otterdog_acceptance.github.app.AppAuth", lambda creds, **kw: world.app)
+    monkeypatch.setattr("otterdog_acceptance.sut.image.docker_available", lambda: True)
+    monkeypatch.setattr("otterdog_acceptance.procs.unshare_available", lambda: True)
     for name in ("CI", "GITHUB_ACTIONS", "E2E_ADMIN_PASSWORD", "E2E_ADMIN_TOTP_SEED", "E2E_ADMIN_USERNAME"):
         monkeypatch.delenv(name, raising=False)
     return world

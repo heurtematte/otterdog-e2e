@@ -43,17 +43,17 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from otterdog_e2e import waiting
-from otterdog_e2e.config_repo import DeliveryTimeoutError, ReactionTimeoutError, comment_contains
-from otterdog_e2e.otterdog.render import ConfigFragments
-from otterdog_e2e.webapp.api import parse_html
+from otterdog_acceptance import waiting
+from otterdog_acceptance.config_repo import DeliveryTimeoutError, ReactionTimeoutError, comment_contains
+from otterdog_acceptance.otterdog.render import ConfigFragments
+from otterdog_acceptance.webapp.api import parse_html
 
 if TYPE_CHECKING:
     from conftest import WebappScenario
-    from otterdog_e2e.context import E2EContext
-    from otterdog_e2e.github.mutate import Mutator
-    from otterdog_e2e.webapp.stack import ExternalWebapp, WebappStack
-    from otterdog_e2e.webhooks.relay import DeliveryRelay, RelayedDelivery
+    from otterdog_acceptance.context import E2EContext
+    from otterdog_acceptance.github.mutate import Mutator
+    from otterdog_acceptance.webapp.stack import ExternalWebapp, WebappStack
+    from otterdog_acceptance.webhooks.relay import DeliveryRelay, RelayedDelivery
 
 pytestmark = [pytest.mark.webapp]
 
@@ -226,7 +226,9 @@ def test_init_imports_existing_pull_requests(
             mutator.create_branch(s.repo, base, main)
             mutator.create_branch(s.repo, head, main)
             note = f"e2e-{s.run_ctx.run_id}-{s.slug}.md"  # not a configuration file: no guard needed
-            mutator.commit_files(s.repo, head, {note: s.describe("PR against another base")}, "otterdog-e2e: note")
+            mutator.commit_files(
+                s.repo, head, {note: s.describe("PR against another base")}, "otterdog-acceptance: note"
+            )
             pull = mutator.create_pull(
                 s.repo, head=head, base=base, title=f"e2e {s.run_ctx.run_id} {s.sid} other base", body=s.describe("x")
             )

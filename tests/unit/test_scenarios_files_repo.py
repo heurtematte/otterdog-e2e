@@ -5,7 +5,7 @@ every live scenario is therefore manifested (jsonnet on the vendored template co
 organization-level object and repository beyond the baseline must carry this run's prefix and every webhook URL must
 lie under the run's hook base, wherever it was written (inline, fragment file, library, overlay). The shared files are
 all used (by a scenario or a documented inject recipe) and each recipe renders and manifests for the offline
-organization (the offline tier validates them with otterdog: scenario lint and ``otterdog-e2e inject``).
+organization (the offline tier validates them with otterdog: scenario lint and ``otterdog-acceptance inject``).
 """
 
 from __future__ import annotations
@@ -19,16 +19,16 @@ from typing import Any
 
 import pytest
 
-from otterdog_e2e import procs
-from otterdog_e2e.inject import InjectRequest, write_adhoc_scenario
-from otterdog_e2e.naming import extract_run_id, new_run_context
-from otterdog_e2e.otterdog.render import OrgConfigRenderer, build_baseline, org_profile
-from otterdog_e2e.scenarios.collect import collect_scenarios
-from otterdog_e2e.scenarios.model import Scenario, load_adhoc_scenario, render_step
-from otterdog_e2e.scenarios.offline import OFFLINE_ORG, OfflineEngine, offline_run_context
-from otterdog_e2e.settings import IDENTITY_ROLES
-from otterdog_e2e.sut.template import offline_template
-from otterdog_e2e.testing.fakes import FAKE_MARKER, FAKE_ORG, FakeCli, default_org_json, make_target
+from otterdog_acceptance import procs
+from otterdog_acceptance.inject import InjectRequest, write_adhoc_scenario
+from otterdog_acceptance.naming import extract_run_id, new_run_context
+from otterdog_acceptance.otterdog.render import OrgConfigRenderer, build_baseline, org_profile
+from otterdog_acceptance.scenarios.collect import collect_scenarios
+from otterdog_acceptance.scenarios.model import Scenario, load_adhoc_scenario, render_step
+from otterdog_acceptance.scenarios.offline import OFFLINE_ORG, OfflineEngine, offline_run_context
+from otterdog_acceptance.settings import IDENTITY_ROLES
+from otterdog_acceptance.sut.template import offline_template
+from otterdog_acceptance.testing.fakes import FAKE_MARKER, FAKE_ORG, FakeCli, default_org_json, make_target
 
 ROOT = Path(__file__).resolve().parents[2]
 SCENARIOS = ROOT / "scenarios"
@@ -194,7 +194,7 @@ def test_inject_recipes_render_for_the_offline_organization(recipe: str, tmp_pat
     names = [item["name"] for key in ("repositories", "variables") for item in org.get(key, [])]
     assert names and all(extract_run_id(name) == run.run_id for name in names)
     if recipe == "overlay":
-        assert org["repositories"][0]["topics"] == ["otterdog-e2e", "e2e-overlay"]
+        assert org["repositories"][0]["topics"] == ["otterdog-acceptance", "e2e-overlay"]
     if recipe == "environment":
         (environment,) = org["repositories"][0]["environments"]
         assert (environment["wait_timer"], environment["branch_policies"]) == (5, ["main"])

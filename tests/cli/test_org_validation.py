@@ -19,18 +19,18 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from otterdog_e2e import waiting
-from otterdog_e2e.otterdog.output import normalize_text
-from otterdog_e2e.otterdog.render import ConfigFragments
+from otterdog_acceptance import waiting
+from otterdog_acceptance.otterdog.output import normalize_text
+from otterdog_acceptance.otterdog.render import ConfigFragments
 
 if TYPE_CHECKING:
-    from otterdog_e2e.context import E2EContext
-    from otterdog_e2e.github.mutate import Mutator
-    from otterdog_e2e.github.oracle import Oracle
-    from otterdog_e2e.naming import RunContext
-    from otterdog_e2e.otterdog.baseline import BaselineManager
-    from otterdog_e2e.otterdog.render import OrgConfigRenderer
-    from otterdog_e2e.otterdog.runner import CliResult, OtterdogCli
+    from otterdog_acceptance.context import E2EContext
+    from otterdog_acceptance.github.mutate import Mutator
+    from otterdog_acceptance.github.oracle import Oracle
+    from otterdog_acceptance.naming import RunContext
+    from otterdog_acceptance.otterdog.baseline import BaselineManager
+    from otterdog_acceptance.otterdog.render import OrgConfigRenderer
+    from otterdog_acceptance.otterdog.runner import CliResult, OtterdogCli
 
 DESCRIPTION = "otterdog e2e: code scanning languages"
 DETECTION_TIMEOUT = 360.0  # GitHub's language detection runs after the push, usually within a minute

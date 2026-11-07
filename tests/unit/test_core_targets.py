@@ -12,10 +12,10 @@ from typing import Any
 import pytest
 import yaml
 
-from otterdog_e2e import settings
-from otterdog_e2e.redact import Redactor
-from otterdog_e2e.safety import SafetyError
-from otterdog_e2e.settings import (
+from otterdog_acceptance import settings
+from otterdog_acceptance.redact import Redactor
+from otterdog_acceptance.safety import SafetyError
+from otterdog_acceptance.settings import (
     HarnessSettings,
     Identity,
     Target,

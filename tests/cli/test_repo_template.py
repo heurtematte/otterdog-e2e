@@ -24,18 +24,18 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from otterdog_e2e import waiting
-from otterdog_e2e.scenarios.model import load_scenario
+from otterdog_acceptance import waiting
+from otterdog_acceptance.scenarios.model import load_scenario
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from otterdog_e2e.github.mutate import Mutator
-    from otterdog_e2e.github.oracle import Oracle
-    from otterdog_e2e.naming import RunContext
-    from otterdog_e2e.scenarios.engine import ScenarioEngine
-    from otterdog_e2e.scenarios.model import Scenario
-    from otterdog_e2e.settings import Target
+    from otterdog_acceptance.github.mutate import Mutator
+    from otterdog_acceptance.github.oracle import Oracle
+    from otterdog_acceptance.naming import RunContext
+    from otterdog_acceptance.scenarios.engine import ScenarioEngine
+    from otterdog_acceptance.scenarios.model import Scenario
+    from otterdog_acceptance.settings import Target
 
 pytestmark = [pytest.mark.tags("repo")]
 
@@ -45,7 +45,7 @@ GENERATED_SLUG = "tpl-gen"
 CONTENT_TIMEOUT = 120.0
 CONTENT_INTERVAL = 5.0
 # mustache tags rendered by otterdog for the files listed in post_process_template_content (chevron: org, repo)
-README_TEMPLATE = "# {{repo}}\n\nGenerated from an otterdog-e2e template repository in {{org}}.\n"
+README_TEMPLATE = "# {{repo}}\n\nGenerated from an otterdog-acceptance template repository in {{org}}.\n"
 NOTICE_TEMPLATE = "{{repo}} is not post-processed: this tag stays as it is.\n"
 
 SCENARIO_YAML = """\
@@ -159,7 +159,7 @@ def test_repository_from_template(
             lambda: oracle.default_branch(template), timeout=60.0, interval=5.0, what=f"default branch of {template}"
         )
         files = {"README.md": README_TEMPLATE, "NOTICE.md": NOTICE_TEMPLATE}
-        mutator.commit_files(template, branch, files, "otterdog-e2e: template content with mustache tags")
+        mutator.commit_files(template, branch, files, "otterdog-acceptance: template content with mustache tags")
         waiting.wait_until(
             lambda: oracle.file_content(template, "NOTICE.md") == NOTICE_TEMPLATE,
             timeout=CONTENT_TIMEOUT,
@@ -169,7 +169,7 @@ def test_repository_from_template(
 
     def check_generated_contents() -> None:
         """README.md of the generated repository is rendered for it, NOTICE.md (not listed) keeps its tag."""
-        rendered = f"# {generated}\n\nGenerated from an otterdog-e2e template repository in {target.org}.\n"
+        rendered = f"# {generated}\n\nGenerated from an otterdog-acceptance template repository in {target.org}.\n"
         readme = waiting.poll(
             lambda: oracle.file_content(generated, "README.md"),
             until=lambda content: content == rendered,

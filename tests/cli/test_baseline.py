@@ -15,10 +15,10 @@ from typing import TYPE_CHECKING
 import pytest
 
 if TYPE_CHECKING:
-    from otterdog_e2e.otterdog.baseline import BaselineManager
-    from otterdog_e2e.otterdog.runner import OtterdogCli
-    from otterdog_e2e.otterdog.workspace import ConfigWorkspace
-    from otterdog_e2e.settings import Target
+    from otterdog_acceptance.otterdog.baseline import BaselineManager
+    from otterdog_acceptance.otterdog.runner import OtterdogCli
+    from otterdog_acceptance.otterdog.workspace import ConfigWorkspace
+    from otterdog_acceptance.settings import Target
 
 pytestmark = [pytest.mark.scenario("cli.baseline"), pytest.mark.tags("smoke", "cli", "org-settings")]
 

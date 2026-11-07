@@ -49,8 +49,8 @@ BRANCH = "main"
 UPSTREAM = "https://github.com/eclipse-csi/otterdog"
 SCENARIOS_DIR = "scenarios"
 TESTS_DIR = "tests"
-CHECKS = "src/otterdog_e2e/scenarios/checks.py"
-ORACLE = "src/otterdog_e2e/github/oracle.py"
+CHECKS = "src/otterdog_acceptance/scenarios/checks.py"
+ORACLE = "src/otterdog_acceptance/github/oracle.py"
 COVERAGE = "scenarios/coverage.yaml"
 KNOWN_BUGS = "scenarios/known_bugs.yaml"
 KNOWN_ISSUES = "known-issues.md"
@@ -78,7 +78,7 @@ TIERS = (
         "offline",
         "Offline scenarios",
         "tests/offline/test_scenarios.py",
-        "src/otterdog_e2e/scenarios/offline.py",
+        "src/otterdog_acceptance/scenarios/offline.py",
         "the SUT only: no organization, no credential, no network",
         "The otterdog CLI of the SUT runs against the minimal organization `e2e-offline` (plan `free` unless the "
         "scenario's `variables.plan` says otherwise), with the SUT's template vendored and the network blocked. "
@@ -91,7 +91,7 @@ TIERS = (
         "cli",
         "Live CLI scenarios",
         "tests/cli/test_scenarios.py",
-        "src/otterdog_e2e/scenarios/engine.py",
+        "src/otterdog_acceptance/scenarios/engine.py",
         "a target organization (`TARGET`) and its admin identity",
         "One pytest item per scenario, on the target organization. Each step writes the organization's baseline plus "
         "its fragments, runs `validate` (when given), `plan`, `apply` (when the plan expects changes), checks the "
@@ -105,7 +105,7 @@ TIERS = (
         "enterprise",
         "Enterprise scenarios",
         "tests/enterprise/test_scenarios.py",
-        "src/otterdog_e2e/scenarios/engine.py",
+        "src/otterdog_acceptance/scenarios/engine.py",
         "a target organization with plan `enterprise` and its admin identity",
         "Live scenarios like the [live CLI ones]({docs}scenarios/cli/index.md), for the features only GitHub "
         "Enterprise Cloud offers: they run on a target organization with plan `enterprise`.",
@@ -198,7 +198,7 @@ APPLY_EXPECT = {
 NO_LOCAL_COMMANDS = ("--version", "list-projects")
 PRIORITIES = {"P0": "P0 (pr-fast lane)", "P1": "P1 (nightly-full lane)", "P2": "P2 (when time allows)"}
 # the GitHub plans, lowest first; an offline scenario without variables.plan simulates OFFLINE_DEFAULT_PLAN of
-# src/otterdog_e2e/scenarios/offline.py (not imported: the docs workflow installs the docs group only)
+# src/otterdog_acceptance/scenarios/offline.py (not imported: the docs workflow installs the docs group only)
 PLANS = ("free", "team", "enterprise")
 OFFLINE_PLAN = "free"
 # what a scenario configures: organization objects (every fragment kind but repositories, or org_level), repositories
@@ -623,7 +623,7 @@ def features_by_item(features: Iterable[Mapping[str, Any]]) -> dict[str, list[Ma
 
 
 def check_kinds(source: str) -> dict[str, tuple[str, tuple[str, ...]]]:
-    """``CHECK_KINDS`` of src/otterdog_e2e/scenarios/checks.py: check kind -> (oracle method, parameters)."""
+    """``CHECK_KINDS`` of src/otterdog_acceptance/scenarios/checks.py: check kind -> (oracle method, parameters)."""
     target: ast.expr
     value: ast.expr | None
     for node in ast.parse(source).body:
@@ -1820,7 +1820,7 @@ def tags_index(site: Site) -> str:
         "",
         (
             f"The {len(tags)} tags of the YAML scenarios (`tags:`) and of the Python tests (`@pytest.mark.tags`): "
-            "`otterdog-e2e run --tags <tag>` selects what carries one of them. Each tag has a page listing them."
+            "`otterdog-acceptance run --tags <tag>` selects what carries one of them. Each tag has a page listing them."
         ),
         "",
         "| Tag | Scenarios | Tiers | Python tests |",
@@ -1842,7 +1842,7 @@ def tag_page(site: Site, tag: str) -> str:
         "",
         (
             f"{len(scenarios)} YAML scenarios and {len(tests)} Python tests carry the tag {code(tag)}: "
-            f"`otterdog-e2e run --tags {tag}` selects them. [Every tag]({w.rel(TAGS_INDEX)})."
+            f"`otterdog-acceptance run --tags {tag}` selects them. [Every tag]({w.rel(TAGS_INDEX)})."
         ),
         "",
     ]

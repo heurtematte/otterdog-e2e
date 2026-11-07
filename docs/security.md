@@ -1,6 +1,6 @@
 # Security
 
-otterdog-e2e gives a program that can create, change and delete GitHub resources (otterdog, possibly an unreviewed
+otterdog-acceptance gives a program that can create, change and delete GitHub resources (otterdog, possibly an unreviewed
 pull request of it) organization-owner credentials. This document describes what can go wrong, which controls the
 harness enforces, what you must set up yourself, and what to do when something went wrong.
 
@@ -158,7 +158,7 @@ key is written for a webapp stack (re-checked at every start) and for the instal
 A refusal is a `SafetyError`: webapp items fail with the reason (they are not skipped), doctor's `app:owner` row
 fails, and `setup` stops before it prints the installation link of a new or stored App (it names
 `setup --target <instance> --rotate app`). Use only the private App created in the test organization by
-`otterdog-e2e setup` or `otterdog-e2e app-manifest`.
+`otterdog-acceptance setup` or `otterdog-acceptance app-manifest`.
 
 ### Org lease and run ledger (T4)
 
@@ -219,7 +219,7 @@ Baseline resets, scenario cleanups and PR guards run with a trusted SUT (`--e2e-
 Pull requests (`pr:N@sha`) and shas not reachable from upstream main or a `v*` tag are untrusted:
 
 - they must be pinned to a full 40-hex sha that is reachable from `refs/pull/N/head`, and exactly that commit is
-  built (a push after the review does not change what runs); `otterdog-e2e pr N` without `--sha` pins the head of the
+  built (a push after the review does not change what runs); `otterdog-acceptance pr N` without `--sha` pins the head of the
   PR when it starts and prints it, which is refused in CI (the reviewed commit is passed there);
 - they are exported to a private directory and only built as a docker image (`otterdog-e2e/untrusted:<label>`,
   never reused as trusted); host installs are refused unless an operator passes `--e2e-trust-code <sha>` from an
@@ -276,7 +276,7 @@ may be a **reference** to an external vault instead of the secret, in an instanc
 | `bitwarden:<item id>@<field>` | Bitwarden (`bw`, `E2E_BITWARDEN_BIN`) | a custom field of the item, or `login.username`, `login.password`, `login.totp` (the TOTP seed), `notes` |
 
 ```bash
-# ~/.config/otterdog-e2e/acme-a.env
+# ~/.config/otterdog-acceptance/acme-a.env
 E2E_ADMIN_TOKEN=vault:otterdog-e2e/acme-a/admin/token
 E2E_APP_PRIVATE_KEY=vault:otterdog-e2e/acme-a/app/private_key
 E2E_ADMIN_TOTP_SEED=bitwarden:4f6d0c1e-8a2b-4c1d-9e7f-0a1b2c3d4e5f@login.totp
@@ -326,18 +326,18 @@ path "secret/data/otterdog-e2e/acme-a/web" { capabilities = ["deny"] }
 POLICY
 vault write auth/jwt/role/otterdog-e2e-acme-a-untrusted - <<'ROLE'
 {"role_type": "jwt", "user_claim": "repository", "bound_audiences": ["https://github.com/<owner>"],
- "bound_claims": {"repository": "<owner>/otterdog-e2e", "environment": "e2e-acme-a-untrusted"},
+ "bound_claims": {"repository": "<owner>/otterdog-acceptance", "environment": "e2e-acme-a-untrusted"},
  "token_policies": ["otterdog-e2e-acme-a-untrusted"], "token_ttl": "15m"}
 ROLE
 ```
 
 #### Reference layout
 
-`otterdog-e2e setup --store vault:<prefix>` (or `pass:<prefix>`) keeps every secret of an instance at a fixed place
+`otterdog-acceptance setup --store vault:<prefix>` (or `pass:<prefix>`) keeps every secret of an instance at a fixed place
 in the store and writes only references into the instance env file (`onboard/store.py`):
 
 ```text
-<prefix>/                     e.g. otterdog-e2e, in the KV v2 mount E2E_VAULT_MOUNT (default secret)
+<prefix>/                     e.g. otterdog-acceptance, in the KV v2 mount E2E_VAULT_MOUNT (default secret)
 └── <instance>/               one subtree per test organization: nothing is shared between instances
     ├── admin                 token                         E2E_ADMIN_TOKEN
     ├── oracle                token                         E2E_ORACLE_TOKEN
@@ -381,7 +381,7 @@ What setup does with a store:
 - the App's key (from its key file) and webhook secret move into `app`; the key file is no longer used and can be
   deleted;
 - then: bind each policy to a JWT role (above), set `E2E_VAULT_ROLE`, `E2E_VAULT_ROLE_UNTRUSTED` and
-  `E2E_VAULT_ROLE_WEBUI` in the env file, and run `otterdog-e2e ci-sync --target <instance> --apply`.
+  `E2E_VAULT_ROLE_WEBUI` in the env file, and run `otterdog-acceptance ci-sync --target <instance> --apply`.
 
 Your own Vault token needs `read`, `create` and `update` on `<mount>/data/<prefix>/<instance>/*` for setup; the CI
 roles only read. Bitwarden addresses items by id, so setup has no layout for it: create one item per role and
@@ -400,7 +400,7 @@ Credentials reach otterdog only through the variables named in the generated `ot
 
 ### Onboarding tools and multi-target runs (T1, T3, T4)
 
-`otterdog-e2e setup` and `otterdog-e2e ci-sync` ([onboarding.md](onboarding.md)) handle every credential of an
+`otterdog-acceptance setup` and `otterdog-acceptance ci-sync` ([onboarding.md](onboarding.md)) handle every credential of an
 instance; batch runs (`run`, `pr`, `doctor`, `janitor` with several targets) handle several organizations in one
 command.
 
@@ -425,10 +425,10 @@ command.
   invitation of the same run that is still pending when the role ends without a token after a token of another
   account was refused (admin token, write-scoped to the organization verified first: pin and plan). A new or stored
   App passes `safety.verify_app` before setup prints its installation link.
-- **Machine accounts in the browser** (`otterdog-e2e accounts`, `setup` with an accounts store, [onboarding.md](onboarding.md#machine-accounts-in-the-browser)):
+- **Machine accounts in the browser** (`otterdog-acceptance accounts`, `setup` with an accounts store, [onboarding.md](onboarding.md#machine-accounts-in-the-browser)):
   the only place the harness drives a browser itself, at onboarding on your machine (refused in CI), in a visible
   Firefox with one fresh context per account, signed out and dropped when the account is done. Each account's
-  password, 2FA key, recovery codes and token live in the accounts store of `~/.config/otterdog-e2e/setup.yaml`
+  password, 2FA key, recovery codes and token live in the accounts store of `~/.config/otterdog-acceptance/setup.yaml`
   (pass or Vault, ci-admin's names), outside the instance's store items that CI environments read; the env file
   refers to a pass entry, but gets the value (or a copy in the instance store) of a Vault field, since a Vault policy
   grants the whole secret, every bot's password and 2FA key included. They are written through `vaults.store`
@@ -450,8 +450,8 @@ command.
   untrusted one the required reviewers and prevent self-review).
 - **One organization per process**: env files fill the environment without overriding it, so the parent of a batch
   never loads one into its own environment. It reads each target's env files into a private copy (to validate the
-  target and register its secrets with the redactor), and every child (`python -P -m otterdog_e2e`: the working
-  directory stays off `sys.path`, so no `otterdog_e2e` package of the current directory is imported by a process
+  target and register its secrets with the redactor), and every child (`python -P -m otterdog_acceptance`: the working
+  directory stays off `sys.path`, so no `otterdog_acceptance` package of the current directory is imported by a process
   holding every credential) receives the parent's pristine environment and loads the env files of its own target;
   `doctor` checks each target with its own copy, in-process. Since an exported value wins over every env file, a
   batch of several targets refuses an exported `E2E_ORG`, `E2E_ORG_ID` or `E2E_PROFILE`, and an exported login or
@@ -528,7 +528,7 @@ therefore share a profile, for example the instances `acme-a` and `acme-b`, both
 | `e2e-<instance>-untrusted` | `e2e.yml` for untrusted SUTs (`e2e-otterdog-pr.yml`, `pr:`/untrusted `sha:` specs) | required reviewers (maintainers), prevent self-review, deployment branches: `main` only | same secrets and variables; `E2E_CONFIG_READER_TOKEN` is required for the webapp tier; never add web-UI credentials |
 | `e2e-<instance>-webui` (optional) | `e2e-webui.yml` (dispatch, nightly `webui` job when `E2E_WEB_UI_ENABLED` is `true`), trusted SUTs only | deployment branches: `main` only (required reviewers block the nightly job) | `E2E_ADMIN_TOKEN`, optionally `E2E_ORACLE_TOKEN`, and the ONLY copy of `E2E_ADMIN_PASSWORD` and `E2E_ADMIN_TOTP_SEED`; the variables of `e2e-<instance>` plus optionally `E2E_ADMIN_USERNAME`, `E2E_WEB_LOGIN_SPACING` |
 
-`otterdog-e2e ci-sync --target <instance>` prints the environments, protections, variables and secrets it would
+`otterdog-acceptance ci-sync --target <instance>` prints the environments, protections, variables and secrets it would
 create from the instance's env file, and `--apply` writes them with your own `gh` login (secret values only on stdin).
 
 Secrets (environment secrets): `E2E_ADMIN_TOKEN` (required), `E2E_ORACLE_TOKEN`, `E2E_AUTHOR_TOKEN`,
@@ -600,7 +600,7 @@ What the workflows enforce (and `tests/unit/test_workflows_static.py` checks):
 - no `${{ }}` expression inside `run:` scripts: inputs and outputs reach scripts through `env:`, always quoted, and
   are validated in bash (instance names, reserved suffixes and the `E2E_INSTANCES` allowlist, suites allowlist,
   tag/glob/`-k` character sets, `pr` and `sha` regular expressions);
-- `e2e.yml` first runs a `classify` job without secrets: it validates the instances, then `otterdog-e2e sut classify`
+- `e2e.yml` first runs a `classify` job without secrets: it validates the instances, then `otterdog-acceptance sut classify`
   decides the trust (an untrusted base SUT makes the run untrusted too) and writes, for untrusted SUTs, the PR title
   (as a code span), author, head repository, pinned sha versus head and the changed build/template files into the step
   summary, which is what the environment reviewer reads before approving;
@@ -624,7 +624,7 @@ What the workflows enforce (and `tests/unit/test_workflows_static.py` checks):
   `github-pages` environment, and only publishes the artifact of the build job.
 
 What you must configure: the two environments per instance with the protections above (and the third one for the
-web-UI lane), their secrets and variables (`otterdog-e2e ci-sync`), the repository variable `E2E_INSTANCES`, a
+web-UI lane), their secrets and variables (`otterdog-acceptance ci-sync`), the repository variable `E2E_INSTANCES`, a
 ruleset on `main` of this repository (pull request with review, no bypass), and GitHub-hosted runners only (never run
 untrusted lanes on self-hosted or persistent runners). On a GitHub-hosted runner the PR code still controls the
 container it runs in and the image it builds; the reviewer gate and the account confinement are the real controls.
@@ -672,8 +672,8 @@ organization.
    configs, defaults and fixture repositories, organization and repository webhooks not pointing to
    `https://otterdog-e2e.invalid/`, the App hook URL, the `sut-*` tags of the defaults repository and the
    `e2e-lease` ref. Check the machine accounts' own security logs for new tokens, SSH keys or OAuth grants.
-4. **Clean up**: `otterdog-e2e janitor --target <instance> --apply`, then
-   `otterdog-e2e bootstrap --target <instance> --apply` to restore the baseline; delete the affected workflow
+4. **Clean up**: `otterdog-acceptance janitor --target <instance> --apply`, then
+   `otterdog-acceptance bootstrap --target <instance> --apply` to restore the baseline; delete the affected workflow
    artifacts (Actions run page, Artifacts).
 5. **Report**: inform the maintainers of this repository; for an otterdog vulnerability follow the Eclipse Foundation
    vulnerability reporting process (https://www.eclipse.org/security/). Unsuspend the App and lift the environment

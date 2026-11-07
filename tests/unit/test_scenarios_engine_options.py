@@ -14,14 +14,14 @@ from typing import Any
 
 import pytest
 
-from otterdog_e2e.capabilities import from_plan
-from otterdog_e2e.known_bugs import KnownBug
-from otterdog_e2e.otterdog import output as od_output
-from otterdog_e2e.otterdog.output import ApplyResult, PlanObject, PlanResult, ValidationResult
-from otterdog_e2e.otterdog.render import ConfigFragments
-from otterdog_e2e.otterdog.runner import CliResult, DiffOptions
-from otterdog_e2e.safety import SafetyError
-from otterdog_e2e.scenarios.engine import (
+from otterdog_acceptance.capabilities import from_plan
+from otterdog_acceptance.known_bugs import KnownBug
+from otterdog_acceptance.otterdog import output as od_output
+from otterdog_acceptance.otterdog.output import ApplyResult, PlanObject, PlanResult, ValidationResult
+from otterdog_acceptance.otterdog.render import ConfigFragments
+from otterdog_acceptance.otterdog.runner import CliResult, DiffOptions
+from otterdog_acceptance.safety import SafetyError
+from otterdog_acceptance.scenarios.engine import (
     DifferentialRunner,
     KnownBugNotReproducedWarning,
     ScenarioEngine,
@@ -34,9 +34,9 @@ from otterdog_e2e.scenarios.engine import (
     record_phase_problems,
     step_bug,
 )
-from otterdog_e2e.scenarios.model import Scenario, StepSpec, load_scenario
-from otterdog_e2e.sut.template import offline_template
-from otterdog_e2e.testing.fakes import FakeCli, FakeOracle, FakeWorkspace, make_run_context
+from otterdog_acceptance.scenarios.model import Scenario, StepSpec, load_scenario
+from otterdog_acceptance.sut.template import offline_template
+from otterdog_acceptance.testing.fakes import FakeCli, FakeOracle, FakeWorkspace, make_run_context
 
 RUN = make_run_context()
 P = RUN.prefix
@@ -294,7 +294,7 @@ def remove(name: str) -> PlanObject:
 def test_deleting_steps_use_the_flags_of_their_plan(tmp_path: Path, step: str, match: str) -> None:
     """The model refuses an apply -d whose diff flags differ from its plan's (the guard checks that plan) and
     only_secrets with delete (a secrets-only plan hides every other removal)."""
-    from otterdog_e2e.scenarios.model import ScenarioError
+    from otterdog_acceptance.scenarios.model import ScenarioError
 
     text = f"id: g\ntitle: g\nsteps: [{{fragments: {{}}, {step[1:-1]}}}]\n"
     with pytest.raises(ScenarioError, match=match):
@@ -507,7 +507,7 @@ def test_an_unlisted_bug_affects_every_sut(tmp_path: Path) -> None:
 
 def test_infra_problems_and_harness_errors_are_never_expected() -> None:
     """record_phase_problems keeps infra problems and the errors of the phase (exceptions) as failures."""
-    from otterdog_e2e.scenarios.engine import StepOutcome
+    from otterdog_acceptance.scenarios.engine import StepOutcome
 
     outcome, step = ScenarioOutcome("s"), StepOutcome("x")
     step.errors.append("SafetyError: refusing")

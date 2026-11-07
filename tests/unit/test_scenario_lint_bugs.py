@@ -11,8 +11,8 @@ from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from typing import Any
 
-from otterdog_e2e.known_bugs import KnownBug
-from otterdog_e2e.scenarios.model import Scenario, load_scenario
+from otterdog_acceptance.known_bugs import KnownBug
+from otterdog_acceptance.scenarios.model import Scenario, load_scenario
 
 ROOT = Path(__file__).resolve().parents[2]
 LINT_MODULE = ROOT / "tests" / "offline" / "test_scenario_lint.py"
@@ -27,7 +27,7 @@ BUGS = {
 @cache
 def lint() -> ModuleType:
     """tests/offline/test_scenario_lint.py as a standalone module (test modules cannot import each other)."""
-    name = "otterdog_e2e_scenario_lint_under_test"
+    name = "otterdog_acceptance_scenario_lint_under_test"
     spec = importlib.util.spec_from_file_location(name, LINT_MODULE)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -128,7 +128,7 @@ def test_a_step_bug_that_leaves_validate_out_keeps_the_lint_strict(tmp_path: Pat
 
 def cli_result(output: str, exit_code: int = 1) -> Any:
     """A CliResult carrying ``output`` (validation parsed from it)."""
-    from otterdog_e2e.otterdog.runner import CliResult
+    from otterdog_acceptance.otterdog.runner import CliResult
 
     return CliResult(["otterdog", "validate"], exit_code, output, "", 0.1, Path("/nonexistent"))
 
@@ -153,7 +153,7 @@ def test_error_steps_need_reported_validation_errors() -> None:
 def test_team_steps_are_linted_without_their_teams(tmp_path: Path) -> None:
     """BAT-09: a step expecting to validate is linted with its teams fragments removed (team validation calls
     GitHub); a step expecting a validation error with teams, or code scanning languages, is still skipped."""
-    from otterdog_e2e.otterdog.render import ConfigFragments
+    from otterdog_acceptance.otterdog.render import ConfigFragments
 
     case = scenario(
         tmp_path,

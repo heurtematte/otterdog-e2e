@@ -22,45 +22,45 @@ steps:
       settings:
         - "name::: 'otterdog e2e {{ run }}'"
         - "blog::: 'https://example.org/otterdog-e2e/{{ run }}'"
-        - "location::: 'otterdog-e2e {{ run }}'"
-        - "company::: 'otterdog-e2e {{ run }}'"
+        - "location::: 'otterdog-acceptance {{ run }}'"
+        - "company::: 'otterdog-acceptance {{ run }}'"
     plan:
       expect: changes
       contains:
         - "~ settings {"
         - '-> "otterdog e2e {{ run }}"'
         - '-> "https://example.org/otterdog-e2e/{{ run }}"'
-        - '-> "otterdog-e2e {{ run }}"'
+        - '-> "otterdog-acceptance {{ run }}"'
     state:
       - kind: org
         match:
           name: "otterdog e2e {{ run }}"
           blog: "https://example.org/otterdog-e2e/{{ run }}"
-          location: "otterdog-e2e {{ run }}"
-          company: "otterdog-e2e {{ run }}"
+          location: "otterdog-acceptance {{ run }}"
+          company: "otterdog-acceptance {{ run }}"
 
   - name: contact
     fragments:
       settings:
         - "name::: 'otterdog e2e {{ run }}'"
         - "blog::: 'https://example.org/otterdog-e2e/{{ run }}'"
-        - "location::: 'otterdog-e2e {{ run }}'"
-        - "company::: 'otterdog-e2e {{ run }}'"
+        - "location::: 'otterdog-acceptance {{ run }}'"
+        - "company::: 'otterdog-acceptance {{ run }}'"
         - "email::: 'otterdog-e2e-{{ run }}@example.org'"
-        - "twitter_username::: 'otterdog_e2e'"
+        - "twitter_username::: 'otterdog_acceptance'"
     plan:
       expect: changes
       contains:
         - "~ settings {"
         - '-> "otterdog-e2e-{{ run }}@example.org"'
-        - '-> "otterdog_e2e"'
+        - '-> "otterdog_acceptance"'
       not_contains:
         - '-> "https://example.org/otterdog-e2e/{{ run }}"'
     state:
       - kind: org
         match:
           email: "otterdog-e2e-{{ run }}@example.org"
-          twitter_username: otterdog_e2e
+          twitter_username: otterdog_acceptance
           blog: "https://example.org/otterdog-e2e/{{ run }}"
 
   # no fragments: layer 1 (the profile of the session start) is the expected state; the converge plan of this step
@@ -74,6 +74,6 @@ steps:
         - "~ settings {"
         - '"otterdog e2e {{ run }}"'
         - '"https://example.org/otterdog-e2e/{{ run }}"'
-        - '"otterdog-e2e {{ run }}"'
+        - '"otterdog-acceptance {{ run }}"'
         - '"otterdog-e2e-{{ run }}@example.org"'
-        - '"otterdog_e2e"'
+        - '"otterdog_acceptance"'

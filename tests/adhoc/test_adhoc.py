@@ -1,6 +1,6 @@
-"""Ad-hoc injection (``otterdog-e2e inject``): one generated scenario, run with the regular fixtures and safety.
+"""Ad-hoc injection (``otterdog-acceptance inject``): one generated scenario, run with the regular fixtures and safety.
 
-The module is skipped unless E2E_ADHOC_SCENARIO names the scenario YAML that ``otterdog-e2e inject`` wrote into the
+The module is skipped unless E2E_ADHOC_SCENARIO names the scenario YAML that ``otterdog-acceptance inject`` wrote into the
 run's scratch directory. Its files may lie anywhere (scenarios.model.load_adhoc_scenario); every content rule of the
 scenario model still applies. Offline scenarios run with the OfflineEngine of the SUT (validate --local, local-plan
 --local against the -BASE config, show --local; no network); live ones with the session's ScenarioEngine exactly like
@@ -18,17 +18,17 @@ from pathlib import Path
 
 import pytest
 
-from otterdog_e2e import inject
-from otterdog_e2e.context import describe_error, get_context
-from otterdog_e2e.scenarios.collect import scenario_params
-from otterdog_e2e.scenarios.engine import ScenarioFailedError, ScenarioOutcome
-from otterdog_e2e.scenarios.model import Scenario, load_adhoc_scenario
-from otterdog_e2e.sut.cli_install import InstalledCli
+from otterdog_acceptance import inject
+from otterdog_acceptance.context import describe_error, get_context
+from otterdog_acceptance.scenarios.collect import scenario_params
+from otterdog_acceptance.scenarios.engine import ScenarioFailedError, ScenarioOutcome
+from otterdog_acceptance.scenarios.model import Scenario, load_adhoc_scenario
+from otterdog_acceptance.sut.cli_install import InstalledCli
 
 SCENARIO_FILE = os.environ.get(inject.ADHOC_ENV, "")
 if not SCENARIO_FILE:
     pytest.skip(
-        f"{inject.ADHOC_ENV} is not set: tests/adhoc only runs the scenario written by otterdog-e2e inject",
+        f"{inject.ADHOC_ENV} is not set: tests/adhoc only runs the scenario written by otterdog-acceptance inject",
         allow_module_level=True,
     )
 

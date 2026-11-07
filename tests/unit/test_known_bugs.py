@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from otterdog_e2e.known_bugs import KnownBug, KnownBugError, bugs_for_scenario, check_references, load
+from otterdog_acceptance.known_bugs import KnownBug, KnownBugError, bugs_for_scenario, check_references, load
 
 ROOT = Path(__file__).resolve().parents[2]
 REGISTRY = ROOT / "scenarios" / "known_bugs.yaml"
@@ -172,7 +172,7 @@ def test_every_scenario_and_step_link_is_valid() -> None:
     """Scenario and step known_bug ids of every YAML scenario directory exist, bugs list existing scenarios or Python
     scenario ids of the live test tiers (tests/unit/test_yaml_cli.py checks the latter), and step-level bugs stay
     step-level."""
-    from otterdog_e2e.scenarios.collect import collect_scenarios
+    from otterdog_acceptance.scenarios.collect import collect_scenarios
 
     scenarios = [
         scenario

@@ -10,10 +10,10 @@ from typing import Any
 
 import pytest
 
-from otterdog_e2e.capabilities import Cap, from_plan
-from otterdog_e2e.context import ContextError, E2EContext, E2EOptions
-from otterdog_e2e.safety import SafetyError
-from otterdog_e2e.testing.fakes import (
+from otterdog_acceptance.capabilities import Cap, from_plan
+from otterdog_acceptance.context import ContextError, E2EContext, E2EOptions
+from otterdog_acceptance.safety import SafetyError
+from otterdog_acceptance.testing.fakes import (
     FAKE_RUN_ID,
     FakeLease,
     make_identities,
@@ -74,7 +74,7 @@ def test_web_ui_problems_of_the_context(tmp_path: Path) -> None:
 
 def test_probe_derives_web_ui(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """probe(): WEB_UI only without problems (and not when the target overrides remove it); run.json records it."""
-    monkeypatch.setattr("otterdog_e2e.capabilities.probe_capabilities", lambda *a, **k: from_plan("free"))
+    monkeypatch.setattr("otterdog_acceptance.capabilities.probe_capabilities", lambda *a, **k: from_plan("free"))
     monkeypatch.setattr(E2EContext, "check_app", lambda self: (False, "no App"))
     monkeypatch.setattr(E2EContext, "docker_available", lambda self: False)
     monkeypatch.setattr(E2EContext, "http", lambda self, name, write=False: object())
@@ -142,10 +142,10 @@ class Inner:
         self.pytester = pytester
         self.monkeypatch = monkeypatch
         self.settings = make_settings(pytester.path / "harness")
-        monkeypatch.setattr("otterdog_e2e.settings.harness_settings", lambda environ=None: self.settings)
-        monkeypatch.setattr("otterdog_e2e.redact.install_logging_filter", lambda *a: None)
-        monkeypatch.setattr("otterdog_e2e.report.build_summary", lambda directory, **kw: "# summary\n")
-        monkeypatch.setattr("otterdog_e2e.report.scrub_artifacts", lambda root, redactor=None: [])
+        monkeypatch.setattr("otterdog_acceptance.settings.harness_settings", lambda environ=None: self.settings)
+        monkeypatch.setattr("otterdog_acceptance.redact.install_logging_filter", lambda *a: None)
+        monkeypatch.setattr("otterdog_acceptance.report.build_summary", lambda directory, **kw: "# summary\n")
+        monkeypatch.setattr("otterdog_acceptance.report.scrub_artifacts", lambda root, redactor=None: [])
         for name in CLEARED:
             monkeypatch.delenv(name, raising=False)
 
@@ -216,7 +216,7 @@ def test_allow_flag_and_its_environment_fallback(inner: Inner, monkeypatch: pyte
     """--e2e-allow-web-ui, or E2E_ALLOW_WEB_UI=1/true, sets E2EOptions.allow_web_ui."""
     inner.pytester.makepyfile(
         test_flag=(
-            "from otterdog_e2e.context import E2EOptions\n\n"
+            "from otterdog_acceptance.context import E2EOptions\n\n"
             "def test_flag(pytestconfig):\n"
             "    print('ALLOW', E2EOptions.from_config(pytestconfig).allow_web_ui)\n"
         )

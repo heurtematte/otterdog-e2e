@@ -1,4 +1,4 @@
-"""``otterdog-e2e ci-sync`` (onboard.cisync.CiSync): the names the workflows read per environment, the dry run (names
+"""``otterdog-acceptance ci-sync`` (onboard.cisync.CiSync): the names the workflows read per environment, the dry run (names
 only), the gh command sequence of --apply with secrets on stdin only, the repository variables, and the refusals."""
 
 from __future__ import annotations
@@ -13,8 +13,8 @@ from typing import Any
 import pytest
 from click.testing import CliRunner
 
-from otterdog_e2e import cli, procs
-from otterdog_e2e.onboard.cisync import (
+from otterdog_acceptance import cli, procs
+from otterdog_acceptance.onboard.cisync import (
     TRUSTED,
     UNTRUSTED,
     WEBUI,
@@ -23,11 +23,11 @@ from otterdog_e2e.onboard.cisync import (
     environment_kinds,
     workflow_names,
 )
-from otterdog_e2e.procs import CompletedProcess
-from otterdog_e2e.vaults import VaultError
+from otterdog_acceptance.procs import CompletedProcess
+from otterdog_acceptance.vaults import VaultError
 
 ROOT = Path(__file__).resolve().parents[2]
-REPO = "acme/otterdog-e2e"
+REPO = "acme/otterdog-acceptance"
 SECRETS = {
     "E2E_ADMIN_TOKEN": "tokadmin_1111111111111111",
     "E2E_AUTHOR_TOKEN": "tokauthor_3333333333333333",
@@ -182,7 +182,7 @@ def home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 def write_env(home: Path, *, web: bool, extra: str = "") -> Path:
     """The instance env file of org2 (secrets, variables, App key file)."""
-    directory = home / ".config" / "otterdog-e2e"
+    directory = home / ".config" / "otterdog-acceptance"
     (directory / "org2").mkdir(parents=True, exist_ok=True)
     key = directory / "org2" / "app-4242.private-key.pem"
     key.write_text(PEM)
@@ -287,7 +287,7 @@ def test_dry_run_prints_names_never_values_and_writes_nothing(home: Path, projec
     operations = sync.run(apply=False)
     output = "\n".join(echoed)
     assert not gh.writes()
-    assert f"ci-sync of instance org2 ({home}/.config/otterdog-e2e/org2.env) -> {REPO} (dry run)" in output
+    assert f"ci-sync of instance org2 ({home}/.config/otterdog-acceptance/org2.env) -> {REPO} (dry run)" in output
     assert "environment e2e-org2: deployment branches: main only" in output
     assert "environment e2e-org2-untrusted: deployment branches: main only, required reviewers maintainer" in output
     assert "secret E2E_ADMIN_TOKEN in e2e-org2-untrusted (value on stdin)" in output
@@ -539,7 +539,7 @@ def test_repository_variables(
 
 def test_an_instance_dispatchable_through_the_fallback_needs_no_variable(home: Path, project: Path) -> None:
     """Instance free without E2E_INSTANCES: already allowed by the default list, nothing created."""
-    directory = home / ".config" / "otterdog-e2e"
+    directory = home / ".config" / "otterdog-acceptance"
     shutil.copy(directory / "org2.env", directory / "free.env")
     gh = Gh()
     echoed: list[str] = []
@@ -551,7 +551,7 @@ def test_an_instance_dispatchable_through_the_fallback_needs_no_variable(home: P
 def test_nightly_of_a_default_instance_keeps_the_allowlist_and_the_nightly_default(home: Path, project: Path) -> None:
     """``ci-sync --target team --nightly`` without E2E_INSTANCES and E2E_TARGETS: E2E_INSTANCES is created from the
     default instances first (else the new E2E_TARGETS would become the allowlist), E2E_TARGETS from ["free"] + team."""
-    directory = home / ".config" / "otterdog-e2e"
+    directory = home / ".config" / "otterdog-acceptance"
     shutil.copy(directory / "org2.env", directory / "team.env")
     gh = Gh()
     echoed: list[str] = []
@@ -609,9 +609,9 @@ def test_a_variable_holding_a_secret_is_refused(home: Path, project: Path) -> No
 def test_missing_instance_values_are_refused(home: Path, project: Path, tmp_path: Path) -> None:
     """No env file, no org, no profile: run setup first."""
     sync, _ = make_sync(tmp_path / "nobody", project, Gh())
-    with pytest.raises(CiSyncError, match="does not exist: run `otterdog-e2e setup --target org2` first"):
+    with pytest.raises(CiSyncError, match="does not exist: run `otterdog-acceptance setup --target org2` first"):
         sync.run(apply=False)
-    path = home / ".config" / "otterdog-e2e" / "org2.env"
+    path = home / ".config" / "otterdog-acceptance" / "org2.env"
     path.write_text("E2E_ORG=x\n")
     with pytest.raises(CiSyncError, match="lacks E2E_ORG_ID"):
         make_sync(home, project, Gh())[0].run(apply=False)
@@ -622,7 +622,7 @@ def test_missing_instance_values_are_refused(home: Path, project: Path, tmp_path
 
 def test_an_instance_named_after_a_yml_profile_defaults_its_profile(home: Path, project: Path) -> None:
     """No E2E_PROFILE: targets/<instance>.yml counts like .yaml (settings.TARGET_FILE_SUFFIXES)."""
-    path = home / ".config" / "otterdog-e2e" / "org2.env"
+    path = home / ".config" / "otterdog-acceptance" / "org2.env"
     lines = [line for line in path.read_text().splitlines() if not line.startswith("E2E_PROFILE=")]
     path.write_text("\n".join(lines) + "\n")
     shutil.copy(project / "targets" / "free.yaml", project / "targets" / "org2.yml")
@@ -693,9 +693,9 @@ def test_cli_ci_sync_dry_run(home: Path, project: Path, monkeypatch: pytest.Monk
     """``ci-sync --target org2``: dry run through procs (faked), exit 0, names only."""
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.setattr(
-        "otterdog_e2e.settings.harness_settings", lambda environ=None: type("S", (), {"project_root": project})()
+        "otterdog_acceptance.settings.harness_settings", lambda environ=None: type("S", (), {"project_root": project})()
     )
-    monkeypatch.setattr("otterdog_e2e.redact.install_logging_filter", lambda *args: None)
+    monkeypatch.setattr("otterdog_acceptance.redact.install_logging_filter", lambda *args: None)
     gh = Gh()
     monkeypatch.setattr(procs, "run", lambda argv, **kwargs: gh(list(argv)[1:], kwargs.get("input")))
     result = CliRunner().invoke(cli.main, ["ci-sync", "--target", "org2"])
@@ -712,11 +712,11 @@ def test_cli_ci_sync_dry_run(home: Path, project: Path, monkeypatch: pytest.Monk
 def test_cli_ci_sync_errors(home: Path, project: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """A list of targets is a usage error; CI is a one-line error."""
     monkeypatch.setenv("HOME", str(home))
-    monkeypatch.setattr("otterdog_e2e.redact.install_logging_filter", lambda *args: None)
+    monkeypatch.setattr("otterdog_acceptance.redact.install_logging_filter", lambda *args: None)
     result = CliRunner().invoke(cli.main, ["ci-sync", "--target", "a,b"])
     assert result.exit_code == 2 and "take one instance" in result.output
     monkeypatch.setattr(
-        "otterdog_e2e.settings.harness_settings", lambda environ=None: type("S", (), {"project_root": project})()
+        "otterdog_acceptance.settings.harness_settings", lambda environ=None: type("S", (), {"project_root": project})()
     )
     monkeypatch.setenv("CI", "true")
     result = CliRunner().invoke(cli.main, ["ci-sync", "--target", "org2", "--apply"])
@@ -746,7 +746,7 @@ def vault(monkeypatch: pytest.MonkeyPatch) -> dict[str, str]:
             raise VaultError(f"{value}: not found")
         return REFERENCES[value]
 
-    monkeypatch.setattr("otterdog_e2e.onboard.cisync.resolve", resolve)
+    monkeypatch.setattr("otterdog_acceptance.onboard.cisync.resolve", resolve)
     return REFERENCES
 
 

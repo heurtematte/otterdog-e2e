@@ -20,21 +20,21 @@ from typing import TYPE_CHECKING, Any, TypeVar
 
 import pytest
 
-from otterdog_e2e import waiting
-from otterdog_e2e.config_repo import DeliveryTimeoutError, ReactionTimeoutError
-from otterdog_e2e.otterdog.output import UNKNOWN_PROPERTIES_RE
-from otterdog_e2e.otterdog.render import ConfigFragments
-from otterdog_e2e.redact import REDACTOR
-from otterdog_e2e.scenarios.collect import TIER_TIMEOUTS
+from otterdog_acceptance import waiting
+from otterdog_acceptance.config_repo import DeliveryTimeoutError, ReactionTimeoutError
+from otterdog_acceptance.otterdog.output import UNKNOWN_PROPERTIES_RE
+from otterdog_acceptance.otterdog.render import ConfigFragments
+from otterdog_acceptance.redact import REDACTOR
+from otterdog_acceptance.scenarios.collect import TIER_TIMEOUTS
 
 if TYPE_CHECKING:
-    from otterdog_e2e.context import E2EContext
-    from otterdog_e2e.otterdog.baseline import BaselineManager
-    from otterdog_e2e.otterdog.output import ApplyResult
-    from otterdog_e2e.otterdog.render import OrgConfigRenderer
-    from otterdog_e2e.otterdog.runner import CliResult
-    from otterdog_e2e.settings import Target
-    from otterdog_e2e.webapp.api import WebappApi
+    from otterdog_acceptance.context import E2EContext
+    from otterdog_acceptance.otterdog.baseline import BaselineManager
+    from otterdog_acceptance.otterdog.output import ApplyResult
+    from otterdog_acceptance.otterdog.render import OrgConfigRenderer
+    from otterdog_acceptance.otterdog.runner import CliResult
+    from otterdog_acceptance.settings import Target
+    from otterdog_acceptance.webapp.api import WebappApi
 
 T = TypeVar("T")
 
@@ -44,7 +44,7 @@ TASK_TIMEOUT = 120.0  # webapp task of a forwarded delivery
 STATE_TIMEOUT = 120.0  # live state after an otterdog apply
 HOOK_DELIVERY_TIMEOUT = 300.0  # GitHub logs hook deliveries (even to the never-resolving HOOK_HOST) within minutes
 CONVERGE_TIMEOUT = 150.0
-PR_BODY = "Opened by the otterdog-e2e harness (scenario {scenario}, run {run}); the harness closes it."
+PR_BODY = "Opened by the otterdog-acceptance harness (scenario {scenario}, run {run}); the harness closes it."
 
 
 @pytest.hookimpl(tryfirst=True)

@@ -11,14 +11,14 @@ from typing import Any
 
 import pytest
 
-from otterdog_e2e.known_bugs import KnownBug
-from otterdog_e2e.otterdog import output as od_output
-from otterdog_e2e.otterdog.output import PlanObject, PlanResult, ValidationResult
-from otterdog_e2e.otterdog.render import BaselineSpec, ConfigFragments, RenderError
-from otterdog_e2e.otterdog.runner import CliResult, DiffOptions
-from otterdog_e2e.otterdog.workspace import WorkspaceLayout
-from otterdog_e2e.scenarios.model import Scenario, load_scenario, render_step
-from otterdog_e2e.scenarios.offline import (
+from otterdog_acceptance.known_bugs import KnownBug
+from otterdog_acceptance.otterdog import output as od_output
+from otterdog_acceptance.otterdog.output import PlanObject, PlanResult, ValidationResult
+from otterdog_acceptance.otterdog.render import BaselineSpec, ConfigFragments, RenderError
+from otterdog_acceptance.otterdog.runner import CliResult, DiffOptions
+from otterdog_acceptance.otterdog.workspace import WorkspaceLayout
+from otterdog_acceptance.scenarios.model import Scenario, load_scenario, render_step
+from otterdog_acceptance.scenarios.offline import (
     OFFLINE_MARKER,
     OFFLINE_ORG,
     OFFLINE_PROFILE,
@@ -26,9 +26,9 @@ from otterdog_e2e.scenarios.offline import (
     OfflineEngine,
     offline_run_context,
 )
-from otterdog_e2e.sut import template as sut_template
-from otterdog_e2e.sut.template import offline_template
-from otterdog_e2e.testing.fakes import FakeCli, FakeWorkspace
+from otterdog_acceptance.sut import template as sut_template
+from otterdog_acceptance.sut.template import offline_template
+from otterdog_acceptance.testing.fakes import FakeCli, FakeWorkspace
 
 RUN = offline_run_context()
 
@@ -359,13 +359,13 @@ def test_render_step_keeps_the_offline_rules(tmp_path: Path) -> None:
 # --- the real OtterdogCli --------------------------------------------------------------------------------------------
 def test_layout_config_file_reaches_the_real_cli(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """With the jsonnet layout the real CLI gets ``-c <root>/otterdog.jsonnet``; the file exists on disk."""
-    from otterdog_e2e import procs
-    from otterdog_e2e.otterdog import runner as runner_module
-    from otterdog_e2e.otterdog.runner import OtterdogCli
-    from otterdog_e2e.otterdog.workspace import ConfigWorkspace
-    from otterdog_e2e.settings import HarnessSettings
-    from otterdog_e2e.sut.cli_install import InstalledCli
-    from otterdog_e2e.sut.spec import ResolvedSut, SutSpec
+    from otterdog_acceptance import procs
+    from otterdog_acceptance.otterdog import runner as runner_module
+    from otterdog_acceptance.otterdog.runner import OtterdogCli
+    from otterdog_acceptance.otterdog.workspace import ConfigWorkspace
+    from otterdog_acceptance.settings import HarnessSettings
+    from otterdog_acceptance.sut.cli_install import InstalledCli
+    from otterdog_acceptance.sut.spec import ResolvedSut, SutSpec
 
     seen: list[list[str]] = []
 

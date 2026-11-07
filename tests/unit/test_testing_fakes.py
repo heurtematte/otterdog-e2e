@@ -1,4 +1,4 @@
-"""The fakes of otterdog_e2e.testing.fakes mirror the real interfaces and behave as documented."""
+"""The fakes of otterdog_acceptance.testing.fakes mirror the real interfaces and behave as documented."""
 
 from __future__ import annotations
 
@@ -8,15 +8,15 @@ from pathlib import Path
 
 import pytest
 
-from otterdog_e2e import naming
-from otterdog_e2e.github.app import AppAuth
-from otterdog_e2e.github.http import GitHubError, GitHubHttp
-from otterdog_e2e.github.mutate import Mutator
-from otterdog_e2e.github.oracle import Oracle
-from otterdog_e2e.otterdog.runner import OtterdogCli
-from otterdog_e2e.safety import SafetyError
-from otterdog_e2e.scenarios.checks import CHECK_KINDS, LIST_KINDS
-from otterdog_e2e.testing.fakes import (
+from otterdog_acceptance import naming
+from otterdog_acceptance.github.app import AppAuth
+from otterdog_acceptance.github.http import GitHubError, GitHubHttp
+from otterdog_acceptance.github.mutate import Mutator
+from otterdog_acceptance.github.oracle import Oracle
+from otterdog_acceptance.otterdog.runner import OtterdogCli
+from otterdog_acceptance.safety import SafetyError
+from otterdog_acceptance.scenarios.checks import CHECK_KINDS, LIST_KINDS
+from otterdog_acceptance.testing.fakes import (
     FAKE_ORG,
     FAKE_RUN_ID,
     FakeAppAuth,
@@ -309,7 +309,7 @@ def test_fake_app_auth_deliveries() -> None:
 
 def test_fake_app_tokens_look_real_and_are_redacted() -> None:
     """Fake JWTs and installation tokens have real token shapes, so redaction applies to them."""
-    from otterdog_e2e.redact import Redactor
+    from otterdog_acceptance.redact import Redactor
 
     app = FakeAppAuth()
     redactor = Redactor()

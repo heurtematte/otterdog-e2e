@@ -1,15 +1,15 @@
 # Onboarding a test organization
 
-`otterdog-e2e setup` onboards one test organization interactively: it checks the organization, asks the token of
+`otterdog-acceptance setup` onboards one test organization interactively: it checks the organization, asks the token of
 every role through prefilled creation URLs, stores the web-UI login, creates the GitHub App, then offers `bootstrap`
-and `doctor`. `otterdog-e2e ci-sync` then creates the CI environments of the organization with your own `gh` login.
+and `doctor`. `otterdog-acceptance ci-sync` then creates the CI environments of the organization with your own `gh` login.
 What GitHub does not let a program do stays manual, but guided: the harness prints the exact URL, then polls until the
 step is done ([What cannot be automated](#what-cannot-be-automated)).
 
 Vocabulary used below (details in [Instances and profiles](#instances-and-profiles)):
 
 - an **instance** is one test organization: `--target <instance>` everywhere, its env file
-  `~/.config/otterdog-e2e/<instance>.env`, its CI environments `e2e-<instance>`, `e2e-<instance>-untrusted` and
+  `~/.config/otterdog-acceptance/<instance>.env`, its CI environments `e2e-<instance>`, `e2e-<instance>-untrusted` and
   `e2e-<instance>-webui`;
 - a **profile** is a target file `targets/<profile>.yaml` (`free`, `team`, `enterprise`) holding no org-specific
   value; `E2E_PROFILE` in the env file binds an instance to its profile.
@@ -34,11 +34,11 @@ By hand, before `setup` (no API can do these, see [What cannot be automated](#wh
 Then, from the repository root (`make init` done, `OTTERDOG_CONFIG_ROOT` unset):
 
 ```bash
-.venv/bin/otterdog-e2e setup --target acme-a --profile free    # org, tokens, web login, App, then bootstrap and doctor
-.venv/bin/otterdog-e2e bootstrap --target acme-a --apply --wait # only when you declined it in setup
-.venv/bin/otterdog-e2e doctor --target acme-a                   # every row OK (WARN rows say what will be skipped)
-.venv/bin/otterdog-e2e ci-sync --target acme-a                  # dry run: the environments, variables and secrets
-.venv/bin/otterdog-e2e ci-sync --target acme-a --apply          # writes them with your gh login
+.venv/bin/otterdog-acceptance setup --target acme-a --profile free    # org, tokens, web login, App, then bootstrap and doctor
+.venv/bin/otterdog-acceptance bootstrap --target acme-a --apply --wait # only when you declined it in setup
+.venv/bin/otterdog-acceptance doctor --target acme-a                   # every row OK (WARN rows say what will be skipped)
+.venv/bin/otterdog-acceptance ci-sync --target acme-a                  # dry run: the environments, variables and secrets
+.venv/bin/otterdog-acceptance ci-sync --target acme-a --apply          # writes them with your gh login
 make cli TARGET=acme-a                                          # first live run, locally
 gh workflow run e2e.yml -f target=acme-a -f sut=release:latest  # first run in CI
 ```
@@ -60,7 +60,7 @@ settings is faster: `setup --target acme-b --from acme-a` ([A second organizatio
 
 ## What setup asks and writes
 
-`setup` writes every validated answer to `~/.config/otterdog-e2e/<instance>.env` at once: an interrupted run (Ctrl-C,
+`setup` writes every validated answer to `~/.config/otterdog-acceptance/<instance>.env` at once: an interrupted run (Ctrl-C,
 a closed terminal) keeps its progress, and the next run continues where it stopped. It reads and writes only that
 file (not `.env.e2e.<instance>` nor `.env.e2e`), and is refused when `CI` or `GITHUB_ACTIONS` is set.
 
@@ -106,13 +106,13 @@ vault access, checks the value like a typed token and writes the reference, neve
 
 ### Machine accounts in the browser
 
-Instead of clicking each token yourself, `otterdog-e2e accounts` signs in to github.com as each machine account in a
+Instead of clicking each token yourself, `otterdog-acceptance accounts` signs in to github.com as each machine account in a
 visible Firefox window, enrolls two-factor authentication (authenticator app) when the account has none and creates
 the role's **classic** token (its scopes, the note of the prefilled URL, no expiration; `accounts --expires-in` 7,
 30, 60 or 90 days for one), in the way of the scripts of [eclipse-cbi/ci-admin](https://github.com/eclipse-cbi/ci-admin/tree/master/github/playwright).
 
 Where the secrets of the accounts are is the `accounts` section of the setup configuration file
-`~/.config/otterdog-e2e/setup.yaml` (another file: `E2E_SETUP_CONFIG` or `accounts --config`), one file for every
+`~/.config/otterdog-acceptance/setup.yaml` (another file: `E2E_SETUP_CONFIG` or `accounts --config`), one file for every
 instance:
 
 ```yaml
@@ -146,9 +146,9 @@ instance `free` has `pass:bots/technology.csi/github.com/otterdog-e2e-free-admin
 
 ```bash
 make init                                                   # once: Playwright (extra browser) and its Firefox
-.venv/bin/otterdog-e2e accounts --target free               # every role whose account is in the store
-.venv/bin/otterdog-e2e accounts --target free --role admin --rotate --expires-in 90
-.venv/bin/otterdog-e2e setup --target free                  # finds the tokens in the store and checks them
+.venv/bin/otterdog-acceptance accounts --target free               # every role whose account is in the store
+.venv/bin/otterdog-acceptance accounts --target free --role admin --rotate --expires-in 90
+.venv/bin/otterdog-acceptance setup --target free                  # finds the tokens in the store and checks them
 ```
 
 `pass` runs with `PASSWORD_STORE_DIR` and nothing else: ci-admin's `~/.cbi/config` is never read. Export it in your
@@ -195,7 +195,7 @@ account. Only [GitHub Support](https://support.github.com/contact) lifts the fla
 of the role's token, else of its token in the accounts store, else the declared one, else the name of its entries
 in the store), whether it exists (a token answers, or its profile is public) and whether GitHub flagged it (WARN).
 It checks them even before the organization exists (the target does not load yet). A hidden profile without a token
-is flagged or not created: `otterdog-e2e web-login <account>` tells (a flagged account sees a banner).
+is flagged or not created: `otterdog-acceptance web-login <account>` tells (a flagged account sees a banner).
 
 What stays yours: creating the accounts (GitHub's terms), a captcha, and the verification code GitHub e-mails when
 an account signs in from a new device (typed in the terminal, or in the window). When a page is not what the
@@ -209,20 +209,20 @@ as GitHub shows it. Refused in CI.
 
 On GNOME 46 (Ubuntu 24.04), Playwright's Firefox aborts at start (`GLib-GIO-ERROR ... does not contain a key named
 'antialiasing'`): GNOME moved its font keys to a deprecated schema where Firefox does not look. The harness gives
-Firefox a schema directory with those keys back (`~/.cache/otterdog-e2e/gsettings-schemas`, through
+Firefox a schema directory with those keys back (`~/.cache/otterdog-acceptance/gsettings-schemas`, through
 `GSETTINGS_SCHEMA_DIR`, compiled with `glib-compile-schemas`); the system's schemas stay untouched. When Firefox still
 does not start, the error names its last line of output.
 
 ### Signing in as an account
 
-`otterdog-e2e web-login` opens the same visible Firefox signed in as one account, like `otterdog web-login`, to look
+`otterdog-acceptance web-login` opens the same visible Firefox signed in as one account, like `otterdog web-login`, to look
 at what a run did or to finish something by hand; Enter in the terminal signs the account out and closes the window:
 
 ```bash
-otterdog-e2e web-login otterdog-e2e-free-admin                # an account of the accounts store, by its entries' name
-otterdog-e2e web-login --target acme                          # the admin of an instance, on the organization's page
-otterdog-e2e web-login --target acme --role author --url /orgs/acme/teams
-otterdog-e2e web-login some-bot                               # an account the store does not know: password typed
+otterdog-acceptance web-login otterdog-e2e-free-admin                # an account of the accounts store, by its entries' name
+otterdog-acceptance web-login --target acme                          # the admin of an instance, on the organization's page
+otterdog-acceptance web-login --target acme --role author --url /orgs/acme/teams
+otterdog-acceptance web-login some-bot                               # an account the store does not know: password typed
 ```
 
 `ACCOUNT` (or `--login`) is the name its entries start with in the accounts store (`otterdog-e2e-free-admin` for the
@@ -242,7 +242,7 @@ holds references only:
 
 ```bash
 vault login                                                   # your token: read, create, update on the instance's paths
-otterdog-e2e setup --target acme-a --store vault:otterdog-e2e # or --store pass:otterdog-e2e
+otterdog-acceptance setup --target acme-a --store vault:otterdog-e2e # or --store pass:otterdog-e2e
 ```
 
 A secret already at its place is used without a prompt, a typed one is written there once it passed its checks, and
@@ -292,7 +292,7 @@ token's login, kind and scopes passed, right before the isolation check that nee
 organization is the validated test organization of another instance: an organization id N of the instance `x`
 qualifies when
 
-- `~/.config/otterdog-e2e/<x>.env` pins `E2E_ORG` and `E2E_ORG_ID=N` and holds `E2E_ADMIN_LOGIN` and
+- `~/.config/otterdog-acceptance/<x>.env` pins `E2E_ORG` and `E2E_ORG_ID=N` and holds `E2E_ADMIN_LOGIN` and
   `E2E_ADMIN_TOKEN` (setup writes them only after the admin's owner check: a setup of `x` interrupted earlier does not
   qualify),
 - the target of `x` loads with these values (the denylist of production organizations included),
@@ -313,9 +313,9 @@ Run `setup --target <instance>` again at any time. Stored tokens are checked aga
 token that fails is asked again (for an optional role you may also remove it). `--rotate` replaces valid values:
 
 ```bash
-.venv/bin/otterdog-e2e setup --target acme-a --rotate admin --rotate author   # new tokens (regenerating them works too)
-.venv/bin/otterdog-e2e setup --target acme-a --rotate web                     # a new password or TOTP setup key
-.venv/bin/otterdog-e2e setup --target acme-a --rotate app                     # registers a NEW App: delete the old one
+.venv/bin/otterdog-acceptance setup --target acme-a --rotate admin --rotate author   # new tokens (regenerating them works too)
+.venv/bin/otterdog-acceptance setup --target acme-a --rotate web                     # a new password or TOTP setup key
+.venv/bin/otterdog-acceptance setup --target acme-a --rotate app                     # registers a NEW App: delete the old one
 ```
 
 The org is pinned: `--org` naming another organization than the stored `E2E_ORG`, or an `E2E_ORG_ID` that no longer
@@ -331,7 +331,7 @@ status contexts, the webapp workers, `E2E_APP_WEBHOOK_URL`, `E2E_MIN_RATE_REMAIN
 `E2E_WEB_LOGIN_SPACING`.
 
 ```bash
-.venv/bin/otterdog-e2e setup --target acme-b --from acme-a
+.venv/bin/otterdog-acceptance setup --target acme-b --from acme-a
 make setup TARGET=acme-b FROM=acme-a
 ```
 
@@ -351,7 +351,7 @@ at once, each its share ([architecture](architecture.md#organizations-and-shards
 | `repos` | `otterdog-e2e-repos` | free | repository settings, branch protection, teams, import |
 | `automation` | `otterdog-e2e-automation` | free | environments, secrets, variables, workflows, webhooks, custom properties, otterdog's other commands (the default shard) |
 
-They share one set of machine accounts: `set:` in the accounts section of `~/.config/otterdog-e2e/setup.yaml` gives
+They share one set of machine accounts: `set:` in the accounts section of `~/.config/otterdog-acceptance/setup.yaml` gives
 every instance the accounts of that set (classic tokens, which work in every organization they are members of):
 
 ```yaml
@@ -384,12 +384,12 @@ With the accounts store, setup also does in Firefox, after a confirmation each, 
 author and approver accept their invitation and make their membership public, the admin confirms the App of the
 manifest and installs it. A step whose page is not what the automation expects stops there and leaves the window open
 to finish by hand; setup's wait (`bootstrap --wait`, the installation poll) then sees it done either way. Each instance
-set up joins the list `~/.config/otterdog-e2e/lists/shards`:
+set up joins the list `~/.config/otterdog-acceptance/lists/shards`:
 
 ```bash
-otterdog-e2e setup --shards             # every shard, in the order of scenarios/shards.yaml
-otterdog-e2e shards                     # what each shard runs, and the instance that selects it
-otterdog-e2e run --target @shards --suite cli,webhooks,webapp,enterprise --parallel 5
+otterdog-acceptance setup --shards             # every shard, in the order of scenarios/shards.yaml
+otterdog-acceptance shards                     # what each shard runs, and the instance that selects it
+otterdog-acceptance run --target @shards --suite cli,webhooks,webapp,enterprise --parallel 5
 ```
 
 `setup --target <instance> --shard <name>` sets up one instance for a shard (the existing `free` organization can
@@ -408,14 +408,14 @@ The webapp and webhooks tiers need a GitHub App owned by the test organization (
 3. The manifest flow: setup listens on `http://127.0.0.1:8765/` (`--port`) and prints that URL; open it in a browser
    signed in as an organization owner (the admin account) and confirm the App on GitHub. GitHub redirects back with a
    code, which setup exchanges at once (the listener waits 10 minutes for the redirect).
-4. The credentials land in `~/.config/otterdog-e2e/<instance>/` (mode 0700): `app-<id>.private-key.pem`,
+4. The credentials land in `~/.config/otterdog-acceptance/<instance>/` (mode 0700): `app-<id>.private-key.pem`,
    `app-<id>.webhook-secret` and `app-<id>.env` (mode 0600). Setup writes `E2E_APP_ID`, `E2E_APP_SLUG`,
    `E2E_APP_PRIVATE_KEY_FILE` and `E2E_APP_WEBHOOK_SECRET` into the instance env file itself (and removes an inline
    `E2E_APP_PRIVATE_KEY` of a former App).
 5. The installation: setup first verifies the App, a new one or the one stored (`safety.verify_app`, as before
    every webapp start: `GET /app` names the test organization as owner, every installation is on a test
    organization). An App that fails gets no installation link: setup stops with the reason and the command that
-   registers a new App, `otterdog-e2e setup --target <instance> --rotate app`. Otherwise it prints
+   registers a new App, `otterdog-acceptance setup --target <instance> --rotate app`. Otherwise it prints
    `https://github.com/apps/<slug>/installations/new/permissions?target_id=<org id>` (the organization preselected).
    Install the App for **All repositories**; setup polls `GET /orgs/{org}/installation` with the App's JWT every 10 s,
    up to `--wait-timeout`, then checks the installation (all repositories, permissions, events, not suspended).
@@ -426,7 +426,7 @@ On a timeout nothing is lost: install the App, then run `setup` (or `bootstrap -
 kept on re-runs (setup verifies it again and only waits for its installation); `--rotate app` registers a new one.
 
 When the browser cannot reach the local listener (a remote machine), use
-`otterdog-e2e app-manifest --target <instance> --webhook-url <url>` and its `--exchange <code>` fallback
+`otterdog-acceptance app-manifest --target <instance> --webhook-url <url>` and its `--exchange <code>` fallback
 ([github-app.md](github-app.md#creating-the-app)), add the printed lines to the env file, then run setup again.
 
 ## The web login step
@@ -446,7 +446,7 @@ a run passes `--allow-web-ui`.
 
 ## CI: ci-sync
 
-`otterdog-e2e ci-sync --target <instance>` creates the GitHub environments of an instance and sets their variables and
+`otterdog-acceptance ci-sync --target <instance>` creates the GitHub environments of an instance and sets their variables and
 secrets from its env file.
 
 | Environment | Managed | Protection set by ci-sync | Values |
@@ -458,7 +458,7 @@ secrets from its env file.
 - **Names**: the `${{ vars.X }}` and `${{ secrets.X }}` that the steps of the workflow jobs running in each kind of
   environment read (`.github/workflows/*.yml`), always plus `E2E_PROFILE`. Repository variables (`E2E_INSTANCES`,
   `E2E_TARGETS`, `E2E_WEB_UI_ENABLED`, `E2E_WEB_UI_TARGETS`) and `GITHUB_TOKEN` are never copied into an environment.
-- **Values**: from `~/.config/otterdog-e2e/<instance>.env` only; the secret `E2E_APP_PRIVATE_KEY` is the content of
+- **Values**: from `~/.config/otterdog-acceptance/<instance>.env` only; the secret `E2E_APP_PRIVATE_KEY` is the content of
   `E2E_APP_PRIVATE_KEY_FILE`; `E2E_PROFILE` of an instance named after a profile is that name. A name without a value
   is skipped and listed. A variable whose name looks like a secret, or whose value holds a secret or a line break, is
   refused.
@@ -497,10 +497,10 @@ secrets from its env file.
   `CI` or `GITHUB_ACTIONS` is set.
 
 ```bash
-.venv/bin/otterdog-e2e ci-sync --target acme-a                                        # dry run
-.venv/bin/otterdog-e2e ci-sync --target acme-a --reviewer alice --reviewer bob --apply
-.venv/bin/otterdog-e2e ci-sync --target acme-a --nightly --apply                      # also nightly and janitor
-.venv/bin/otterdog-e2e ci-sync --target acme-a --prune-branch-policies                # dry run: "would delete"
+.venv/bin/otterdog-acceptance ci-sync --target acme-a                                        # dry run
+.venv/bin/otterdog-acceptance ci-sync --target acme-a --reviewer alice --reviewer bob --apply
+.venv/bin/otterdog-acceptance ci-sync --target acme-a --nightly --apply                      # also nightly and janitor
+.venv/bin/otterdog-acceptance ci-sync --target acme-a --prune-branch-policies                # dry run: "would delete"
 ```
 
 When you are the only required reviewer and self-review is prevented, you cannot approve the untrusted runs you
@@ -521,27 +521,27 @@ An **instance** is one test organization. `--target <value>` resolves to an inst
 |---|---|---|
 | a path (`targets/free.yaml`, anything with `/` or a `.yaml`/`.yml` suffix) | the file name without suffix | the same |
 | a name with a file `targets/<name>.yaml` (`free`, `team`, `enterprise`) | the name | the name (an `E2E_PROFILE` naming another profile is refused as ambiguous) |
-| any other name (`acme-a`) | the name | `E2E_PROFILE`, read from the instance's env files; without it the error tells you to run `otterdog-e2e setup --target acme-a` or to add `E2E_PROFILE=<profile>` to `~/.config/otterdog-e2e/acme-a.env` |
+| any other name (`acme-a`) | the name | `E2E_PROFILE`, read from the instance's env files; without it the error tells you to run `otterdog-acceptance setup --target acme-a` or to add `E2E_PROFILE=<profile>` to `~/.config/otterdog-acceptance/acme-a.env` |
 
 Instance names: lower-case letters, digits and `-`, at most 39 characters, starting with a letter or a digit
 (`^[a-z0-9][a-z0-9-]{0,38}$`), never ending with `-untrusted` or `-webui` (the suffixes of its CI environments), and
-not `lists` (the directory `~/.config/otterdog-e2e/lists/` holds the target lists). The
+not `lists` (the directory `~/.config/otterdog-acceptance/lists/` holds the target lists). The
 env files of an instance, first value wins and the process environment wins over all of them:
-`~/.config/otterdog-e2e/<instance>.env`, `.env.e2e.<instance>`, `.env.e2e`.
+`~/.config/otterdog-acceptance/<instance>.env`, `.env.e2e.<instance>`, `.env.e2e`.
 
-`otterdog-e2e targets` (`make targets`) lists the instances: every `~/.config/otterdog-e2e/<instance>.env` and every
+`otterdog-acceptance targets` (`make targets`) lists the instances: every `~/.config/otterdog-acceptance/<instance>.env` and every
 profile (an instance of its own name), with the profile, the organization and the env file, and a `problem:` line
 under an instance whose target cannot be loaded. It is read-only and contacts nothing; `--json` prints the same as
 JSON.
 
 ```text
 INSTANCE    PROFILE     ORG          ENV FILE
-acme-a      free        acme-e2e-a   /home/me/.config/otterdog-e2e/acme-a.env
+acme-a      free        acme-e2e-a   /home/me/.config/otterdog-acceptance/acme-a.env
 enterprise  enterprise  -            -
-  problem: not configured (otterdog-e2e setup --target enterprise)
-free        free        my-e2e-free  /home/me/.config/otterdog-e2e/free.env
+  problem: not configured (otterdog-acceptance setup --target enterprise)
+free        free        my-e2e-free  /home/me/.config/otterdog-acceptance/free.env
 team        team        -            -
-  problem: not configured (otterdog-e2e setup --target team)
+  problem: not configured (otterdog-acceptance setup --target team)
 ```
 
 `run.json` records the profile next to the instance (`target.profile`), and `summary.md` and `doctor` show both.
@@ -554,29 +554,29 @@ One target works as before. `run`, `pr`, `doctor` and `janitor` also accept seve
 | `--target` | Targets |
 |---|---|
 | `--target acme-a,acme-b` or `--target acme-a --target acme-b` | these instances, in order, duplicates dropped |
-| `--target @all` | every instance with an env file `~/.config/otterdog-e2e/<instance>.env` (sorted; a profile without env file is not included; a file whose name cannot be an instance, such as `acme.bak.env` or `my_org.env`, is skipped unless it is named after a profile) |
-| `--target @nightly` | the instances of the list file `~/.config/otterdog-e2e/lists/nightly`: one per line, `#` starts a comment |
+| `--target @all` | every instance with an env file `~/.config/otterdog-acceptance/<instance>.env` (sorted; a profile without env file is not included; a file whose name cannot be an instance, such as `acme.bak.env` or `my_org.env`, is skipped unless it is named after a profile) |
+| `--target @nightly` | the instances of the list file `~/.config/otterdog-acceptance/lists/nightly`: one per line, `#` starts a comment |
 
 The other commands (`bootstrap`, `relay`, `app-manifest`, `inject`, `setup`, `ci-sync`) take one target and refuse a
 list, and so does pytest's `--e2e-target` (or `E2E_TARGET`) when live tests are selected.
 
 ```bash
-install -d -m 700 ~/.config/otterdog-e2e/lists
-printf '%s\n' '# instances of my nightly runs' free acme-a > ~/.config/otterdog-e2e/lists/nightly
+install -d -m 700 ~/.config/otterdog-acceptance/lists
+printf '%s\n' '# instances of my nightly runs' free acme-a > ~/.config/otterdog-acceptance/lists/nightly
 
-.venv/bin/otterdog-e2e run --target free,acme-a --suite cli                  # one after the other
-.venv/bin/otterdog-e2e run --target @all --suite cli --parallel 2 --fail-fast
-.venv/bin/otterdog-e2e pr 792 --sha <40-hex> --target @nightly
-.venv/bin/otterdog-e2e doctor --target @all                                  # one table per instance
+.venv/bin/otterdog-acceptance run --target free,acme-a --suite cli                  # one after the other
+.venv/bin/otterdog-acceptance run --target @all --suite cli --parallel 2 --fail-fast
+.venv/bin/otterdog-acceptance pr 792 --sha <40-hex> --target @nightly
+.venv/bin/otterdog-acceptance doctor --target @all                                  # one table per instance
 make cli TARGET=free,acme-a PARALLEL=2
 make doctor TARGET=@all
 ```
 
 How several targets run:
 
-- **One child process per target** for `run`, `pr` and `janitor` (`python -P -m otterdog_e2e run --target=<instance>
+- **One child process per target** for `run`, `pr` and `janitor` (`python -P -m otterdog_acceptance run --target=<instance>
   --run-id=<id> ...`, with the same interpreter, after the `-v`/`-vv` of the batch command; `-P` keeps the working
-  directory off `sys.path`, so an `otterdog_e2e` package in the current directory, such as the `src/` of another
+  directory off `sys.path`, so an `otterdog_acceptance` package in the current directory, such as the `src/` of another
   checkout, is never imported). An env file fills the environment without overriding it, so two
   organizations in one process would mix their values: the parent never loads an env file into its own environment,
   every child gets the parent's environment unchanged (plus its webapp port, below) and loads the env files of its

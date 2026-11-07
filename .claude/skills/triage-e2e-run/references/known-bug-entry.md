@@ -1,6 +1,6 @@
 # Known bug entry, documentation section and upstream issue text
 
-The registry is `scenarios/known_bugs.yaml` (loaded by `src/otterdog_e2e/known_bugs.py`), mirrored by
+The registry is `scenarios/known_bugs.yaml` (loaded by `src/otterdog_acceptance/known_bugs.py`), mirrored by
 `docs/known-issues.md`; `tests/unit/test_yaml_cli.py` checks that every entry has its section with its status, a
 reproduction when confirmed, and its linked scenarios named.
 

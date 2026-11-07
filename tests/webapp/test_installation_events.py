@@ -20,12 +20,12 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from otterdog_e2e.webhooks.payloads import installation_payload
+from otterdog_acceptance.webhooks.payloads import installation_payload
 
 if TYPE_CHECKING:
     from conftest import WebappScenario
-    from otterdog_e2e.webapp.stack import ExternalWebapp, WebappStack
-    from otterdog_e2e.webhooks.injector import WebhookInjector
+    from otterdog_acceptance.webapp.stack import ExternalWebapp, WebappStack
+    from otterdog_acceptance.webhooks.injector import WebhookInjector
 
 pytestmark = [pytest.mark.webapp]
 

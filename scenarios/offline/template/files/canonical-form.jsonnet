@@ -9,7 +9,7 @@ local orgs = import '{{ import_path }}';
 
 orgs.newOrg('{{ project }}', '{{ org }}') {
   settings+: {
-    description: "otterdog-e2e offline organization",
+    description: "otterdog-acceptance offline organization",
   },
   _repositories+:: [
     orgs.newRepo('{{ p }}-canon') {

@@ -2,14 +2,14 @@
 name: fill-coverage-gap
 description: >-
   Closes a gap of the otterdog coverage matrix (scenarios/coverage.yaml): lists the gap and partial features with
-  otterdog-e2e assist coverage, picks one, follows its gap_outline to write the missing scenario or test by imitating
+  otterdog-acceptance assist coverage, picks one, follows its gap_outline to write the missing scenario or test by imitating
   the related ones, validates it, then updates the feature (status, covered_by, notes, gap_outline) and regenerates
   docs/coverage-matrix.md, never claiming coverage without an assertion that exercises the feature. Use when asked to
   fill, close or work on a coverage gap or partial feature, a feature id of the coverage matrix, or to improve the
   coverage of an area, a tier or a priority.
 license: EPL-2.0
 compatibility: >-
-  Requires the otterdog-e2e checkout with .venv (make init), unshare and docker for the offline tier, network to
+  Requires the otterdog-acceptance checkout with .venv (make init), unshare and docker for the offline tier, network to
   fetch SUTs. Features of live tiers need a test organization: their tests are written and linted here, run by the
   user.
 ---
@@ -32,8 +32,8 @@ The text after the skill name (`$ARGUMENTS` in Claude Code): a feature id (`conf
 1. **List the candidates:**
 
    ```bash
-   .venv/bin/otterdog-e2e assist coverage --status gap,partial --priority P0,P1
-   .venv/bin/otterdog-e2e assist coverage --status gap,partial --area rulesets --tier offline
+   .venv/bin/otterdog-acceptance assist coverage --status gap,partial --priority P0,P1
+   .venv/bin/otterdog-acceptance assist coverage --status gap,partial --area rulesets --tier offline
    ```
 
    The output is sorted by priority then status (bundle `artifacts/assist/coverage/coverage.md`). Prefer P0, then
@@ -54,7 +54,7 @@ The text after the skill name (`$ARGUMENTS` in Claude Code): a feature id (`conf
 2. **Open one feature:**
 
    ```bash
-   .venv/bin/otterdog-e2e assist coverage --feature config.hook.validate-team
+   .venv/bin/otterdog-acceptance assist coverage --feature config.hook.validate-team
    ```
 
    Read its `title`, `source` (otterdog paths at the matrix's ref), `operations`, `min_plan`, `tier`, `ui_only`,
@@ -74,13 +74,13 @@ The text after the skill name (`$ARGUMENTS` in Claude Code): a feature id (`conf
 5. **Validate** until clean:
 
    ```bash
-   .venv/bin/otterdog-e2e assist check scenarios/offline/variables/val-org-variables.yaml
-   .venv/bin/otterdog-e2e run --suite offline --sut release:latest --scenario O-VAL-ORGVAR   # offline items
+   .venv/bin/otterdog-acceptance assist check scenarios/offline/variables/val-org-variables.yaml
+   .venv/bin/otterdog-acceptance run --suite offline --sut release:latest --scenario O-VAL-ORGVAR   # offline items
    make lint-scenarios                                                                       # live YAML steps
    ```
 
    For a live test, stop here and give the user the exact command, e.g. `make one SCENARIO=<id> TARGET=<instance>`
-   (a Python test: `.venv/bin/otterdog-e2e run --target <instance> --suite cli -k <test name>`).
+   (a Python test: `.venv/bin/otterdog-acceptance run --target <instance> --suite cli -k <test name>`).
 6. **Update the feature** in `scenarios/coverage.yaml` ([references/coverage-rules.md](references/coverage-rules.md)):
    - `covered_by`: add the YAML scenario id or the pytest node id `tests/<tier>/<file>.py::<test>`;
    - `status`: `covered` only when every operation of the feature is exercised by an assertion AND at least one
@@ -99,7 +99,7 @@ The text after the skill name (`$ARGUMENTS` in Claude Code): a feature id (`conf
 
    ```bash
    .venv/bin/python tests/unit/test_coverage_matrix.py --write
-   .venv/bin/otterdog-e2e assist check scenarios/coverage.yaml
+   .venv/bin/otterdog-acceptance assist check scenarios/coverage.yaml
    make unit
    ```
 

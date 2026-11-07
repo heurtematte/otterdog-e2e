@@ -6,7 +6,7 @@ harness renders the configuration, runs otterdog, checks the output and the real
 Python tests (webapp, webhooks, special cases) use the same fixtures and markers.
 
 An AI agent can draft scenarios with the `write-e2e-scenario` skill, which follows this page and validates every file
-with `otterdog-e2e assist check` and the offline tier before you review it ([ai-assistance.md](ai-assistance.md)).
+with `otterdog-acceptance assist check` and the offline tier before you review it ([ai-assistance.md](ai-assistance.md)).
 
 ## Where scenarios live
 
@@ -33,8 +33,8 @@ scenarios of webhooks both live in `offline/webhooks/`) and whatever its kind: a
 next to the other scenarios of their feature. A scenario touching several areas goes into the domain whose behaviour
 it asserts, the other areas are extra tags. There is no deeper subdirectory: the jsonnet files of a domain's scenarios
 go into its `files/` directory, shared ones into `scenarios/fragments/` and `scenarios/lib/`.
-`tests/unit/test_yaml_cli.py`, `tests/unit/test_yaml_offline.py` and `otterdog-e2e assist check` enforce the layout
-(`otterdog_e2e.scenarios.model.domain_problem`). `scenarios/known_bugs.yaml` and `scenarios/coverage.yaml` are not
+`tests/unit/test_yaml_cli.py`, `tests/unit/test_yaml_offline.py` and `otterdog-acceptance assist check` enforce the layout
+(`otterdog_acceptance.scenarios.model.domain_problem`). `scenarios/known_bugs.yaml` and `scenarios/coverage.yaml` are not
 scenarios.
 
 Directories and files group scenarios by functionality, never by pull request: the otterdog PRs behind a behaviour go
@@ -129,14 +129,14 @@ make one TARGET=free SCENARIO=cli.example.repo-lifecycle
 | `steps` | list, required | | at least one step |
 | `cleanup` | `auto` \| `none` | `auto` | `none` keeps the objects (debugging only) |
 
-Capabilities are the values of `otterdog_e2e.capabilities.Cap` (see [capability-matrix.md](capability-matrix.md)):
+Capabilities are the values of `otterdog_acceptance.capabilities.Cap` (see [capability-matrix.md](capability-matrix.md)):
 `public_repos`, `private_repo_branch_protection`, `private_repo_rulesets`, `private_repo_environments`,
 `private_repo_env_protection_rules`, `private_pages`, `org_rulesets`, `otterdog_org_rulesets`, `push_rulesets`,
 `ruleset_evaluate`, `custom_org_roles`, `custom_properties`, `internal_repos`, `org_secrets_private_repos`,
 `secret_scanning_public`, `ghas_private`, `larger_runners`, `merge_queue_private`, `actions_cache_limit`, `app`,
 `docker`, `identity_author`, `identity_approver`, `identity_outsider`, `identity_config_reader`, `separate_oracle`.
 
-Tag vocabulary (also used by the PR tag selection, `otterdog_e2e.selection`): `repo`, `bpr`, `rulesets`,
+Tag vocabulary (also used by the PR tag selection, `otterdog_acceptance.selection`): `repo`, `bpr`, `rulesets`,
 `environments`, `secrets`, `variables`, `webhooks`, `teams`, `custom-properties`, `org-settings`, `workflows`,
 `org-roles`, `code-security`, `template`, `cli`, `webapp`, `webhooks-app`, `offline`, `smoke` (always selected).
 
@@ -282,7 +282,7 @@ steps:
 ```
 
 **Paths** are relative to the directory of the scenario file and must resolve, symlinks followed, inside the project
-(the directory holding otterdog-e2e's `pyproject.toml`; for a scenario outside any project, its own directory):
+(the directory holding otterdog-acceptance's `pyproject.toml`; for a scenario outside any project, its own directory):
 `../../lib/e2e.libsonnet` from `scenarios/cli/<domain>/` is fine, absolute paths and paths leaving the project are refused. Files are read once, when the scenario loads: UTF-8, not
 empty, at most 512 KiB.
 
@@ -368,7 +368,7 @@ scenarios/cli/repo/x.yaml: step 'create': overlay[0] changes the organization se
 `cli.environment` (both steps render `environment-repo.jsonnet` with their own `vars`) and `cli.neg.private-bpr`
 (`e2e.privateRepo` in an inline fragment) are the examples among the live scenarios. Every live step is validated
 offline by the scenario lint ([Linting live scenarios offline](#linting-live-scenarios-offline)), and
-`otterdog-e2e inject` tries files without writing a scenario
+`otterdog-acceptance inject` tries files without writing a scenario
 ([local-development.md](local-development.md#ad-hoc-injection)).
 
 ## Expectations
@@ -541,7 +541,7 @@ repository and refuses (403) on an archived one. `apply.api` pins the requests o
 
 `state` entries are evaluated against the independent read-only oracle (GitHub REST/GraphQL, never otterdog), retried
 every 5 s for up to 60 s (a check's own `timeout:` in seconds extends the budget, e.g. for webhook deliveries).
-`otterdog_e2e.scenarios.checks.CHECK_KINDS` is the reference: each kind names an `Oracle` method and its parameters
+`otterdog_acceptance.scenarios.checks.CHECK_KINDS` is the reference: each kind names an `Oracle` method and its parameters
 (a unit test checks that they match). Kinds marked *list* return a list and refuse `absent`.
 
 **Organization: profile, Actions, members and security**
@@ -918,7 +918,7 @@ steps:
     validate: {ok: false, exit_code: 2, contains: ["need to define a base template"]}
 ```
 
-Python tests use the same layouts (`otterdog_e2e.otterdog.workspace.WorkspaceLayout`, [Python tests](#python-tests)),
+Python tests use the same layouts (`otterdog_acceptance.otterdog.workspace.WorkspaceLayout`, [Python tests](#python-tests)),
 plus `document` (a complete configuration of their own) and the raw `invoke` API for commands without `-c`.
 
 ## Linting live scenarios offline
@@ -931,7 +931,7 @@ validate (warnings are fine, the misplaced-field warning is not). Broken jsonnet
 wrong expectations thus fail `make offline`, before any live run. Skipped with the reason: steps with teams or
 `code_scanning_default_languages` (their validation calls GitHub) and scenarios whose `fixed_in` the SUT predates;
 a mismatch in a scenario of a known bug the SUT has is an expected failure. Run only the lint with
-`otterdog-e2e run --suite offline -k lint`.
+`otterdog-acceptance run --suite offline -k lint`.
 
 ## Differential observation
 
@@ -963,7 +963,7 @@ a `step` pattern must match a step of the scenario; a change appears once per sc
 branch or sha spec; two references of one change with different `base` or `template` values are a collection error.
 Python tests pass the same list as `pytest.mark.scenario("<id>", references=[...])` (a literal or a module constant,
 no `step`). Add a reference when a PR implements, fixes or changes the behaviour (a regression references its fix):
-`otterdog-e2e run --change <n>` (or a `pr:<n>@<sha>` SUT) then selects the referencing scenarios, uses their expected
+`otterdog-acceptance run --change <n>` (or a `pr:<n>@<sha>` SUT) then selects the referencing scenarios, uses their expected
 deltas in `differential.md` and their base and template ([testing-an-otterdog-pr.md](testing-an-otterdog-pr.md)).
 
 ## Known bugs
@@ -1058,13 +1058,13 @@ reference for every rule, and a unit test fails when the committed file is stale
 with:
 
 ```bash
-.venv/bin/python -c 'import json; from otterdog_e2e.scenarios.model import json_schema; print(json.dumps(json_schema(), indent=2))' > .vscode/scenario.schema.json
+.venv/bin/python -c 'import json; from otterdog_acceptance.scenarios.model import json_schema; print(json.dumps(json_schema(), indent=2))' > .vscode/scenario.schema.json
 ```
 
 Load a file quickly with:
 
 ```bash
-.venv/bin/python -c 'import sys; from pathlib import Path; from otterdog_e2e.scenarios.model import load_scenario; print(load_scenario(Path(sys.argv[1])))' scenarios/cli/repo/repo-lifecycle.yaml
+.venv/bin/python -c 'import sys; from pathlib import Path; from otterdog_acceptance.scenarios.model import load_scenario; print(load_scenario(Path(sys.argv[1])))' scenarios/cli/repo/repo-lifecycle.yaml
 ```
 
 ## Markers and selection
@@ -1076,9 +1076,9 @@ test call only, not the session setup its fixtures trigger). With `-p no:timeout
 ignored. Select with:
 
 ```bash
-otterdog-e2e run --scenario 'cli.repo.*,cli.team.*' ...     # fnmatch globs on ids (every tier, unit included)
-otterdog-e2e run --suite offline --scenario 'O-VAL-REPO/limits'  # one offline case: <scenario id>/<step>
-otterdog-e2e run --tags repo,secrets ...                    # any of the tags; tests/unit and tests/offline are exempt
+otterdog-acceptance run --scenario 'cli.repo.*,cli.team.*' ...     # fnmatch globs on ids (every tier, unit included)
+otterdog-acceptance run --suite offline --scenario 'O-VAL-REPO/limits'  # one offline case: <scenario id>/<step>
+otterdog-acceptance run --tags repo,secrets ...                    # any of the tags; tests/unit and tests/offline are exempt
 ```
 
 Values inside one option are ORed, the two options are ANDed. `pytest -m` works on the same marks.
@@ -1110,7 +1110,7 @@ restored after), `dtrack_mock` (the Dependency-Track mock, emptied before and af
 
 import pytest
 
-from otterdog_e2e.otterdog.render import ConfigFragments
+from otterdog_acceptance.otterdog.render import ConfigFragments
 
 pytestmark = [pytest.mark.webapp, pytest.mark.tags("webapp")]
 
@@ -1138,11 +1138,11 @@ wraps every command (`validate`, `plan`, `apply`, `local_plan`, `import_config`,
 `validation()`, `plan()`, `apply()`, `assert_ok()`). Other flags and stdin go through
 `run(command, *args, org=True, input=None, local=False)` (``-c`` and the organization are added).
 
-The diff commands take `DiffOptions` (`otterdog_e2e.otterdog.runner`): `repo_filter`, `update_webhooks`,
+The diff commands take `DiffOptions` (`otterdog_acceptance.otterdog.runner`): `repo_filter`, `update_webhooks`,
 `update_secrets`, `only_secrets`, `update_filter`, `verbose`:
 
 ```python
-from otterdog_e2e.otterdog.runner import DiffOptions
+from otterdog_acceptance.otterdog.runner import DiffOptions
 
 options = DiffOptions(repo_filter=run_ctx.repo_filter(), update_secrets=True, update_filter=f"{run_ctx.const_prefix}A*")
 result = otterdog.plan_with(options)  # plan -n -r ... --update-secrets --update-filter ...
@@ -1166,7 +1166,7 @@ config = str(offline_cli.workspace.config_file.resolve())
 custom = offline_cli.invoke("validate", "-c", config, "--local", "e2e-offline", env={"E2E_CUSTOM_TOKEN": "dummy"})
 ```
 
-Workspace variants for configuration tests (`otterdog_e2e.otterdog.workspace.WorkspaceLayout`, the YAML
+Workspace variants for configuration tests (`otterdog_acceptance.otterdog.workspace.WorkspaceLayout`, the YAML
 [workspace](#workspace-variants-offline) key): `workspace.use_layout(layout)` writes the configuration of the layout
 (`format`, `orgs`, `defaults_override`, `base_url`, `config_dir`, `vendor`, and Python only `document`, a complete
 configuration written as it is); `config_file`, `org_dir`, `org_dir_for(org)`, `org_config_file_for(org, suffix=...)`
@@ -1177,7 +1177,7 @@ layouts too, e.g. `WorkspaceLayout(defaults_override={"github": {"exclude_teams"
 for otterdog's team exclusion (live otterdog clones its template, `vendor` only concerns the offline engine).
 
 ```python
-from otterdog_e2e.otterdog.workspace import WorkspaceLayout
+from otterdog_acceptance.otterdog.workspace import WorkspaceLayout
 
 ws = offline_cli.workspace
 ws.use_layout(
@@ -1191,7 +1191,7 @@ ws.use_layout(
 result = offline_cli.validate(local=True)  # exit 2: need to define a base template in your otterdog config
 ```
 
-Unit tests use the fakes of `otterdog_e2e.testing.fakes`: `FakeCli` mirrors every public `OtterdogCli` method
+Unit tests use the fakes of `otterdog_acceptance.testing.fakes`: `FakeCli` mirrors every public `OtterdogCli` method
 (results queued per command; `plan_with`/`apply_with`/`local_plan_with` calls are recorded under their command with
 `options` and its fields, `invoke` under its first argument) and `FakeWorkspace` is a `ConfigWorkspace` with the real
 paths and layouts that records its writes in memory (`writes`, `base_writes`, `documents`, `files`).
@@ -1224,6 +1224,6 @@ restore rules.
 - tags from the vocabulary; `observe: true` for offline scenarios worth comparing across SUT versions;
 - named after the behaviour; the PRs behind it in `references` (with the expected deltas they cause);
 - long or shared jsonnet in files (`scenarios/fragments/`, helpers in `scenarios/lib/`), live steps lint-clean
-  offline (`otterdog-e2e run --suite offline -k lint`);
+  offline (`otterdog-acceptance run --suite offline -k lint`);
 - run it alone first: `make one SCENARIO=<id> [TARGET=free]`, then read `artifacts/<run>/summary.md` and the `cli/`
   outputs.

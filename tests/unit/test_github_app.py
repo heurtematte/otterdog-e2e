@@ -13,12 +13,12 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from responses import matchers
 
-from otterdog_e2e.github.app import AppAuth, cursor_from_link, parse_github_time
-from otterdog_e2e.github.http import GITHUB_API
-from otterdog_e2e.redact import REDACTOR
-from otterdog_e2e.safety import SafetyError
-from otterdog_e2e.settings import AppCredentials
-from otterdog_e2e.testing.fakes import FAKE_ORG, make_verified_org
+from otterdog_acceptance.github.app import AppAuth, cursor_from_link, parse_github_time
+from otterdog_acceptance.github.http import GITHUB_API
+from otterdog_acceptance.redact import REDACTOR
+from otterdog_acceptance.safety import SafetyError
+from otterdog_acceptance.settings import AppCredentials
+from otterdog_acceptance.testing.fakes import FAKE_ORG, make_verified_org
 
 NOW = 1_900_000_000.0
 INSTALLATION_TOKEN = "ghs_" + "InstallationTokenForTests0123456789abc"
@@ -250,8 +250,8 @@ def test_installations_and_refreshed_app_feed_verify_app(
 ) -> None:
     """installations() follows every page of GET /app/installations; get_app(refresh=True) reads GET /app again;
     safety.verify_app refuses an installation on a foreign org found on page 2 (DESTR-01)."""
-    from otterdog_e2e.safety import verify_app
-    from otterdog_e2e.testing.fakes import FAKE_ORG_ID, make_target
+    from otterdog_acceptance.safety import verify_app
+    from otterdog_acceptance.testing.fakes import FAKE_ORG_ID, make_target
 
     owner = {"login": FAKE_ORG, "id": FAKE_ORG_ID, "type": "Organization"}
     api.add(responses.GET, f"{GITHUB_API}/app", json={"id": 12345, "slug": "otterdog-e2e-test", "owner": owner})

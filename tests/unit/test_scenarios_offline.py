@@ -12,18 +12,18 @@ from typing import Any
 
 import pytest
 
-from otterdog_e2e.otterdog import output as od_output
-from otterdog_e2e.otterdog.output import PlanObject, PlanResult, ValidationResult
-from otterdog_e2e.otterdog.render import ConfigFragments
-from otterdog_e2e.otterdog.runner import CliResult
-from otterdog_e2e.safety import SafetyError
-from otterdog_e2e.scenarios import offline as offline_module
-from otterdog_e2e.scenarios.engine import DifferentialRunner, SutSide
-from otterdog_e2e.scenarios.model import Scenario, load_scenario
-from otterdog_e2e.scenarios.offline import OFFLINE_ORG, OFFLINE_RUN_ID, OfflineEngine, offline_run_context
-from otterdog_e2e.sut import template as sut_template
-from otterdog_e2e.sut.template import offline_template
-from otterdog_e2e.testing.fakes import FakeCli, make_run_context
+from otterdog_acceptance.otterdog import output as od_output
+from otterdog_acceptance.otterdog.output import PlanObject, PlanResult, ValidationResult
+from otterdog_acceptance.otterdog.render import ConfigFragments
+from otterdog_acceptance.otterdog.runner import CliResult
+from otterdog_acceptance.safety import SafetyError
+from otterdog_acceptance.scenarios import offline as offline_module
+from otterdog_acceptance.scenarios.engine import DifferentialRunner, SutSide
+from otterdog_acceptance.scenarios.model import Scenario, load_scenario
+from otterdog_acceptance.scenarios.offline import OFFLINE_ORG, OFFLINE_RUN_ID, OfflineEngine, offline_run_context
+from otterdog_acceptance.sut import template as sut_template
+from otterdog_acceptance.sut.template import offline_template
+from otterdog_acceptance.testing.fakes import FakeCli, make_run_context
 
 RUN = offline_run_context()
 
@@ -456,12 +456,12 @@ REAL_OUTPUTS = {
 
 def test_offline_engine_argv_with_the_real_cli(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """validate/local-plan/show get ``-c <otterdog.json>``, ``--local`` and the org; the dummy token is the env."""
-    from otterdog_e2e import procs
-    from otterdog_e2e.otterdog.runner import OtterdogCli
-    from otterdog_e2e.otterdog.workspace import ConfigWorkspace
-    from otterdog_e2e.settings import HarnessSettings
-    from otterdog_e2e.sut.cli_install import InstalledCli
-    from otterdog_e2e.sut.spec import ResolvedSut, SutSpec
+    from otterdog_acceptance import procs
+    from otterdog_acceptance.otterdog.runner import OtterdogCli
+    from otterdog_acceptance.otterdog.workspace import ConfigWorkspace
+    from otterdog_acceptance.settings import HarnessSettings
+    from otterdog_acceptance.sut.cli_install import InstalledCli
+    from otterdog_acceptance.sut.spec import ResolvedSut, SutSpec
 
     calls: list[tuple[list[str], dict[str, str]]] = []
 

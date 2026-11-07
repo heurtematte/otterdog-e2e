@@ -1,4 +1,4 @@
-"""E2EContext (the otterdog_e2e.context package): options, lazy live session, lease, SUT roles, webapp wiring and
+"""E2EContext (the otterdog_acceptance.context package): options, lazy live session, lease, SUT roles, webapp wiring and
 isolation, reporting."""
 
 from __future__ import annotations
@@ -13,10 +13,10 @@ from typing import Any
 
 import pytest
 
-from otterdog_e2e import context as context_module
-from otterdog_e2e.capabilities import Cap, from_plan
-from otterdog_e2e.changes import ChangeError, ChangeId
-from otterdog_e2e.context import (
+from otterdog_acceptance import context as context_module
+from otterdog_acceptance.capabilities import Cap, from_plan
+from otterdog_acceptance.changes import ChangeError, ChangeId
+from otterdog_acceptance.context import (
     ContextError,
     E2EContext,
     E2EOptions,
@@ -30,16 +30,16 @@ from otterdog_e2e.context import (
     target_env_name,
     text_or_none,
 )
-from otterdog_e2e.context import core as context_core
-from otterdog_e2e.context import helpers as context_helpers
-from otterdog_e2e.context import sut as context_sut
-from otterdog_e2e.naming import new_run_context
-from otterdog_e2e.otterdog import runtime as runtime_module
-from otterdog_e2e.redact import REDACTOR
-from otterdog_e2e.safety import SafetyError
-from otterdog_e2e.settings import AppCredentials
-from otterdog_e2e.sut.template import TemplateRef, offline_template
-from otterdog_e2e.testing.fakes import (
+from otterdog_acceptance.context import core as context_core
+from otterdog_acceptance.context import helpers as context_helpers
+from otterdog_acceptance.context import sut as context_sut
+from otterdog_acceptance.naming import new_run_context
+from otterdog_acceptance.otterdog import runtime as runtime_module
+from otterdog_acceptance.redact import REDACTOR
+from otterdog_acceptance.safety import SafetyError
+from otterdog_acceptance.settings import AppCredentials
+from otterdog_acceptance.sut.template import TemplateRef, offline_template
+from otterdog_acceptance.testing.fakes import (
     FAKE_ORG,
     FAKE_RUN_ID,
     FakeAppAuth,
@@ -105,19 +105,23 @@ def live(monkeypatch: pytest.MonkeyPatch) -> LiveFakes:
         fakes.calls.append(f"lease(repo={kwargs['repo']})")
         return fakes.lease
 
-    monkeypatch.setattr("otterdog_e2e.settings.load_env_files", lambda *a, **k: fakes.calls.append("env") or [])
+    monkeypatch.setattr("otterdog_acceptance.settings.load_env_files", lambda *a, **k: fakes.calls.append("env") or [])
     monkeypatch.setattr(
-        "otterdog_e2e.settings.load_target", lambda *a, **k: fakes.calls.append("target") or make_target()
+        "otterdog_acceptance.settings.load_target", lambda *a, **k: fakes.calls.append("target") or make_target()
     )
-    monkeypatch.setattr("otterdog_e2e.settings.resolve_identities", lambda *a, **k: make_identities("admin", "author"))
-    monkeypatch.setattr("otterdog_e2e.settings.resolve_app_credentials", lambda *a, **k: None)
-    monkeypatch.setattr("otterdog_e2e.github.http.GitHubHttp", http)
-    monkeypatch.setattr("otterdog_e2e.safety.verify_target", verify)
-    monkeypatch.setattr("otterdog_e2e.capabilities.probe_capabilities", probe)
-    monkeypatch.setattr("otterdog_e2e.sut.image.docker_available", lambda: False)
-    monkeypatch.setattr("otterdog_e2e.github.lease.OrgLease", lease)
-    monkeypatch.setattr("otterdog_e2e.github.oracle.Oracle", lambda http, org: fakes.oracle)
-    monkeypatch.setattr("otterdog_e2e.github.mutate.Mutator", lambda http, verified, **k: RecordingMutator(verified))
+    monkeypatch.setattr(
+        "otterdog_acceptance.settings.resolve_identities", lambda *a, **k: make_identities("admin", "author")
+    )
+    monkeypatch.setattr("otterdog_acceptance.settings.resolve_app_credentials", lambda *a, **k: None)
+    monkeypatch.setattr("otterdog_acceptance.github.http.GitHubHttp", http)
+    monkeypatch.setattr("otterdog_acceptance.safety.verify_target", verify)
+    monkeypatch.setattr("otterdog_acceptance.capabilities.probe_capabilities", probe)
+    monkeypatch.setattr("otterdog_acceptance.sut.image.docker_available", lambda: False)
+    monkeypatch.setattr("otterdog_acceptance.github.lease.OrgLease", lease)
+    monkeypatch.setattr("otterdog_acceptance.github.oracle.Oracle", lambda http, org: fakes.oracle)
+    monkeypatch.setattr(
+        "otterdog_acceptance.github.mutate.Mutator", lambda http, verified, **k: RecordingMutator(verified)
+    )
     return fakes
 
 
@@ -155,7 +159,7 @@ def test_lease_holder_text() -> None:
 
 def test_installation_problems() -> None:
     """Selection, suspension, permission levels and events are all checked."""
-    from otterdog_e2e.appmanifest import DEFAULT_EVENTS, DEFAULT_PERMISSIONS
+    from otterdog_acceptance.appmanifest import DEFAULT_EVENTS, DEFAULT_PERMISSIONS
 
     good = {"repository_selection": "all", "suspended_at": None, "permissions": dict(DEFAULT_PERMISSIONS)}
     good["events"] = list(DEFAULT_EVENTS)
@@ -225,23 +229,23 @@ def test_start_session_writes_run_json_and_sets_home(tmp_path: Path, monkeypatch
     """start_session: log redaction installed, subprocess HOME in scratch, container names scoped to the run,
     run.json with the options."""
     installed: list[Any] = []
-    monkeypatch.setattr("otterdog_e2e.redact.install_logging_filter", lambda *a: installed.append(a))
+    monkeypatch.setattr("otterdog_acceptance.redact.install_logging_filter", lambda *a: installed.append(a))
     homes: list[Any] = []
-    monkeypatch.setattr("otterdog_e2e.procs.set_default_home", homes.append)
+    monkeypatch.setattr("otterdog_acceptance.procs.set_default_home", homes.append)
     scopes: list[Any] = []
-    monkeypatch.setattr("otterdog_e2e.otterdog.runtime.set_container_scope", scopes.append)
+    monkeypatch.setattr("otterdog_acceptance.otterdog.runtime.set_container_scope", scopes.append)
     context = new_context(tmp_path, target="free", sut="tag:v1.6.1")
     context.start_session(argv=["-q", "tests/cli"])
     assert installed and homes == [context.scratch / "home"] and scopes == [FAKE_RUN_ID]
     run = json.loads((context.artifacts_dir / "run.json").read_text())
     assert run["run_id"] == FAKE_RUN_ID and run["target"] == "free" and run["sut"] == "tag:v1.6.1"
     assert run["reset_sut"] == "release:latest" and run["argv"] == ["-q", "tests/cli"]
-    assert run["command"] is None  # set only by otterdog-e2e run|pr (E2E_INVOCATION)
+    assert run["command"] is None  # set only by otterdog-acceptance run|pr (E2E_INVOCATION)
     started = new_context(tmp_path / "cmd", run_id=OTHER_RUN)
-    started.environ = {"E2E_INVOCATION": "otterdog-e2e run --suite offline --sut release:latest"}
+    started.environ = {"E2E_INVOCATION": "otterdog-acceptance run --suite offline --sut release:latest"}
     started.start_session()
     command = json.loads((started.artifacts_dir / "run.json").read_text())["command"]
-    assert command == "otterdog-e2e run --suite offline --sut release:latest"
+    assert command == "otterdog-acceptance run --suite offline --sut release:latest"
 
 
 def test_session_close_is_registered_at_exit(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -249,8 +253,8 @@ def test_session_close_is_registered_at_exit(tmp_path: Path, monkeypatch: pytest
     registered: list[Any] = []
     monkeypatch.setattr(context_core.atexit, "register", registered.append)
     monkeypatch.setattr(context_core.atexit, "unregister", registered.remove)
-    monkeypatch.setattr("otterdog_e2e.redact.install_logging_filter", lambda *a: None)
-    monkeypatch.setattr("otterdog_e2e.report.scrub_artifacts", lambda root, redactor: [])
+    monkeypatch.setattr("otterdog_acceptance.redact.install_logging_filter", lambda *a: None)
+    monkeypatch.setattr("otterdog_acceptance.report.scrub_artifacts", lambda root, redactor: [])
     context = new_context(tmp_path)
     context.start_session()
     assert registered == [context.close] and runtime_module.container_name(1) == f"otterdog-e2e-{FAKE_RUN_ID}-0001"
@@ -262,7 +266,9 @@ def test_close_runs_finalizers_releases_lease_scrubs(tmp_path: Path, monkeypatch
     """Finalizers in reverse order (failures do not stop the others), lease released, scrub, scratch removed."""
     leak = tmp_path / "leak.txt"
     scrubbed: list[Path] = []
-    monkeypatch.setattr("otterdog_e2e.report.scrub_artifacts", lambda root, redactor: scrubbed.append(root) or [leak])
+    monkeypatch.setattr(
+        "otterdog_acceptance.report.scrub_artifacts", lambda root, redactor: scrubbed.append(root) or [leak]
+    )
     context = new_context(tmp_path)
     order: list[str] = []
     context.add_finalizer(lambda: order.append("first"))
@@ -285,7 +291,7 @@ def test_close_purges_live_http_caches_kept_across_runs(tmp_path: Path, monkeypa
     """ISO-04: live HTTP caches (pickled Authorization headers) never outlive a session: those older versions left in
     <E2E_CACHE_DIR>/http-cache are deleted at close; offline caches (dummy token) stay shared; the CLIs of the
     session keep their live caches in the run's scratch."""
-    monkeypatch.setattr("otterdog_e2e.report.scrub_artifacts", lambda root, redactor: [])
+    monkeypatch.setattr("otterdog_acceptance.report.scrub_artifacts", lambda root, redactor: [])
     context = new_context(tmp_path)
     shared = context.settings.cache_dir / "http-cache"
     for name in ("v1.6.1-admin", "v1.6.1-oracle", "v1.6.1-offline"):
@@ -293,7 +299,7 @@ def test_close_purges_live_http_caches_kept_across_runs(tmp_path: Path, monkeypa
         (shared / name / "responses.sqlite").write_text("pickled Authorization: Bearer ghp_x")
     built: list[dict[str, Any]] = []
     monkeypatch.setattr(
-        "otterdog_e2e.otterdog.runner.OtterdogCli", lambda *a, **k: built.append(k) or SimpleNamespace()
+        "otterdog_acceptance.otterdog.runner.OtterdogCli", lambda *a, **k: built.append(k) or SimpleNamespace()
     )
     context.cli(SimpleNamespace(), SimpleNamespace(), name="x", offline=True)  # type: ignore[arg-type]
     assert built[0]["http_cache_root"] == context.scratch / "http-cache"
@@ -304,7 +310,7 @@ def test_close_purges_live_http_caches_kept_across_runs(tmp_path: Path, monkeypa
 def test_close_keeps_scratch_with_keep(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """--e2e-keep keeps the scratch dir; a failing scrub is recorded."""
     monkeypatch.setattr(
-        "otterdog_e2e.report.scrub_artifacts", lambda root, redactor: (_ for _ in ()).throw(OSError("x"))
+        "otterdog_acceptance.report.scrub_artifacts", lambda root, redactor: (_ for _ in ()).throw(OSError("x"))
     )
     context = new_context(tmp_path, keep=True)
     context.close()
@@ -390,8 +396,8 @@ def test_one_session_per_run_id_and_scratch(tmp_path: Path, monkeypatch: pytest.
     """DESTR-03: a second session reusing a running session's run id on the same machine is refused at start (it would
     share, and at its end delete, the first session's scratch); a context that never started does not delete a
     scratch another session holds; the first session's close still drops it."""
-    monkeypatch.setattr("otterdog_e2e.redact.install_logging_filter", lambda *a: None)
-    monkeypatch.setattr("otterdog_e2e.report.scrub_artifacts", lambda root, redactor: [])
+    monkeypatch.setattr("otterdog_acceptance.redact.install_logging_filter", lambda *a: None)
+    monkeypatch.setattr("otterdog_acceptance.report.scrub_artifacts", lambda root, redactor: [])
     first = new_context(tmp_path)
     first.start_session()
     (first.scratch / "http-cache").mkdir()
@@ -409,7 +415,9 @@ def test_one_session_per_run_id_and_scratch(tmp_path: Path, monkeypatch: pytest.
 
 def test_a_lost_lease_stops_every_write(tmp_path: Path, live: LiveFakes, monkeypatch: pytest.MonkeyPatch) -> None:
     """DESTR-03: once the lease is lost, write clients, guarded applies and live otterdog commands are refused."""
-    monkeypatch.setattr("otterdog_e2e.otterdog.runner.OtterdogCli", lambda *a, **k: SimpleNamespace(live_check=None))
+    monkeypatch.setattr(
+        "otterdog_acceptance.otterdog.runner.OtterdogCli", lambda *a, **k: SimpleNamespace(live_check=None)
+    )
     context = new_context(tmp_path, target="free")
     context.ensure_live()
     client = context.http("admin", write=True)
@@ -496,7 +504,7 @@ def test_takeover_of_a_finished_runs_lease(tmp_path: Path, live: LiveFakes) -> N
 
 def test_takeover_of_a_live_runs_lease_is_refused(tmp_path: Path, live: LiveFakes) -> None:
     """A run that renewed its lease recently looks alive: the takeover raises LeaseBusy, nothing is held."""
-    from otterdog_e2e.github.lease import LeaseBusy
+    from otterdog_acceptance.github.lease import LeaseBusy
 
     context = new_context(tmp_path, target="free")
     context.load_target()
@@ -552,12 +560,14 @@ def suts(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
         state["images"].append(sut.label)
         return SimpleNamespace(tag=f"otterdog-e2e/untrusted:{sut.label}")
 
-    monkeypatch.setattr("otterdog_e2e.sut.spec.parse_sut_spec", lambda raw: raw)
-    monkeypatch.setattr("otterdog_e2e.sut.spec.resolve_sut", lambda spec, settings, http=None: resolved[spec])
-    monkeypatch.setattr("otterdog_e2e.sut.cli_install.install_cli", install)
-    monkeypatch.setattr("otterdog_e2e.sut.cli_install.image_cli", image_cli)
-    monkeypatch.setattr("otterdog_e2e.sut.image.build_webapp_image", build)
-    monkeypatch.setattr("otterdog_e2e.github.http.GitHubHttp", lambda token, **kw: FakeGitHubHttp(identity="anonymous"))
+    monkeypatch.setattr("otterdog_acceptance.sut.spec.parse_sut_spec", lambda raw: raw)
+    monkeypatch.setattr("otterdog_acceptance.sut.spec.resolve_sut", lambda spec, settings, http=None: resolved[spec])
+    monkeypatch.setattr("otterdog_acceptance.sut.cli_install.install_cli", install)
+    monkeypatch.setattr("otterdog_acceptance.sut.cli_install.image_cli", image_cli)
+    monkeypatch.setattr("otterdog_acceptance.sut.image.build_webapp_image", build)
+    monkeypatch.setattr(
+        "otterdog_acceptance.github.http.GitHubHttp", lambda token, **kw: FakeGitHubHttp(identity="anonymous")
+    )
     return state
 
 
@@ -656,8 +666,8 @@ def test_resolution_uses_one_anonymous_read_only_client(tmp_path: Path, monkeypa
         seen.append(http)
         return FakeResolved(spec.raw, fake_sha(spec.raw), spec.trusted)
 
-    monkeypatch.setattr("otterdog_e2e.github.http.GitHubHttp", http)
-    monkeypatch.setattr("otterdog_e2e.sut.spec.resolve_sut", resolve_sut)
+    monkeypatch.setattr("otterdog_acceptance.github.http.GitHubHttp", http)
+    monkeypatch.setattr("otterdog_acceptance.sut.spec.resolve_sut", resolve_sut)
     context = new_context(tmp_path)
     context.resolve("pr:792@" + fake_sha("pr"))
     context.resolve("release:latest")
@@ -767,10 +777,12 @@ class FakeFlow:
 def webapp_context(tmp_path: Path, live: LiveFakes, monkeypatch: pytest.MonkeyPatch) -> tuple[E2EContext, list[str]]:
     """A verified context whose stack, flow and otterdog.json writer record into one event list."""
     events: list[str] = []
-    monkeypatch.setattr("otterdog_e2e.webapp.stack.WebappStack", lambda settings, **kw: FakeStack(events))
-    monkeypatch.setattr("otterdog_e2e.webapp.stack.WebappSettings", lambda **kw: SimpleNamespace(**kw))
-    monkeypatch.setattr("otterdog_e2e.config_repo.ConfigRepoFlow", lambda **kw: FakeFlow(events, **kw))
-    monkeypatch.setattr("otterdog_e2e.otterdog.workspace.webapp_otterdog_json", lambda *a, **k: {"organizations": []})
+    monkeypatch.setattr("otterdog_acceptance.webapp.stack.WebappStack", lambda settings, **kw: FakeStack(events))
+    monkeypatch.setattr("otterdog_acceptance.webapp.stack.WebappSettings", lambda **kw: SimpleNamespace(**kw))
+    monkeypatch.setattr("otterdog_acceptance.config_repo.ConfigRepoFlow", lambda **kw: FakeFlow(events, **kw))
+    monkeypatch.setattr(
+        "otterdog_acceptance.otterdog.workspace.webapp_otterdog_json", lambda *a, **k: {"organizations": []}
+    )
     context = new_context(tmp_path, target="free")
     context.ensure_live()
     credentials = AppCredentials("1", "-----BEGIN PRIVATE KEY-----\nx\n-----END PRIVATE KEY-----", "s3cret-hook", None)
@@ -809,7 +821,7 @@ def test_start_webapp_failure_stops_the_stack(
     """A failing init brings the stack down and propagates."""
     context, events = webapp_context
     monkeypatch.setattr(
-        "otterdog_e2e.webapp.stack.WebappStack", lambda settings, **kw: FakeStack(events, fail_init=True)
+        "otterdog_acceptance.webapp.stack.WebappStack", lambda settings, **kw: FakeStack(events, fail_init=True)
     )
     with pytest.raises(RuntimeError, match="init failed"):
         context.start_webapp(FakeBaselineManager(), SimpleNamespace(url="u"))  # type: ignore[arg-type]
@@ -829,7 +841,7 @@ def test_publish_otterdog_json_is_idempotent(webapp_context: tuple[E2EContext, l
 
 def test_webapp_deployment_external_and_none(webapp_context: tuple[E2EContext, list[str]]) -> None:
     """external needs a URL; none cannot serve webapp tests."""
-    from otterdog_e2e.settings import WebappSpec
+    from otterdog_acceptance.settings import WebappSpec
 
     context, _events = webapp_context
     context.target = make_target(webapp=WebappSpec("external", "http://127.0.0.1:5000", None, "v", "s", 1, 5000))
@@ -865,7 +877,7 @@ def test_start_relay_since_ready_time(
     context.extras["webapp_ready_at"] = ready
     context._memos["app_auth"] = object()
     context._memos["installation_id"] = 4242
-    monkeypatch.setattr("otterdog_e2e.webhooks.relay.DeliveryRelay", Relay)
+    monkeypatch.setattr("otterdog_acceptance.webhooks.relay.DeliveryRelay", Relay)
     context.start_relay(FakeStack([]))  # type: ignore[arg-type]
     assert created["since"] == ready and created["installation_id"] == 4242 and created["started"]
     assert created["forward_url"].endswith("/github-webhook/receive") and created["secret"] == "s3cret-hook"
@@ -877,7 +889,7 @@ def test_webapp_deployment_refuses_an_app_reaching_other_orgs(
     """DESTR-01: the private key never reaches a WebappStack when the App is owned by another account or installed
     outside the test orgs; the check is repeated at every start (GET /app re-read)."""
     created: list[Any] = []
-    monkeypatch.setattr("otterdog_e2e.webapp.stack.WebappStack", lambda settings, **kw: created.append(settings))
+    monkeypatch.setattr("otterdog_acceptance.webapp.stack.WebappStack", lambda settings, **kw: created.append(settings))
     context, _events = webapp_context
     context.webapp_deployment()
     context.webapp_deployment()
@@ -913,7 +925,7 @@ def test_check_app_and_installation_id_verify_the_app(tmp_path: Path, live: Live
 
 def test_installation_id_preflight(tmp_path: Path, live: LiveFakes) -> None:
     """installation_id fails with the problems of an unusable installation."""
-    from otterdog_e2e.testing.fakes import FakeAppAuth
+    from otterdog_acceptance.testing.fakes import FakeAppAuth
 
     context = new_context(tmp_path, target="free")
     context.load_target()
@@ -1067,8 +1079,10 @@ def templates(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> dict[str, Any]
         ),
     }
     StubPublisher.created = []
-    monkeypatch.setattr("otterdog_e2e.sut.spec.resolve_sut", lambda spec, settings, http=None: resolved[spec.raw])
-    monkeypatch.setattr("otterdog_e2e.sut.template.TemplatePublisher", StubPublisher)
+    monkeypatch.setattr(
+        "otterdog_acceptance.sut.spec.resolve_sut", lambda spec, settings, http=None: resolved[spec.raw]
+    )
+    monkeypatch.setattr("otterdog_acceptance.sut.template.TemplatePublisher", StubPublisher)
     return resolved
 
 
@@ -1116,7 +1130,7 @@ def test_sut_trust_decisions(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
             raise RuntimeError("mirror fetch failed")
         return SimpleNamespace(trusted=trust[spec.raw])
 
-    monkeypatch.setattr("otterdog_e2e.sut.spec.resolve_sut", resolve_sut)
+    monkeypatch.setattr("otterdog_acceptance.sut.spec.resolve_sut", resolve_sut)
     assert new_context(tmp_path, sut="pr:792@" + fake_sha("pr")).sut_trusted() is False
     assert new_context(tmp_path, sut="release:latest").sut_trusted() is True
     assert calls == []
@@ -1178,11 +1192,11 @@ def test_known_bugs_and_change(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     assert context.known_bugs() == {} and context.change() is None and context.change_spec() is None
     (tmp_path / "scenarios").mkdir()
     (tmp_path / "scenarios" / "known_bugs.yaml").write_text("- {id: KB-001, title: t}\n")
-    monkeypatch.setattr("otterdog_e2e.known_bugs.load", lambda path: {"KB-001": SimpleNamespace(id="KB-001")})
+    monkeypatch.setattr("otterdog_acceptance.known_bugs.load", lambda path: {"KB-001": SimpleNamespace(id="KB-001")})
     assert set(new_context(tmp_path).known_bugs()) == {"KB-001"}
     loaded: list[tuple[Path, Path, ChangeId]] = []
     monkeypatch.setattr(
-        "otterdog_e2e.changes.load_change",
+        "otterdog_acceptance.changes.load_change",
         lambda *args: loaded.append(args) or "spec",  # type: ignore[func-returns-value]
     )
     context = new_context(tmp_path, change="check-merge")
@@ -1219,7 +1233,7 @@ def test_offline_sut_pair(tmp_path: Path, suts: dict[str, Any]) -> None:
         assert root.name == f"diff-offline-{side.role}"
         assert (str(root), "<WORKSPACE>") in side.recorder.normalize_ctx.literals
         assert ("/ws/", "<WORKSPACE>/") not in side.recorder.normalize_ctx.literals  # host runtime
-    from otterdog_e2e.otterdog.output import normalize_text
+    from otterdog_acceptance.otterdog.output import normalize_text
 
     for side in pair:
         printed = f"{side.cli.workspace.root}/orgs/e2e-offline/e2e-offline.jsonnet:43:3 syntax error\n"
@@ -1272,7 +1286,7 @@ def test_broken_app_credentials_do_not_break_scenario_variables(
         """An unreadable App key."""
         raise ValueError("bad PEM")
 
-    monkeypatch.setattr("otterdog_e2e.settings.resolve_app_credentials", broken)
+    monkeypatch.setattr("otterdog_acceptance.settings.resolve_app_credentials", broken)
     assert context.scenario_variables()["app_id"] == ""
 
 
@@ -1282,7 +1296,7 @@ def test_webapp_deployment_starts_the_dtrack_mock_when_requested(
     """extras["dtrack_mock"] (set by the plugin for items using the dtrack_mock fixture) reaches WebappSettings."""
     context, _events = webapp_context
     seen: list[Any] = []
-    monkeypatch.setattr("otterdog_e2e.webapp.stack.WebappStack", lambda settings, **kw: seen.append(settings))
+    monkeypatch.setattr("otterdog_acceptance.webapp.stack.WebappStack", lambda settings, **kw: seen.append(settings))
     context.webapp_deployment()
     context.extras["dtrack_mock"] = True
     context.webapp_deployment()
@@ -1317,7 +1331,7 @@ class DtrackStack:
 def test_dtrack_mock_of_the_deployment(tmp_path: Path) -> None:
     """The running mock's client, the mock started on a stack without it, refusals for external webapps and stack
     errors."""
-    from otterdog_e2e.webapp.stack import WebappStackError
+    from otterdog_acceptance.webapp.stack import WebappStackError
 
     context = new_context(tmp_path)
     running, started = DtrackStack(True), DtrackStack(False)
@@ -1350,7 +1364,7 @@ def test_publish_otterdog_json_with_organization_overrides(
     webapp_context: tuple[E2EContext, list[str]], live: LiveFakes, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """admin_teams / approval_teams of the org entry are replaced (None drops a key); other keys are refused."""
-    from otterdog_e2e.context import check_organization_overrides
+    from otterdog_acceptance.context import check_organization_overrides
 
     context, _events = webapp_context
     entry = {
@@ -1360,7 +1374,7 @@ def test_publish_otterdog_json_with_organization_overrides(
         "approval_teams": ["^project-leads$"],
     }
     monkeypatch.setattr(
-        "otterdog_e2e.otterdog.workspace.webapp_otterdog_json", lambda *a, **k: {"organizations": [dict(entry)]}
+        "otterdog_acceptance.otterdog.workspace.webapp_otterdog_json", lambda *a, **k: {"organizations": [dict(entry)]}
     )
     written: list[dict[str, Any]] = []
     mutator = context.mutator("admin")

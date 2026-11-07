@@ -2,7 +2,7 @@
 
 scenarios/api_endpoints.yaml lists every write request otterdog sends to GitHub, named as otterdog's request
 statistics name them; live scenario steps assert the requests of their apply with ``apply.api`` (sent / not_sent).
-These tests keep both honest (the checks live in otterdog_e2e.api_coverage, shared with ``otterdog-e2e assist check
+These tests keep both honest (the checks live in otterdog_acceptance.api_coverage, shared with ``otterdog-acceptance assist check
 scenarios/api_endpoints.yaml``):
 
 * the inventory loads (unique write endpoints, sources, triggers, scopes) and its features exist in the coverage matrix;
@@ -20,7 +20,7 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-from otterdog_e2e.api_coverage import REGENERATE, ApiAssertion, ApiCoverageProject, collect_assertions, method_of
+from otterdog_acceptance.api_coverage import REGENERATE, ApiAssertion, ApiCoverageProject, collect_assertions, method_of
 
 ROOT = Path(__file__).resolve().parents[2]
 PROJECT = ApiCoverageProject(ROOT)
@@ -60,7 +60,7 @@ def test_collect_assertions_reads_the_steps() -> None:
     """collect_assertions walks the steps' apply.api of the given scenarios."""
     from types import SimpleNamespace
 
-    from otterdog_e2e.otterdog.api_usage import ApiSpec
+    from otterdog_acceptance.otterdog.api_usage import ApiSpec
 
     step = SimpleNamespace(name="s", apply=SimpleNamespace(api=ApiSpec(sent=["POST /x"], not_sent=["PUT /y"])))
     other = SimpleNamespace(name="t", apply=None)

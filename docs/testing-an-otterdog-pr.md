@@ -4,12 +4,12 @@ The harness can test a proposed upstream pull request (pinned to the commit you 
 uncommitted changes included. It runs the regression tiers against it, runs the same observe-only scenarios on the
 change and on its base, and reports which differences (deltas) were expected and which were not.
 
-## What `otterdog-e2e pr` does
+## What `otterdog-acceptance pr` does
 
 ```bash
-otterdog-e2e pr 792                                # offline tiers + differential of its current head, no GitHub org
-otterdog-e2e pr 792 --sha d0d3b08...               # the commit you reviewed
-otterdog-e2e pr 792 --sha d0d3b08... --target free # plus the live tiers on the test org
+otterdog-acceptance pr 792                                # offline tiers + differential of its current head, no GitHub org
+otterdog-acceptance pr 792 --sha d0d3b08...               # the commit you reviewed
+otterdog-acceptance pr 792 --sha d0d3b08... --target free # plus the live tiers on the test org
 make pr PR=792 TARGET=free                         # SHA=<40-hex> pins a commit
 ```
 
@@ -29,7 +29,7 @@ without `--sha` is refused when `CI` is set. Get the current head with
    credentials only in a 0600 env-file. Resets, cleanups and PR-text guards use the trusted reset [SUT](glossary.md#systems-under-test)
    (`release:latest`). Docker is therefore required.
 3. **Select**: tags are derived from the changed files (`git diff` between the merge base and the pin, mapped by
-   `otterdog_e2e.selection.PATH_RULES`; `smoke` always); the scenarios whose `references` name the PR (the change
+   `otterdog_acceptance.selection.PATH_RULES`; `smoke` always); the scenarios whose `references` name the PR (the change
    under test, `--change` to pick another one) are selected in addition. The offline tier always runs in full; the differential and live tiers run the selected
    scenarios.
 4. **Run** the suites: `auto` (default) = `offline` and `differential`, plus `cli`, `webhooks`, `webapp` and
@@ -39,7 +39,7 @@ without `--sha` is refused when `CI` is set. Get the current head with
    `--strict-diff` fails the run on unexpected deltas.
 
 Before the first test runs, the plugin resolves and installs every SUT the selected tests need, and builds the
-images they need (`otterdog-e2e: preparing the head SUT (...)` lines), then builds the live session (verification and
+images they need (`otterdog-acceptance: preparing the head SUT (...)` lines), then builds the live session (verification and
 the org lease). A cold install, an image build or a lease wait therefore never counts against the timeout of the
 first test of a tier; live tests are timed on their test call only. The artifacts directory is printed at the end
 (`pytest exit code N; artifacts: ...`), with the delta counts.
@@ -62,13 +62,13 @@ is not a `run`/`pr` option; call pytest directly:
 
 ```bash
 # committed HEAD of a local otterdog checkout (the checkout is only read)
-.venv/bin/otterdog-e2e run --sut path:../otterdog --base-sut auto --suite offline,differential
+.venv/bin/otterdog-acceptance run --sut path:../otterdog --base-sut auto --suite offline,differential
 
 # HEAD plus uncommitted changes
-.venv/bin/otterdog-e2e run --sut dirty:../otterdog --base-sut auto --suite offline,differential
+.venv/bin/otterdog-acceptance run --sut dirty:../otterdog --base-sut auto --suite offline,differential
 
 # against the test org, compared with a release
-.venv/bin/otterdog-e2e run --target free --sut dirty:../otterdog --base-sut tag:v1.6.1
+.venv/bin/otterdog-acceptance run --target free --sut dirty:../otterdog --base-sut tag:v1.6.1
 ```
 
 - `auto` is the merge base of the checkout's `HEAD` with upstream main (the local commits are fetched into the
@@ -91,7 +91,7 @@ the templates. The pytest option is `--e2e-change` (environment fallback `E2E_CH
 explicitly:
 
 ```bash
-.venv/bin/otterdog-e2e run --target free --sut dirty:../otterdog \
+.venv/bin/otterdog-acceptance run --target free --sut dirty:../otterdog \
   --change check-merge                                                 # base tag:v1.6.0 from the references
 
 .venv/bin/python -m pytest tests/offline tests/differential \
@@ -127,7 +127,7 @@ behaviour it changes (or add a generic one named after that behaviour), and the 
 when the behaviour evolved several times, in its `references`. A YAML scenario has a top-level `references` list; a
 Python test passes the same list as the `references` keyword of its `pytest.mark.scenario(...)` marker (a literal or a
 module constant). With an AI agent, the `otterdog-pr-tests` skill finds the scenarios of the PR from
-`otterdog-e2e assist pr-context`, extends them, runs the offline and differential tiers on the pinned PR in docker
+`otterdog-acceptance assist pr-context`, extends them, runs the offline and differential tiers on the pinned PR in docker
 and explains every delta for your review ([ai-assistance.md](ai-assistance.md)).
 
 | Key | Default | Meaning |
@@ -186,7 +186,7 @@ references:
 The differential proof of concept of #790 needs no GitHub organization at all:
 
 ```bash
-.venv/bin/otterdog-e2e run --sut sha:9bdeb75 --change 790 --suite offline,differential   # base sha:b5f7bb1 from the references
+.venv/bin/otterdog-acceptance run --sut sha:9bdeb75 --change 790 --suite offline,differential   # base sha:b5f7bb1 from the references
 ```
 
 With warm caches it takes 15 to 30 minutes (the offline tier of the head runs first). The verified outcome is 388
@@ -201,7 +201,7 @@ passed, 8 skipped and 30 xfailed (registered known bugs), with `differential: 1 
 - the other 696 observations of the 59 observed scenarios are unchanged, for example O-VAL-SYNTAX, whose jsonnet
   error prints a different workspace path on each side.
 
-Check the references of the scenarios you changed with `.venv/bin/otterdog-e2e assist check <files>`.
+Check the references of the scenarios you changed with `.venv/bin/otterdog-acceptance assist check <files>`.
 
 ## Reading the differential report
 
@@ -229,17 +229,17 @@ behaviour differences remain. Every observation is in `observations/base.jsonl` 
 `summary.md` also has a **Manual testing** block (organization, plan, CLI commands run, webapp flows, webhook
 interactions) in the shape of otterdog's pull request template, ready to paste into the PR description. Commands
 that ran without GitHub access (offline tiers, `--local`, network sandbox) are not listed as live CLI testing; they
-are only counted ("plus N offline command(s) without GitHub access"). "How to reproduce" quotes the `otterdog-e2e
+are only counted ("plus N offline command(s) without GitHub access"). "How to reproduce" quotes the `otterdog-acceptance
 run|pr` command of the run.
 
 ## In CI
 
 ```bash
-gh workflow run e2e-otterdog-pr.yml --repo <owner>/otterdog-e2e --ref main \
+gh workflow run e2e-otterdog-pr.yml --repo <owner>/otterdog-acceptance --ref main \
   -f pr=792 -f sha=<40-hex> -f target=free
 
 # several test organizations: one job per instance, each approved separately
-gh workflow run e2e-otterdog-pr.yml --repo <owner>/otterdog-e2e --ref main \
+gh workflow run e2e-otterdog-pr.yml --repo <owner>/otterdog-acceptance --ref main \
   -f pr=792 -f sha=<40-hex> -f target=free,acme-a
 ```
 
@@ -261,7 +261,7 @@ instance is a test organization with its environments `e2e-<instance>` and `e2e-
    that test organization. The jobs of the other instances keep running when one fails.
 4. Each job checks that its environment configures the instance (an environment that does not exist is created by
    GitHub on the fly, unprotected: the job then fails before any SUT code runs), runs
-   `otterdog-e2e pr <n> --sha <sha> --target <instance> --suite auto` in the lane `pr-fast`, sweeps its run
+   `otterdog-acceptance pr <n> --sha <sha> --target <instance> --suite auto` in the lane `pr-fast`, sweeps its run
    (`janitor --run-id`), scrubs and uploads the artifacts (7 days).
 
 ## Triggering from an otterdog pull request
@@ -302,13 +302,13 @@ jobs:
           app-id: ${{ vars.E2E_TRIGGER_APP_ID }}
           private-key: ${{ secrets.E2E_TRIGGER_APP_PRIVATE_KEY }}
           owner: <e2e repository owner>
-          repositories: otterdog-e2e
+          repositories: otterdog-acceptance
           permission-actions: write
       - name: Dispatch e2e-otterdog-pr.yml
         env:
           GH_TOKEN: ${{ steps.token.outputs.token }}
           UPSTREAM_TOKEN: ${{ github.token }}
-          E2E_REPO: <e2e repository owner>/otterdog-e2e
+          E2E_REPO: <e2e repository owner>/otterdog-acceptance
           PR: ${{ github.event.issue.number }}
           BODY: ${{ github.event.comment.body }}
         run: |

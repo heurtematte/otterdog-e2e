@@ -49,25 +49,25 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from otterdog_e2e import waiting
-from otterdog_e2e.github.oracle import deliveries_since
-from otterdog_e2e.otterdog.output import normalize_text
-from otterdog_e2e.otterdog.render import ConfigFragments
+from otterdog_acceptance import waiting
+from otterdog_acceptance.github.oracle import deliveries_since
+from otterdog_acceptance.otterdog.output import normalize_text
+from otterdog_acceptance.otterdog.render import ConfigFragments
 
 if TYPE_CHECKING:
-    from otterdog_e2e.context import E2EContext
-    from otterdog_e2e.github.mutate import Mutator
-    from otterdog_e2e.github.oracle import Oracle
-    from otterdog_e2e.naming import RunContext
-    from otterdog_e2e.otterdog.baseline import BaselineManager
-    from otterdog_e2e.otterdog.render import OrgConfigRenderer
-    from otterdog_e2e.otterdog.runner import CliResult, OtterdogCli
-    from otterdog_e2e.otterdog.workspace import ConfigWorkspace
-    from otterdog_e2e.scenarios.engine import ScenarioEngine, ScenarioOutcome
-    from otterdog_e2e.scenarios.model import Scenario
-    from otterdog_e2e.settings import Target
-    from otterdog_e2e.sut.cli_install import InstalledCli
-    from otterdog_e2e.sut.template import TemplateRef
+    from otterdog_acceptance.context import E2EContext
+    from otterdog_acceptance.github.mutate import Mutator
+    from otterdog_acceptance.github.oracle import Oracle
+    from otterdog_acceptance.naming import RunContext
+    from otterdog_acceptance.otterdog.baseline import BaselineManager
+    from otterdog_acceptance.otterdog.render import OrgConfigRenderer
+    from otterdog_acceptance.otterdog.runner import CliResult, OtterdogCli
+    from otterdog_acceptance.otterdog.workspace import ConfigWorkspace
+    from otterdog_acceptance.scenarios.engine import ScenarioEngine, ScenarioOutcome
+    from otterdog_acceptance.scenarios.model import Scenario
+    from otterdog_acceptance.settings import Target
+    from otterdog_acceptance.sut.cli_install import InstalledCli
+    from otterdog_acceptance.sut.template import TemplateRef
 
 logger = logging.getLogger(__name__)
 
@@ -239,7 +239,7 @@ def tail(text: str, limit: int = TAIL) -> str:
 
 
 def cli_text(result: CliResult) -> str:
-    """Normalized output of a command (otterdog_e2e.otterdog.output.normalize_text: no ANSI codes, boxed messages
+    """Normalized output of a command (otterdog_acceptance.otterdog.output.normalize_text: no ANSI codes, boxed messages
     unboxed as ``Error: <message>`` with left-trimmed continuation lines, progress bars replaced)."""
     return normalize_text(result.output)
 
@@ -471,7 +471,9 @@ class ConfigRepo:
         assert sha, f"{self.repo} has no default branch head"
         self.track_ref(f"heads/{name}")
         self.mutator.create_branch(self.repo, name, sha)
-        self.mutator.commit_files(self.repo, name, {self.path: text}, f"otterdog-e2e {self.run_ctx.run_id}: {slug}")
+        self.mutator.commit_files(
+            self.repo, name, {self.path: text}, f"otterdog-acceptance {self.run_ctx.run_id}: {slug}"
+        )
         content = self.wait_remote(text, ref=name)
         assert content == text, f"{self.repo}@{name} does not hold the committed configuration"
         return name
@@ -509,7 +511,7 @@ class ConfigRepo:
             attempt(f"close #{number}", functools.partial(self.mutator.close_pull, self.repo, number))
         for ref in self.refs:
             attempt(f"delete {ref}", functools.partial(self.mutator.delete_ref, self.repo, ref))
-        message = f"otterdog-e2e {self.run_ctx.run_id}: restore the baseline"
+        message = f"otterdog-acceptance {self.run_ctx.run_id}: restore the baseline"
         attempt("restore the baseline", lambda: self.set_default(self.baseline.text(), message))
         if errors:
             raise AssertionError(f"config repository cleanup of {self.repo} failed: {'; '.join(errors)}")
@@ -521,7 +523,7 @@ def config_repo(
 ) -> Iterator[ConfigRepo]:
     """ConfigRepo of the test: the default branch holds the baseline before, and again after the test."""
     repo = ConfigRepo(baseline, oracle, mutator, target, run_ctx)
-    repo.set_default(baseline.text(), f"otterdog-e2e {run_ctx.run_id}: baseline before a config repository test")
+    repo.set_default(baseline.text(), f"otterdog-acceptance {run_ctx.run_id}: baseline before a config repository test")
     yield repo
     if not e2e.options.keep:
         repo.restore()

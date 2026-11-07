@@ -12,12 +12,12 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from otterdog_e2e.context import get_context
-from otterdog_e2e.scenarios.collect import generate_scenario_tests
+from otterdog_acceptance.context import get_context
+from otterdog_acceptance.scenarios.collect import generate_scenario_tests
 
 if TYPE_CHECKING:
-    from otterdog_e2e.scenarios.engine import ScenarioEngine
-    from otterdog_e2e.scenarios.model import Scenario
+    from otterdog_acceptance.scenarios.engine import ScenarioEngine
+    from otterdog_acceptance.scenarios.model import Scenario
 
 SCENARIO_DIRS = ("enterprise",)
 

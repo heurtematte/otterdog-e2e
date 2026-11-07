@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from otterdog_e2e.webui.gate import (
+from otterdog_acceptance.webui.gate import (
     DEFAULT_SPACING,
     TOTP_PERIOD,
     GateState,

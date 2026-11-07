@@ -12,16 +12,16 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from otterdog_e2e.otterdog.render import ConfigFragments
+from otterdog_acceptance.otterdog.render import ConfigFragments
 
 if TYPE_CHECKING:
-    from otterdog_e2e.context import E2EContext
-    from otterdog_e2e.github.oracle import Oracle
-    from otterdog_e2e.naming import RunContext
-    from otterdog_e2e.otterdog.baseline import BaselineManager
-    from otterdog_e2e.otterdog.render import OrgConfigRenderer
-    from otterdog_e2e.otterdog.runner import OtterdogCli
-    from otterdog_e2e.otterdog.workspace import ConfigWorkspace
+    from otterdog_acceptance.context import E2EContext
+    from otterdog_acceptance.github.oracle import Oracle
+    from otterdog_acceptance.naming import RunContext
+    from otterdog_acceptance.otterdog.baseline import BaselineManager
+    from otterdog_acceptance.otterdog.render import OrgConfigRenderer
+    from otterdog_acceptance.otterdog.runner import OtterdogCli
+    from otterdog_acceptance.otterdog.workspace import ConfigWorkspace
 
 ABORTED_TEXT = "Planning aborted due to validation errors."  # operations/plan.py:123
 

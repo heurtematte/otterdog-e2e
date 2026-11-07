@@ -27,7 +27,7 @@ REPO = "https://github.com/heurtematte/otterdog-e2e"
 @cache
 def explorer() -> ModuleType:
     """docs_scenarios.py as a module (a file next to zensical.toml, not part of the package)."""
-    name = "otterdog_e2e_docs_scenarios_under_test"
+    name = "otterdog_acceptance_docs_scenarios_under_test"
     spec = importlib.util.spec_from_file_location(name, HOOKS)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)

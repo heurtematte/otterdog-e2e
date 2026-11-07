@@ -1,4 +1,4 @@
-"""otterdog_e2e.assist.check and ``otterdog-e2e assist check``: every validation kind (scenarios and their references,
+"""otterdog_acceptance.assist.check and ``otterdog-acceptance assist check``: every validation kind (scenarios and their references,
 coverage matrix, known bugs, jsonnet, Python tests and their references), the changed files of git status, the offline
 lint through the run_pytest seam and the exit codes."""
 
@@ -12,10 +12,10 @@ from typing import Any
 import pytest
 from click.testing import CliRunner
 
-from otterdog_e2e import cli, coverage_matrix
-from otterdog_e2e.assist import check
-from otterdog_e2e.assist.check import Problem, check_files
-from otterdog_e2e.testing.fakes import make_settings
+from otterdog_acceptance import cli, coverage_matrix
+from otterdog_acceptance.assist import check
+from otterdog_acceptance.assist.check import Problem, check_files
+from otterdog_acceptance.testing.fakes import make_settings
 
 REPO = Path(__file__).resolve().parents[2]
 DESCRIPTION = " ".join(["Why this offline scenario exists, it pins the validation of a repository."] * 3)
@@ -89,7 +89,7 @@ def project(tmp_path: Path) -> Path:
         "docs",
     ):
         (root / directory).mkdir(parents=True)
-    (root / "pyproject.toml").write_text('[project]\nname = "otterdog-e2e"\n')
+    (root / "pyproject.toml").write_text('[project]\nname = "otterdog-acceptance"\n')
     (root / "scenarios" / "offline" / "repo" / "val.yaml").write_text(OFFLINE)
     (root / "scenarios" / "cli" / "repo" / "repo.yaml").write_text(LIVE)
     (root / "scenarios" / "fragments" / "repo.jsonnet").write_text("orgs.newRepo('{{ p }}-r') { description: 'r' }\n")
@@ -631,7 +631,7 @@ def command(project: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     """Settings of the checkout; run_pytest replaced: it records its arguments, prints to stdout (the command must
     keep its JSON clean) and writes the results of the lint items it is given."""
     settings = make_settings(project)
-    monkeypatch.setattr("otterdog_e2e.settings.harness_settings", lambda environ=None: settings)
+    monkeypatch.setattr("otterdog_acceptance.settings.harness_settings", lambda environ=None: settings)
     monkeypatch.delenv("PYTEST_ADDOPTS", raising=False)
     state: dict[str, Any] = {
         "calls": [],
@@ -649,7 +649,7 @@ def command(project: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
         (run / "results.jsonl").write_text("".join(json.dumps(row) + "\n" for row in state["rows"]))
         return int(state["code"])
 
-    monkeypatch.setattr("otterdog_e2e.cli.assist.run_pytest", run_pytest)
+    monkeypatch.setattr("otterdog_acceptance.cli.assist.run_pytest", run_pytest)
     state["settings"] = settings
     return state
 
@@ -666,7 +666,7 @@ def test_command_lints_live_scenarios(command: dict[str, Any], monkeypatch: pyte
     assert "--e2e-sut=release:latest" in call["args"] and "-ktest_live_scenario_lint and ([cli.repo.x/)" in call["args"]
     assert (
         call["command"]
-        == "otterdog-e2e run --suite offline --sut release:latest -k 'test_live_scenario_lint and ([cli.repo.x/)'"
+        == "otterdog-acceptance run --suite offline --sut release:latest -k 'test_live_scenario_lint and ([cli.repo.x/)'"
     )
     data = json.loads(result.stdout)
     assert data["ok"] is True and data["lint"]["ran"] and data["lint"]["outcomes"] == {"passed": 2}

@@ -24,19 +24,19 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from otterdog_e2e.redact import REDACTOR
-from otterdog_e2e.webui import mapping
-from otterdog_e2e.webui.oracle import TrustedWebReader, rest_web_values, wait_rest_values
-from otterdog_e2e.webui.roundtrip import WebSettingsRoundTrip
+from otterdog_acceptance.redact import REDACTOR
+from otterdog_acceptance.webui import mapping
+from otterdog_acceptance.webui.oracle import TrustedWebReader, rest_web_values, wait_rest_values
+from otterdog_acceptance.webui.roundtrip import WebSettingsRoundTrip
 
 if TYPE_CHECKING:
-    from otterdog_e2e.context import E2EContext
-    from otterdog_e2e.github.oracle import Oracle
-    from otterdog_e2e.naming import RunContext
-    from otterdog_e2e.otterdog.baseline import BaselineManager
-    from otterdog_e2e.otterdog.runner import WebOtterdogCli
-    from otterdog_e2e.settings import Target
-    from otterdog_e2e.sut.cli_install import InstalledCli
+    from otterdog_acceptance.context import E2EContext
+    from otterdog_acceptance.github.oracle import Oracle
+    from otterdog_acceptance.naming import RunContext
+    from otterdog_acceptance.otterdog.baseline import BaselineManager
+    from otterdog_acceptance.otterdog.runner import WebOtterdogCli
+    from otterdog_acceptance.settings import Target
+    from otterdog_acceptance.sut.cli_install import InstalledCli
 
 TIER_DIR = Path(__file__).resolve().parent
 

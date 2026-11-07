@@ -1,6 +1,6 @@
 # Web-UI tier samples (tests/unit/test_webui_*.py)
 
-Inputs of the unit tests of `otterdog_e2e.webui` (docs/web-ui-testing.md). Nothing here needs GitHub.
+Inputs of the unit tests of `otterdog_acceptance.webui` (docs/web-ui-testing.md). Nothing here needs GitHub.
 
 ## Upstream files (verbatim, EPL-2.0)
 

@@ -10,11 +10,11 @@ from datetime import UTC, datetime
 import pytest
 import responses
 
-from otterdog_e2e.github.http import GITHUB_API, GitHubError, GitHubHttp
-from otterdog_e2e.github.mutate import DRY_RUN_SHA, Mutator, accept_org_invitation, publicize_membership
-from otterdog_e2e.naming import HOOK_BASE
-from otterdog_e2e.safety import SafetyError
-from otterdog_e2e.testing.fakes import FAKE_ORG, FAKE_RUN_ID, make_verified_org
+from otterdog_acceptance.github.http import GITHUB_API, GitHubError, GitHubHttp
+from otterdog_acceptance.github.mutate import DRY_RUN_SHA, Mutator, accept_org_invitation, publicize_membership
+from otterdog_acceptance.naming import HOOK_BASE
+from otterdog_acceptance.safety import SafetyError
+from otterdog_acceptance.testing.fakes import FAKE_ORG, FAKE_RUN_ID, make_verified_org
 
 TOKEN = "ghp_" + "MutatorTestToken0123456789abcdefghijk"
 REPO = f"{GITHUB_API}/repos/{FAKE_ORG}/r"

@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from otterdog_e2e.onboard.cisync import workflow_names
-from otterdog_e2e.onboard.store import (
+from otterdog_acceptance.onboard.cisync import workflow_names
+from otterdog_acceptance.onboard.store import (
     ENVIRONMENT_ITEMS,
     LAYOUT,
     StoreError,
@@ -30,7 +30,9 @@ def test_parse_store(value: str, expected: tuple[str, str]) -> None:
     assert parse_store(value) == expected
 
 
-@pytest.mark.parametrize("value", ["otterdog-e2e", "bitwarden:x", "vault:", "vault:a b", "pass:../x", "vault:a//b"])
+@pytest.mark.parametrize(
+    "value", ["otterdog-acceptance", "bitwarden:x", "vault:", "vault:a b", "pass:../x", "vault:a//b"]
+)
 def test_invalid_stores(value: str) -> None:
     """A provider without a path layout (Bitwarden), an empty or odd prefix are refused."""
     with pytest.raises(StoreError):

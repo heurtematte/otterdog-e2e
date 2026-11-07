@@ -9,15 +9,15 @@ from pathlib import Path
 
 import pytest
 
-from otterdog_e2e.otterdog.workspace import (
+from otterdog_acceptance.otterdog.workspace import (
     CREDENTIAL_ENV,
     DEFAULTS_OVERRIDE_FILE,
     ConfigWorkspace,
     WorkspaceLayout,
     jsonnet_config_text,
 )
-from otterdog_e2e.sut.template import offline_template
-from otterdog_e2e.testing.fakes import FAKE_ORG, FakeWorkspace
+from otterdog_acceptance.sut.template import offline_template
+from otterdog_acceptance.testing.fakes import FAKE_ORG, FakeWorkspace
 
 ENV_PROVIDER = {"provider": "env", **CREDENTIAL_ENV}
 
@@ -47,7 +47,7 @@ def test_jsonnet_format_writes_otterdog_jsonnet_and_drops_the_json(tmp_path: Pat
     assert path == tmp_path / "ws" / "otterdog.jsonnet" == ws.config_file
     assert not (tmp_path / "ws" / "otterdog.json").exists()
     text = path.read_text()
-    assert text.startswith("// otterdog.jsonnet written by otterdog-e2e") and "local config = {" in text
+    assert text.startswith("// otterdog.jsonnet written by otterdog-acceptance") and "local config = {" in text
     assert text.rstrip().endswith("config")
     with pytest.raises(json.JSONDecodeError):
         json.loads(text)

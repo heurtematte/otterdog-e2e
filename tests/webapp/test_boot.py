@@ -11,17 +11,17 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from otterdog_e2e.sut.version import public_version
-from otterdog_e2e.webhooks.payloads import ping_payload
+from otterdog_acceptance.sut.version import public_version
+from otterdog_acceptance.webhooks.payloads import ping_payload
 
 if TYPE_CHECKING:
-    from otterdog_e2e.context import E2EContext
-    from otterdog_e2e.otterdog.baseline import BaselineManager
-    from otterdog_e2e.settings import Target
-    from otterdog_e2e.webapp.api import WebappApi
-    from otterdog_e2e.webapp.stack import ExternalWebapp, WebappStack
-    from otterdog_e2e.webhooks.injector import WebhookInjector
-    from otterdog_e2e.webhooks.relay import DeliveryRelay
+    from otterdog_acceptance.context import E2EContext
+    from otterdog_acceptance.otterdog.baseline import BaselineManager
+    from otterdog_acceptance.settings import Target
+    from otterdog_acceptance.webapp.api import WebappApi
+    from otterdog_acceptance.webapp.stack import ExternalWebapp, WebappStack
+    from otterdog_acceptance.webhooks.injector import WebhookInjector
+    from otterdog_acceptance.webhooks.relay import DeliveryRelay
 
 pytestmark = [pytest.mark.webapp]
 

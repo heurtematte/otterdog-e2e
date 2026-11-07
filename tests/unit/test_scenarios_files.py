@@ -11,10 +11,10 @@ from typing import Any
 
 import pytest
 
-from otterdog_e2e.inject import SourceText
-from otterdog_e2e.naming import new_run_context
-from otterdog_e2e.otterdog.render import ConfigFragments
-from otterdog_e2e.scenarios.model import (
+from otterdog_acceptance.inject import SourceText
+from otterdog_acceptance.naming import new_run_context
+from otterdog_acceptance.otterdog.render import ConfigFragments
+from otterdog_acceptance.scenarios.model import (
     Scenario,
     ScenarioError,
     fragment_problems,
@@ -23,10 +23,10 @@ from otterdog_e2e.scenarios.model import (
     overlay_changes_settings,
     render_step,
 )
-from otterdog_e2e.scenarios.offline import OFFLINE_ORG, OfflineEngine, offline_run_context
-from otterdog_e2e.sut import template as sut_template
-from otterdog_e2e.sut.template import offline_template
-from otterdog_e2e.testing.fakes import FakeCli
+from otterdog_acceptance.scenarios.offline import OFFLINE_ORG, OfflineEngine, offline_run_context
+from otterdog_acceptance.sut import template as sut_template
+from otterdog_acceptance.sut.template import offline_template
+from otterdog_acceptance.testing.fakes import FakeCli
 
 RUN = new_run_context("t3c7z8a5")
 VARIABLES: dict[str, Any] = {
@@ -43,8 +43,8 @@ REPO = "// a repository\norgs.newRepo('{{ p }}-{{ slug }}') {\n  description: '{
 
 @pytest.fixture
 def project(tmp_path: Path) -> Path:
-    """An otterdog-e2e project root with scenarios/lib/e2e.libsonnet and scenarios/fragments/repo.jsonnet."""
-    (tmp_path / "pyproject.toml").write_text('[project]\nname = "otterdog-e2e"\n')
+    """An otterdog-acceptance project root with scenarios/lib/e2e.libsonnet and scenarios/fragments/repo.jsonnet."""
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "otterdog-acceptance"\n')
     write(tmp_path / "scenarios" / "lib" / "e2e.libsonnet", LIBRARY)
     write(tmp_path / "scenarios" / "fragments" / "repo.jsonnet", REPO)
     return tmp_path

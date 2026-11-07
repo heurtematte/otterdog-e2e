@@ -4,7 +4,7 @@ The profile `enterprise` (`targets/enterprise.yaml`, `expected_plan: enterprise`
 (`tests/enterprise`, `scenarios/enterprise`, scenarios with `min_plan: enterprise`) and every other tier with the
 enterprise capabilities. Every Enterprise Cloud test organization is an **instance** of it: the instance
 `enterprise` (bound to the profile of the same name), or any other name whose env file sets `E2E_PROFILE=enterprise`
-([onboarding.md](onboarding.md#instances-and-profiles)). `otterdog-e2e setup --target <instance> --profile enterprise`
+([onboarding.md](onboarding.md#instances-and-profiles)). `otterdog-acceptance setup --target <instance> --profile enterprise`
 onboards it ([onboarding.md](onboarding.md)); [setup-free-org.md](setup-free-org.md) describes the steps by hand:
 accounts, tokens, env file, doctor, bootstrap and the GitHub App work the same way. This page lists what differs.
 
@@ -17,7 +17,7 @@ accounts, tokens, env file, doctor, bootstrap and the GitHub App work the same w
   EMU organizations have no public repositories, while the harness relies on public fixture repositories and on
   personal machine accounts.
 - A **Team** organization uses the profile `team` (`targets/team.yaml`, `expected_plan: team`; the plan matrix
-  grants its capabilities): `otterdog-e2e setup --target team` (or another instance name with `--profile team`),
+  grants its capabilities): `otterdog-acceptance setup --target team` (or another instance name with `--profile team`),
   then `ci-sync` for its CI environments.
 
 ## Getting an Enterprise Cloud organization
@@ -42,20 +42,20 @@ enterprise owner's token ([What cannot be automated](onboarding.md#what-cannot-b
 ## Instance and env file
 
 ```bash
-.venv/bin/otterdog-e2e setup --target enterprise                   # or: setup --target acme-ghec --profile enterprise
-.venv/bin/otterdog-e2e doctor --target enterprise
+.venv/bin/otterdog-acceptance setup --target enterprise                   # or: setup --target acme-ghec --profile enterprise
+.venv/bin/otterdog-acceptance doctor --target enterprise
 ```
 
 By hand (the file setup would write):
 
 ```bash
-install -m 600 .env.example ~/.config/otterdog-e2e/enterprise.env
-$EDITOR ~/.config/otterdog-e2e/enterprise.env      # E2E_ORG, E2E_ORG_ID, identities of this organization
-.venv/bin/otterdog-e2e doctor --target enterprise
-.venv/bin/otterdog-e2e bootstrap --target enterprise --apply --wait
+install -m 600 .env.example ~/.config/otterdog-acceptance/enterprise.env
+$EDITOR ~/.config/otterdog-acceptance/enterprise.env      # E2E_ORG, E2E_ORG_ID, identities of this organization
+.venv/bin/otterdog-acceptance doctor --target enterprise
+.venv/bin/otterdog-acceptance bootstrap --target enterprise --apply --wait
 ```
 
-Another instance name needs `E2E_PROFILE=enterprise` in its file (`~/.config/otterdog-e2e/acme-ghec.env`). Several
+Another instance name needs `E2E_PROFILE=enterprise` in its file (`~/.config/otterdog-acceptance/acme-ghec.env`). Several
 Enterprise Cloud organizations are several instances of the same profile; their per-instance differences live in
 their env files (below), never in `targets/enterprise.yaml`.
 
@@ -87,8 +87,8 @@ their env files (below), never in `targets/enterprise.yaml`.
     See [capability-matrix.md](capability-matrix.md).
 
 - One GitHub App per test organization: `setup` creates it for each instance, or
-  `app-manifest --target <instance> --webhook-url ...` (the credentials go to `~/.config/otterdog-e2e/<instance>/`,
-  here `~/.config/otterdog-e2e/enterprise/`).
+  `app-manifest --target <instance> --webhook-url ...` (the credentials go to `~/.config/otterdog-acceptance/<instance>/`,
+  here `~/.config/otterdog-acceptance/enterprise/`).
 
 ## SAML single sign-on
 
@@ -160,6 +160,6 @@ example `["free", "enterprise"]`) for the nightly and janitor runs ([onboarding.
 [security.md](security.md#ci-environments)). A dispatch can then name several instances:
 
 ```bash
-.venv/bin/otterdog-e2e ci-sync --target enterprise --nightly --apply
+.venv/bin/otterdog-acceptance ci-sync --target enterprise --nightly --apply
 gh workflow run e2e.yml -f target=free,enterprise -f sut=release:latest   # one job per instance
 ```

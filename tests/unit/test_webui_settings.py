@@ -11,10 +11,10 @@ from typing import Any
 import pytest
 import yaml
 
-from otterdog_e2e import settings
-from otterdog_e2e.capabilities import Cap, apply_overrides, from_plan, with_capabilities
-from otterdog_e2e.redact import Redactor
-from otterdog_e2e.settings import (
+from otterdog_acceptance import settings
+from otterdog_acceptance.capabilities import Cap, apply_overrides, from_plan, with_capabilities
+from otterdog_acceptance.redact import Redactor
+from otterdog_acceptance.settings import (
     DEFAULT_WEB_ENV,
     HarnessSettings,
     IdentitySpec,

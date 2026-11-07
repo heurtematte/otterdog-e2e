@@ -13,18 +13,18 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from otterdog_e2e.github.oracle import deliveries_since
-from otterdog_e2e.otterdog.render import ConfigFragments
-from otterdog_e2e.waiting import CONVERGE_BACKOFF
+from otterdog_acceptance.github.oracle import deliveries_since
+from otterdog_acceptance.otterdog.render import ConfigFragments
+from otterdog_acceptance.waiting import CONVERGE_BACKOFF
 
 if TYPE_CHECKING:
     from conftest import WebhookHelpers
-    from otterdog_e2e.github.mutate import Mutator
-    from otterdog_e2e.github.oracle import Oracle
-    from otterdog_e2e.naming import RunContext
-    from otterdog_e2e.otterdog.baseline import BaselineManager
-    from otterdog_e2e.otterdog.render import OrgConfigRenderer
-    from otterdog_e2e.otterdog.runner import OtterdogCli
+    from otterdog_acceptance.github.mutate import Mutator
+    from otterdog_acceptance.github.oracle import Oracle
+    from otterdog_acceptance.naming import RunContext
+    from otterdog_acceptance.otterdog.baseline import BaselineManager
+    from otterdog_acceptance.otterdog.render import OrgConfigRenderer
+    from otterdog_acceptance.otterdog.runner import OtterdogCli
 
 pytestmark = [pytest.mark.org_level]
 

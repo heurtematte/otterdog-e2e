@@ -1,4 +1,4 @@
-# otterdog-e2e target: a DEDICATED GitHub Enterprise Cloud test organization on github.com (SPEC 6.2).
+# otterdog-acceptance target: a DEDICATED GitHub Enterprise Cloud test organization on github.com (SPEC 6.2).
 #
 # Only GitHub Enterprise Cloud on github.com is supported (otterdog hard-codes api.github.com): no GHES, no ghe.com,
 # no Enterprise Managed Users. With SAML SSO enforced, every classic PAT must be SSO-authorized for the org.
@@ -7,7 +7,7 @@
 # Secrets are never written here: *_env keys hold the NAME of the environment variable that carries the secret.
 # This file is a PROFILE: it holds no org-specific value. An instance (one test org) uses it with --target <instance>
 # and E2E_PROFILE=enterprise in its env file; --target enterprise is the instance named after the profile. Env files
-# of the instance, loaded without overriding the environment: ~/.config/otterdog-e2e/<instance>.env,
+# of the instance, loaded without overriding the environment: ~/.config/otterdog-acceptance/<instance>.env,
 # <root>/.env.e2e.<instance>, <root>/.env.e2e. Every identity MUST be a dedicated machine account that only belongs
 # to test organizations (github.allowed_org_ids); classic PATs need the read:org scope.
 # Note: inside {flow, mappings} a ${...} value must be quoted ("${VAR}"), otherwise YAML reads '{' as syntax.
@@ -23,7 +23,7 @@ github:
   # true and the web-UI tier is skipped (docs/web-ui-testing.md); the token tiers work with SSO-authorized PATs.
   saml_sso: ${E2E_SAML_SSO:-false}
   # Capability overrides, applied last (after the plan matrix and the probes; comma lists of
-  # otterdog_e2e.capabilities.Cap values). A GHEC TRIAL org has no larger runners but includes Code Security / Secret
+  # otterdog_acceptance.capabilities.Cap values). A GHEC TRIAL org has no larger runners but includes Code Security / Secret
   # Protection, so its instance sets E2E_CAPABILITIES_ADD=ghas_private and E2E_CAPABILITIES_REMOVE=larger_runners
   # (the literal form of a custom profile: capabilities: {add: [ghas_private], remove: [larger_runners]}).
   # GHAS_PRIVATE is never probed: add it only when GitHub Advanced Security / Code Security covers private repos.

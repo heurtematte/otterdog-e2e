@@ -9,8 +9,8 @@ from pathlib import Path
 
 import pytest
 
-from otterdog_e2e.webui import mapping
-from otterdog_e2e.webui.mapping import (
+from otterdog_acceptance.webui import mapping
+from otterdog_acceptance.webui.mapping import (
     EXPECTED_UNREAD,
     REST_FIELDS,
     REST_READABLE,

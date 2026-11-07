@@ -14,13 +14,13 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from otterdog_e2e.sut.version import public_version
+from otterdog_acceptance.sut.version import public_version
 
 if TYPE_CHECKING:
-    from otterdog_e2e.context import E2EContext
-    from otterdog_e2e.otterdog.runner import OtterdogCli
-    from otterdog_e2e.settings import Target
-    from otterdog_e2e.sut.cli_install import InstalledCli
+    from otterdog_acceptance.context import E2EContext
+    from otterdog_acceptance.otterdog.runner import OtterdogCli
+    from otterdog_acceptance.settings import Target
+    from otterdog_acceptance.sut.cli_install import InstalledCli
 
 pytestmark = [pytest.mark.scenario("cli.smoke"), pytest.mark.tags("smoke", "cli")]
 

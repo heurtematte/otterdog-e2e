@@ -1,4 +1,4 @@
-"""``otterdog-e2e inject``: option checks, the generated scenario, the pytest arguments and the final report
+"""``otterdog-acceptance inject``: option checks, the generated scenario, the pytest arguments and the final report
 (pytest.main is replaced: no session, no otterdog, no GitHub)."""
 
 from __future__ import annotations
@@ -12,11 +12,11 @@ import pytest
 import yaml
 from click.testing import CliRunner
 
-from otterdog_e2e import cli
-from otterdog_e2e.cli import inject as cli_inject
-from otterdog_e2e.inject import ADHOC_ENV, InjectRequest, write_adhoc_result
-from otterdog_e2e.scenarios.model import load_adhoc_scenario
-from otterdog_e2e.testing.fakes import make_settings
+from otterdog_acceptance import cli
+from otterdog_acceptance.cli import inject as cli_inject
+from otterdog_acceptance.inject import ADHOC_ENV, InjectRequest, write_adhoc_result
+from otterdog_acceptance.scenarios.model import load_adhoc_scenario
+from otterdog_acceptance.testing.fakes import make_settings
 
 RUN_ID = "t3c7z8a5"
 REPO = "orgs.newRepo('{{ p }}-x') { description: 'injected' }\n"
@@ -28,7 +28,7 @@ def session(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     session would (results.jsonl, adhoc/result.json, the exported config), then returns ``code``."""
     settings = make_settings(tmp_path)
     captured: dict[str, Any] = {"code": 0, "outcome": "passed"}
-    monkeypatch.setattr("otterdog_e2e.settings.harness_settings", lambda environ=None: settings)
+    monkeypatch.setattr("otterdog_acceptance.settings.harness_settings", lambda environ=None: settings)
     monkeypatch.delenv(ADHOC_ENV, raising=False)
     monkeypatch.delenv("PYTEST_ADDOPTS", raising=False)
 
@@ -61,7 +61,7 @@ def user_file(tmp_path: Path, name: str = "repo.jsonnet", text: str = REPO) -> P
 
 
 def invoke(*args: str) -> Any:
-    """Run ``otterdog-e2e inject <args>`` with a fixed run id."""
+    """Run ``otterdog-acceptance inject <args>`` with a fixed run id."""
     return CliRunner().invoke(cli.main, ["inject", "--run-id", RUN_ID, *args])
 
 
@@ -87,8 +87,8 @@ def test_offline_injection(session: dict[str, Any], tmp_path: Path) -> None:
     scenario = session["scenario"]
     assert scenario.tier == "offline" and scenario.variables == {"label": "x", "plan": "team"}
     assert scenario.steps[0].fragments.repositories == [REPO]
-    assert session["command"] == f"otterdog-e2e inject --fragment repositories={repo} --plan team --var label=x"
-    assert "otterdog-e2e inject (offline): artifacts" in result.output
+    assert session["command"] == f"otterdog-acceptance inject --fragment repositories={repo} --plan team --var label=x"
+    assert "otterdog-acceptance inject (offline): artifacts" in result.output
     assert "rendered config: " in result.output and "validate: ok (0 error(s), 0 warning(s))" in result.output
     assert "result: passed" in result.output and "orgs.newOrg('e2e-offline') {}" in result.output  # --print
 
@@ -188,7 +188,7 @@ def test_command_line_and_adhoc_item(tmp_path: Path) -> None:
     )
     line = cli_inject.inject_command_line(request, target="free", sut=None, reset_sut=None, no_reset=True)
     assert line == (
-        "otterdog-e2e inject --target free --fragment repositories=/u/r.jsonnet --library e2e=/u/l.libsonnet "
+        "otterdog-acceptance inject --target free --fragment repositories=/u/r.jsonnet --library e2e=/u/l.libsonnet "
         "--overlay /u/o.jsonnet --plan team --var n=5 --var 's=a b' --apply --no-reset"
     )
     assert cli_inject.adhoc_item(tmp_path) is None

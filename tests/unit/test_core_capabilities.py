@@ -9,7 +9,7 @@ from typing import Any
 import pytest
 import responses
 
-from otterdog_e2e.capabilities import (
+from otterdog_acceptance.capabilities import (
     PLAN_MATRIX,
     PLANS,
     Cap,
@@ -21,9 +21,9 @@ from otterdog_e2e.capabilities import (
     probe_capabilities,
     probe_status,
 )
-from otterdog_e2e.github.http import GitHubHttp
-from otterdog_e2e.settings import Identity
-from otterdog_e2e.testing.fakes import FAKE_ORG, FakeGitHubHttp, make_verified_org
+from otterdog_acceptance.github.http import GitHubHttp
+from otterdog_acceptance.settings import Identity
+from otterdog_acceptance.testing.fakes import FAKE_ORG, FakeGitHubHttp, make_verified_org
 
 API = "https://api.github.com"
 FIXTURE = "otterdog-e2e-fixture-a"
@@ -213,7 +213,7 @@ def test_probe_capabilities_overrides_apply_last(caplog: pytest.LogCaptureFixtur
         "add": ["ghas_private", "LARGER_RUNNERS", "warp_drive"],
         "remove": ["custom_properties", "larger_runners"],
     }
-    with caplog.at_level(logging.WARNING, logger="otterdog_e2e.capabilities"):
+    with caplog.at_level(logging.WARNING, logger="otterdog_acceptance.capabilities"):
         caps = probe(http, plan="enterprise", overrides=overrides)
     assert caps.has(Cap.GHAS_PRIVATE)
     assert not caps.has(Cap.CUSTOM_PROPERTIES)
@@ -233,19 +233,19 @@ def test_apply_overrides_tolerates_missing_keys() -> None:
 
 def test_probe_capabilities_enterprise_sanity_warning(caplog: pytest.LogCaptureFixture) -> None:
     """An enterprise org without custom-repository-roles (200) is reported, not fatal."""
-    with caplog.at_level(logging.WARNING, logger="otterdog_e2e.capabilities"):
+    with caplog.at_level(logging.WARNING, logger="otterdog_acceptance.capabilities"):
         caps = probe(probes_http({}), plan="enterprise")
     assert caps.caps == PLAN_MATRIX["enterprise"]
     assert "custom-repository-roles" in caplog.text
     caplog.clear()
-    with caplog.at_level(logging.WARNING, logger="otterdog_e2e.capabilities"):
+    with caplog.at_level(logging.WARNING, logger="otterdog_acceptance.capabilities"):
         probe(probes_http({ROLES: 200}), plan="enterprise")
     assert "custom-repository-roles" not in caplog.text
 
 
 def test_probe_capabilities_unknown_plan_is_tolerated(caplog: pytest.LogCaptureFixture) -> None:
     """A plan outside the matrix yields no plan capabilities and a warning."""
-    with caplog.at_level(logging.WARNING, logger="otterdog_e2e.capabilities"):
+    with caplog.at_level(logging.WARNING, logger="otterdog_acceptance.capabilities"):
         caps = probe(probes_http({}), plan="business")
     assert caps.caps == frozenset() and "unknown plan" in caplog.text
 

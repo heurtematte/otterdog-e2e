@@ -5,14 +5,14 @@
 #   variable E2E_PROFILE names its profile targets/<profile>.yaml (default: the instance name, so `free`, `team` and
 #   `enterprise` keep working without it). Dispatchable instances: the repository variable E2E_INSTANCES (JSON list),
 #   else E2E_TARGETS, else ["free", "team", "enterprise"].
-# classify (no secrets): validates the inputs (instance names, the allowlist) and runs `otterdog-e2e sut classify`
+# classify (no secrets): validates the inputs (instance names, the allowlist) and runs `otterdog-acceptance sut classify`
 #   (trust + normalized specs; for an untrusted SUT the PR title, author, head repo, sha and risky changed files go to
 #   the step summary for the reviewer); outputs the instances as a JSON list.
 # e2e: one job per instance (matrix, fail-fast off) in the environment `e2e-<instance>` (trusted SUTs: no reviewers,
 #   main only) or `e2e-<instance>-untrusted` (required reviewers, prevent self-review, main only). GitHub creates a
 #   missing environment on the fly, unprotected: the instance check fails the job before any SUT code runs when the
 #   environment does not hold the instance's configuration. Secrets are mapped on the harness steps only; the final
-#   janitor step sweeps exactly this run; artifacts are uploaded only after `otterdog-e2e scrub-artifacts` succeeded.
+#   janitor step sweeps exactly this run; artifacts are uploaded only after `otterdog-acceptance scrub-artifacts` succeeded.
 #
 # Values never reach `run:` scripts as `${{ }}` expressions: they are passed through `env:` and always quoted.
 name: e2e
@@ -208,7 +208,7 @@ jobs:
         run: |
           set -euo pipefail
           # the CLI also writes trust/sut/base_sut lines to GITHUB_OUTPUT: this step writes its own (combined) ones
-          classify() { GITHUB_OUTPUT=/dev/null .venv/bin/otterdog-e2e sut classify "$1"; }
+          classify() { GITHUB_OUTPUT=/dev/null .venv/bin/otterdog-acceptance sut classify "$1"; }
           head="$(classify "$SUT")"
           trust="$(jq -r .trust <<< "$head")"
           sut="$(jq -r .sut <<< "$head")"
@@ -414,7 +414,7 @@ jobs:
             if [[ -n "$PYTEST_K" ]]; then args+=(-k "$PYTEST_K"); fi
           fi
           if [[ "$STRICT_DIFF" == true ]]; then args+=(--strict-diff); fi
-          .venv/bin/otterdog-e2e "${args[@]}"
+          .venv/bin/otterdog-acceptance "${args[@]}"
       - name: Locate the run artifacts
         if: always()
         env:
@@ -455,7 +455,7 @@ jobs:
               continue
             fi
             # sweeps exactly this run (no age threshold) and takes over a lease the run may have left behind
-            .venv/bin/otterdog-e2e janitor --target "$TARGET" --run-id "$id" --apply || status=1
+            .venv/bin/otterdog-acceptance janitor --target "$TARGET" --run-id "$id" --apply || status=1
           done
           exit "$status"
       - name: Scrub the artifacts (fails on leaked secrets)
@@ -480,7 +480,7 @@ jobs:
             echo "no artifacts to scrub"
             exit 0
           fi
-          .venv/bin/otterdog-e2e scrub-artifacts "$E2E_ARTIFACTS"
+          .venv/bin/otterdog-acceptance scrub-artifacts "$E2E_ARTIFACTS"
       - name: Upload the artifacts
         if: always() && steps.scrub.outcome == 'success'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -502,7 +502,7 @@ jobs:
           set -euo pipefail
           # the pytest session already appended its summary.md (results, budgets, differential, manual testing)
           {
-            echo "### otterdog-e2e session"
+            echo "### otterdog-acceptance session"
             echo
             echo "| item | value |"
             echo "|---|---|"

@@ -21,18 +21,18 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from otterdog_e2e import waiting
+from otterdog_acceptance import waiting
 
 if TYPE_CHECKING:
-    from otterdog_e2e.context import E2EContext
-    from otterdog_e2e.github.mutate import Mutator
-    from otterdog_e2e.github.oracle import Oracle
-    from otterdog_e2e.naming import RunContext
-    from otterdog_e2e.otterdog.baseline import BaselineManager
-    from otterdog_e2e.otterdog.runner import CliResult, OtterdogCli
-    from otterdog_e2e.otterdog.workspace import ConfigWorkspace
-    from otterdog_e2e.settings import Target
-    from otterdog_e2e.sut.template import TemplateRef
+    from otterdog_acceptance.context import E2EContext
+    from otterdog_acceptance.github.mutate import Mutator
+    from otterdog_acceptance.github.oracle import Oracle
+    from otterdog_acceptance.naming import RunContext
+    from otterdog_acceptance.otterdog.baseline import BaselineManager
+    from otterdog_acceptance.otterdog.runner import CliResult, OtterdogCli
+    from otterdog_acceptance.otterdog.workspace import ConfigWorkspace
+    from otterdog_acceptance.settings import Target
+    from otterdog_acceptance.sut.template import TemplateRef
 
 pytestmark = [pytest.mark.tags("cli")]
 
@@ -50,7 +50,7 @@ def definition_path(target: Target) -> str:
 
 def variant(text: str, run_ctx: RunContext, purpose: str) -> str:
     """The baseline with one trailing jsonnet comment (a real content change, no model change)."""
-    return text.rstrip("\n") + f"\n// otterdog-e2e {purpose} of run {run_ctx.run_id}\n"
+    return text.rstrip("\n") + f"\n// otterdog-acceptance {purpose} of run {run_ctx.run_id}\n"
 
 
 def push(cli: OtterdogCli, workspace: ConfigWorkspace, text: str, message: str) -> CliResult:
@@ -88,7 +88,7 @@ def test_push_fetch_round_trip(
     text = variant(baseline.text(), run_ctx, "push-fetch round trip")
     failed = False
     try:
-        pushed = push(cli, fresh_workspace, text, f"otterdog-e2e {run_ctx.run_id}: push-fetch round trip")
+        pushed = push(cli, fresh_workspace, text, f"otterdog-acceptance {run_ctx.run_id}: push-fetch round trip")
         assert PUSHED_TEXT in pushed.output, pushed.output[-2000:]
         remote = wait_content(oracle, repo, path, text)
         assert remote == text, f"{repo}:{path} does not hold the pushed configuration ({len(remote or '')} chars)"
@@ -108,7 +108,7 @@ def restore_baseline(
 ) -> None:
     """Push the baseline back to the config repository; a failure only fails the test when nothing failed before."""
     try:
-        restored = push(cli, workspace, baseline.text(), f"otterdog-e2e {run_ctx.run_id}: restore the baseline")
+        restored = push(cli, workspace, baseline.text(), f"otterdog-acceptance {run_ctx.run_id}: restore the baseline")
         assert PUSHED_TEXT in restored.output or NOTHING_PUSHED_TEXT in restored.output, restored.output[-2000:]
     except AssertionError:
         if not failed:
@@ -128,7 +128,7 @@ def test_open_pr(
     """open-pr opens a pull request from otterdog/e2e-<run>-open-pr carrying the local configuration."""
     repo, path = target.config_repo_for(run_ctx), definition_path(target)
     cli = make_cli(fresh_workspace)
-    push(cli, fresh_workspace, baseline.text(), f"otterdog-e2e {run_ctx.run_id}: baseline before open-pr")
+    push(cli, fresh_workspace, baseline.text(), f"otterdog-acceptance {run_ctx.run_id}: baseline before open-pr")
     branch = run_ctx.name("open-pr")
     head_ref = f"otterdog/{branch}"
     text = variant(baseline.text(), run_ctx, "open-pr")
@@ -137,7 +137,7 @@ def test_open_pr(
     assert author, "the target declares no admin login"
     number: int | None = None
     try:
-        result = cli.open_pr(branch=branch, title=f"otterdog-e2e {run_ctx.run_id}: open-pr", author=author)
+        result = cli.open_pr(branch=branch, title=f"otterdog-acceptance {run_ctx.run_id}: open-pr", author=author)
         result.assert_ok("open-pr")
         match = CREATED_PR_RE.search(result.output)
         assert match, f"open-pr printed no pull request number:\n{result.output[-2000:]}"

@@ -18,18 +18,18 @@ import pytest
 import requests
 from click.testing import CliRunner
 
-from otterdog_e2e import cli
-from otterdog_e2e.cli import app_manifest as cli_app_manifest
-from otterdog_e2e.cli import bootstrap as cli_bootstrap
-from otterdog_e2e.cli import common as cli_common
-from otterdog_e2e.cli import maintenance as cli_maintenance
-from otterdog_e2e.cli import ops as cli_ops
-from otterdog_e2e.context import E2EContext, E2EOptions
-from otterdog_e2e.github.janitor import JanitorItem
-from otterdog_e2e.redact import Redactor
-from otterdog_e2e.safety import SafetyError
-from otterdog_e2e.settings import AppCredentials, Identity, IdentitySpec, Target
-from otterdog_e2e.testing.fakes import (
+from otterdog_acceptance import cli
+from otterdog_acceptance.cli import app_manifest as cli_app_manifest
+from otterdog_acceptance.cli import bootstrap as cli_bootstrap
+from otterdog_acceptance.cli import common as cli_common
+from otterdog_acceptance.cli import maintenance as cli_maintenance
+from otterdog_acceptance.cli import ops as cli_ops
+from otterdog_acceptance.context import E2EContext, E2EOptions
+from otterdog_acceptance.github.janitor import JanitorItem
+from otterdog_acceptance.redact import Redactor
+from otterdog_acceptance.safety import SafetyError
+from otterdog_acceptance.settings import AppCredentials, Identity, IdentitySpec, Target
+from otterdog_acceptance.testing.fakes import (
     FAKE_MARKER,
     FAKE_ORG,
     FAKE_ORG_ID,
@@ -108,19 +108,19 @@ def org(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Org:
         """RecordingMutator per identity, updating the oracle."""
         return state.mutators.setdefault(client.identity, RecordingMutator(verified, oracle=state.oracle))
 
-    monkeypatch.setattr("otterdog_e2e.settings.harness_settings", lambda environ=None: make_settings(tmp_path))
-    monkeypatch.setattr("otterdog_e2e.settings.load_env_files", lambda *a, **k: [])
-    monkeypatch.setattr("otterdog_e2e.settings.load_target", lambda *a, **k: state.target)
-    monkeypatch.setattr("otterdog_e2e.settings.resolve_identities", lambda *a, **k: dict(state.identities))
-    monkeypatch.setattr("otterdog_e2e.settings.resolve_app_credentials", lambda *a, **k: state.app_credentials)
-    monkeypatch.setattr("otterdog_e2e.github.http.GitHubHttp", http)
-    monkeypatch.setattr("otterdog_e2e.safety.verify_target", verify)
-    monkeypatch.setattr("otterdog_e2e.github.oracle.Oracle", lambda client, login: state.oracle)
-    monkeypatch.setattr("otterdog_e2e.github.mutate.Mutator", mutator)
-    monkeypatch.setattr("otterdog_e2e.github.lease.OrgLease", lambda *a, **k: state.lease)
-    monkeypatch.setattr("otterdog_e2e.github.app.AppAuth", lambda creds, **kw: state.app)
-    monkeypatch.setattr("otterdog_e2e.redact.install_logging_filter", lambda *a: None)
-    monkeypatch.setattr("otterdog_e2e.report.scrub_artifacts", lambda root, redactor=None: [])
+    monkeypatch.setattr("otterdog_acceptance.settings.harness_settings", lambda environ=None: make_settings(tmp_path))
+    monkeypatch.setattr("otterdog_acceptance.settings.load_env_files", lambda *a, **k: [])
+    monkeypatch.setattr("otterdog_acceptance.settings.load_target", lambda *a, **k: state.target)
+    monkeypatch.setattr("otterdog_acceptance.settings.resolve_identities", lambda *a, **k: dict(state.identities))
+    monkeypatch.setattr("otterdog_acceptance.settings.resolve_app_credentials", lambda *a, **k: state.app_credentials)
+    monkeypatch.setattr("otterdog_acceptance.github.http.GitHubHttp", http)
+    monkeypatch.setattr("otterdog_acceptance.safety.verify_target", verify)
+    monkeypatch.setattr("otterdog_acceptance.github.oracle.Oracle", lambda client, login: state.oracle)
+    monkeypatch.setattr("otterdog_acceptance.github.mutate.Mutator", mutator)
+    monkeypatch.setattr("otterdog_acceptance.github.lease.OrgLease", lambda *a, **k: state.lease)
+    monkeypatch.setattr("otterdog_acceptance.github.app.AppAuth", lambda creds, **kw: state.app)
+    monkeypatch.setattr("otterdog_acceptance.redact.install_logging_filter", lambda *a: None)
+    monkeypatch.setattr("otterdog_acceptance.report.scrub_artifacts", lambda root, redactor=None: [])
     for name in ("CI", "GITHUB_ACTIONS", "E2E_LEASE_WAIT"):
         monkeypatch.delenv(name, raising=False)
     return state
@@ -364,7 +364,7 @@ def test_the_delivery_probe_waits_as_long_as_every_delivery_wait() -> None:
     """F6: GitHub lists deliveries minutes late: bootstrap's probe gets the 300 s of the other delivery waits."""
     import inspect
 
-    from otterdog_e2e.config_repo import ConfigRepoFlow
+    from otterdog_acceptance.config_repo import ConfigRepoFlow
 
     flow_default = inspect.signature(ConfigRepoFlow).parameters["delivery_timeout"].default
     assert cli_bootstrap.DELIVERY_PROBE_TIMEOUT == flow_default == 300
@@ -639,7 +639,7 @@ def test_bootstrap_wait_timeout_and_ctrl_c_tell_to_run_it_again(org: Org, heavy:
     """A timeout (--wait-timeout) or Ctrl-C during the wait stops bootstrap before the lease with how to resume."""
     org.https["author"] = refusing("author")
     clock = Clock()
-    again = re.escape("run `otterdog-e2e bootstrap --target fake --apply --wait` again")
+    again = re.escape("run `otterdog-acceptance bootstrap --target fake --apply --wait` again")
     with pytest.raises(click.ClickException, match=rf"author e2e-author: not done within 30 s: {again}"):
         verified_steps(org, clock=clock, wait=True, wait_timeout=30).identities()
     assert clock.sleeps == [10.0, 10.0, 10.0]
@@ -709,7 +709,7 @@ def test_bootstrap_explains_fine_grained_tokens_that_cannot_prove_their_isolatio
 ) -> None:
     """verify_target refuses a fine-grained author/approver/oracle token until its account is an active member
     (owner) and, for members, the request is approved: bootstrap adds those steps; other errors pass unchanged."""
-    from otterdog_e2e.safety import SafetyError as RealSafetyError
+    from otterdog_acceptance.safety import SafetyError as RealSafetyError
 
     if role == "oracle":
         with_oracle(org)
@@ -719,7 +719,7 @@ def test_bootstrap_explains_fine_grained_tokens_that_cannot_prove_their_isolatio
         """The isolation proof of the fine-grained token fails."""
         raise RealSafetyError(message)
 
-    monkeypatch.setattr("otterdog_e2e.safety.verify_target", refuse)
+    monkeypatch.setattr("otterdog_acceptance.safety.verify_target", refuse)
     result = CliRunner().invoke(cli.main, ["bootstrap", "--target", "fake", "--apply"])
     assert result.exit_code == 1 and f"SafetyError: {message}" in result.output
     for text in expected:
@@ -841,7 +841,7 @@ def fake_janitor(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
             state["swept"] = list(swept)
             return list(swept)
 
-    monkeypatch.setattr("otterdog_e2e.github.janitor.Janitor", Janitor)
+    monkeypatch.setattr("otterdog_acceptance.github.janitor.Janitor", Janitor)
     return state
 
 
@@ -951,7 +951,7 @@ def test_relay_command_holds_the_lease(org: Org, monkeypatch: pytest.MonkeyPatch
     org.oracle.set("org", value={**org.oracle.org(), "description": f"{FAKE_MARKER} ok"})
     created: dict[str, Any] = {}
     monkeypatch.setattr(
-        "otterdog_e2e.webhooks.relay.DeliveryRelay", lambda app, **kw: created.update(kw) or FakeRelay()
+        "otterdog_acceptance.webhooks.relay.DeliveryRelay", lambda app, **kw: created.update(kw) or FakeRelay()
     )
     monkeypatch.setattr(cli_ops, "relay_loop", lambda relay, **kw: created.setdefault("lease", list(org.lease.calls)))
     before = datetime.now(UTC)
@@ -968,13 +968,17 @@ def test_relay_command_holds_the_lease(org: Org, monkeypatch: pytest.MonkeyPatch
 # --- report, scrub, cache -------------------------------------------------------------------------------------------
 def test_report_and_scrub_commands(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """report prints the summary; scrub-artifacts exits 1 when it removed leaking files."""
-    monkeypatch.setattr("otterdog_e2e.report.build_summary", lambda directory, **kw: f"# summary {directory.name}")
+    monkeypatch.setattr(
+        "otterdog_acceptance.report.build_summary", lambda directory, **kw: f"# summary {directory.name}"
+    )
     result = CliRunner().invoke(cli.main, ["report", str(tmp_path)])
     assert result.exit_code == 0 and f"# summary {tmp_path.name}" in result.output
-    monkeypatch.setattr("otterdog_e2e.report.scrub_artifacts", lambda root, redactor=None: [root / "cli" / "x.txt"])
+    monkeypatch.setattr(
+        "otterdog_acceptance.report.scrub_artifacts", lambda root, redactor=None: [root / "cli" / "x.txt"]
+    )
     result = CliRunner().invoke(cli.main, ["scrub-artifacts", str(tmp_path)])
     assert result.exit_code == 1 and "x.txt" in result.output
-    monkeypatch.setattr("otterdog_e2e.report.scrub_artifacts", lambda root, redactor=None: [])
+    monkeypatch.setattr("otterdog_acceptance.report.scrub_artifacts", lambda root, redactor=None: [])
     result = CliRunner().invoke(cli.main, ["scrub-artifacts", str(tmp_path)])
     assert result.exit_code == 0 and "no leak" in result.output
 
@@ -1039,8 +1043,8 @@ def test_cache_prune_keeps_the_newest_entries(tmp_path: Path, monkeypatch: pytes
             os.utime(entry, (1_700_000_000 - age * 100, 1_700_000_000 - age * 100))
     (cache / "src" / "v1.6.0.e2e-export.json").write_text("{}")
     (cache / "mirror").mkdir()
-    monkeypatch.setattr("otterdog_e2e.settings.harness_settings", lambda environ=None: make_settings(tmp_path))
-    monkeypatch.setattr("otterdog_e2e.sut.image.docker_available", lambda: False)
+    monkeypatch.setattr("otterdog_acceptance.settings.harness_settings", lambda environ=None: make_settings(tmp_path))
+    monkeypatch.setattr("otterdog_acceptance.sut.image.docker_available", lambda: False)
     result = CliRunner().invoke(cli.main, ["cache", "prune", "--keep", "1"])
     assert result.exit_code == 0, result.output
     assert sorted(p.name for p in (cache / "run").iterdir()) == ["r3"]
@@ -1061,8 +1065,8 @@ def test_prune_images_keeps_the_newest_tags(monkeypatch: pytest.MonkeyPatch) -> 
             return SimpleNamespace(returncode=0, stdout=f"{repository}:new\n{repository}:old\n{repository}:<none>\n")
         return SimpleNamespace(returncode=0, stdout="")
 
-    monkeypatch.setattr("otterdog_e2e.sut.image.docker_available", lambda: True)
-    monkeypatch.setattr("otterdog_e2e.procs.run", run)
+    monkeypatch.setattr("otterdog_acceptance.sut.image.docker_available", lambda: True)
+    monkeypatch.setattr("otterdog_acceptance.procs.run", run)
     removed = cli_maintenance.prune_images(keep=1)
     assert removed == ["otterdog-e2e/otterdog:old", "otterdog-e2e/untrusted:old"]
     assert ["docker", "image", "rm", "otterdog-e2e/otterdog:old"] in calls
@@ -1072,10 +1076,10 @@ def test_prune_images_keeps_the_newest_tags(monkeypatch: pytest.MonkeyPatch) -> 
 def test_manifest_flow_verifies_state(monkeypatch: pytest.MonkeyPatch) -> None:
     """The loopback listener serves the form, ignores a wrong state and returns the code of the right one."""
     monkeypatch.setattr(
-        "otterdog_e2e.appmanifest.build_manifest", lambda target, **kw: {"redirect_url": kw["redirect_url"]}
+        "otterdog_acceptance.appmanifest.build_manifest", lambda target, **kw: {"redirect_url": kw["redirect_url"]}
     )
     monkeypatch.setattr(
-        "otterdog_e2e.appmanifest.manifest_form_html", lambda org, manifest, state: f"<form {org} {state}>"
+        "otterdog_acceptance.appmanifest.manifest_form_html", lambda org, manifest, state: f"<form {org} {state}>"
     )
     flow = cli_app_manifest.ManifestFlow(
         make_target(), webhook_url="https://sink.example.org/x", port=0, state="the-state", timeout=30
@@ -1130,7 +1134,7 @@ def test_app_manifest_exchange_prints_paths_not_secrets(
             "secret_path": out_dir / "webhook-secret",
         }
 
-    monkeypatch.setattr("otterdog_e2e.appmanifest.exchange_code", exchange)
+    monkeypatch.setattr("otterdog_acceptance.appmanifest.exchange_code", exchange)
     home = tmp_path / "home"
     result = CliRunner().invoke(
         cli.main,
@@ -1146,10 +1150,13 @@ def test_app_manifest_exchange_prints_paths_not_secrets(
         env={"HOME": str(home)},
     )
     assert result.exit_code == 0, result.output
-    assert exchanged["code"] == "code-12345678" and exchanged["out_dir"] == home / ".config" / "otterdog-e2e" / "fake"
+    assert (
+        exchanged["code"] == "code-12345678"
+        and exchanged["out_dir"] == home / ".config" / "otterdog-acceptance" / "fake"
+    )
     assert "E2E_APP_ID=77" in result.output and "E2E_APP_PRIVATE_KEY_FILE=" in result.output
     assert "E2E_APP_WEBHOOK_SECRET=<the content of" in result.output and "code-12345678" not in result.output
-    assert f"add to {home / '.config' / 'otterdog-e2e' / 'fake.env'}:" in result.output
+    assert f"add to {home / '.config' / 'otterdog-acceptance' / 'fake.env'}:" in result.output
 
 
 def test_app_credentials_dir_and_instructions_use_home_of_the_environ(tmp_path: Path) -> None:
@@ -1157,7 +1164,7 @@ def test_app_credentials_dir_and_instructions_use_home_of_the_environ(tmp_path: 
     of the process); the instructions name that env file and the installation URL preselecting the org."""
     target = make_target("my-instance")
     environ = {"HOME": str(tmp_path)}
-    config = tmp_path / ".config" / "otterdog-e2e"
+    config = tmp_path / ".config" / "otterdog-acceptance"
     assert cli_app_manifest.app_credentials_dir(target, environ) == config / "my-instance"
     result = {"id": 7, "slug": "otterdog-e2e-x", "pem_path": "k.pem", "secret_path": "s", "env_path": "app-7.env"}
     text = cli_app_manifest.app_instructions(target, result, environ)
@@ -1196,20 +1203,20 @@ class Resolved:
 def test_sut_commands(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """resolve prints the ResolvedSut; install refuses untrusted SUTs; image builds the webapp image."""
     resolved = {"release:latest": Resolved("v1.6.1", True), "pr:1@" + fake_sha("p"): Resolved("pr1-abc", False)}
-    monkeypatch.setattr("otterdog_e2e.settings.harness_settings", lambda environ=None: make_settings(tmp_path))
-    monkeypatch.setattr("otterdog_e2e.redact.install_logging_filter", lambda *a: None)
-    monkeypatch.setattr("otterdog_e2e.sut.spec.parse_sut_spec", lambda raw: raw)
-    monkeypatch.setattr("otterdog_e2e.sut.spec.resolve_sut", lambda spec, settings, http=None: resolved[spec])
-    monkeypatch.setattr("otterdog_e2e.github.http.GitHubHttp", lambda token, **kw: FakeGitHubHttp())
+    monkeypatch.setattr("otterdog_acceptance.settings.harness_settings", lambda environ=None: make_settings(tmp_path))
+    monkeypatch.setattr("otterdog_acceptance.redact.install_logging_filter", lambda *a: None)
+    monkeypatch.setattr("otterdog_acceptance.sut.spec.parse_sut_spec", lambda raw: raw)
+    monkeypatch.setattr("otterdog_acceptance.sut.spec.resolve_sut", lambda spec, settings, http=None: resolved[spec])
+    monkeypatch.setattr("otterdog_acceptance.github.http.GitHubHttp", lambda token, **kw: FakeGitHubHttp())
     installed = SimpleNamespace(
         runtime="host", otterdog_bin=tmp_path / "otterdog", version_output="otterdog.sh, version 1.6.1\n"
     )
     monkeypatch.setattr(
-        "otterdog_e2e.sut.cli_install.install_cli",
+        "otterdog_acceptance.sut.cli_install.install_cli",
         lambda sut, settings, **kw: SimpleNamespace(sut=sut, **vars(installed)),
     )
     monkeypatch.setattr(
-        "otterdog_e2e.sut.image.build_webapp_image",
+        "otterdog_acceptance.sut.image.build_webapp_image",
         lambda sut, **kw: make_dataclass("Image", ["tag"])(tag=f"otterdog-e2e/otterdog:{sut.label}"),
     )
     result = CliRunner().invoke(cli.main, ["sut", "resolve", "release:latest"])

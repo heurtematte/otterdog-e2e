@@ -1,4 +1,4 @@
-"""Fixtures of the ad-hoc injection tests (``otterdog-e2e inject``, tests/adhoc/test_adhoc.py).
+"""Fixtures of the ad-hoc injection tests (``otterdog-acceptance inject``, tests/adhoc/test_adhoc.py).
 
 The offline fixtures mirror tests/offline/conftest.py (conftest fixtures are per directory): the SUT CLI with
 ``offline=True`` (dummy token, ``unshare -rn`` or ``--network none``) on a fresh ``e2e-offline`` workspace whose
@@ -13,13 +13,13 @@ from pathlib import Path
 
 import pytest
 
-from otterdog_e2e.context import E2EContext, get_context
-from otterdog_e2e.inject import ADHOC_DIR
-from otterdog_e2e.otterdog.runner import OtterdogCli
-from otterdog_e2e.otterdog.workspace import ConfigWorkspace
-from otterdog_e2e.scenarios.offline import OfflineEngine, offline_run_context
-from otterdog_e2e.sut.cli_install import InstalledCli
-from otterdog_e2e.sut.template import template_source_dir
+from otterdog_acceptance.context import E2EContext, get_context
+from otterdog_acceptance.inject import ADHOC_DIR
+from otterdog_acceptance.otterdog.runner import OtterdogCli
+from otterdog_acceptance.otterdog.workspace import ConfigWorkspace
+from otterdog_acceptance.scenarios.offline import OfflineEngine, offline_run_context
+from otterdog_acceptance.sut.cli_install import InstalledCli
+from otterdog_acceptance.sut.template import template_source_dir
 
 
 @pytest.fixture(scope="session")

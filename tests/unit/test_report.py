@@ -1,4 +1,4 @@
-"""Unit tests of otterdog_e2e.report: build_summary (sections, PR-template block, size) and scrub_artifacts."""
+"""Unit tests of otterdog_acceptance.report: build_summary (sections, PR-template block, size) and scrub_artifacts."""
 
 from __future__ import annotations
 
@@ -12,11 +12,11 @@ from typing import Any
 
 import pytest
 
-from otterdog_e2e import report
-from otterdog_e2e.differential import ExpectedDelta, compare
-from otterdog_e2e.observe import Observation
-from otterdog_e2e.redact import Redactor
-from otterdog_e2e.report import (
+from otterdog_acceptance import report
+from otterdog_acceptance.differential import ExpectedDelta, compare
+from otterdog_acceptance.observe import Observation
+from otterdog_acceptance.redact import Redactor
+from otterdog_acceptance.report import (
     RunData,
     aggregate_results,
     build_summary,
@@ -30,7 +30,7 @@ from otterdog_e2e.report import (
     tier_of,
     write_summary,
 )
-from otterdog_e2e.safety import SafetyError
+from otterdog_acceptance.safety import SafetyError
 
 RUN_ID = "t3c7z8a5"
 ORG = "e2e-test-org"
@@ -143,7 +143,7 @@ def live_run(tmp_path: Path) -> Path:
             "trusted": True,
         },
         "capabilities": {"plan": "free", "caps": ["public_repos", "secret_scanning_public"], "probes": {}},
-        "argv": ["otterdog-e2e", "run", "--target", "free", "--sut", f"pr:792@{SHA}", "--base-sut", "auto"],
+        "argv": ["otterdog-acceptance", "run", "--target", "free", "--sut", f"pr:792@{SHA}", "--base-sut", "auto"],
     }
     (run_dir / "run.json").write_text(json.dumps(run))
     _jsonl(run_dir / "results.jsonl", _results())
@@ -222,7 +222,7 @@ def test_fmt_duration() -> None:
 # --- summary sections ---------------------------------------------------------------------------------------------
 def test_summary_title_and_run_table(summary: str) -> None:
     """Verdict counts product vs infrastructure failures; the run table describes target and SUTs."""
-    assert summary.startswith(f"# otterdog-e2e run `{RUN_ID}`")
+    assert summary.startswith(f"# otterdog-acceptance run `{RUN_ID}`")
     assert "**FAILED**: 1 product failure(s), 1 infrastructure failure(s) out of 10 test(s)." in summary
     assert f"| Target | `free` (org `{ORG}`, plan Free) |" in summary
     assert "| SUT under test | `pr792-d0d3b08` (spec `pr:792@" in summary and "**untrusted**" in summary
@@ -231,7 +231,7 @@ def test_summary_title_and_run_table(summary: str) -> None:
     assert reset in summary and "| Lane | `pr-fast` |" in summary
     assert "| Finished | 2026-10-02T10:41:10+00:00 (duration 41m 10s) |" in summary
     assert "| Capabilities | `public_repos`, `secret_scanning_public` |" in summary
-    assert "| Command | `otterdog-e2e run --target free --sut pr:792@" in summary
+    assert "| Command | `otterdog-acceptance run --target free --sut pr:792@" in summary
 
 
 def test_summary_names_the_profile_of_the_instance(live_run: Path) -> None:
@@ -250,7 +250,7 @@ def test_run_overview_and_tally_text(live_run: Path, tmp_path: Path) -> None:
     assert (overview["target"], overview["profile"], overview["org"], overview["plan"]) == ("free", None, ORG, "free")
     assert overview["tests"] == 10 and sum(overview["tallies"].values()) == 10
     assert overview["failures"] == 2 and overview["infra_failures"] == 1
-    assert str(overview["command"]).startswith("otterdog-e2e run --target free")
+    assert str(overview["command"]).startswith("otterdog-acceptance run --target free")
     assert report.run_overview(tmp_path / "missing") == {
         "target": None,
         "profile": None,
@@ -317,7 +317,7 @@ def test_summary_manual_testing_block_for_a_live_run(summary: str) -> None:
     assert lines[0] == "### Manual testing"
     assert "- [ ] GitHub API calls only stubbed / mocked in unit tests (no live testing)" in lines
     assert "- [x] Tested on a real GitHub organization (live GitHub API):" in lines
-    assert f"  - Organization(s) used: `{ORG}` (dedicated otterdog-e2e test organization)" in lines
+    assert f"  - Organization(s) used: `{ORG}` (dedicated otterdog-acceptance test organization)" in lines
     assert "  - GitHub plan: Free" in lines
     cli_line = next(line for line in lines if "**CLI**" in line)
     assert cli_line.startswith("  - [x] **CLI** — commands run: `otterdog plan` (2), `otterdog apply`")
@@ -329,7 +329,7 @@ def test_summary_manual_testing_block_for_a_live_run(summary: str) -> None:
     assert "org plan used: Free — `H-APP-DELIVERY` (passed); 3 App deliveries relayed" in webhooks
     assert "`pull_request.opened`, `issue_comment.created`, `push`; webapp answered 204: 3)" in webhooks
     assert "### How to reproduce / test scenario:**" in lines
-    assert any(line.startswith("2. Run `otterdog-e2e run --target free --sut pr:792@") for line in lines)
+    assert any(line.startswith("2. Run `otterdog-acceptance run --target free --sut pr:792@") for line in lines)
     assert any("1 unexpected delta(s)" in line for line in lines)
 
 
@@ -354,13 +354,16 @@ def test_manual_testing_block_mirrors_the_pr_template(live_run: Path, tmp_path: 
 def test_command_line_of_pytest_invocations() -> None:
     """run.json argv holds pytest's invocation args (prefixed with pytest) or a full command line."""
     assert report.command_line({"argv": ["tests/cli", "--e2e-target", "free"]}) == "pytest tests/cli --e2e-target free"
-    assert report.command_line({"argv": ["otterdog-e2e", "run", "--sut", "a b"]}) == "otterdog-e2e run --sut 'a b'"
+    assert (
+        report.command_line({"argv": ["otterdog-acceptance", "run", "--sut", "a b"]})
+        == "otterdog-acceptance run --sut 'a b'"
+    )
     assert report.command_line({"argv": [], "command": "make e2e"}) == "make e2e"
     harness = {
         "argv": ["/abs/tests/offline", "--e2e-sut=release:latest"],
-        "command": "otterdog-e2e run --suite offline",
+        "command": "otterdog-acceptance run --suite offline",
     }
-    assert report.command_line(harness) == "otterdog-e2e run --suite offline"  # the harness command wins
+    assert report.command_line(harness) == "otterdog-acceptance run --suite offline"  # the harness command wins
     assert report.command_line({"argv": []}) is None
 
 
@@ -376,14 +379,16 @@ def test_offline_only_run_checks_the_no_live_box(tmp_path: Path) -> None:
     assert "- [x] GitHub API calls only stubbed / mocked in unit tests (no live testing)" in block
     assert "- [ ] Tested on a real GitHub organization (live GitHub API):" in block
     assert "  - Organization(s) used: -" in block and "  - [ ] **CLI** — commands run: none" in block
-    assert "1. Check out otterdog-e2e (offline tiers only: no GitHub organization or token is needed" in block
+    assert "1. Check out otterdog-acceptance (offline tiers only: no GitHub organization or token is needed" in block
     (run_dir / "run.json").write_text(
-        json.dumps({"reset_sut": "release:latest", "command": "otterdog-e2e run --suite offline --sut release:latest"})
+        json.dumps(
+            {"reset_sut": "release:latest", "command": "otterdog-acceptance run --suite offline --sut release:latest"}
+        )
     )
     text = build_summary(run_dir, redactor=Redactor())
     assert "**PASSED**: 1 passed, 0 skipped, 0 known-bug xfail(s), 0 xpass(es) out of 1 test(s)." in text
     assert "| Reset SUT | `release:latest` (configured, not used: no baseline reset in this run) |" in text
-    assert "2. Run `otterdog-e2e run --suite offline --sut release:latest`." in text
+    assert "2. Run `otterdog-acceptance run --suite offline --sut release:latest`." in text
 
 
 def test_sandboxed_offline_commands_are_not_live_cli_testing(tmp_path: Path) -> None:
@@ -428,7 +433,7 @@ def test_summary_of_an_empty_or_missing_directory(tmp_path: Path) -> None:
     (run_dir / "run.json").write_text("{broken")
     text = build_summary(run_dir, redactor=Redactor())
     assert "**NO RESULTS**" in text and "_2 malformed line(s) of results.jsonl were ignored._" in text
-    assert f"# otterdog-e2e run `{run_dir.name}`" in text
+    assert f"# otterdog-acceptance run `{run_dir.name}`" in text
 
 
 def test_summary_stays_below_one_mebibyte(tmp_path: Path) -> None:
@@ -817,7 +822,7 @@ def test_default_coverage_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
         """Raise like find_project_root outside any project."""
         raise FileNotFoundError("no project")
 
-    monkeypatch.setattr("otterdog_e2e.settings.find_project_root", no_project)
+    monkeypatch.setattr("otterdog_acceptance.settings.find_project_root", no_project)
     assert report.default_coverage_file({}) is None
 
 
@@ -832,7 +837,7 @@ def test_the_project_matrix_loads() -> None:
 def test_summary_lists_the_write_requests_of_the_scenario_commands(live_run: Path, tmp_path: Path) -> None:
     """The parsed api-usage.json copies of the SUT's commands give the write endpoints of the run (reset and base
     commands excluded) and, next to the coverage matrix, the endpoints of the inventory no command sent."""
-    from otterdog_e2e.report import api_writes
+    from otterdog_acceptance.report import api_writes
 
     def usage(relative: str, endpoints: dict[str, int]) -> None:
         (live_run / relative / "api-usage.json").write_text(json.dumps({"endpoints": endpoints}))

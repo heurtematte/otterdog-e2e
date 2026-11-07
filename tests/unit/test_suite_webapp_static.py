@@ -33,14 +33,14 @@ from typing import Any
 
 import pytest
 
-from otterdog_e2e import waiting
-from otterdog_e2e.config_repo import ConfigPr, ConfigRepoFlow, DeliveryTimeoutError, ReactionTimeoutError
-from otterdog_e2e.otterdog.render import OrgConfigRenderer, build_baseline, org_profile
-from otterdog_e2e.pytest_plugin import COMPOSE_FIXTURES, FIXTURE_IDENTITIES
-from otterdog_e2e.selection import SCENARIO_TAGS
-from otterdog_e2e.sut.image import BuiltImage
-from otterdog_e2e.sut.template import offline_template
-from otterdog_e2e.testing.fakes import (
+from otterdog_acceptance import waiting
+from otterdog_acceptance.config_repo import ConfigPr, ConfigRepoFlow, DeliveryTimeoutError, ReactionTimeoutError
+from otterdog_acceptance.otterdog.render import OrgConfigRenderer, build_baseline, org_profile
+from otterdog_acceptance.pytest_plugin import COMPOSE_FIXTURES, FIXTURE_IDENTITIES
+from otterdog_acceptance.selection import SCENARIO_TAGS
+from otterdog_acceptance.sut.image import BuiltImage
+from otterdog_acceptance.sut.template import offline_template
+from otterdog_acceptance.testing.fakes import (
     FAKE_MARKER,
     FAKE_ORG,
     FakeOracle,
@@ -82,7 +82,7 @@ ORG_LEVEL_CLEANUPS = frozenset({"org_level_reset", "webapp_case"})
 NON_ADMIN_IDENTITIES = frozenset({"author", "approver", "outsider", "config_reader"})
 # ConfigRepoFlow methods acting as a non-admin identity by default (config_repo.py: approve, request_changes)
 DEFAULT_IDENTITY_CALLS = {"approve": "approver", "request_changes": "approver"}
-POLLING_NAMES = frozenset({"poll", "wait_until", "retry", "Deadline"})  # otterdog_e2e.waiting
+POLLING_NAMES = frozenset({"poll", "wait_until", "retry", "Deadline"})  # otterdog_acceptance.waiting
 SLEEP_MODULES = frozenset({"time", "asyncio"})
 BOT = "otterdog-e2e-app"
 REPO = "e2e-t3c7z8a5-config"
@@ -260,7 +260,7 @@ def sleep_calls(tree: ast.Module) -> list[str]:
 
 
 def own_polls(tree: ast.Module) -> list[str]:
-    """Direct uses of otterdog_e2e.waiting polling in a test module (only the classified conftest helpers poll)."""
+    """Direct uses of otterdog_acceptance.waiting polling in a test module (only the classified conftest helpers poll)."""
     found = []
     for node in ast.walk(tree):
         if isinstance(node, ast.Attribute) and node.attr in POLLING_NAMES and isinstance(node.value, ast.Name):
@@ -374,7 +374,7 @@ def test_nothing_sleeps_blindly(trees: dict[Path, ast.Module]) -> None:
 
 
 def test_test_modules_wait_through_classified_helpers(trees: dict[Path, ast.Module]) -> None:
-    """Test modules never poll with otterdog_e2e.waiting directly (no infra/SUT classification there)."""
+    """Test modules never poll with otterdog_acceptance.waiting directly (no infra/SUT classification there)."""
     offenders = {
         str(path.relative_to(PROJECT)): found
         for path, tree in trees.items()
@@ -621,7 +621,7 @@ def test_webapp_includes(tiers: Tiers, monkeypatch: pytest.MonkeyPatch) -> None:
             """fix -> rev."""
             return (a, b) == (fake_sha("fix"), fake_sha("rev"))
 
-    monkeypatch.setattr("otterdog_e2e.sut.source.UpstreamMirror", Mirror)
+    monkeypatch.setattr("otterdog_acceptance.sut.source.UpstreamMirror", Mirror)
     images["head"] = BuiltImage("otterdog-e2e/otterdog:x", "sha256:1", "1.7.0", fake_sha("rev"), True)
     assert scenario.webapp_includes(fake_sha("fix")) is True
     assert scenario.webapp_includes(fake_sha("other")) is False
@@ -695,7 +695,7 @@ def test_xfail_unless_includes(tiers: Tiers, monkeypatch: pytest.MonkeyPatch) ->
             """fix_known -> rev."""
             return a == fake_sha("fix_known")
 
-    monkeypatch.setattr("otterdog_e2e.sut.source.UpstreamMirror", Mirror)
+    monkeypatch.setattr("otterdog_acceptance.sut.source.UpstreamMirror", Mirror)
     image = BuiltImage("otterdog-e2e/otterdog:x", "sha256:1", "1.7.0", fake_sha("rev"), True)
     e2e = SimpleNamespace(
         image_for={"head": image}.__getitem__, settings=SimpleNamespace(cache_dir=Path("/x"), upstream_repo="o/r")
@@ -720,7 +720,7 @@ def test_xfail_unless_includes(tiers: Tiers, monkeypatch: pytest.MonkeyPatch) ->
 
 def test_known_bug_reason(tiers: Tiers) -> None:
     """The known bug whose upstream URL ends with the suffix names the xfail; a default otherwise."""
-    from otterdog_e2e.known_bugs import KnownBug
+    from otterdog_acceptance.known_bugs import KnownBug
 
     bug = KnownBug("KB-018", "stale snapshots", upstream="https://github.com/eclipse-csi/otterdog/pull/792/")
     scenario, _, _ = _scenario(tiers, e2e=SimpleNamespace(known_bugs=lambda: {bug.id: bug}))
@@ -815,7 +815,7 @@ def test_settle_and_tasks_without_pull_request(tiers: Tiers) -> None:
 def test_installation_and_push_waits(tiers: Tiers) -> None:
     """wait_installation polls /admin/organizations; wait_push matches the push of a sha to the config repo, checks
     its forward, and is a no-op without a relay."""
-    from otterdog_e2e.webhooks.relay import RelayedDelivery
+    from otterdog_acceptance.webhooks.relay import RelayedDelivery
 
     scenario, _, _ = _scenario(tiers)
     rows = iter([{}, {FAKE_ORG: {"installation_id": 7, "status": "installed", "project_name": "p"}}])
@@ -880,7 +880,7 @@ def test_installation_and_push_waits(tiers: Tiers) -> None:
 def test_open_pr_with_cli_adopts_the_otterdog_branch(tiers: Tiers) -> None:
     """open-pr runs on the guarded text, the printed number is adopted (head otterdog/e2e-<run>-<slug>-<suffix>);
     no number printed is an assertion error."""
-    from otterdog_e2e.testing.fakes import FAKE_LOGINS, FakeCli, FakeWorkspace
+    from otterdog_acceptance.testing.fakes import FAKE_LOGINS, FakeCli, FakeWorkspace
 
     scenario, oracle, _ = _scenario(tiers)
     branch = "otterdog/e2e-t3c7z8a5-w-test-x"

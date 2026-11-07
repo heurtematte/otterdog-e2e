@@ -23,17 +23,17 @@ from typing import TYPE_CHECKING
 import pytest
 import yaml
 
-from otterdog_e2e.scenarios.model import load_scenario
+from otterdog_acceptance.scenarios.model import load_scenario
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from otterdog_e2e.context import E2EContext
-    from otterdog_e2e.naming import RunContext
-    from otterdog_e2e.scenarios.engine import ScenarioEngine
-    from otterdog_e2e.scenarios.model import Scenario
-    from otterdog_e2e.sut.cli_install import InstalledCli
-    from otterdog_e2e.sut.template import TemplateRef
+    from otterdog_acceptance.context import E2EContext
+    from otterdog_acceptance.naming import RunContext
+    from otterdog_acceptance.scenarios.engine import ScenarioEngine
+    from otterdog_acceptance.scenarios.model import Scenario
+    from otterdog_acceptance.sut.cli_install import InstalledCli
+    from otterdog_acceptance.sut.template import TemplateRef
 
 pytestmark = [pytest.mark.tags("cli", "rulesets", "bpr", "repo")]
 

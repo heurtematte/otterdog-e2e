@@ -30,14 +30,14 @@ outlines as the YAML.
     make one SCENARIO=O-VAL-ORGVAR                         # an offline scenario (no GitHub)
     make lint-scenarios                                    # every live scenario step validated offline
     make one SCENARIO=cli.org.workflow-permissions TARGET=free
-    .venv/bin/otterdog-e2e run --target free --suite webapp -k test_draft_pr   # a Python test of a tier
+    .venv/bin/otterdog-acceptance run --target free --suite webapp -k test_draft_pr   # a Python test of a tier
     make report                                            # summary.md of the newest run
     ```
 
 6. **Update the coverage matrix** (section 7) and run `make check` and `make offline`.
 7. **Submit** with the checklist of section 9.
 
-`otterdog-e2e assist coverage` lists the gap and partial features with their outlines, and the `fill-coverage-gap`
+`otterdog-acceptance assist coverage` lists the gap and partial features with their outlines, and the `fill-coverage-gap`
 skill follows these steps with an AI agent, under the same gates and your review
 ([ai-assistance.md](ai-assistance.md)).
 
@@ -65,7 +65,7 @@ linked to a known bug as a whole is never P0 and carries the `known-bug` tag.
 
 ### Tags
 
-The vocabulary is `otterdog_e2e.selection.SCENARIO_TAGS`: the model areas `repo`, `bpr`, `rulesets`,
+The vocabulary is `otterdog_acceptance.selection.SCENARIO_TAGS`: the model areas `repo`, `bpr`, `rulesets`,
 `environments`, `secrets`, `variables`, `webhooks`, `teams`, `custom-properties`, `org-settings`, `workflows`,
 `org-roles`, `code-security`, and `template`, `cli`, `webapp`, `webhooks-app`, `offline`, `smoke` (the PR lane selects scenarios by the
 files a PR changes, through these tags). Live YAML scenarios carry at least one model-area tag and may add
@@ -264,7 +264,7 @@ the `offline_cli` / `vendored_cli` fixtures:
   `PATH` after them).
 
 ```python
-from otterdog_e2e.otterdog.workspace import WorkspaceLayout
+from otterdog_acceptance.otterdog.workspace import WorkspaceLayout
 
 
 @pytest.mark.scenario("O-CONFIG-DISCOVERY")
@@ -326,7 +326,7 @@ again until the run's objects converge; the cleanup is a guarded `apply -d` (or 
   workflow permissions, allowed actions): set the org setting in the same step.
 - **Plan-gated features**: `requires: [<cap>]` skips without the capability, `min_plan: team|enterprise` skips below
   the plan, `expect_failure_without: [<cap>]` + `on_missing_capability` asserts how otterdog or GitHub refuses it.
-  Capabilities: `otterdog_e2e.capabilities.Cap` ([capability-matrix.md](capability-matrix.md)); `actions_cache_limit`
+  Capabilities: `otterdog_acceptance.capabilities.Cap` ([capability-matrix.md](capability-matrix.md)); `actions_cache_limit`
   means "otterdog can manage the cache limit here" (KB-006: never on the documented API alone).
 - **Identities** (`identities: [author, approver, outsider, config_reader]`) for logins in fragments
   (`{{ logins.author }}`), e.g. team members; a missing identity skips.
@@ -398,7 +398,7 @@ GitHub) and posts deliveries with the `injector` (`WebhookInjector`):
 - `deliver(event, payload=None, body=b"null", omit_headers=("User-Agent",), headers={...})`: raw bytes (still signed
   over exactly these bytes), header omission (the HTTP client's own headers included), overrides after signing;
 - `sent`, `last(event)`, `replay(delivery_id)` (the same bytes and headers again: a GitHub redelivery);
-- payload builders of `otterdog_e2e.webhooks.payloads`: `ping_payload`, `pull_request_payload`,
+- payload builders of `otterdog_acceptance.webhooks.payloads`: `ping_payload`, `pull_request_payload`,
   `issue_comment_payload`, `push_payload`, `pull_request_review_payload`, `installation_payload`,
   `workflow_job_payload`, `workflow_run_payload`, `unknown_event_payload`, `synthetic_*` (the review, installation and
   workflow builders were checked against otterdog's pydantic models in the SUT image).
@@ -548,7 +548,7 @@ settings (no login) belongs to `tests/webapp/test_web_ui_flags.py`. Details: [we
   released yet; or, offline, an offline scenario with `observe: true`.
 - A pending change (an otterdog PR, a maintainer branch) is a `references` entry (`pr: <n>` or `change: <slug>`, with
   its expected differential deltas, base and template) of the scenarios of the functionality it changes, never a
-  PR-named scenario or directory; it is tested with `otterdog-e2e pr <n> --sha <sha>` or
+  PR-named scenario or directory; it is tested with `otterdog-acceptance pr <n> --sha <sha>` or
   `run --sut dirty:<checkout> --change <slug>` ([testing-an-otterdog-pr.md](testing-an-otterdog-pr.md)).
 - `observe: true` offline scenarios are recorded on both SUT sides of a differential run; live scenarios with
   `observe: true` are observed with `validate` and `plan` only.
@@ -590,9 +590,9 @@ settings (no login) belongs to `tests/webapp/test_web_ui_flags.py`. Details: [we
 | GitHub truth | `Oracle` (every check kind is an Oracle method; `find_workflow_runs`, `workflow_run_jobs`, delivery details) |
 | GitHub writes | `Mutator` (run objects and run-branch PRs only; section 3.5) |
 | config PR workflow | `ConfigRepoFlow` (section 3.9) |
-| webhook payloads | `WebhookInjector`, `otterdog_e2e.webhooks.payloads`, `DeliveryRelay.wait_event` / `replay` |
+| webhook payloads | `WebhookInjector`, `otterdog_acceptance.webhooks.payloads`, `DeliveryRelay.wait_event` / `replay` |
 | the webapp | `WebappStack`, `WebappApi`, `DtrackMock`, `BlueprintHelper` |
-| fakes for unit tests | `otterdog_e2e.testing.fakes`: `FakeOracle`, `RecordingMutator` (with the Mutator's guards), `FakeCli`, `FakeWorkspace`, `FakeGitHubHttp`, `FakeAppAuth`, `FakeLease` |
+| fakes for unit tests | `otterdog_acceptance.testing.fakes`: `FakeOracle`, `RecordingMutator` (with the Mutator's guards), `FakeCli`, `FakeWorkspace`, `FakeGitHubHttp`, `FakeAppAuth`, `FakeLease` |
 
 ## 5. The offline scenario lint
 
@@ -606,9 +606,9 @@ SUT predates; a mismatch in a step whose own `known_bug` the SUT has, or in a sc
 failure.
 
 **Rule: a live scenario is submitted only once it passes the lint** (`make lint-scenarios`, i.e.
-`otterdog-e2e run --suite offline -k lint`, with `SUT=branch:main` too for scenarios of unreleased fixes). The lint
+`otterdog-acceptance run --suite offline -k lint`, with `SUT=branch:main` too for scenarios of unreleased fixes). The lint
 runs in every `make offline` and in CI, so a broken scenario fails the offline tier of everybody, before any live
-run. `make inject ARGS='--fragment repositories=<file> --print'` (`otterdog-e2e inject`) tries jsonnet before it
+run. `make inject ARGS='--fragment repositories=<file> --print'` (`otterdog-acceptance inject`) tries jsonnet before it
 becomes a scenario.
 
 ## 6. Unit tests of the harness

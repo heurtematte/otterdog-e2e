@@ -9,7 +9,7 @@
   same team.
 * cli.http-cache (config.http-cache): every command runs in a fresh cwd whose ``.cache/async_http`` links to the
   HTTP cache of the SUT and identity shared by the run's commands (in the run's private scratch: it holds the token,
-  otterdog_e2e.otterdog.runner); otterdog revalidates cached responses
+  otterdog_acceptance.otterdog.runner); otterdog revalidates cached responses
   (otterdog/providers/github/cache/file.py), so a plan right after an out-of-band change must see it although the
   same request was cached seconds before (GitHub's responses say ``max-age=60``: honouring it would hide the change).
 * cli.template.hidden-fields (config.template-feature-gating, the hidden-field part): a field hidden with ``::`` is
@@ -28,22 +28,22 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from otterdog_e2e import waiting
-from otterdog_e2e.otterdog.output import normalize_text
-from otterdog_e2e.otterdog.render import ConfigFragments
-from otterdog_e2e.otterdog.workspace import WorkspaceLayout
+from otterdog_acceptance import waiting
+from otterdog_acceptance.otterdog.output import normalize_text
+from otterdog_acceptance.otterdog.render import ConfigFragments
+from otterdog_acceptance.otterdog.workspace import WorkspaceLayout
 
 if TYPE_CHECKING:
-    from otterdog_e2e.context import E2EContext
-    from otterdog_e2e.github.mutate import Mutator
-    from otterdog_e2e.github.oracle import Oracle
-    from otterdog_e2e.naming import RunContext
-    from otterdog_e2e.otterdog.baseline import BaselineManager
-    from otterdog_e2e.otterdog.output import PlanResult
-    from otterdog_e2e.otterdog.render import OrgConfigRenderer
-    from otterdog_e2e.otterdog.runner import OtterdogCli
-    from otterdog_e2e.otterdog.workspace import ConfigWorkspace
-    from otterdog_e2e.settings import Target
+    from otterdog_acceptance.context import E2EContext
+    from otterdog_acceptance.github.mutate import Mutator
+    from otterdog_acceptance.github.oracle import Oracle
+    from otterdog_acceptance.naming import RunContext
+    from otterdog_acceptance.otterdog.baseline import BaselineManager
+    from otterdog_acceptance.otterdog.output import PlanResult
+    from otterdog_acceptance.otterdog.render import OrgConfigRenderer
+    from otterdog_acceptance.otterdog.runner import OtterdogCli
+    from otterdog_acceptance.otterdog.workspace import ConfigWorkspace
+    from otterdog_acceptance.settings import Target
 
 STATE_TIMEOUT = 90.0  # GitHub reads after a write can lag a few seconds
 STATE_INTERVAL = 3.0

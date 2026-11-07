@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from otterdog_e2e.selection import (
+from otterdog_acceptance.selection import (
     ALL_TAGS,
     ALWAYS_TAGS,
     PATH_RULES,

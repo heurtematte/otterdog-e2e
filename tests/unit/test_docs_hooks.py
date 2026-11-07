@@ -33,7 +33,7 @@ HTML_TAG_RE = re.compile(r"</?(?P<name>[A-Za-z][A-Za-z0-9-]*)(?:\s[^<>]*)?/?>")
 @cache
 def hooks() -> ModuleType:
     """docs_hooks.py as a module (a file next to zensical.toml, not part of the package)."""
-    name = "otterdog_e2e_docs_hooks_under_test"
+    name = "otterdog_acceptance_docs_hooks_under_test"
     spec = importlib.util.spec_from_file_location(name, HOOKS)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)

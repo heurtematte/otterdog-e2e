@@ -1,10 +1,10 @@
-# otterdog-e2e target: a DEDICATED GitHub Free test organization (SPEC 6.2).
+# otterdog-acceptance target: a DEDICATED GitHub Free test organization (SPEC 6.2).
 #
 # Values come from the environment: ${VAR} or ${VAR:-default} (expanded after YAML parsing, never re-expanded).
 # Secrets are never written here: *_env keys hold the NAME of the environment variable that carries the secret.
 # This file is a PROFILE: it holds no org-specific value. An instance (one test org) uses it with --target <instance>
 # and E2E_PROFILE=free in its env file; --target free is the instance named after the profile. Env files of the
-# instance, loaded without overriding the environment: ~/.config/otterdog-e2e/<instance>.env,
+# instance, loaded without overriding the environment: ~/.config/otterdog-acceptance/<instance>.env,
 # <root>/.env.e2e.<instance>, <root>/.env.e2e. Every identity MUST be a dedicated machine account that only belongs
 # to test organizations (github.allowed_org_ids); classic PATs need the read:org scope so their memberships can be
 # verified.

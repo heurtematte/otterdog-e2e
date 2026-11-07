@@ -2,7 +2,7 @@
 
 An AI agent can do three jobs of this repository with you: write the tests of an otterdog pull request, triage a
 failed run, and close gaps of the coverage matrix. The harness itself stays deterministic: the agent runs the
-`otterdog-e2e assist` commands, which gather context and validate what it writes, and follows the **skills**
+`otterdog-acceptance assist` commands, which gather context and validate what it writes, and follows the **skills**
 committed in `.claude/skills/`. Every file it proposes goes through the same gates as yours, then through your
 review.
 
@@ -11,10 +11,10 @@ review.
 - **The harness never calls an AI.** No LLM dependency, no API key, no network call to a model: the AI work happens
   in an agent you run (Claude Code, or any agent supporting the open [Agent Skills](https://agentskills.io) format),
   outside the execution path of the tests.
-- **Deterministic commands do everything that needs no judgement**: `otterdog-e2e assist` gathers context bundles
+- **Deterministic commands do everything that needs no judgement**: `otterdog-acceptance assist` gathers context bundles
   (a PR, a run, the coverage matrix), pre-classifies failures and validates what the agent wrote. They are
   unit-tested like the rest of the harness.
-- **AI output is never trusted.** Every file an agent writes goes through `otterdog-e2e assist check` (schema, ids,
+- **AI output is never trusted.** Every file an agent writes goes through `otterdog-acceptance assist check` (schema, ids,
   references, offline lint), the offline tier and the unit tests, then through a human review. The skills never run
   a live tier unless you ask.
 - **Untrusted input is data.** PR titles, bodies, diffs, comments and run outputs can be written by anyone: the
@@ -36,17 +36,17 @@ flowchart LR
 
 ## The assist commands
 
-Provided by the harness (`otterdog-e2e assist`, package `src/otterdog_e2e/assist/`); they need no agent and are
+Provided by the harness (`otterdog-acceptance assist`, package `src/otterdog_acceptance/assist/`); they need no agent and are
 useful on their own. Every command prints a short human summary with the bundle path, or the summary as JSON with
 `--json`. Exit codes: 0 success, 1 harness error (for `check`: problems found), 2 usage error.
 
 ### `assist pr-context`
 
 ```bash
-.venv/bin/otterdog-e2e assist pr-context 790 --sha 0cee9e302282fefa092b4e0767248a997a9272ea
+.venv/bin/otterdog-acceptance assist pr-context 790 --sha 0cee9e302282fefa092b4e0767248a997a9272ea
 ```
 
-`otterdog-e2e assist pr-context NUMBER [--sha SHA] [--upstream OWNER/REPO] [--out DIR] [--json]`
+`otterdog-acceptance assist pr-context NUMBER [--sha SHA] [--upstream OWNER/REPO] [--out DIR] [--json]`
 
 | Option | Meaning |
 |---|---|
@@ -61,17 +61,17 @@ the risky files, the tags the PR lane would select, the [SUT](glossary.md#system
 features whose `source` the PR touches (with status, tier, covering items and gap outline), the related scenarios
 and their files, the scenarios whose `references` already name the PR (`referencing_scenarios`: ids, files, their
 reference entries with the expected deltas, and the base they declare), the documentation to read and the next
-commands (`otterdog-e2e run --sut pr:<n>@<sha> [--base-sut auto] --suite offline,differential`, the change being
-implied by the `pr:` SUT, and `otterdog-e2e pr <n> --sha <sha>`). The PR's tests extend the scenarios of the
+commands (`otterdog-acceptance run --sut pr:<n>@<sha> [--base-sut auto] --suite offline,differential`, the change being
+implied by the `pr:` SUT, and `otterdog-acceptance pr <n> --sha <sha>`). The PR's tests extend the scenarios of the
 functionality it changes and reference the PR there: never a PR-named scenario or directory.
 
 ### `assist check`
 
 ```bash
-.venv/bin/otterdog-e2e assist check scenarios/offline/rulesets/val-ruleset-strict.yaml tests/webapp/test_stale_status.py
+.venv/bin/otterdog-acceptance assist check scenarios/offline/rulesets/val-ruleset-strict.yaml tests/webapp/test_stale_status.py
 ```
 
-`otterdog-e2e assist check [PATHS...] [--sut SPEC] [--no-lint] [--json]`
+`otterdog-acceptance assist check [PATHS...] [--sut SPEC] [--no-lint] [--json]`
 
 Validates the files an agent (or you) wrote; without paths, the files changed in the work tree below `scenarios/`
 and `tests/` (`git status`). It applies the real loaders and the repository's rules: scenario YAML (the model with its
@@ -85,10 +85,10 @@ problems (file, location, message) and the lint result; exit 1 when there is any
 ### `assist triage`
 
 ```bash
-.venv/bin/otterdog-e2e assist triage latest
+.venv/bin/otterdog-acceptance assist triage latest
 ```
 
-`otterdog-e2e assist triage RUN_DIR|latest [--baseline RUN_DIR] [--out DIR] [--json]`
+`otterdog-acceptance assist triage RUN_DIR|latest [--baseline RUN_DIR] [--out DIR] [--json]`
 
 Scrubs the run directory first (as `scrub-artifacts` does, with the secret values of the environment) and refuses to
 build a bundle when leaks remain. For every failed or errored item: node id, scenario id, tier, phase, an excerpt of
@@ -99,7 +99,7 @@ the reason, the otterdog commands of the item, the relevant artifact paths, the 
 |---|---|
 | `known-bug` | the item or step declares a registered bug, or the output carries a bug's crash signature |
 | `infrastructure` | GitHub 5xx, secondary rate limit, abuse detection, network errors, delivery wait timeouts, docker or compose failures, a busy lease |
-| `harness` | errors raised by `otterdog_e2e` at setup or teardown (`ContextError`, `SafetyError`, `TargetError`, tracebacks ending in `src/otterdog_e2e`) |
+| `harness` | errors raised by `otterdog_acceptance` at setup or teardown (`ContextError`, `SafetyError`, `TargetError`, tracebacks ending in `src/otterdog_acceptance`) |
 | `sut` | assertion or check failures of a scenario step on otterdog output or GitHub state |
 | `unknown` | none of the above |
 
@@ -108,11 +108,11 @@ With `--baseline`, each failure is marked new or already present in the baseline
 ### `assist coverage`
 
 ```bash
-.venv/bin/otterdog-e2e assist coverage --status gap,partial --priority P0
-.venv/bin/otterdog-e2e assist coverage --feature config.hook.validate-team
+.venv/bin/otterdog-acceptance assist coverage --status gap,partial --priority P0
+.venv/bin/otterdog-acceptance assist coverage --feature config.hook.validate-team
 ```
 
-`otterdog-e2e assist coverage [--status gap,partial] [--priority P0,P1,P2] [--area AREA] [--tier TIER] [--feature ID] [--out DIR] [--json]`
+`otterdog-acceptance assist coverage [--status gap,partial] [--priority P0,P1,P2] [--area AREA] [--tier TIER] [--feature ID] [--out DIR] [--json]`
 
 Lists the features of `scenarios/coverage.yaml` with status, priority, tier, minimum plan, web-UI flag, source,
 covering items and gap outline (needs split into available and missing), sorted by priority then status. `--feature`
@@ -176,12 +176,12 @@ instructions ("follow `.claude/skills/triage-e2e-run/SKILL.md` for the latest ru
   found in it are never followed and that attempts are reported. Your review is the last line of defence: look for
   changes the task did not ask for.
 - **No secrets.** Triage works on scrubbed artifacts only and refuses when leaks remain; the PR context needs no
-  token; the skills forbid reading `.env*` files, the instance files of `~/.config/otterdog-e2e/` and the harness
+  token; the skills forbid reading `.env*` files, the instance files of `~/.config/otterdog-acceptance/` and the harness
   cache, and allow dummy secret values only ([writing-scenarios.md](writing-scenarios.md#secrets)).
 - **Untrusted code stays in docker.** A PR runs only as `pr:<n>@<sha>` (its own image, no network for offline
   commands); the skills never install it on the host ([testing-an-otterdog-pr.md](testing-an-otterdog-pr.md)).
 - **No live tiers, GitHub writes, commits or pushes** unless you ask: the skills give you the live commands
-  (`make one SCENARIO=<id> TARGET=<instance>`, `otterdog-e2e pr <n> --sha <sha> --target <instance>`) instead of
+  (`make one SCENARIO=<id> TARGET=<instance>`, `otterdog-acceptance pr <n> --sha <sha> --target <instance>`) instead of
   running them, and leave their changes in the work tree.
 - **Local agent state stays out of git**: `.gitignore` covers `.claude/settings.local.json` (your own permissions)
   and `.claude/worktrees/` (worktrees of parallel agents); only `.claude/skills/` is tracked.
@@ -205,6 +205,6 @@ The gates and your review are what make the proposals usable. Review them like a
 
 `tests/unit/test_skills.py` (in `make unit`) checks that every skill keeps the portable format (standard fields
 only, `name` equal to its directory, length limits, a short body with its safety section, references one level
-deep) and that what it tells an agent to run exists: every `otterdog-e2e` command, subcommand and long option in the
+deep) and that what it tells an agent to run exists: every `otterdog-acceptance` command, subcommand and long option in the
 click CLI, every `make` target in the Makefile, every repository path and every relative link. A renamed command or
 file therefore fails the unit tier until the skills follow.

@@ -1,5 +1,5 @@
 """Harness CLI with several targets: run/pr/janitor start one child process per target (batch.py), doctor checks
-each target with its own environment copy, the other commands refuse lists; ``otterdog-e2e targets``; ``cache prune``
+each target with its own environment copy, the other commands refuse lists; ``otterdog-acceptance targets``; ``cache prune``
 keeps the scratch of running sessions; RunRequest.harness_args round trip."""
 
 from __future__ import annotations
@@ -21,14 +21,14 @@ import filelock
 import pytest
 from click.testing import CliRunner
 
-from otterdog_e2e import cli
-from otterdog_e2e.cli import common as cli_common
-from otterdog_e2e.cli import doctor as cli_doctor
-from otterdog_e2e.cli import maintenance as cli_maintenance
-from otterdog_e2e.cli import run as cli_run
-from otterdog_e2e.redact import Redactor
-from otterdog_e2e.settings import HarnessSettings
-from otterdog_e2e.testing.fakes import fake_sha, make_settings
+from otterdog_acceptance import cli
+from otterdog_acceptance.cli import common as cli_common
+from otterdog_acceptance.cli import doctor as cli_doctor
+from otterdog_acceptance.cli import maintenance as cli_maintenance
+from otterdog_acceptance.cli import run as cli_run
+from otterdog_acceptance.redact import Redactor
+from otterdog_acceptance.settings import HarnessSettings
+from otterdog_acceptance.testing.fakes import fake_sha, make_settings
 
 PROJECT = Path(__file__).resolve().parents[2]
 TOKEN = "ghp_" + "c" * 36
@@ -47,7 +47,7 @@ class Batch:
     pytest_calls: list[list[str]] = field(default_factory=list)
 
     def instance(self, name: str, profile: str | None, org_id: int, **extra: str) -> None:
-        """Write ~/.config/otterdog-e2e/<name>.env of an instance of the org ``<name>-e2e``."""
+        """Write ~/.config/otterdog-acceptance/<name>.env of an instance of the org ``<name>-e2e``."""
         values = {
             "E2E_ORG": f"{name}-e2e",
             "E2E_ORG_ID": str(org_id),
@@ -78,7 +78,7 @@ class Batch:
                 "run-id"
             ]
             run_dir.mkdir(parents=True, exist_ok=True)
-            run = {"run_id": values["run-id"], "command": f"otterdog-e2e {args[0]} --target {values['target']}"}
+            run = {"run_id": values["run-id"], "command": f"otterdog-acceptance {args[0]} --target {values['target']}"}
             (run_dir / "run.json").write_text(json.dumps(run), encoding="utf-8")
         on_line(f"child of {values.get('target')}")
         return self.codes.get(values.get("target", ""), 0)
@@ -94,7 +94,7 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Batch:
     for suite in cli_run.SUITES:
         (root / "tests" / suite).mkdir(parents=True)
     home = tmp_path / "home"
-    config = home / ".config" / "otterdog-e2e"
+    config = home / ".config" / "otterdog-acceptance"
     config.mkdir(parents=True)
     state = Batch(make_settings(root), config)
     for key in [key for key in os.environ if key.startswith("E2E_")]:
@@ -102,18 +102,18 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Batch:
     for key in ("PYTEST_ADDOPTS", "GITHUB_STEP_SUMMARY", "CI", "GITHUB_ACTIONS"):
         monkeypatch.delenv(key, raising=False)
     monkeypatch.setenv("HOME", str(home))
-    monkeypatch.setattr("otterdog_e2e.settings.harness_settings", lambda environ=None: state.settings)
+    monkeypatch.setattr("otterdog_acceptance.settings.harness_settings", lambda environ=None: state.settings)
     fresh = Redactor()
     for module in (
-        "otterdog_e2e.settings",
-        "otterdog_e2e.batch",
-        "otterdog_e2e.cli.common",
-        "otterdog_e2e.cli.doctor",
-        "otterdog_e2e.cli.run",
-        "otterdog_e2e.procs",
+        "otterdog_acceptance.settings",
+        "otterdog_acceptance.batch",
+        "otterdog_acceptance.cli.common",
+        "otterdog_acceptance.cli.doctor",
+        "otterdog_acceptance.cli.run",
+        "otterdog_acceptance.procs",
     ):
         monkeypatch.setattr(f"{module}.REDACTOR", fresh)
-    monkeypatch.setattr("otterdog_e2e.procs.run_harness", state.runner)
+    monkeypatch.setattr("otterdog_acceptance.procs.run_harness", state.runner)
 
     def run_pytest(args: list[str], *, command: str | None = None) -> int:
         """In-process pytest of a single target: recorded."""
@@ -134,7 +134,7 @@ def invoke(*args: str) -> Any:
 
 # --- run -----------------------------------------------------------------------------------------------------------------
 def test_run_starts_one_child_per_target(world: Batch) -> None:
-    """run --target acme,beta: python -m otterdog_e2e run per target with its own run id and the shared artifacts
+    """run --target acme,beta: python -m otterdog_acceptance run per target with its own run id and the shared artifacts
     root; the parent's environment (never an env-file value); prefixed output; the most severe exit code; the batch
     summary below the artifacts root."""
     world.codes = {"beta": 1}
@@ -144,7 +144,7 @@ def test_run_starts_one_child_per_target(world: Batch) -> None:
     assert dict(os.environ) == before
     acme, beta = world.children
     root = world.settings.artifacts_root
-    assert acme["argv"][:4] == [sys.executable, "-P", "-m", "otterdog_e2e"] and acme["verbose"] == 0
+    assert acme["argv"][:4] == [sys.executable, "-P", "-m", "otterdog_acceptance"] and acme["verbose"] == 0
     assert acme["args"] == [
         "run",
         "--suite=cli",
@@ -170,7 +170,7 @@ def test_run_starts_one_child_per_target(world: Batch) -> None:
         ("acme", "free", 0),
         ("beta", "team", 1),
     ]
-    assert document["targets"][0]["command"] == "otterdog-e2e run --target acme"
+    assert document["targets"][0]["command"] == "otterdog-acceptance run --target acme"
     assert f"batch summary: {summaries[0]}" in result.stderr and world.pytest_calls == []
 
 
@@ -353,7 +353,7 @@ def test_children_get_the_verbosity_of_the_batch(world: Batch) -> None:
 # --- signals -------------------------------------------------------------------------------------------------------------
 SLOW_COMMAND = """
     import os, time
-    from otterdog_e2e import cli
+    from otterdog_acceptance import cli
 
     @cli.main.command("e2e-test-slow")
     def slow() -> None:
@@ -365,7 +365,7 @@ SLOW_COMMAND = """
             time.sleep(1)
             print("cleanup done", flush=True)
 
-    cli.main(["e2e-test-slow"], prog_name="otterdog-e2e")
+    cli.main(["e2e-test-slow"], prog_name="otterdog-acceptance")
 """
 
 
@@ -384,7 +384,7 @@ def test_sigterm_lets_every_command_clean_up() -> None:
         elif line == "cleanup started":
             os.kill(int(lines[1].split()[1]), signal.SIGTERM)
 
-    from otterdog_e2e import procs
+    from otterdog_acceptance import procs
 
     code = procs.run_harness(
         [sys.executable, "-P", "-c", textwrap.dedent(SLOW_COMMAND)], env=dict(os.environ), on_line=on_line
@@ -405,7 +405,7 @@ def test_the_termination_guard_is_installed_for_the_command_and_restored(
         seen.append(signal.getsignal(signal.SIGTERM))
         return []
 
-    monkeypatch.setattr("otterdog_e2e.batch.list_instances", list_instances)
+    monkeypatch.setattr("otterdog_acceptance.batch.list_instances", list_instances)
     assert invoke("targets").exit_code == 0
     assert getattr(seen[0], "__self__", None).__class__ is cli_common.TerminationGuard
     assert {sig: signal.getsignal(sig) for sig in before} == before
@@ -523,7 +523,9 @@ def test_targets_lists_instances_and_profiles(world: Batch) -> None:
 def test_targets_without_anything(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """No env file and no profile: one explaining line."""
     monkeypatch.setenv("HOME", str(tmp_path))
-    monkeypatch.setattr("otterdog_e2e.settings.harness_settings", lambda environ=None: make_settings(tmp_path / "p"))
+    monkeypatch.setattr(
+        "otterdog_acceptance.settings.harness_settings", lambda environ=None: make_settings(tmp_path / "p")
+    )
     result = invoke("targets")
     assert result.exit_code == 0 and "no target instance" in result.output
 
@@ -537,8 +539,8 @@ def test_cache_prune_keeps_the_scratch_of_running_sessions(tmp_path: Path, monke
         (cache / "run" / name).mkdir(parents=True)
         (cache / "run" / f"{name}.lock").touch()
         os.utime(cache / "run" / name, (1_700_000_000 - age * 100, 1_700_000_000 - age * 100))
-    monkeypatch.setattr("otterdog_e2e.settings.harness_settings", lambda environ=None: make_settings(tmp_path))
-    monkeypatch.setattr("otterdog_e2e.sut.image.docker_available", lambda: False)
+    monkeypatch.setattr("otterdog_acceptance.settings.harness_settings", lambda environ=None: make_settings(tmp_path))
+    monkeypatch.setattr("otterdog_acceptance.sut.image.docker_available", lambda: False)
     with filelock.FileLock(str(cache / "run" / "r1.lock"), timeout=0):
         result = invoke("cache", "prune", "--keep", "1")
     assert result.exit_code == 0, result.output
@@ -580,7 +582,7 @@ def test_cache_prune_removes_exact_sidecars_and_keeps_held_entries(
 def test_lock_held(tmp_path: Path) -> None:
     """context.lock_held: a missing lock file is free, a held one (another holder, even of this process) is held, a
     released one is free again; never waits."""
-    from otterdog_e2e.context import lock_held
+    from otterdog_acceptance.context import lock_held
 
     path = tmp_path / "x.lock"
     assert not lock_held(path) and not path.exists()

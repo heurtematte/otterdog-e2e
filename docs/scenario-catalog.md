@@ -7,7 +7,7 @@ Status values:
   untrusted `sha:d0d3b08` (docker runtime) and a `dirty:` local checkout;
 - **implemented**: the scenario or test exists, loads, is collected and skips cleanly without a target. It needs a
   live test organization (target, App, docker) and has not run against one yet;
-- **harness**: covered by a harness feature rather than by a scenario (the code exists in `src/otterdog_e2e`);
+- **harness**: covered by a harness feature rather than by a scenario (the code exists in `src/otterdog_acceptance`);
 - **planned**: backlog, not written yet;
 - **future**: needs infrastructure that is out of scope for v1 (ghproxy, Dependency-Track mock, tunnels,
   Helm/Kubernetes, MongoDB inspection, GHES/EMU).
@@ -165,7 +165,7 @@ logins (they could lock the bot out).
 | SUT resolution, mirror, version, host install, image build | CLI-00, DEP-BUILD-01, DEP-BUILD-02 | harness | `sut/` |
 | version guard (shallow, tagless, placeholder versions refused) | DEP-BUILD-03 | harness | `sut/version.py` |
 | capability probe and gating | CAP-PROBE-001, PRV-CAP-01 | harness | `capabilities.py`, plugin gating |
-| bootstrap of configs/defaults repositories, baseline, App checks | CFG-01, MOD-INFRA-01 | harness | `otterdog-e2e bootstrap` |
+| bootstrap of configs/defaults repositories, baseline, App checks | CFG-01, MOD-INFRA-01 | harness | `otterdog-acceptance bootstrap` |
 | base template resolution and publishing (pinned to a commit) | CFG-02 (template part) | harness | `sut/template.py` |
 | pull relay of App deliveries | DEP-WH-03, WH-RELAY-001 | harness | `webhooks/relay.py` |
 | rate budget gating | PRV-RL-01 | harness | `E2E_MIN_RATE_REMAINING` |

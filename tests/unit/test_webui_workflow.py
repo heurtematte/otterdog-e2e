@@ -17,14 +17,14 @@ import click
 import pytest
 import yaml
 
-from otterdog_e2e import cli
+from otterdog_acceptance import cli
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS = ROOT / ".github" / "workflows"
 PINNED_ACTION_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+@[0-9a-f]{40}$")
 SECRET_REF_RE = re.compile(r"secrets\.([A-Za-z0-9_]+)")
 WEB_SECRETS = {"E2E_ADMIN_PASSWORD", "E2E_ADMIN_TOTP_SEED"}
-HARNESS = ".venv/bin/otterdog-e2e"
+HARNESS = ".venv/bin/otterdog-acceptance"
 INSTANCES_ALLOWLIST = '${{ vars.E2E_INSTANCES || vars.E2E_TARGETS || \'["free","team","enterprise"]\' }}'
 INSTANCE_VARS = (
     "E2E_PROFILE",
@@ -196,7 +196,7 @@ def test_scrub_before_upload_and_the_session_command() -> None:
 
 
 def test_harness_commands_and_options_exist() -> None:
-    """Every otterdog-e2e command and long option of the lane exists in the click application."""
+    """Every otterdog-acceptance command and long option of the lane exists in the click application."""
     commands: dict[str, click.Command] = {}
 
     def walk(group: click.Group, prefix: str) -> None:
@@ -211,7 +211,7 @@ def test_harness_commands_and_options_exist() -> None:
     for job in jobs("e2e-webui").values():
         for step in steps(job):
             for line in str(step.get("run") or "").splitlines():
-                match = re.search(r"bin/otterdog-e2e\s+([a-z-]+)(?:\s+([a-z-]+))?", line)
+                match = re.search(r"bin/otterdog-acceptance\s+([a-z-]+)(?:\s+([a-z-]+))?", line)
                 if not match:
                     continue
                 path = f"{match[1]} {match[2]}" if f"{match[1]} {match[2]}" in commands else match[1]

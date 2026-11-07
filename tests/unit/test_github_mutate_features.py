@@ -10,16 +10,16 @@ from typing import Any
 import pytest
 import responses
 
-from otterdog_e2e.github.http import GITHUB_API, GitHubError, GitHubHttp
-from otterdog_e2e.github.mutate import (
+from otterdog_acceptance.github.http import GITHUB_API, GitHubError, GitHubHttp
+from otterdog_acceptance.github.mutate import (
     CONVERT_TO_DRAFT_MUTATION,
     DISPATCH_ATTEMPTS,
     DRY_RUN_GHSA,
     READY_FOR_REVIEW_MUTATION,
     Mutator,
 )
-from otterdog_e2e.safety import SafetyError
-from otterdog_e2e.testing.fakes import FAKE_ORG, FAKE_RUN_ID, make_verified_org
+from otterdog_acceptance.safety import SafetyError
+from otterdog_acceptance.testing.fakes import FAKE_ORG, FAKE_RUN_ID, make_verified_org
 
 TOKEN = "ghp_" + "MutatorFeatureToken0123456789abcdefgh"
 P = f"e2e-{FAKE_RUN_ID}"
@@ -278,7 +278,11 @@ def test_code_security_configuration_lifecycle(api: responses.RequestsMock, muta
     api.add(responses.DELETE, f"{ORG}/code-security/configurations/12", status=204)
     created = mutator.create_code_security_configuration(name, dependency_graph="enabled")
     assert created["id"] == 12
-    assert body(api.calls[0]) == {"name": name, "description": "otterdog-e2e probe", "dependency_graph": "enabled"}
+    assert body(api.calls[0]) == {
+        "name": name,
+        "description": "otterdog-acceptance probe",
+        "dependency_graph": "enabled",
+    }
     assert mutator.set_code_security_default(12, name=name, default_for_new_repos="public")["default_for_new_repos"]
     assert body(api.calls[2]) == {"default_for_new_repos": "public"}
     mutator.delete_code_security_configuration(12, name=name)

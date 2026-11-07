@@ -11,10 +11,10 @@ from typing import Any
 import pytest
 import yaml
 
-from otterdog_e2e import context, settings
-from otterdog_e2e.context import E2EContext, E2EOptions
-from otterdog_e2e.redact import Redactor
-from otterdog_e2e.settings import (
+from otterdog_acceptance import context, settings
+from otterdog_acceptance.context import E2EContext, E2EOptions
+from otterdog_acceptance.redact import Redactor
+from otterdog_acceptance.settings import (
     INSTANCE_NAME_RE,
     PROFILE_ENV,
     RESERVED_INSTANCE_NAMES,
@@ -94,8 +94,8 @@ def test_an_instance_without_profile_explains_how_to_bind_it(harness: HarnessSet
     with pytest.raises(TargetError) as info:
         load_target("acme", harness, ENV)
     message = str(info.value)
-    assert "otterdog-e2e setup --target acme" in message
-    assert f"{PROFILE_ENV}=<profile> to ~/.config/otterdog-e2e/acme.env" in message
+    assert "otterdog-acceptance setup --target acme" in message
+    assert f"{PROFILE_ENV}=<profile> to ~/.config/otterdog-acceptance/acme.env" in message
     assert "available: ['enterprise', 'free', 'team']" in message
 
 
@@ -112,7 +112,7 @@ def test_a_profile_bound_to_another_profile_is_ambiguous(harness: HarnessSetting
     """--target free with E2E_PROFILE=team: is it the profile free or an instance free of the team profile?"""
     with pytest.raises(TargetError, match="ambiguous") as info:
         resolve_target_ref("free", harness, {PROFILE_ENV: "team"})
-    assert "~/.config/otterdog-e2e/free.env" in str(info.value) and "'team'" in str(info.value)
+    assert "~/.config/otterdog-acceptance/free.env" in str(info.value) and "'team'" in str(info.value)
 
 
 @pytest.mark.parametrize(
@@ -127,8 +127,8 @@ def test_a_profile_bound_to_another_profile_is_ambiguous(harness: HarnessSetting
         ("acme-webui", "the suffix -webui is reserved"),
         ("lists", "'lists': the name is reserved"),
         ("acme org", "invalid target name"),
-        ("a,b", "only accepted by otterdog-e2e run, pr, doctor and janitor"),
-        ("@all", "only accepted by otterdog-e2e run, pr, doctor and janitor"),
+        ("a,b", "only accepted by otterdog-acceptance run, pr, doctor and janitor"),
+        ("@all", "only accepted by otterdog-acceptance run, pr, doctor and janitor"),
     ],
 )
 def test_instance_names_are_ci_safe(harness: HarnessSettings, name: str, message: str) -> None:
@@ -145,9 +145,9 @@ def test_instance_name_problem() -> None:
     for valid in ("free", "acme", "a", "acme-2", "x" * 39, "webui", "untrusted-acme", "lists-2", "my-lists"):
         assert instance_name_problem(valid) is None, valid
     assert "e2e-acme-webui is the CI environment of the instance 'acme'" in str(instance_name_problem("acme-webui"))
-    # ~/.config/otterdog-e2e/lists/ holds the target lists: an instance "lists" would write its App credentials there
+    # ~/.config/otterdog-acceptance/lists/ holds the target lists: an instance "lists" would write its App credentials there
     assert RESERVED_INSTANCE_NAMES == ("lists",)
-    assert "~/.config/otterdog-e2e/lists/ holds the target lists" in str(instance_name_problem("lists"))
+    assert "~/.config/otterdog-acceptance/lists/ holds the target lists" in str(instance_name_problem("lists"))
     for invalid in ("", "x" * 40, "Acme", "a.b", "a_b", "-a"):
         assert instance_name_problem(invalid), invalid
 
@@ -174,7 +174,7 @@ def test_profile_names(harness: HarnessSettings) -> None:
 
 def test_target_env_name_refuses_lists() -> None:
     """settings.target_env_name refuses lists with the hint; context.target_env_name delegates to it."""
-    with pytest.raises(TargetError, match="only accepted by otterdog-e2e run, pr, doctor and janitor"):
+    with pytest.raises(TargetError, match="only accepted by otterdog-acceptance run, pr, doctor and janitor"):
         target_env_name("free,team")
     assert context.target_env_name("targets/team.yaml") == "team"
     assert context.target_env_name("acme") == "acme"
@@ -187,10 +187,10 @@ def test_target_env_name_refuses_lists() -> None:
 def test_context_loads_the_instance_env_file_then_its_profile(
     harness: HarnessSettings, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """E2EContext.load_target: ~/.config/otterdog-e2e/<instance>.env (E2E_PROFILE included) is loaded first, so an
+    """E2EContext.load_target: ~/.config/otterdog-acceptance/<instance>.env (E2E_PROFILE included) is loaded first, so an
     instance needs nothing but its env file."""
     home = tmp_path / "home"
-    env_file = home / ".config" / "otterdog-e2e" / "acme.env"
+    env_file = home / ".config" / "otterdog-acceptance" / "acme.env"
     env_file.parent.mkdir(parents=True)
     lines = [f"{PROFILE_ENV}=enterprise", "E2E_ORG=acme-e2e", "E2E_ORG_ID=77", "E2E_ADMIN_LOGIN=acme-admin"]
     env_file.write_text("\n".join([*lines, "E2E_ADMIN_TOKEN=ghp_" + "a" * 36, ""]), encoding="utf-8")

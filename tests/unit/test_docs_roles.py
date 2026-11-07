@@ -21,8 +21,8 @@ from pathlib import Path
 
 import yaml
 
-from otterdog_e2e.pytest_plugin import FIXTURE_IDENTITIES
-from otterdog_e2e.settings import IDENTITY_ROLES
+from otterdog_acceptance.pytest_plugin import FIXTURE_IDENTITIES
+from otterdog_acceptance.settings import IDENTITY_ROLES
 
 ROOT = Path(__file__).resolve().parents[2]
 PAGE = ROOT / "docs" / "roles.md"

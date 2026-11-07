@@ -70,8 +70,8 @@ from typing import TYPE_CHECKING, Any, ClassVar, TypeVar
 
 import pytest
 
-from otterdog_e2e import procs, waiting
-from otterdog_e2e.config_repo import (
+from otterdog_acceptance import procs, waiting
+from otterdog_acceptance.config_repo import (
     APPLIED_TEXTS,
     ConfigPr,
     DeliveryTimeoutError,
@@ -79,22 +79,22 @@ from otterdog_e2e.config_repo import (
     check_forwarded,
     comment_contains,
 )
-from otterdog_e2e.otterdog.render import ConfigFragments
-from otterdog_e2e.redact import REDACTOR
-from otterdog_e2e.scenarios.collect import TIER_TIMEOUTS
-from otterdog_e2e.webapp.api import parse_timestamp
+from otterdog_acceptance.otterdog.render import ConfigFragments
+from otterdog_acceptance.redact import REDACTOR
+from otterdog_acceptance.scenarios.collect import TIER_TIMEOUTS
+from otterdog_acceptance.webapp.api import parse_timestamp
 
 if TYPE_CHECKING:
-    from otterdog_e2e.config_repo import ConfigRepoFlow
-    from otterdog_e2e.context import E2EContext, WebappCase
-    from otterdog_e2e.github.oracle import Oracle
-    from otterdog_e2e.naming import RunContext
-    from otterdog_e2e.otterdog.baseline import BaselineManager
-    from otterdog_e2e.otterdog.render import OrgConfigRenderer
-    from otterdog_e2e.otterdog.runner import OtterdogCli
-    from otterdog_e2e.settings import Target
-    from otterdog_e2e.webapp.api import WebappApi
-    from otterdog_e2e.webhooks.relay import RelayedDelivery
+    from otterdog_acceptance.config_repo import ConfigRepoFlow
+    from otterdog_acceptance.context import E2EContext, WebappCase
+    from otterdog_acceptance.github.oracle import Oracle
+    from otterdog_acceptance.naming import RunContext
+    from otterdog_acceptance.otterdog.baseline import BaselineManager
+    from otterdog_acceptance.otterdog.render import OrgConfigRenderer
+    from otterdog_acceptance.otterdog.runner import OtterdogCli
+    from otterdog_acceptance.settings import Target
+    from otterdog_acceptance.webapp.api import WebappApi
+    from otterdog_acceptance.webhooks.relay import RelayedDelivery
 
 T = TypeVar("T")
 
@@ -162,7 +162,9 @@ INSTALLATION_TIMEOUT = 120.0  # update_installation_status runs as a background 
 # tests running several PR flows (validation + sync + merge + apply each) get this call timeout instead of the tier's
 LONG_FLOW_TIMEOUT = 1800
 
-SYNTAX_ERROR_TAIL = "// otterdog-e2e: deliberate syntax error (W-PR-INVALID), this configuration must not load\n}\n"
+SYNTAX_ERROR_TAIL = (
+    "// otterdog-acceptance: deliberate syntax error (W-PR-INVALID), this configuration must not load\n}\n"
+)
 # the repository schema only accepts pull, triage, push, maintain and admin: an uncaught jsonschema error while the
 # configuration loads (KB-032), i.e. an evaluation error in the webapp and a load error for the config guard
 SCHEMA_ERROR_PERMISSION = "e2e-not-a-permission"
@@ -171,7 +173,7 @@ SCHEMA_ERROR_PERMISSION = "e2e-not-a-permission"
 INVALID_TOPIC = "E2E_Not_A_Topic"
 CREATED_PR_RE = re.compile(r"created pull request #(\d+)")  # operations/open_pull_request.py:140-143
 PR_BODY = (
-    "Opened by the otterdog-e2e harness (scenario {scenario}, run {run}). The harness closes it and deletes its "
+    "Opened by the otterdog-acceptance harness (scenario {scenario}, run {run}). The harness closes it and deletes its "
     "branch; it is merged only when the scenario says so."
 )
 TIER_DIR = Path(__file__).resolve().parent
@@ -389,7 +391,7 @@ class WebappScenario:
             f"the trusted reset CLI could not create {what} (precondition):\n{REDACTOR(result.raw)[-2000:]}"
         )
         main = text if main_text is None else main_text
-        self.flow.reset_main(main, message=f"otterdog-e2e {self.run_ctx.run_id}: {self.sid} declares {what}")
+        self.flow.reset_main(main, message=f"otterdog-acceptance {self.run_ctx.run_id}: {self.sid} declares {what}")
         return main
 
     def login(self, identity: str) -> str:
@@ -804,7 +806,7 @@ class WebappScenario:
         without revision label, commit or revision missing from the mirror)."""
         if self.target.webapp.transport != "relay":
             return None
-        from otterdog_e2e.sut.source import UpstreamMirror
+        from otterdog_acceptance.sut.source import UpstreamMirror
 
         revision = self.e2e.image_for("head").revision  # memoized: the image the compose stack runs
         mirror = UpstreamMirror(self.e2e.settings.cache_dir, self.e2e.settings.upstream_repo)

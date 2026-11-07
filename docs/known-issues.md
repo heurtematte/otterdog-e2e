@@ -28,7 +28,7 @@ How the registry is used:
   ([setup-free-org.md](setup-free-org.md#fine-grained-personal-access-tokens)). The matrix features
   they affect list them in `known_bugs`. A bug that only one step of a YAML scenario exercises is declared by that
   step (`known_bug` of the step) and is not listed in `scenarios`: its section names the step, its evidence the file.
-- `otterdog-e2e assist triage` pre-classifies the failures of a run, and the `triage-e2e-run` skill drafts new
+- `otterdog-acceptance assist triage` pre-classifies the failures of a run, and the `triage-e2e-run` skill drafts new
   entries and sections in this format with an AI agent ([ai-assistance.md](ai-assistance.md)); a human checks the
   evidence and the reproduction before an entry is merged.
 
@@ -1503,7 +1503,7 @@ Status: **confirmed** · Upstream: none · Scenarios: `webui.kb.import-two-facto
 Evidence: `otterdog/resources/github-web-settings.jsonnet:40-42`, `otterdog/resources/schemas/settings.json:102-105`,
 `otterdog/providers/github/__init__.py:33-35`, `otterdog/providers/github/__init__.py:116-120`,
 `otterdog/providers/github/web.py:93-99`, `otterdog/models/organization_settings.py:68`,
-e2e: `src/otterdog_e2e/webui/mapping.py` (the web-UI tier reads it through REST and never toggles it).
+e2e: `src/otterdog_acceptance/webui/mapping.py` (the web-UI tier reads it through REST and never toggles it).
 
 Found by the web-UI tier. The settings schema declares `two_factor_requirement` as a web setting, and the provider
 requests it from the web client whenever `-n` is not given. The page definitions name it `two_factor_required`, and

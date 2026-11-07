@@ -20,17 +20,17 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from otterdog_e2e import waiting
-from otterdog_e2e.scenarios.model import load_scenario
+from otterdog_acceptance import waiting
+from otterdog_acceptance.scenarios.model import load_scenario
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from otterdog_e2e.github.mutate import Mutator
-    from otterdog_e2e.github.oracle import Oracle
-    from otterdog_e2e.naming import RunContext
-    from otterdog_e2e.scenarios.engine import ScenarioEngine
-    from otterdog_e2e.scenarios.model import Scenario
+    from otterdog_acceptance.github.mutate import Mutator
+    from otterdog_acceptance.github.oracle import Oracle
+    from otterdog_acceptance.naming import RunContext
+    from otterdog_acceptance.scenarios.engine import ScenarioEngine
+    from otterdog_acceptance.scenarios.model import Scenario
 
 pytestmark = [pytest.mark.tags("repo")]
 

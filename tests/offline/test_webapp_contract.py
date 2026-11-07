@@ -43,16 +43,16 @@ from typing import Any
 import pytest
 import requests
 
-from otterdog_e2e import procs, waiting
-from otterdog_e2e.context import E2EContext
-from otterdog_e2e.naming import new_run_context
-from otterdog_e2e.scenarios.offline import OFFLINE_ORG, offline_run_context
-from otterdog_e2e.sut.image import BuiltImage
-from otterdog_e2e.sut.source import UpstreamMirror
-from otterdog_e2e.webapp.api import parse_html
-from otterdog_e2e.webapp.stack import WebappStack, dummy_webapp_settings
-from otterdog_e2e.webhooks.injector import WebhookInjector
-from otterdog_e2e.webhooks.payloads import (
+from otterdog_acceptance import procs, waiting
+from otterdog_acceptance.context import E2EContext
+from otterdog_acceptance.naming import new_run_context
+from otterdog_acceptance.scenarios.offline import OFFLINE_ORG, offline_run_context
+from otterdog_acceptance.sut.image import BuiltImage
+from otterdog_acceptance.sut.source import UpstreamMirror
+from otterdog_acceptance.webapp.api import parse_html
+from otterdog_acceptance.webapp.stack import WebappStack, dummy_webapp_settings
+from otterdog_acceptance.webhooks.injector import WebhookInjector
+from otterdog_acceptance.webhooks.payloads import (
     ping_payload,
     pull_request_payload,
     push_payload,
@@ -62,7 +62,7 @@ from otterdog_e2e.webhooks.payloads import (
     workflow_job_payload,
     workflow_run_payload,
 )
-from otterdog_e2e.webhooks.signing import FORM_CONTENT_TYPE
+from otterdog_acceptance.webhooks.signing import FORM_CONTENT_TYPE
 
 # the first test may build the SUT image (docker build of otterdog: several minutes on a cold layer cache)
 pytestmark = [
@@ -72,7 +72,7 @@ pytestmark = [
     pytest.mark.timeout(2700),
 ]
 
-UNKNOWN_INSTALLATION = stable_id("otterdog-e2e offline: unknown installation", base=900_000_000)
+UNKNOWN_INSTALLATION = stable_id("otterdog-acceptance offline: unknown installation", base=900_000_000)
 UNKNOWN_INSTALLATION_LOG = f"received event for unknown installation '{UNKNOWN_INSTALLATION}'"
 EVENT_LOAD_FAILURE_LOG = "failed to load pull request event data"
 CONFIG_REPO = "otterdog-e2e-offline-config"
@@ -384,7 +384,7 @@ def test_workflow_events_are_described_selectively(offline_stack: WebappStack, i
     """Every workflow_job and workflow_run delivery is accepted (204), but only a queued job and a completed run are
     described in the log ('workflow '<name>' on '<labels>' queued in repository <repo>' / 'workflow '<name>'
     completed in repository <repo>'), in_progress jobs and requested runs are not."""
-    installation = stable_id("otterdog-e2e offline: workflow events", base=900_000_000)
+    installation = stable_id("otterdog-acceptance offline: workflow events", base=900_000_000)
     ids = {case: delivery_id(case) for case in ("job-in-progress", "job-queued", "run-requested", "run-completed")}
     job = {"org": OFFLINE_ORG, "repo": EVENT_REPO, "run_id": 4242, "installation_id": installation}
     statuses = [
@@ -412,8 +412,8 @@ def test_unformattable_events_are_still_processed(
     whose 'pusher' is null breaks the description with a TypeError: since #775 the webapp warns ('could not format
     webhook delivery <id> for event 'push' (TypeError ...)' with the null fields), describes it as 'push (<id>)' and
     processes it (204, the push hook reports the unknown installation); older SUTs answer 500 and drop the event."""
-    missing_installation = stable_id("otterdog-e2e offline: push without pusher", base=900_000_000)
-    null_installation = stable_id("otterdog-e2e offline: push with null pusher", base=900_000_000)
+    missing_installation = stable_id("otterdog-acceptance offline: push without pusher", base=900_000_000)
+    null_installation = stable_id("otterdog-acceptance offline: push with null pusher", base=900_000_000)
     missing = push_payload(
         org=OFFLINE_ORG, repo=EVENT_REPO, ref="refs/heads/main", after="3" * 40, installation_id=missing_installation
     )

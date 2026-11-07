@@ -9,18 +9,18 @@ from typing import Any
 
 import pytest
 
-from otterdog_e2e.naming import RunContext
-from otterdog_e2e.otterdog.baseline import BaselineManager, combine_apply_results
-from otterdog_e2e.otterdog.output import PlanObject, PlanResult, parse_apply, parse_plan
-from otterdog_e2e.otterdog.render import OrgConfigRenderer, build_baseline
-from otterdog_e2e.otterdog.runner import OtterdogCli
-from otterdog_e2e.otterdog.workspace import ConfigWorkspace
-from otterdog_e2e.safety import SafetyError
-from otterdog_e2e.settings import HarnessSettings, Identity, IdentitySpec, Target, WebappSpec
-from otterdog_e2e.sut.cli_install import InstalledCli
-from otterdog_e2e.sut.spec import ResolvedSut, SutSpec
-from otterdog_e2e.sut.template import offline_template
-from otterdog_e2e.testing.fakes import FakeCli, FakeOracle, make_verified_org
+from otterdog_acceptance.naming import RunContext
+from otterdog_acceptance.otterdog.baseline import BaselineManager, combine_apply_results
+from otterdog_acceptance.otterdog.output import PlanObject, PlanResult, parse_apply, parse_plan
+from otterdog_acceptance.otterdog.render import OrgConfigRenderer, build_baseline
+from otterdog_acceptance.otterdog.runner import OtterdogCli
+from otterdog_acceptance.otterdog.workspace import ConfigWorkspace
+from otterdog_acceptance.safety import SafetyError
+from otterdog_acceptance.settings import HarnessSettings, Identity, IdentitySpec, Target, WebappSpec
+from otterdog_acceptance.sut.cli_install import InstalledCli
+from otterdog_acceptance.sut.spec import ResolvedSut, SutSpec
+from otterdog_acceptance.sut.template import offline_template
+from otterdog_acceptance.testing.fakes import FakeCli, FakeOracle, make_verified_org
 
 DATA = Path(__file__).parent / "data"
 ORG = "e2e-test-org"
@@ -264,8 +264,8 @@ def test_changes_the_reset_cannot_restore_are_refused(tmp_path: Path) -> None:
     """DESTR-07: a change without a run id is allowed for the org settings, baseline repositories (nested objects
     included) and baseline teams only; an extra protected repository, an unmanaged team or an org-level object
     named by hand is refused."""
-    from otterdog_e2e.otterdog.baseline import unmanaged_changes
-    from otterdog_e2e.otterdog.output import PlanObject, PlanResult
+    from otterdog_acceptance.otterdog.baseline import unmanaged_changes
+    from otterdog_acceptance.otterdog.output import PlanObject, PlanResult
 
     def obj(op: str, kind: str, value: str, parent: tuple[str, str] | None = None) -> PlanObject:
         """A plan object with a one-key body."""
@@ -435,7 +435,7 @@ def test_push_and_text(tmp_path: Path) -> None:
     manager = make_manager(tmp_path)
     flow = Flow()
     assert manager.push(flow) == "c" * 40  # type: ignore[arg-type]
-    assert flow.calls == [(manager.text(), "otterdog-e2e: baseline of run t3c7z8a5")]
+    assert flow.calls == [(manager.text(), "otterdog-acceptance: baseline of run t3c7z8a5")]
     assert "e2e-t3c7z8a5-config" in manager.text() and "otterdog-admins" in manager.text()
 
 

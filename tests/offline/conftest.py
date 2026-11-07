@@ -20,14 +20,14 @@ from pathlib import Path
 
 import pytest
 
-from otterdog_e2e import procs
-from otterdog_e2e.context import E2EContext, get_context
-from otterdog_e2e.otterdog.runner import OtterdogCli
-from otterdog_e2e.otterdog.workspace import ConfigWorkspace
-from otterdog_e2e.scenarios.offline import OfflineEngine, offline_run_context
-from otterdog_e2e.sut.cli_install import InstalledCli
-from otterdog_e2e.sut.source import UpstreamMirror
-from otterdog_e2e.sut.template import (
+from otterdog_acceptance import procs
+from otterdog_acceptance.context import E2EContext, get_context
+from otterdog_acceptance.otterdog.runner import OtterdogCli
+from otterdog_acceptance.otterdog.workspace import ConfigWorkspace
+from otterdog_acceptance.scenarios.offline import OfflineEngine, offline_run_context
+from otterdog_acceptance.sut.cli_install import InstalledCli
+from otterdog_acceptance.sut.source import UpstreamMirror
+from otterdog_acceptance.sut.template import (
     OFFLINE_LOCAL_APPLY_HIDDEN,
     hide_template_functions,
     template_source_dir,

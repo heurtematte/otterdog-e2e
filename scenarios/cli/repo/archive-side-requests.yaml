@@ -23,7 +23,7 @@ steps:
         - |
           orgs.newRepo('{{ p }}-arch-side') {
             description: "otterdog e2e: archive side requests",
-            topics: ["otterdog-e2e", "side-a"],
+            topics: ["otterdog-acceptance", "side-a"],
           }
     plan:
       expect: changes
@@ -41,7 +41,7 @@ steps:
         match: {archived: false}
       - kind: repo_topics
         name: "{{ p }}-arch-side"
-        match: {$unordered: [otterdog-e2e, side-a]}
+        match: {$unordered: [otterdog-acceptance, side-a]}
 
   - name: archive-with-topics
     known_bug: KB-082
@@ -50,7 +50,7 @@ steps:
         - |
           orgs.newRepo('{{ p }}-arch-side') {
             description: "otterdog e2e: archive side requests",
-            topics: ["otterdog-e2e", "side-b"],
+            topics: ["otterdog-acceptance", "side-b"],
             archived: true,
           }
     plan:
@@ -71,7 +71,7 @@ steps:
         match: {archived: true}
       - kind: repo_topics
         name: "{{ p }}-arch-side"
-        match: {$unordered: [otterdog-e2e, side-b]}
+        match: {$unordered: [otterdog-acceptance, side-b]}
 
   - name: archived-topics
     known_bug: KB-058
@@ -80,7 +80,7 @@ steps:
         - |
           orgs.newRepo('{{ p }}-arch-side') {
             description: "otterdog e2e: archive side requests",
-            topics: ["otterdog-e2e", "side-c"],
+            topics: ["otterdog-acceptance", "side-c"],
             archived: true,
           }
     plan:

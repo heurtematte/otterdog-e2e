@@ -13,10 +13,10 @@ from typing import Any
 
 import pytest
 
-from otterdog_e2e.capabilities import from_plan
-from otterdog_e2e.otterdog.output import parse_plan
-from otterdog_e2e.otterdog.runner import CliResult, infra_error_line
-from otterdog_e2e.scenarios.engine import (
+from otterdog_acceptance.capabilities import from_plan
+from otterdog_acceptance.otterdog.output import parse_plan
+from otterdog_acceptance.otterdog.runner import CliResult, infra_error_line
+from otterdog_acceptance.scenarios.engine import (
     ScenarioEngine,
     ScenarioFailedError,
     apply_problems,
@@ -29,8 +29,8 @@ from otterdog_e2e.scenarios.engine import (
     unknown_properties_problem,
     validation_problems,
 )
-from otterdog_e2e.scenarios.model import ApplySpec, PlanSpec, ValidateSpec, load_scenario
-from otterdog_e2e.testing.fakes import FakeCli, FakeOracle, make_run_context
+from otterdog_acceptance.scenarios.model import ApplySpec, PlanSpec, ValidateSpec, load_scenario
+from otterdog_acceptance.testing.fakes import FakeCli, FakeOracle, make_run_context
 
 DATA = Path(__file__).parent / "data"
 RUN = make_run_context()

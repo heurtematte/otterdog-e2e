@@ -23,9 +23,9 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from otterdog_e2e.config_repo import comment_contains
-from otterdog_e2e.otterdog.render import ConfigFragments
-from otterdog_e2e.webui.mapping import jsonnet_fields, web_setting
+from otterdog_acceptance.config_repo import comment_contains
+from otterdog_acceptance.otterdog.render import ConfigFragments
+from otterdog_acceptance.webui.mapping import jsonnet_fields, web_setting
 
 if TYPE_CHECKING:
     from conftest import WebappScenario
@@ -59,7 +59,7 @@ def test_web_ui_setting_needs_a_manual_apply(webapp_scenario: WebappScenario) ->
     s = webapp_scenario
     live = _live(s)
     assert live is not None, f"GET /orgs/{{org}} returns no {SETTING.rest_field}: the oracle needs an owner token"
-    s.flow.reset_main(_text(s, live), message=f"otterdog-e2e {s.run_ctx.run_id}: W-PR-WEBUI pins {SETTING.key}")
+    s.flow.reset_main(_text(s, live), message=f"otterdog-acceptance {s.run_ctx.run_id}: W-PR-WEBUI pins {SETTING.key}")
     pr = s.open_pr(_text(s, not live))
 
     s.wait_validation(pr)

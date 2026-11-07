@@ -3,7 +3,7 @@
 # Each endpoint is written as otterdog's request statistics name it (otterdog >= 1.7.0, #881,
 # otterdog/providers/github/stats/__init__.py rest_endpoint): the method and the path with every name or id replaced
 # by a placeholder ({org}, {owner}/{repo}, {name}, {id}), or 'mutation <name>' for GraphQL. These are the strings a
-# live scenario step names in `apply.api.sent` / `apply.api.not_sent` (src/otterdog_e2e/otterdog/api_usage.py); every
+# live scenario step names in `apply.api.sent` / `apply.api.not_sent` (src/otterdog_acceptance/otterdog/api_usage.py); every
 # write endpoint a scenario names must be listed here (tests/unit/test_api_endpoints.py), and docs/api-coverage.md,
 # generated from this file and the scenarios, shows which endpoints a step asserts and which none does yet:
 #   .venv/bin/python tests/unit/test_api_endpoints.py --write

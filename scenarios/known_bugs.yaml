@@ -517,7 +517,7 @@
     - otterdog/providers/github/__init__.py:116-120
     - otterdog/providers/github/web.py:93-99
     - otterdog/models/organization_settings.py:68
-    - "e2e: src/otterdog_e2e/webui/mapping.py (EXPECTED_UNREAD: the web-UI tier reads it through REST and never toggles it)"
+    - "e2e: src/otterdog_acceptance/webui/mapping.py (EXPECTED_UNREAD: the web-UI tier reads it through REST and never toggles it)"
   upstream: null
   fixed_in: null
   scenarios: [webui.kb.import-two-factor]

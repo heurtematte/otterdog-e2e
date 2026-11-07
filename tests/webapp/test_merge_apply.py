@@ -40,12 +40,12 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from otterdog_e2e.config_repo import comment_contains
+from otterdog_acceptance.config_repo import comment_contains
 
 if TYPE_CHECKING:
     from conftest import WebappScenario
-    from otterdog_e2e.config_repo import ConfigPr
-    from otterdog_e2e.github.mutate import Mutator
+    from otterdog_acceptance.config_repo import ConfigPr
+    from otterdog_acceptance.github.mutate import Mutator
 
 pytestmark = [pytest.mark.webapp]
 

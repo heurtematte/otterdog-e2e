@@ -42,10 +42,10 @@ declared once per change. Format and use: the `otterdog-pr-tests` skill (`refere
 
 ## Tags
 
-Vocabulary `otterdog_e2e.selection.SCENARIO_TAGS`: model areas `repo`, `bpr`, `rulesets`, `environments`, `secrets`,
+Vocabulary `otterdog_acceptance.selection.SCENARIO_TAGS`: model areas `repo`, `bpr`, `rulesets`, `environments`, `secrets`,
 `variables`, `webhooks`, `teams`, `custom-properties`, `org-settings`, `workflows`, `org-roles`, `code-security`, and
 `template`, `cli`, `webapp`, `webhooks-app`, `offline`, `smoke`. The PR lane selects scenarios by the files a PR changes through these
-tags (`PATH_RULES` of `src/otterdog_e2e/selection.py`).
+tags (`PATH_RULES` of `src/otterdog_acceptance/selection.py`).
 
 - offline YAML: `offline` first, then vocabulary tags only;
 - live YAML: at least one model-area tag; regressions add `regression` (their PR goes into `references`, no `pr-<n>`

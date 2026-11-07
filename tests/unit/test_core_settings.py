@@ -9,10 +9,10 @@ from pathlib import Path
 
 import pytest
 
-from otterdog_e2e import settings
-from otterdog_e2e.redact import Redactor
-from otterdog_e2e.safety import SafetyError
-from otterdog_e2e.settings import (
+from otterdog_acceptance import settings
+from otterdog_acceptance.redact import Redactor
+from otterdog_acceptance.safety import SafetyError
+from otterdog_acceptance.settings import (
     HarnessSettings,
     env_file_candidates,
     expand_env,
@@ -36,7 +36,7 @@ def redactor(monkeypatch: pytest.MonkeyPatch) -> Redactor:
     return fresh
 
 
-def _project(root: Path, name: str = "otterdog-e2e") -> Path:
+def _project(root: Path, name: str = "otterdog-acceptance") -> Path:
     """Create a directory with a pyproject.toml declaring ``name``."""
     root.mkdir(parents=True, exist_ok=True)
     (root / "pyproject.toml").write_text(f'[project]\nname = "{name}"\n', encoding="utf-8")
@@ -77,7 +77,7 @@ def test_expand_env_rejects_malformed_references(value: str) -> None:
 
 # --- project root / settings ----------------------------------------------------------------------------------------
 def test_find_project_root_from_nested_dir_and_file(tmp_path: Path) -> None:
-    """The nearest pyproject.toml named otterdog-e2e wins; other projects are skipped."""
+    """The nearest pyproject.toml named otterdog-acceptance wins; other projects are skipped."""
     root = _project(tmp_path / "proj")
     nested = _project(root / "sub" / "other", name="not-the-harness") / "deep"
     nested.mkdir()
@@ -111,12 +111,12 @@ def test_find_project_root_defaults_to_cwd_then_package(monkeypatch: pytest.Monk
 
 
 def test_harness_settings_defaults(tmp_path: Path) -> None:
-    """Defaults: ~/.cache/otterdog-e2e (HOME of environ, created 0700), <root>/artifacts, upstream otterdog."""
+    """Defaults: ~/.cache/otterdog-acceptance (HOME of environ, created 0700), <root>/artifacts, upstream otterdog."""
     root = _project(tmp_path / "proj")
     home = tmp_path / "home"
     config = harness_settings({"E2E_PROJECT_ROOT": str(root), "HOME": str(home)})
     assert config.project_root == root
-    assert config.cache_dir == home / ".cache" / "otterdog-e2e"
+    assert config.cache_dir == home / ".cache" / "otterdog-acceptance"
     assert stat.S_IMODE(config.cache_dir.stat().st_mode) == 0o700
     assert config.artifacts_root == root / "artifacts"
     assert not config.artifacts_root.exists()
@@ -196,8 +196,43 @@ def test_scratch_is_private_and_rejects_path_tricks(tmp_path: Path) -> None:
 
 
 def test_user_config_dir(tmp_path: Path) -> None:
-    """~/.config/otterdog-e2e below HOME of environ."""
-    assert user_config_dir({"HOME": str(tmp_path)}) == tmp_path / ".config" / "otterdog-e2e"
+    """~/.config/otterdog-acceptance below HOME of environ."""
+    assert user_config_dir({"HOME": str(tmp_path)}) == tmp_path / ".config" / "otterdog-acceptance"
+
+
+def test_directories_of_the_former_name_are_used_until_the_new_ones_exist(tmp_path: Path) -> None:
+    """~/.config/otterdog-e2e and ~/.cache/otterdog-e2e (the project's former name) are used, never moved, while
+    the new directories do not exist: their env files, App keys, browser profile and SUT installs stay valid."""
+    environ = {"HOME": str(tmp_path)}
+    config, cache = tmp_path / ".config", tmp_path / ".cache"
+    assert settings.default_cache_dir(environ) == cache / "otterdog-acceptance"
+    (config / "otterdog-e2e").mkdir(parents=True)
+    (cache / "otterdog-e2e").mkdir(parents=True)
+    assert user_config_dir(environ) == config / "otterdog-e2e"
+    assert settings.default_cache_dir(environ) == cache / "otterdog-e2e"
+    assert env_file_candidates("free", tmp_path, environ)[0] == config / "otterdog-e2e" / "free.env"
+    root = _project(tmp_path / "proj")
+    assert harness_settings({**environ, "E2E_PROJECT_ROOT": str(root)}).cache_dir == cache / "otterdog-e2e"
+    (config / "otterdog-acceptance").mkdir()
+    (cache / "otterdog-acceptance").mkdir()
+    assert user_config_dir(environ) == config / "otterdog-acceptance"
+    assert settings.default_cache_dir(environ) == cache / "otterdog-acceptance"
+
+
+def test_the_default_child_home_follows_the_cache_of_the_former_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """procs.default_home (before the plugin sets the scratch HOME) is below the cache dir settings choose: computing
+    it must not create ~/.cache/otterdog-acceptance next to a ~/.cache/otterdog-e2e still in use."""
+    from otterdog_acceptance import procs
+
+    monkeypatch.setattr(procs, "_default_home", None)
+    monkeypatch.delenv("E2E_CACHE_DIR", raising=False)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    (tmp_path / ".cache" / "otterdog-e2e").mkdir(parents=True)
+    assert procs.default_home() == tmp_path / ".cache" / "otterdog-e2e" / "home"
+    monkeypatch.setenv("E2E_CACHE_DIR", str(tmp_path / "c"))
+    assert procs.default_home() == tmp_path / "c" / "home"
 
 
 # --- env files ------------------------------------------------------------------------------------------------------
@@ -244,7 +279,7 @@ def test_parse_env_text_multiline_quoted_pem() -> None:
 def test_parse_env_text_skips_malformed_lines_without_values(caplog: pytest.LogCaptureFixture) -> None:
     """Malformed lines are skipped with a warning that never shows their content."""
     text = "this is not an assignment s3cr3t-value\n1BAD=x\nOK=1\nOPEN='never closed s3cr3t-value\n"
-    with caplog.at_level(logging.WARNING, logger="otterdog_e2e.settings"):
+    with caplog.at_level(logging.WARNING, logger="otterdog_acceptance.settings"):
         assert parse_env_text(text, source="f.env") == {"OK": "1"}
     assert "f.env:1" in caplog.text and "f.env:2" in caplog.text and "unterminated" in caplog.text
     assert "s3cr3t-value" not in caplog.text
@@ -264,7 +299,7 @@ def test_env_file_candidates_order(tmp_path: Path) -> None:
     """Precedence: user config file, project target file, project generic file."""
     environ = {"HOME": str(tmp_path / "home")}
     assert env_file_candidates("free", tmp_path, environ) == [
-        tmp_path / "home" / ".config" / "otterdog-e2e" / "free.env",
+        tmp_path / "home" / ".config" / "otterdog-acceptance" / "free.env",
         tmp_path / ".env.e2e.free",
         tmp_path / ".env.e2e",
     ]
@@ -282,7 +317,7 @@ def _write(path: Path, text: str, mode: int = 0o600) -> Path:
 def test_load_env_files_precedence_and_no_override(tmp_path: Path, redactor: Redactor) -> None:
     """Earlier files win, the environment is never overridden, missing files are skipped."""
     home, root = tmp_path / "home", tmp_path / "proj"
-    user = _write(home / ".config" / "otterdog-e2e" / "free.env", "E2E_ORG=from-user\nE2E_A=user\n")
+    user = _write(home / ".config" / "otterdog-acceptance" / "free.env", "E2E_ORG=from-user\nE2E_A=user\n")
     target = _write(root / ".env.e2e.free", "E2E_ORG=from-target\nE2E_B=target\nE2E_A=target\n")
     generic = _write(root / ".env.e2e", "E2E_ORG=from-generic\nE2E_C=generic\nE2E_EXISTING=file\n")
     environ = {"HOME": str(home), "E2E_EXISTING": "env"}
@@ -336,7 +371,7 @@ def test_load_env_files_warns_about_shared_files(
     """Secrets files readable by group/others are reported."""
     root = tmp_path / "proj"
     _write(root / ".env.e2e", "E2E_X=1\n", mode=0o644)
-    with caplog.at_level(logging.WARNING, logger="otterdog_e2e.settings"):
+    with caplog.at_level(logging.WARNING, logger="otterdog_acceptance.settings"):
         load_env_files(None, root, {"HOME": str(tmp_path / "home")})
     assert "chmod 600" in caplog.text
 
@@ -349,6 +384,6 @@ def test_load_env_files_defaults_to_os_environ(
     monkeypatch.setenv("E2E_WPA_LOADED", "placeholder")  # registers the variable for removal after the test
     monkeypatch.delenv("E2E_WPA_LOADED")
     root = tmp_path / "proj"
-    _write(tmp_path / "home" / ".config" / "otterdog-e2e" / "free.env", "E2E_WPA_LOADED=yes\n")
-    assert load_env_files("free", root) == [tmp_path / "home" / ".config" / "otterdog-e2e" / "free.env"]
+    _write(tmp_path / "home" / ".config" / "otterdog-acceptance" / "free.env", "E2E_WPA_LOADED=yes\n")
+    assert load_env_files("free", root) == [tmp_path / "home" / ".config" / "otterdog-acceptance" / "free.env"]
     assert os.environ["E2E_WPA_LOADED"] == "yes"

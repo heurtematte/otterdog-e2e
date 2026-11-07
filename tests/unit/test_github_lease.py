@@ -15,13 +15,13 @@ import pytest
 import requests
 import responses
 
-from otterdog_e2e.github.http import GITHUB_API, GitHubError, GitHubHttp
-from otterdog_e2e.github.lease import UNPARSEABLE_HOLDER, LeaseBusy, OrgLease, format_time
-from otterdog_e2e.github.mutate import Mutator
-from otterdog_e2e.github.oracle import Oracle
-from otterdog_e2e.naming import new_run_context
-from otterdog_e2e.safety import SafetyError
-from otterdog_e2e.testing.fakes import FAKE_ORG, make_verified_org
+from otterdog_acceptance.github.http import GITHUB_API, GitHubError, GitHubHttp
+from otterdog_acceptance.github.lease import UNPARSEABLE_HOLDER, LeaseBusy, OrgLease, format_time
+from otterdog_acceptance.github.mutate import Mutator
+from otterdog_acceptance.github.oracle import Oracle
+from otterdog_acceptance.naming import new_run_context
+from otterdog_acceptance.safety import SafetyError
+from otterdog_acceptance.testing.fakes import FAKE_ORG, make_verified_org
 
 REPO = "otterdog-e2e-configs"
 BASE = f"{GITHUB_API}/repos/{FAKE_ORG}/{REPO}"

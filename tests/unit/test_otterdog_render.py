@@ -9,9 +9,9 @@ from typing import Any
 
 import pytest
 
-from otterdog_e2e import procs
-from otterdog_e2e.naming import RunContext
-from otterdog_e2e.otterdog.render import (
+from otterdog_acceptance import procs
+from otterdog_acceptance.naming import RunContext
+from otterdog_acceptance.otterdog.render import (
     CACHE_LIMIT_OVERRIDES,
     BaselineSpec,
     ConfigFragments,
@@ -22,8 +22,8 @@ from otterdog_e2e.otterdog.render import (
     org_profile,
     settings_field,
 )
-from otterdog_e2e.settings import IdentitySpec, Target, WebappSpec
-from otterdog_e2e.sut.template import offline_template
+from otterdog_acceptance.settings import IdentitySpec, Target, WebappSpec
+from otterdog_acceptance.sut.template import offline_template
 
 TEMPLATE_DIR = Path(__file__).parent / "data" / "template"
 RUN = RunContext("t3c7z8a5")
@@ -123,7 +123,7 @@ def test_layer_one_pins_the_live_profile() -> None:
 def test_the_baseline_pins_the_workflow_defaults_the_template_leaves_unset() -> None:
     """BAT-14: fork_pr_approval_policy (changed by cli.org.actions-allowed) is pinned to GitHub's default, so every
     baseline reset restores it; the target's own value wins; workflows: null keeps the template block alone."""
-    from otterdog_e2e.otterdog.render import baseline_settings
+    from otterdog_acceptance.otterdog.render import baseline_settings
 
     assert baseline_settings({}) == {"workflows": {"fork_pr_approval_policy": "first_time_contributors"}}
     assert baseline_settings({"workflows": {"fork_pr_approval_policy": "all_external_contributors"}}) == {

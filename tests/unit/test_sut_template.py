@@ -10,11 +10,11 @@ from typing import Any
 import pytest
 import responses
 
-from otterdog_e2e import procs
-from otterdog_e2e.github.http import GitHubHttp
-from otterdog_e2e.safety import SafetyError
-from otterdog_e2e.sut.spec import ResolvedSut, parse_sut_spec
-from otterdog_e2e.sut.template import (
+from otterdog_acceptance import procs
+from otterdog_acceptance.github.http import GitHubHttp
+from otterdog_acceptance.safety import SafetyError
+from otterdog_acceptance.sut.spec import ResolvedSut, parse_sut_spec
+from otterdog_acceptance.sut.template import (
     HOOK_FILES,
     OFFLINE_TEMPLATE_URL,
     TemplatePublisher,
@@ -31,7 +31,7 @@ from otterdog_e2e.sut.template import (
     url_template,
     vendor_template,
 )
-from otterdog_e2e.testing.fakes import FAKE_ORG, FakeGitHubHttp, HttpCall, fake_sha, make_verified_org
+from otterdog_acceptance.testing.fakes import FAKE_ORG, FakeGitHubHttp, HttpCall, fake_sha, make_verified_org
 
 SHA = "a07ce8ad16f43178cb7366b737e3e2903aa349ef"
 API = f"/repos/{FAKE_ORG}/otterdog-e2e-defaults"
@@ -192,7 +192,7 @@ def test_hide_template_functions_wraps_the_vendored_file(tmp_path: Path) -> None
     assert (root / "otterdog-defaults-sut.libsonnet").read_text() == TEMPLATE["otterdog-defaults.libsonnet"]
     assert (root / "otterdog-defaults.libsonnet").read_text() == (
         "(import 'otterdog-defaults-sut.libsonnet') + "
-        "{ newOrgCodeSecurityConfiguration:: error 'hidden by otterdog-e2e: newOrgCodeSecurityConfiguration' }\n"
+        "{ newOrgCodeSecurityConfiguration:: error 'hidden by otterdog-acceptance: newOrgCodeSecurityConfiguration' }\n"
     )
     with pytest.raises(FileExistsError):
         hide_template_functions(org_dir, offline_template(), ["newOrgRuleset"])

@@ -1,4 +1,4 @@
-# otterdog-e2e
+# otterdog-acceptance
 
 <!-- github-only -->
 
@@ -47,13 +47,13 @@ request it compares base and head (differential observations) and reports expect
 Without any GitHub organization (offline tier only):
 
 ```bash
-make init        # poetry install --with dev -> .venv, and otterdog-e2e on the PATH (~/.local/bin)
+make init        # poetry install --with dev -> .venv, and otterdog-acceptance on the PATH (~/.local/bin)
 make unit        # harness self-tests: no network, no docker, about 1 min
 make offline     # offline tier of the latest otterdog release (docker for the webapp part), about 6 min warm
 
 # differential proof of concept of otterdog#790: the offline tier of the head, then base and head CLIs on every
 # observed offline scenario, about 15 min warm
-.venv/bin/otterdog-e2e run --sut sha:9bdeb75 --change 790 --suite offline,differential
+.venv/bin/otterdog-acceptance run --sut sha:9bdeb75 --change 790 --suite offline,differential
 ```
 
 The first run fetches the otterdog repository, installs each SUT and builds its webapp image; later runs reuse the
@@ -64,9 +64,9 @@ onboard it ([docs/onboarding.md](docs/onboarding.md) is the fast path, [docs/set
 the same steps by hand):
 
 ```bash
-.venv/bin/otterdog-e2e setup --target free             # interactive: org, tokens (prefilled URLs), App, bootstrap
-.venv/bin/otterdog-e2e doctor --target free            # read-only checks
-.venv/bin/otterdog-e2e ci-sync --target free --apply   # CI environments, variables and secrets (your gh login)
+.venv/bin/otterdog-acceptance setup --target free             # interactive: org, tokens (prefilled URLs), App, bootstrap
+.venv/bin/otterdog-acceptance doctor --target free            # read-only checks
+.venv/bin/otterdog-acceptance ci-sync --target free --apply   # CI environments, variables and secrets (your gh login)
 make cli TARGET=free                                   # live CLI tier
 make one TARGET=free SCENARIO='cli.repo.*'             # selected scenarios only
 make web-ui TARGET=free                                # web-UI tier: the admin bot logs in (docs/web-ui-testing.md)
@@ -76,10 +76,10 @@ Every test organization is an **instance** (`free` above, or any name such as `a
 `targets/<profile>.yaml` by `E2E_PROFILE`); several of them run in one command, one child process each:
 
 ```bash
-.venv/bin/otterdog-e2e setup --target acme-a --from free   # a second organization, same settings
-.venv/bin/otterdog-e2e targets                             # the instances, their profile and org
+.venv/bin/otterdog-acceptance setup --target acme-a --from free   # a second organization, same settings
+.venv/bin/otterdog-acceptance targets                             # the instances, their profile and org
 make cli TARGET=free,acme-a                                # one after the other (PARALLEL=2: at once)
-.venv/bin/otterdog-e2e run --target @all --suite cli       # every instance with an env file
+.venv/bin/otterdog-acceptance run --target @all --suite cli       # every instance with an env file
 ```
 
 ## Tiers
@@ -127,7 +127,7 @@ gap: which harness API, YAML key, fixture or check kind to use for each kind of 
 
 ## AI-assisted test writing
 
-The harness never calls an AI, but an agent can work with it. Deterministic `otterdog-e2e assist` commands gather
+The harness never calls an AI, but an agent can work with it. Deterministic `otterdog-acceptance assist` commands gather
 context bundles (a pull request, a failed run, the coverage gaps) and validate what an agent writes; the agent skills
 of `.claude/skills/` use them to write the tests of an otterdog PR, triage a run and close coverage gaps, e.g.
 `/otterdog-pr-tests 790 <sha>`, `/triage-e2e-run latest` or `/fill-coverage-gap <feature>` in Claude Code, or in any
@@ -153,16 +153,16 @@ SUT (`--base-sut`), and the [glossary](docs/glossary.md) defines the other terms
 
 Untrusted SUTs run only inside their own docker image (no network for offline commands, read-only root, no
 capabilities, credentials in a 0600 env-file); destructive resets always use a trusted reset SUT
-(`--e2e-reset-sut`, default `release:latest`). `otterdog-e2e sut classify SPEC` prints the trust decision.
+(`--e2e-reset-sut`, default `release:latest`). `otterdog-acceptance sut classify SPEC` prints the trust decision.
 
 ## Commands
 
-All commands are subcommands of `.venv/bin/otterdog-e2e` (`--help` on each one; `-v`/`-vv` for more logging).
+All commands are subcommands of `.venv/bin/otterdog-acceptance` (`--help` on each one; `-v`/`-vv` for more logging).
 
 | Command | Purpose |
 |---|---|
-| `setup --target T [--profile P] [--shard S] [--from I] [--token-type classic\|fine-grained] [--rotate ROLE] [--wait-timeout 30m] [--open] [--no-browser]`, `setup --shards` | interactive onboarding of one instance, or of the instance of every shard in turn: org, tokens of every role (prefilled creation URLs, checked before they are written), web-UI login, GitHub App (verified before its installation link), then bootstrap and doctor; with an accounts store, the classic tokens and the web steps (org creation, invitations, public memberships, App creation and installation) in Firefox as the machine accounts; writes `~/.config/otterdog-e2e/<instance>.env` ([onboarding.md](docs/onboarding.md)) |
-| `accounts --target T [--role R] [--rotate] [--expires-in none] [--config FILE]` | set up machine accounts in a Firefox window (optional extra `browser`): sign in, enroll 2FA when missing, create the classic token; secrets in the accounts store of `~/.config/otterdog-e2e/setup.yaml` (pass or Vault, ci-admin's names), the tokens checked and registered by `setup` ([onboarding.md](docs/onboarding.md#machine-accounts-in-the-browser)) |
+| `setup --target T [--profile P] [--shard S] [--from I] [--token-type classic\|fine-grained] [--rotate ROLE] [--wait-timeout 30m] [--open] [--no-browser]`, `setup --shards` | interactive onboarding of one instance, or of the instance of every shard in turn: org, tokens of every role (prefilled creation URLs, checked before they are written), web-UI login, GitHub App (verified before its installation link), then bootstrap and doctor; with an accounts store, the classic tokens and the web steps (org creation, invitations, public memberships, App creation and installation) in Firefox as the machine accounts; writes `~/.config/otterdog-acceptance/<instance>.env` ([onboarding.md](docs/onboarding.md)) |
+| `accounts --target T [--role R] [--rotate] [--expires-in none] [--config FILE]` | set up machine accounts in a Firefox window (optional extra `browser`): sign in, enroll 2FA when missing, create the classic token; secrets in the accounts store of `~/.config/otterdog-acceptance/setup.yaml` (pass or Vault, ci-admin's names), the tokens checked and registered by `setup` ([onboarding.md](docs/onboarding.md#machine-accounts-in-the-browser)) |
 | `web-login [ACCOUNT \| --target T [--role R]] [--url URL]` | a visible Firefox signed in as an account of the accounts store (by the name of its entries), of an instance (admin by default) or typed in the terminal, on the test organization or `--url`; Enter signs it out ([onboarding.md](docs/onboarding.md#signing-in-as-an-account)) |
 | `ci-sync --target T [--reviewer LOGIN] [--nightly] [--prune-branch-policies] [--apply]` | the CI environments, variables and secrets of an instance, with your own `gh` login (dry run without `--apply`; deployment branch `main` only, the protections read back before any secret) |
 | `targets [--json]` | list the instances (env files) and profiles, with their shard and organization |
@@ -212,12 +212,17 @@ They read `TARGET` (default
   value. Values come from environment variables; secrets are never written there (`*_env` keys name the variable
   holding them).
 - Instances: one test organization each, `--target <instance>`. Its environment files, first one wins and the process
-  environment wins over all of them: `~/.config/otterdog-e2e/<instance>.env` (written by `setup`, with
+  environment wins over all of them: `~/.config/otterdog-acceptance/<instance>.env` (written by `setup`, with
   `E2E_PROFILE=<profile>`), `.env.e2e.<instance>`, `.env.e2e`. The instances `free`, `team` and `enterprise` use the
   profile of the same name. [.env.example](.env.example) lists every variable with its meaning and the required token
   scopes; [docs/onboarding.md](docs/onboarding.md#instances-and-profiles) the naming rules.
-- `E2E_CACHE_DIR` (default `~/.cache/otterdog-e2e`): upstream mirror, SUT sources and builds, tool venvs, private
+- `E2E_CACHE_DIR` (default `~/.cache/otterdog-acceptance`): upstream mirror, SUT sources and builds, tool venvs, private
   per-run scratch directories. `E2E_ARTIFACTS` (default `./artifacts`): redacted run artifacts.
+- The project was named otterdog-e2e: while `~/.config/otterdog-acceptance` (or `~/.cache/otterdog-acceptance`) does
+  not exist, the harness keeps using `~/.config/otterdog-e2e` (or `~/.cache/otterdog-e2e`) as it is. The names it
+  gives on GitHub and in the secret stores keep the former prefix: the org marker `[otterdog-e2e]`, the repositories
+  `otterdog-e2e-configs` and `otterdog-e2e-defaults`, the App `otterdog-e2e-<org>`, the token names, the accounts
+  store entries, the webhook host `otterdog-e2e.invalid` and the docker images `otterdog-e2e/*`.
 
 ## Run artifacts
 
@@ -225,7 +230,7 @@ Every session that runs e2e tests writes `<E2E_ARTIFACTS>/<run_id>/` (a `--colle
 
 | Path | Content |
 |---|---|
-| `run.json` | target, org, plan, SUT/base/reset SUT details and versions, capabilities, lane, timings (SUT preparation included), the `otterdog-e2e` command |
+| `run.json` | target, org, plan, SUT/base/reset SUT details and versions, capabilities, lane, timings (SUT preparation included), the `otterdog-acceptance` command |
 | `results.jsonl` | one line per test: outcome, phase durations, tier, scenario, tags, skip/xfail reason, short failure, infra flag, rate budget |
 | `summary.md` | human summary: outcomes, failures, skips by reason, known bugs, coverage matrix (shares and the features the run exercised), budget overruns, differential summary, a "Manual testing" block for otterdog's PR template |
 | `cli/`, `reset/cli/`, `base/…/cli/`, `head/…/cli/`, `offline/<test>/cli/` | redacted `cmd.txt` (logical and process argv, runtime, duration), `stdout.txt`, `stderr.txt`, `exit_code.txt` of every otterdog command |
@@ -252,7 +257,7 @@ scratch directory below `E2E_CACHE_DIR`, which is deleted at session end (unless
 
 The required repository setup (environments, variables, secrets) is described in
 [docs/security.md](docs/security.md#ci-environments) and [docs/setup-free-org.md](docs/setup-free-org.md#ci);
-`otterdog-e2e ci-sync` creates it per instance ([docs/onboarding.md](docs/onboarding.md#ci-ci-sync)).
+`otterdog-acceptance ci-sync` creates it per instance ([docs/onboarding.md](docs/onboarding.md#ci-ci-sync)).
 
 ## Documentation
 

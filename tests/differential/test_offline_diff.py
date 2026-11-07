@@ -24,21 +24,21 @@ from pathlib import Path
 
 import pytest
 
-from otterdog_e2e.changes import ChangeSpec
-from otterdog_e2e.context import SutPair, get_context
-from otterdog_e2e.differential import compare
-from otterdog_e2e.observe import load_observations
-from otterdog_e2e.scenarios.collect import collect_scenarios, scenario_params
-from otterdog_e2e.scenarios.engine import INFRA_PREFIX, DifferentialRunner, ScenarioOutcome, SutSide
-from otterdog_e2e.scenarios.model import Scenario
-from otterdog_e2e.selection import SCENARIO_TAGS
-from otterdog_e2e.sut.template import PUBLISHED_TEMPLATE_FILE, template_source_dir
+from otterdog_acceptance.changes import ChangeSpec
+from otterdog_acceptance.context import SutPair, get_context
+from otterdog_acceptance.differential import compare
+from otterdog_acceptance.observe import load_observations
+from otterdog_acceptance.scenarios.collect import collect_scenarios, scenario_params
+from otterdog_acceptance.scenarios.engine import INFRA_PREFIX, DifferentialRunner, ScenarioOutcome, SutSide
+from otterdog_acceptance.scenarios.model import Scenario
+from otterdog_acceptance.selection import SCENARIO_TAGS
+from otterdog_acceptance.sut.template import PUBLISHED_TEMPLATE_FILE, template_source_dir
 
 logger = logging.getLogger(__name__)
 
 # failures of these phases are harness or infrastructure problems: the recorded observations cannot be compared
 HARNESS_PHASES = (" prepare: ", " render: ")
-# the differential tier is tag-filtered (otterdog-e2e pr always passes --e2e-tags): the session-wide items carry every
+# the differential tier is tag-filtered (otterdog-acceptance pr always passes --e2e-tags): the session-wide items carry every
 # tag so they are selected whenever a recording item can be
 EVERY_TAG = pytest.mark.tags(*SCENARIO_TAGS)
 

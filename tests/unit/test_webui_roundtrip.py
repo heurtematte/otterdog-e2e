@@ -11,11 +11,11 @@ from typing import Any
 
 import pytest
 
-from otterdog_e2e.otterdog.runner import CliResult
-from otterdog_e2e.testing.fakes import FakeCli, cli_result
-from otterdog_e2e.webui import mapping
-from otterdog_e2e.webui.oracle import TrustedWebReader
-from otterdog_e2e.webui.roundtrip import (
+from otterdog_acceptance.otterdog.runner import CliResult
+from otterdog_acceptance.testing.fakes import FakeCli, cli_result
+from otterdog_acceptance.webui import mapping
+from otterdog_acceptance.webui.oracle import TrustedWebReader
+from otterdog_acceptance.webui.roundtrip import (
     WebSettingsRoundTrip,
     combine_snapshot,
     expected_changes,

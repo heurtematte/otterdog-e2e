@@ -32,7 +32,7 @@ steps:
         - |
           orgs.newRepo('{{ p }}-flag-repo') {
             description: "otterdog e2e: true_false custom property",
-            custom_properties: {"{{ p }}-flag": "true", "{{ p }}-note": "otterdog-e2e"},
+            custom_properties: {"{{ p }}-flag": "true", "{{ p }}-note": "otterdog-acceptance"},
           }
     plan:
       expect: changes
@@ -47,7 +47,7 @@ steps:
         match: {property_name: "{{ p }}-flag", value_type: true_false, required: false}
       - kind: repo_custom_properties
         repo: "{{ p }}-flag-repo"
-        match: {"{{ p }}-flag": "true", "{{ p }}-note": otterdog-e2e}
+        match: {"{{ p }}-flag": "true", "{{ p }}-note": otterdog-acceptance}
 
   - name: flag-false
     fragments:
@@ -56,7 +56,7 @@ steps:
         - |
           orgs.newRepo('{{ p }}-flag-repo') {
             description: "otterdog e2e: true_false custom property",
-            custom_properties: {"{{ p }}-flag": "false", "{{ p }}-note": "otterdog-e2e"},
+            custom_properties: {"{{ p }}-flag": "false", "{{ p }}-note": "otterdog-acceptance"},
           }
     plan:
       expect: changes

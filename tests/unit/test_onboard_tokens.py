@@ -10,10 +10,10 @@ from pathlib import Path
 import pytest
 import yaml
 
-from otterdog_e2e import safety
-from otterdog_e2e.cli import doctor as cli_doctor
-from otterdog_e2e.onboard import tokens
-from otterdog_e2e.onboard.tokens import (
+from otterdog_acceptance import safety
+from otterdog_acceptance.cli import doctor as cli_doctor
+from otterdog_acceptance.onboard import tokens
+from otterdog_acceptance.onboard.tokens import (
     ACCESS_LABELS,
     ADMIN_PERMISSIONS,
     MEMBER_PERMISSIONS,

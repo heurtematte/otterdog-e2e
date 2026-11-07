@@ -11,10 +11,10 @@ import requests
 import responses
 from responses import matchers
 
-from otterdog_e2e.redact import REDACTOR
-from otterdog_e2e.safety import SafetyError
-from otterdog_e2e.waiting import WaitTimeoutError
-from otterdog_e2e.webapp.api import (
+from otterdog_acceptance.redact import REDACTOR
+from otterdog_acceptance.safety import SafetyError
+from otterdog_acceptance.waiting import WaitTimeoutError
+from otterdog_acceptance.webapp.api import (
     RemoteEndpointError,
     WebappApi,
     WebappApiError,

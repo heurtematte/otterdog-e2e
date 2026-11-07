@@ -8,8 +8,8 @@ body stays short (details in ``references/*.md``, one level deep) and has a Safe
 
 What the skills tell an agent to run or read must exist, so they cannot drift from the harness:
 
-* every ``otterdog-e2e <command> [<subcommand>]`` written in a code span or a fenced block, and its ``--long``
-  options, exist in the click CLI (``otterdog_e2e.cli.main``);
+* every ``otterdog-acceptance <command> [<subcommand>]`` written in a code span or a fenced block, and its ``--long``
+  options, exist in the click CLI (``otterdog_acceptance.cli.main``);
 * every ``make <target>`` exists in the Makefile;
 * every repository path (``docs/``, ``scenarios/``, ``src/``, ``tests/``) of a code span or a shell block exists;
   placeholders (``<n>``), globs and variables are skipped;
@@ -29,7 +29,7 @@ import click
 import pytest
 import yaml
 
-from otterdog_e2e.cli import main
+from otterdog_acceptance.cli import main
 
 ROOT = Path(__file__).resolve().parents[2]
 SKILLS = ROOT / ".claude" / "skills"
@@ -62,7 +62,7 @@ SHELL_INFOS = frozenset({"bash", "sh", "shell", "console", "zsh"})
 REFERENCE_RE = re.compile(r"(?<![\w./-])references/[A-Za-z0-9_.-]+\.md")
 
 # --- commands --------------------------------------------------------------------------------------------------------
-INVOCATION_RE = re.compile(r"(?:^|(?<=[\s/`(]))otterdog-e2e[ \t]+(?P<args>[^\n]*)")
+INVOCATION_RE = re.compile(r"(?:^|(?<=[\s/`(]))otterdog-acceptance[ \t]+(?P<args>[^\n]*)")
 MAKE_RE = re.compile(r"(?:^|(?<=[\s`(]))make[ \t]+(?P<args>[^\n]*)")
 SEPARATOR_RE = re.compile(r"&&|\|\||[;|]")
 LONG_OPTION_RE = re.compile(r"^--[a-z][a-z0-9-]*")
@@ -75,15 +75,15 @@ PLACEHOLDER_CHARS = frozenset("<>*{}$[]?|")
 
 @dataclass(frozen=True)
 class Invocation:
-    """One ``otterdog-e2e`` command line found in a skill file."""
+    """One ``otterdog-acceptance`` command line found in a skill file."""
 
     file: str
     words: tuple[str, ...]
 
     @property
     def label(self) -> str:
-        """``<file>: otterdog-e2e <words>``."""
-        return f"{self.file}: otterdog-e2e {' '.join(self.words)}"
+        """``<file>: otterdog-acceptance <words>``."""
+        return f"{self.file}: otterdog-acceptance {' '.join(self.words)}"
 
 
 # --- files -------------------------------------------------------------------------------------------------------------
@@ -162,7 +162,7 @@ def command_lines(text: str) -> Iterator[str]:
 
 
 def invocations(path: Path) -> list[Invocation]:
-    """Every ``otterdog-e2e`` invocation of a skill file, as its words after the program name."""
+    """Every ``otterdog-acceptance`` invocation of a skill file, as its words after the program name."""
     found = []
     for line in command_lines(path.read_text(encoding="utf-8")):
         for match in INVOCATION_RE.finditer(line):
@@ -244,7 +244,9 @@ def invocation_problems(invocation: Invocation) -> list[str]:
             break
         match = LONG_OPTION_RE.match(word)
         if match and match.group() not in known:
-            problems.append(f"{invocation.label}: {' '.join(path) or 'otterdog-e2e'} has no option {match.group()}")
+            problems.append(
+                f"{invocation.label}: {' '.join(path) or 'otterdog-acceptance'} has no option {match.group()}"
+            )
     return problems
 
 
@@ -328,8 +330,8 @@ def test_relative_links_exist(path: Path) -> None:
 
 
 @pytest.mark.parametrize("path", skill_files(), ids=relative)
-def test_otterdog_e2e_invocations_exist(path: Path) -> None:
-    """Every otterdog-e2e command, subcommand and long option a skill file names exists in the click CLI."""
+def test_otterdog_acceptance_invocations_exist(path: Path) -> None:
+    """Every otterdog-acceptance command, subcommand and long option a skill file names exists in the click CLI."""
     problems = [problem for invocation in invocations(path) for problem in invocation_problems(invocation)]
     assert problems == []
 
@@ -355,18 +357,18 @@ def test_repository_paths_exist(path: Path) -> None:
 
 # --- the parsers themselves --------------------------------------------------------------------------------------------
 SAMPLE = """\
-Run `.venv/bin/otterdog-e2e run --suite offline --sut release:latest --scenario <id>` then `make one SCENARIO=x`.
+Run `.venv/bin/otterdog-acceptance run --suite offline --sut release:latest --scenario <id>` then `make one SCENARIO=x`.
 Read `docs/writing-scenarios.md#known-bugs`, `tests/unit/test_yaml_cli.py::test_x`, `scenarios/offline/<topic>/<n>.yaml`.
 
 ```bash
-.venv/bin/otterdog-e2e sut resolve release:latest && make lint-scenarios   # comment --not-an-option
-.venv/bin/otterdog-e2e run --sut x \\
+.venv/bin/otterdog-acceptance sut resolve release:latest && make lint-scenarios   # comment --not-an-option
+.venv/bin/otterdog-acceptance run --sut x \\
   --no-such-option
 ```
 
 ````markdown
 ```text
-otterdog-e2e nope
+otterdog-acceptance nope
 ```
 ````
 """
@@ -388,4 +390,4 @@ def test_parsers_read_commands_options_targets_and_paths(tmp_path: Path) -> None
     assert any("has no option --no-such-option" in problem for problem in problems)
     assert any("unknown command 'nope'" in problem for problem in problems)
     assert not any("--not-an-option" in problem for problem in problems)
-    assert invocation_problems(Invocation("x", ("sut",))) == ["x: otterdog-e2e sut: 'sut' needs a subcommand"]
+    assert invocation_problems(Invocation("x", ("sut",))) == ["x: otterdog-acceptance sut: 'sut' needs a subcommand"]

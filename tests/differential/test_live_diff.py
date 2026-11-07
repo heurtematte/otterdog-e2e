@@ -19,15 +19,15 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from otterdog_e2e.context import SutPair, get_context
-from otterdog_e2e.observe import load_observations
-from otterdog_e2e.scenarios.collect import collect_scenarios, scenario_params
-from otterdog_e2e.scenarios.engine import DifferentialRunner
-from otterdog_e2e.sut.template import template_source_dir
+from otterdog_acceptance.context import SutPair, get_context
+from otterdog_acceptance.observe import load_observations
+from otterdog_acceptance.scenarios.collect import collect_scenarios, scenario_params
+from otterdog_acceptance.scenarios.engine import DifferentialRunner
+from otterdog_acceptance.sut.template import template_source_dir
 
 if TYPE_CHECKING:
-    from otterdog_e2e.context import E2EContext
-    from otterdog_e2e.scenarios.model import Scenario
+    from otterdog_acceptance.context import E2EContext
+    from otterdog_acceptance.scenarios.model import Scenario
 
 LIVE_SCENARIO_DIRS = ("cli", "enterprise")
 

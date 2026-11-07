@@ -6,8 +6,8 @@ from typing import Any
 
 import pytest
 
-from otterdog_e2e.github.http import GitHubError
-from otterdog_e2e.scenarios.checks import (
+from otterdog_acceptance.github.http import GitHubError
+from otterdog_acceptance.scenarios.checks import (
     CHECK_KINDS,
     CheckError,
     evaluate_check,
@@ -17,7 +17,7 @@ from otterdog_e2e.scenarios.checks import (
     validate_check,
     wait_for_checks,
 )
-from otterdog_e2e.testing.fakes import FakeOracle
+from otterdog_acceptance.testing.fakes import FakeOracle
 
 REPO = "e2e-t3c7z8a5-basic"
 
@@ -303,8 +303,8 @@ def test_unavailable_records_are_kept_in_sync_with_the_oracle(oracle: FakeOracle
 
 def test_checks_with_the_real_oracle() -> None:
     """The real Oracle (over FakeGitHubHttp): 404 on a paid-plan listing is ``unavailable``; repo lookups match."""
-    from otterdog_e2e.github.oracle import Oracle
-    from otterdog_e2e.testing.fakes import FAKE_ORG, FakeGitHubHttp
+    from otterdog_acceptance.github.oracle import Oracle
+    from otterdog_acceptance.testing.fakes import FAKE_ORG, FakeGitHubHttp
 
     http = FakeGitHubHttp(read_only=True)
     http.add("GET", f"/orgs/{FAKE_ORG}/rulesets", status=404, json={"message": "Not Found"}, repeat=True)
@@ -320,7 +320,7 @@ def test_checks_with_the_real_oracle() -> None:
 def test_unevaluated_checks_are_errors_and_network_failures_are_infra() -> None:
     """BAT-02: a malformed check or a failed lookup sets CheckResult.error (never a known bug's expected failure);
     network errors, 5xx and rate limits are tagged [infra], harness exceptions are not."""
-    from otterdog_e2e.scenarios.checks import INFRA_PREFIX, lookup_error_message
+    from otterdog_acceptance.scenarios.checks import INFRA_PREFIX, lookup_error_message
 
     assert evaluate_check(FakeOracle(), {"kind": "nope"}).error
     assert not evaluate_check(FakeOracle(), {"kind": "repo", "name": "x", "absent": True}).error

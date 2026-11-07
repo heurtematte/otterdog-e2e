@@ -1,4 +1,4 @@
-"""otterdog_e2e.assist.coverage and ``otterdog-e2e assist coverage``: filters, ordering, gap outline needs, one
+"""otterdog_acceptance.assist.coverage and ``otterdog-acceptance assist coverage``: filters, ordering, gap outline needs, one
 feature with what to imitate, the bundle and the usage errors."""
 
 from __future__ import annotations
@@ -10,10 +10,10 @@ from typing import Any
 import pytest
 from click.testing import CliRunner
 
-from otterdog_e2e import cli
-from otterdog_e2e.assist import coverage
-from otterdog_e2e.assist.bundle import AssistError, AssistUsageError
-from otterdog_e2e.testing.fakes import make_settings
+from otterdog_acceptance import cli
+from otterdog_acceptance.assist import coverage
+from otterdog_acceptance.assist.bundle import AssistError, AssistUsageError
+from otterdog_acceptance.testing.fakes import make_settings
 
 OUTLINE = {
     "scenario": "O-VAL-NEW",
@@ -139,7 +139,9 @@ def test_one_feature_with_what_to_imitate(project: Path) -> None:
     ]
     assert imitate["outline_file"] == {"path": "scenarios/offline/val-new.yaml", "exists": True}
     assert imitate["outline_scenario"] == {"id": "O-VAL-NEW", "exists": False}
-    assert listing["commands"][-1] == "otterdog-e2e run --suite offline --sut release:latest --scenario O-VAL-NEW"
+    assert (
+        listing["commands"][-1] == "otterdog-acceptance run --suite offline --sut release:latest --scenario O-VAL-NEW"
+    )
     assert ".venv/bin/python tests/unit/test_coverage_matrix.py --write" in listing["commands"]
     live = coverage.build_coverage(project, coverage.parse_query(feature="teams.a"))
     assert "--target <instance>" in live["commands"][-1] and "the user runs it" in live["commands"][-1]
@@ -184,7 +186,7 @@ def test_bundle_and_markdown(project: Path, tmp_path: Path) -> None:
 @pytest.fixture
 def settings(project: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Settings of the checkout."""
-    monkeypatch.setattr("otterdog_e2e.settings.harness_settings", lambda environ=None: make_settings(project))
+    monkeypatch.setattr("otterdog_acceptance.settings.harness_settings", lambda environ=None: make_settings(project))
     return project
 
 

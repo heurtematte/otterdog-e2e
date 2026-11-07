@@ -32,21 +32,21 @@ from pathlib import Path
 
 import pytest
 
-from otterdog_e2e.context import E2EContext, get_context
-from otterdog_e2e.known_bugs import KnownBug, bugs_for_scenario
-from otterdog_e2e.otterdog.output import normalize_text
-from otterdog_e2e.otterdog.render import ConfigFragments
-from otterdog_e2e.otterdog.runner import CliResult, OtterdogCli
-from otterdog_e2e.scenarios.collect import collect_scenarios
-from otterdog_e2e.scenarios.engine import (
+from otterdog_acceptance.context import E2EContext, get_context
+from otterdog_acceptance.known_bugs import KnownBug, bugs_for_scenario
+from otterdog_acceptance.otterdog.output import normalize_text
+from otterdog_acceptance.otterdog.render import ConfigFragments
+from otterdog_acceptance.otterdog.runner import CliResult, OtterdogCli
+from otterdog_acceptance.scenarios.collect import collect_scenarios
+from otterdog_acceptance.scenarios.engine import (
     fixed_in_skip_reason,
     step_bug,
     unknown_properties_expected,
     validation_problems,
 )
-from otterdog_e2e.scenarios.model import Scenario, StepSpec, ValidateSpec, offline_problems, render_step
-from otterdog_e2e.scenarios.offline import OfflineEngine, offline_run_context
-from otterdog_e2e.sut.cli_install import InstalledCli
+from otterdog_acceptance.scenarios.model import Scenario, StepSpec, ValidateSpec, offline_problems, render_step
+from otterdog_acceptance.scenarios.offline import OfflineEngine, offline_run_context
+from otterdog_acceptance.sut.cli_install import InstalledCli
 
 LIVE_DIRS = ("cli", "enterprise")
 TAIL_LINES = 25

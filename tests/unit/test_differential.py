@@ -1,4 +1,4 @@
-"""Unit tests of otterdog_e2e.differential: expected deltas, compare() and the markdown/JSON reports (the references
+"""Unit tests of otterdog_acceptance.differential: expected deltas, compare() and the markdown/JSON reports (the references
 that declare the expected deltas of a change: tests/unit/test_changes.py)."""
 
 from __future__ import annotations
@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from otterdog_e2e.differential import (
+from otterdog_acceptance.differential import (
     Delta,
     DiffReport,
     ExpectedDelta,
@@ -20,8 +20,8 @@ from otterdog_e2e.differential import (
     truncate_lines,
     unified_diff,
 )
-from otterdog_e2e.observe import Observation
-from otterdog_e2e.redact import Redactor
+from otterdog_acceptance.observe import Observation
+from otterdog_acceptance.redact import Redactor
 
 BASE, HEAD = "v1.6.1", "pr790-0a1b2c3"
 
@@ -202,7 +202,7 @@ def test_markdown_escapes_markup_from_observations() -> None:
 
 def test_markdown_size_budget(monkeypatch: pytest.MonkeyPatch) -> None:
     """Over the size budget remaining deltas are listed without diff."""
-    from otterdog_e2e import differential
+    from otterdog_acceptance import differential
 
     monkeypatch.setattr(differential, "MARKDOWN_MAX_BYTES", 4000)
     diff = "-" + "a" * 300 + "\n+" + "b" * 300

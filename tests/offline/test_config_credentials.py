@@ -32,11 +32,11 @@ from typing import Any
 
 import pytest
 
-from otterdog_e2e.otterdog.output import normalize_text
-from otterdog_e2e.otterdog.render import BaselineSpec, ConfigFragments
-from otterdog_e2e.otterdog.runner import CliResult, OtterdogCli
-from otterdog_e2e.otterdog.workspace import ConfigWorkspace, WorkspaceLayout
-from otterdog_e2e.scenarios.offline import (
+from otterdog_acceptance.otterdog.output import normalize_text
+from otterdog_acceptance.otterdog.render import BaselineSpec, ConfigFragments
+from otterdog_acceptance.otterdog.runner import CliResult, OtterdogCli
+from otterdog_acceptance.otterdog.workspace import ConfigWorkspace, WorkspaceLayout
+from otterdog_acceptance.scenarios.offline import (
     OFFLINE_DEFAULT_PLAN,
     OFFLINE_MARKER,
     OFFLINE_ORG,
@@ -73,7 +73,7 @@ KEY_OF_VARIABLE = {"E2E_E2E_OFFLINE_TOKEN": "api_token", "E2E_E2E_OFFLINE_USER":
 PASS_TOKEN_PATH = f"e2e/{OFFLINE_ORG}/api_token"
 # a stub of the pass CLI: answers `pass ls` and `pass <PASS_TOKEN_PATH>` for the expected store directory only
 PASS_STUB = """#!/bin/sh
-# otterdog-e2e stub of the pass CLI (never the user's password store)
+# otterdog-acceptance stub of the pass CLI (never the user's password store)
 if [ "$PASSWORD_STORE_DIR" != "{store}" ]; then
   echo "Error: e2e stub: unexpected PASSWORD_STORE_DIR '$PASSWORD_STORE_DIR'" >&2
   exit 1
@@ -169,7 +169,7 @@ BW_ITEM = "e2e-item"
 BW_ITEM_WITHOUT_TOTP = "e2e-item-without-totp"
 # a stub of the bitwarden CLI: an unlocked vault with two items (never the user's vault)
 BW_STUB = """#!/bin/sh
-# otterdog-e2e stub of the bitwarden CLI (never the user's vault)
+# otterdog-acceptance stub of the bitwarden CLI (never the user's vault)
 if [ "$1 $2" = "unlock --check" ]; then
   if [ -e "{locked}" ]; then echo "Vault is locked." >&2; exit 1; fi
   echo "Vault is unlocked!"; exit 0

@@ -11,9 +11,9 @@ from typing import Any
 
 import pytest
 
-from otterdog_e2e import procs
-from otterdog_e2e.otterdog import runtime as runtime_module
-from otterdog_e2e.otterdog.runtime import (
+from otterdog_acceptance import procs
+from otterdog_acceptance.otterdog import runtime as runtime_module
+from otterdog_acceptance.otterdog.runtime import (
     DockerRuntime,
     HostRuntime,
     container_name,
@@ -22,8 +22,8 @@ from otterdog_e2e.otterdog.runtime import (
     rewrite_path,
     runtime_for,
 )
-from otterdog_e2e.sut.cli_install import InstalledCli
-from otterdog_e2e.sut.spec import ResolvedSut, SutSpec
+from otterdog_acceptance.sut.cli_install import InstalledCli
+from otterdog_acceptance.sut.spec import ResolvedSut, SutSpec
 
 
 def installed(runtime: str, *, image: str | None = None, binary: Path | None = None) -> InstalledCli:

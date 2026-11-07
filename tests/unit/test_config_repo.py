@@ -10,7 +10,7 @@ from typing import Any
 
 import pytest
 
-from otterdog_e2e.config_repo import (
+from otterdog_acceptance.config_repo import (
     APPLIED_TEXTS,
     MARKERS,
     ConfigPr,
@@ -23,10 +23,10 @@ from otterdog_e2e.config_repo import (
     comment_marker,
     normalize_comment,
 )
-from otterdog_e2e.safety import SafetyError
-from otterdog_e2e.testing.fakes import FAKE_ORG, FakeOracle, RecordingMutator, fake_sha, make_run_context
-from otterdog_e2e.waiting import WaitTimeoutError
-from otterdog_e2e.webhooks.relay import RelayedDelivery
+from otterdog_acceptance.safety import SafetyError
+from otterdog_acceptance.testing.fakes import FAKE_ORG, FakeOracle, RecordingMutator, fake_sha, make_run_context
+from otterdog_acceptance.waiting import WaitTimeoutError
+from otterdog_acceptance.webhooks.relay import RelayedDelivery
 
 VCTX = "e2e/otterdog-validate"
 SCTX = "e2e/otterdog-sync"

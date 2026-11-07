@@ -3,13 +3,13 @@
 ## Setup
 
 ```bash
-make init          # poetry install --with dev: .venv with the harness, pytest, ruff, mypy; links otterdog-e2e
+make init          # poetry install --with dev: .venv with the harness, pytest, ruff, mypy; links otterdog-acceptance
 make check         # ruff check, ruff format --check, mypy, unit tier
 ```
 
-`poetry.toml` keeps the virtualenv in `.venv/`; every Makefile target and workflow calls `.venv/bin/otterdog-e2e`.
-`make init` also links it as `~/.local/bin/otterdog-e2e` (`E2E_LINK=<path>` elsewhere), like otterdog's own
-`make init`, so `otterdog-e2e` runs from any directory of a shell whose `PATH` holds `~/.local/bin` (it finds the
+`poetry.toml` keeps the virtualenv in `.venv/`; every Makefile target and workflow calls `.venv/bin/otterdog-acceptance`.
+`make init` also links it as `~/.local/bin/otterdog-acceptance` (`E2E_LINK=<path>` elsewhere), like otterdog's own
+`make init`, so `otterdog-acceptance` runs from any directory of a shell whose `PATH` holds `~/.local/bin` (it finds the
 project from its own location; a file that is not a symlink is left alone).
 
 ### `OTTERDOG_CONFIG_ROOT` pitfall
@@ -31,16 +31,16 @@ example), an otterdog command you replay by hand would act on real organizations
 | `init`, `check`, `unit`, `lint`, `format`, `typecheck` | development |
 | `offline` | offline tier of `SUT` (default `release:latest`) |
 | `lint-scenarios` | only the offline lint of every live scenario step (`run --suite offline -k lint`): run it before submitting a live scenario |
-| `inject ARGS='--fragment KIND=FILE ...'` | `otterdog-e2e inject` with `SUT` (offline; live with `TARGET`) |
+| `inject ARGS='--fragment KIND=FILE ...'` | `otterdog-acceptance inject` with `SUT` (offline; live with `TARGET`) |
 | `cli`, `webhooks`, `webapp`, `enterprise` | one live tier on `TARGET` (several instances: `TARGET=a,b`, `@all` or `@<list>`, and `PARALLEL=<n>`) |
 | `web-ui` | the web-UI tier on `TARGET` (`--suite web_ui --allow-web-ui`: the admin bot logs in, see below) |
 | `differential` | offline (+ live with `TARGET`) differential of `SUT` against `BASE_SUT` |
 | `e2e` | every tier (live ones skip without `TARGET`) |
 | `one SCENARIO=<glob>` | only matching scenarios (comma separated globs) |
-| `pr PR=<n> SHA=<sha>` | `otterdog-e2e pr` |
+| `pr PR=<n> SHA=<sha>` | `otterdog-acceptance pr` |
 | `setup [FROM=<instance>] [PROFILE=<profile>]` | interactive onboarding of the instance `TARGET` (`--from`, `--profile`; [onboarding.md](onboarding.md)) |
 | `ci-sync [REVIEWER=<login>] [NIGHTLY=1] [APPLY=1]` | the GitHub environments, variables and secrets of the instance `TARGET` (dry run without `APPLY`; `--reviewer`, `--nightly`) |
-| `targets` | the instances (`~/.config/otterdog-e2e/<instance>.env`) and the profiles of `targets/` |
+| `targets` | the instances (`~/.config/otterdog-acceptance/<instance>.env`) and the profiles of `targets/` |
 | `doctor`, `bootstrap [APPLY=1] [WAIT=1]`, `janitor [APPLY=1] [OLDER_THAN=6h] [RUN_ID=<id>]` | org operations on `TARGET` (`doctor` and `janitor` accept several instances; `WAIT=1` needs `APPLY=1`) |
 | `relay [FORWARD_TO=<url>] [SINCE=10m]` | standalone delivery relay |
 | `report [RUN=<dir>]`, `scrub [RUN=<dir>]` | summary / scrub of a run (default: the newest run) |
@@ -60,55 +60,55 @@ make one SCENARIO='offline.my.*'
 make one SCENARIO='cli.my.*' TARGET=free
 
 # keep the resources and the scratch directory of a failing session for inspection
-.venv/bin/otterdog-e2e run --target free --scenario 'cli.my.*' --keep
+.venv/bin/otterdog-acceptance run --target free --scenario 'cli.my.*' --keep
 # ... then sweep exactly that run
 make janitor TARGET=free RUN_ID=<run id> APPLY=1
 
 # skip the baseline reset when iterating (the org must already be at the baseline)
-.venv/bin/otterdog-e2e run --target free --scenario 'cli.my.*' --no-reset
+.venv/bin/otterdog-acceptance run --target free --scenario 'cli.my.*' --no-reset
 
 # your otterdog checkout, uncommitted changes included, compared with its merge base
-.venv/bin/otterdog-e2e run --sut dirty:../otterdog --base-sut auto --suite offline,differential
+.venv/bin/otterdog-acceptance run --sut dirty:../otterdog --base-sut auto --suite offline,differential
 
 # a webapp image you built yourself
-.venv/bin/otterdog-e2e run --target free --suite webapp --webapp-image ghcr.io/eclipse-csi/otterdog:local
+.venv/bin/otterdog-acceptance run --target free --suite webapp --webapp-image ghcr.io/eclipse-csi/otterdog:local
 
 # jsonnet files tried without a scenario (offline; --target for a live plan): see "Ad-hoc injection"
-.venv/bin/otterdog-e2e inject --fragment repositories=scenarios/fragments/repo-basic.jsonnet --print
+.venv/bin/otterdog-acceptance inject --fragment repositories=scenarios/fragments/repo-basic.jsonnet --print
 
 # the offline lint of every live scenario step (validate --local with the SUT)
-make lint-scenarios        # = .venv/bin/otterdog-e2e run --suite offline --sut release:latest -k lint
+make lint-scenarios        # = .venv/bin/otterdog-acceptance run --suite offline --sut release:latest -k lint
 ```
 
-`otterdog-e2e run` without `--suite` runs `offline`, `cli`, `webhooks`, `webapp` and `enterprise`, plus `differential`
+`otterdog-acceptance run` without `--suite` runs `offline`, `cli`, `webhooks`, `webapp` and `enterprise`, plus `differential`
 with `--base-sut` and `web_ui` with `--allow-web-ui`.
 
-`otterdog-e2e -v ...` / `-vv ...` log at INFO/DEBUG (redacted). `otterdog-e2e sut resolve SPEC` shows what a spec
-resolves to (label, sha, version, trust, base sha, changed files). `python -m otterdog_e2e` is the same command line
-as `.venv/bin/otterdog-e2e` (`.venv/bin/python -m otterdog_e2e doctor --target free`): batch runs start their
-children as `python -P -m otterdog_e2e`, with the interpreter of the parent (`-P`: an `otterdog_e2e` package in the
+`otterdog-acceptance -v ...` / `-vv ...` log at INFO/DEBUG (redacted). `otterdog-acceptance sut resolve SPEC` shows what a spec
+resolves to (label, sha, version, trust, base sha, changed files). `python -m otterdog_acceptance` is the same command line
+as `.venv/bin/otterdog-acceptance` (`.venv/bin/python -m otterdog_acceptance doctor --target free`): batch runs start their
+children as `python -P -m otterdog_acceptance`, with the interpreter of the parent (`-P`: an `otterdog_acceptance` package in the
 current directory is never imported).
 
 ## Several targets
 
-`otterdog-e2e targets` (`make targets`) lists the instances: every `~/.config/otterdog-e2e/<instance>.env` and every
+`otterdog-acceptance targets` (`make targets`) lists the instances: every `~/.config/otterdog-acceptance/<instance>.env` and every
 profile of `targets/`, with its profile, organization and env file, and a `problem:` line for an instance that cannot
 be loaded (read-only, no network; `--json` for scripts).
 
 `run`, `pr`, `doctor` and `janitor` accept several targets: a comma list or a repeated `--target`, `@all` (every
-instance with an env file) or `@<list>` (the file `~/.config/otterdog-e2e/lists/<list>`, one instance per line, `#`
+instance with an env file) or `@<list>` (the file `~/.config/otterdog-acceptance/lists/<list>`, one instance per line, `#`
 comments). Details and rules: [onboarding.md](onboarding.md#running-on-one-organization-or-a-list).
 
 ```bash
-.venv/bin/otterdog-e2e targets
-.venv/bin/otterdog-e2e run --target free,acme-a --suite cli --scenario 'cli.my.*'   # one child process per target
-.venv/bin/otterdog-e2e run --target @all --suite cli --parallel 2 --fail-fast        # distinct orgs, at most 2 at once
-.venv/bin/otterdog-e2e doctor --target @all --json                                  # a JSON list, one entry per target
+.venv/bin/otterdog-acceptance targets
+.venv/bin/otterdog-acceptance run --target free,acme-a --suite cli --scenario 'cli.my.*'   # one child process per target
+.venv/bin/otterdog-acceptance run --target @all --suite cli --parallel 2 --fail-fast        # distinct orgs, at most 2 at once
+.venv/bin/otterdog-acceptance doctor --target @all --json                                  # a JSON list, one entry per target
 make cli TARGET=free,acme-a PARALLEL=2
 make report RUN=artifacts/<run id>                                                   # one target's own report
 ```
 
-- Each target runs in a child process (`python -P -m otterdog_e2e run --target=<instance> --run-id=<id> ...`, after
+- Each target runs in a child process (`python -P -m otterdog_acceptance run --target=<instance> --run-id=<id> ...`, after
   the `-v`/`-vv` of the batch command) with its own run id and artifacts directory; every line it prints is prefixed
   with `[<instance>] `. `--run-id` is refused with several targets; janitor children get none (they sweep under a
   run id of their own) and their lines show none.
@@ -129,7 +129,7 @@ make report RUN=artifacts/<run id>                                              
   selected.
 
 Before the first test, the session prepares every SUT and image the selected tests need. It prints
-`otterdog-e2e: preparing the head SUT (<spec>) ...` and records the durations in `run.json` (`sut_prepare_seconds`).
+`otterdog-acceptance: preparing the head SUT (<spec>) ...` and records the durations in `run.json` (`sut_prepare_seconds`).
 Measured on a warm cache: 1-6 s per SUT install check and 25 s for a new webapp image whose dependency layers were
 cached. The first install of a SUT (cold mirror and poetry cache) took 17 s in wave 2. Cold image builds take
 minutes, but no item timeout is spent on them.
@@ -141,18 +141,18 @@ registers the `timeout` marker when pytest-timeout is disabled).
 
 The web-UI tier (`tests/web_ui`, [web-ui-testing.md](web-ui-testing.md)) lets otterdog log in to github.com as the
 admin bot of the target (password and TOTP seed). Prepare the bot once as described there (authenticator-app 2FA,
-setup key stored), put `E2E_ADMIN_PASSWORD` and `E2E_ADMIN_TOTP_SEED` in `~/.config/otterdog-e2e/<instance>.env`
+setup key stored), put `E2E_ADMIN_PASSWORD` and `E2E_ADMIN_TOTP_SEED` in `~/.config/otterdog-acceptance/<instance>.env`
 (chmod 600; `setup --target <instance> --rotate web` asks for both), then:
 
 ```bash
-.venv/bin/otterdog-e2e doctor --target free          # web:* rows: credentials, seed, 2FA, browser, login gate (never logs in)
-make web-ui TARGET=free                              # = otterdog-e2e run --target free --suite web_ui --allow-web-ui
+.venv/bin/otterdog-acceptance doctor --target free          # web:* rows: credentials, seed, 2FA, browser, login gate (never logs in)
+make web-ui TARGET=free                              # = otterdog-acceptance run --target free --suite web_ui --allow-web-ui
 make web-ui TARGET=free SUT=branch:main ARGS='-k round_trip'
-.venv/bin/otterdog-e2e run --target free --suite web_ui --allow-web-ui --scenario webui.settings.round-trip
+.venv/bin/otterdog-acceptance run --target free --suite web_ui --allow-web-ui --scenario webui.settings.round-trip
 # your otterdog checkout (dirty: and path: SUTs are trusted locally; CI runs only released or upstream SUTs)
-.venv/bin/otterdog-e2e run --target free --sut dirty:../otterdog --suite web_ui --allow-web-ui
+.venv/bin/otterdog-acceptance run --target free --sut dirty:../otterdog --suite web_ui --allow-web-ui
 # the bot's browser session: a visible window that closes at once (a display is needed)
-E2E_WEB_LOGIN=1 .venv/bin/otterdog-e2e run --target free --suite web_ui --allow-web-ui --scenario webui.cmd.web-login
+E2E_WEB_LOGIN=1 .venv/bin/otterdog-acceptance run --target free --suite web_ui --allow-web-ui --scenario webui.cmd.web-login
 ```
 
 - Nothing logs in without `--allow-web-ui` (or `E2E_ALLOW_WEB_UI=1` in the process environment): every web test then
@@ -169,7 +169,7 @@ E2E_WEB_LOGIN=1 .venv/bin/otterdog-e2e run --target free --suite web_ui --allow-
 
 ## Ad-hoc injection
 
-`otterdog-e2e inject` runs jsonnet files through otterdog without writing a scenario. It builds a one-step scenario
+`otterdog-acceptance inject` runs jsonnet files through otterdog without writing a scenario. It builds a one-step scenario
 from the files ([writing-scenarios.md](writing-scenarios.md#injecting-jsonnet-from-files)) in the run's scratch
 directory (`$E2E_CACHE_DIR/run/<run>/adhoc/scenario.yaml`), checks it with every scenario rule (no import statements,
 dummy secrets, offline restrictions, Jinja: errors name `<file>:<line>` and stop before any session starts), then
@@ -211,7 +211,7 @@ After pytest's own output the command prints where the rendered configuration is
 and the result; its exit code is pytest's (a file breaking a rule exits 1 before any session, a usage error 2):
 
 ```text
-otterdog-e2e inject (offline): artifacts .../artifacts/<run>
+otterdog-acceptance inject (offline): artifacts .../artifacts/<run>
 rendered config: .../artifacts/<run>/adhoc/workspace/e2e-offline.jsonnet.txt
 BASE config: .../artifacts/<run>/adhoc/workspace/e2e-offline.jsonnet-BASE.txt
 validate: ok (0 error(s), 0 warning(s))
@@ -231,32 +231,32 @@ Recipes (from the project root, `OTTERDOG_CONFIG_ROOT` unset):
 
 ```bash
 # a repository fragment, validated and planned offline with the latest release
-.venv/bin/otterdog-e2e inject --fragment repositories=scenarios/fragments/repo-basic.jsonnet
+.venv/bin/otterdog-acceptance inject --fragment repositories=scenarios/fragments/repo-basic.jsonnet
 
 # a library and a fragment using it, with upstream main, printing the rendered configuration
-.venv/bin/otterdog-e2e inject --sut branch:main --library e2e=scenarios/lib/e2e.libsonnet \
+.venv/bin/otterdog-acceptance inject --sut branch:main --library e2e=scenarios/lib/e2e.libsonnet \
   --fragment repositories=scenarios/fragments/ruleset-repo.jsonnet --print
 
 # the vars of a scenario file become --var options
-.venv/bin/otterdog-e2e inject --library e2e=scenarios/lib/e2e.libsonnet \
+.venv/bin/otterdog-acceptance inject --library e2e=scenarios/lib/e2e.libsonnet \
   --fragment repositories=scenarios/fragments/environment-repo.jsonnet --var wait_timer=5 --var 'branch_policies=[main]'
 
 # an organization variable and an overlay
-.venv/bin/otterdog-e2e inject --fragment variables=scenarios/fragments/org-variable.jsonnet \
+.venv/bin/otterdog-acceptance inject --fragment variables=scenarios/fragments/org-variable.jsonnet \
   --fragment repositories=scenarios/fragments/repo-basic.jsonnet --overlay scenarios/fragments/overlay-run-topics.jsonnet
 
 # an enterprise-only feature, offline
-.venv/bin/otterdog-e2e inject --plan enterprise --fragment rulesets=my-org-ruleset.jsonnet
+.venv/bin/otterdog-acceptance inject --plan enterprise --fragment rulesets=my-org-ruleset.jsonnet
 
 # a complete configuration, planned against another one (local-plan: BASE -> config)
-.venv/bin/otterdog-e2e inject --config scenarios/fragments/offline-config.jsonnet --base my-previous-config.jsonnet
+.venv/bin/otterdog-acceptance inject --config scenarios/fragments/offline-config.jsonnet --base my-previous-config.jsonnet
 
 # your otterdog checkout, uncommitted changes included
-.venv/bin/otterdog-e2e inject --sut dirty:../otterdog --fragment repositories=my-repo.jsonnet
+.venv/bin/otterdog-acceptance inject --sut dirty:../otterdog --fragment repositories=my-repo.jsonnet
 
 # live: validate and plan on the test organization, then apply and clean up
-.venv/bin/otterdog-e2e inject --target free --fragment variables=scenarios/fragments/org-variable.jsonnet
-.venv/bin/otterdog-e2e inject --target free --apply --fragment repositories=scenarios/fragments/repo-basic.jsonnet
+.venv/bin/otterdog-acceptance inject --target free --fragment variables=scenarios/fragments/org-variable.jsonnet
+.venv/bin/otterdog-acceptance inject --target free --apply --fragment repositories=scenarios/fragments/repo-basic.jsonnet
 ```
 
 Teams and `code_scanning_default_languages` are refused offline (their validation calls GitHub; languages beside
@@ -277,7 +277,7 @@ Each session prints its artifacts directory (`<E2E_ARTIFACTS>/<run_id>/`, defaul
 - `offline/<seq>-<test>/workspace/`: the rendered configuration of an offline test;
 - `webapp/compose.log`, `offline-webapp/webapp/compose.log`, `deliveries.jsonl`: webapp logs and the relayed
   deliveries;
-- `run.json`: what ran (SUTs, versions, capabilities, lane, the `otterdog-e2e` command, SUT preparation times).
+- `run.json`: what ran (SUTs, versions, capabilities, lane, the `otterdog-acceptance` command, SUT preparation times).
 
 `make report RUN=artifacts/<run_id>` prints the summary again. The private scratch directory
 (`$E2E_CACHE_DIR/run/<run_id>/`: CLI working directories, workspaces, otterdog's HTTP cache) is deleted at the end of
@@ -324,7 +324,7 @@ lists the test organization and relays the App deliveries to it.
 To explore by hand (open PRs in the test org yourself and watch the webapp react), run only the relay:
 
 ```bash
-.venv/bin/otterdog-e2e relay --target free --forward-to http://127.0.0.1:5000/github-webhook/receive --since 30m
+.venv/bin/otterdog-acceptance relay --target free --forward-to http://127.0.0.1:5000/github-webhook/receive --since 30m
 ```
 
 It forwards the App deliveries newer than `--since` and prints one line per delivery until Ctrl-C. It holds the org
@@ -332,7 +332,7 @@ lease: stop it before starting a test session (or set `E2E_LEASE_WAIT` on the se
 
 ## Harness cache
 
-`E2E_CACHE_DIR` (default `~/.cache/otterdog-e2e`, mode 0700):
+`E2E_CACHE_DIR` (default `~/.cache/otterdog-acceptance`, mode 0700):
 
 | Path | Content |
 |---|---|
@@ -359,9 +359,9 @@ Docker images are tagged `otterdog-e2e/otterdog:<label>` (trusted) and `otterdog
 ## Unit tests
 
 `tests/unit` must stay fast and network-free (a fixture fails any non-loopback connection). Use `responses` for
-`GitHubHttp`, and the fakes of `otterdog_e2e.testing.fakes` (`FakeGitHubHttp`, `FakeOracle`, `FakeCli`, `RecordingMutator`,
+`GitHubHttp`, and the fakes of `otterdog_acceptance.testing.fakes` (`FakeGitHubHttp`, `FakeOracle`, `FakeCli`, `RecordingMutator`,
 `FakeAppAuth`, `FakeLease`, `FakeBaselineManager`) for higher layers; real otterdog output samples live in `tests/unit/data/`. Test modules cannot import each
-other (`--import-mode=importlib`): shared helpers belong in a `conftest.py` or `otterdog_e2e.testing`.
+other (`--import-mode=importlib`): shared helpers belong in a `conftest.py` or `otterdog_acceptance.testing`.
 
 `tests/unit/test_workflows_static.py` checks the CI workflows, the Makefile, `.gitignore` and `.env.example`; run it
 after editing any of them.
@@ -453,9 +453,9 @@ The workflow installs `docs/requirements.txt`: the docs group of `poetry.lock` w
 | Symptom | Cause and fix |
 |---|---|
 | `unshare` FAIL in doctor, offline commands refused in CI | unprivileged user namespaces are disabled (Ubuntu 24.04 AppArmor): `sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0`, or an AppArmor profile for `unshare` |
-| `live session setup failed: ...` on every live test | verification, isolation, scopes, lease or token problem: run `otterdog-e2e doctor --target <instance>` |
+| `live session setup failed: ...` on every live test | verification, isolation, scopes, lease or token problem: run `otterdog-acceptance doctor --target <instance>` |
 | `LeaseBusy` | another session holds the org lease (its holder and expiry are in the message); wait, set `E2E_LEASE_WAIT`, or, for a crashed run, `make janitor TARGET=<instance> RUN_ID=<id> APPLY=1` |
-| `target 'acme-a' not found: no profile targets/acme-a.yaml ... E2E_PROFILE is not set` | the instance has no env file or no `E2E_PROFILE`: `otterdog-e2e setup --target acme-a`, or add `E2E_PROFILE=<profile>` to `~/.config/otterdog-e2e/acme-a.env` |
+| `target 'acme-a' not found: no profile targets/acme-a.yaml ... E2E_PROFILE is not set` | the instance has no env file or no `E2E_PROFILE`: `otterdog-acceptance setup --target acme-a`, or add `E2E_PROFILE=<profile>` to `~/.config/otterdog-acceptance/acme-a.env` |
 | `--target 'a,b': a list of targets (a,b / @all / @<list>) is only accepted by run, pr, doctor, janitor` | `bootstrap`, `relay`, `app-manifest`, `inject`, `setup` and `ci-sync` take one target: run them once per instance |
 | `--parallel: ... test the same organization` | two instances pin one organization, which serves one session at a time: drop `--parallel` |
 | `E2E_ORG is set in the environment: the env files never override the environment ...` (or `the environment overrides what the env files of the batch set differently: ...`) | a batch of several targets with an exported per-instance value, login or secret: unset the named variables (each env file keeps its own), or give one target |

@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from otterdog_e2e.sut.spec import ResolvedSut, SutSpec, cleanup_source, label_part, parse_sut_spec
+from otterdog_acceptance.sut.spec import ResolvedSut, SutSpec, cleanup_source, label_part, parse_sut_spec
 
 PIN = "d0d3b0832d8e21a9da86e0ef967859d2634af894"
 

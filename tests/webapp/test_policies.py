@@ -45,16 +45,16 @@ from typing import TYPE_CHECKING, Any
 import pytest
 import yaml
 
-from otterdog_e2e import waiting
-from otterdog_e2e.blueprints import GLOBAL, POLICY, PolicyDefinition
-from otterdog_e2e.config_repo import DeliveryTimeoutError, ReactionTimeoutError, check_forwarded
-from otterdog_e2e.webapp.api import HtmlNode, floor_to_millis, parse_html, parse_timestamp
+from otterdog_acceptance import waiting
+from otterdog_acceptance.blueprints import GLOBAL, POLICY, PolicyDefinition
+from otterdog_acceptance.config_repo import DeliveryTimeoutError, ReactionTimeoutError, check_forwarded
+from otterdog_acceptance.webapp.api import HtmlNode, floor_to_millis, parse_html, parse_timestamp
 
 if TYPE_CHECKING:
     from conftest import WebappScenario
-    from otterdog_e2e.blueprints import BlueprintHelper
-    from otterdog_e2e.webapp.stack import DtrackMock
-    from otterdog_e2e.webhooks.relay import DeliveryRelay, RelayedDelivery
+    from otterdog_acceptance.blueprints import BlueprintHelper
+    from otterdog_acceptance.webapp.stack import DtrackMock
+    from otterdog_acceptance.webhooks.relay import DeliveryRelay, RelayedDelivery
 
 pytestmark = [pytest.mark.webapp]
 

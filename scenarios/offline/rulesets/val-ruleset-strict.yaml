@@ -1,6 +1,6 @@
 # Offline tier (SPEC 19): validation of the required status checks of a repository ruleset ('strict' parameter).
 # Also the differential proof of concept of eclipse-csi/otterdog#790 (references below):
-#   otterdog-e2e run --sut sha:9bdeb75 --change 790 --suite offline,differential
+#   otterdog-acceptance run --sut sha:9bdeb75 --change 790 --suite offline,differential
 # (or: pytest tests/offline tests/differential --e2e-sut=sha:9bdeb75 --e2e-base-sut=sha:b5f7bb1 --e2e-change=790)
 # then read <artifacts>/<run>/differential.md: the two expected deltas below, plus ONE unexpected delta on
 # O-VAL-ORG-RULESET-STRICT (see its reference): every other observation is unchanged.
@@ -26,7 +26,7 @@ references:
       ruleset whose status checks lack 'strict' is refused at validation instead of failing at apply. Merged by squash
       as 9bdeb75f3e82a6cbd107d6bc3c9ec90392475c08 (PR head 0cee9e3). The base is the first parent of the squash commit,
       b5f7bb1 (#791), so the only difference between both sides is #790 itself (otterdog/models/ruleset.py +3 lines,
-      tests/models/test_ruleset.py); through the PR flow (otterdog-e2e pr 790 --sha
+      tests/models/test_ruleset.py); through the PR flow (otterdog-acceptance pr 790 --sha
       0cee9e302282fefa092b4e0767248a997a9272ea, untrusted pr: SUT in docker) this base overrides the merge base of the
       PR head with main (a77ad1c, #784), which predates #791 and would add #791's own changes to the comparison. The
       example template is identical on both sides, so template own and head give the same observations. Step

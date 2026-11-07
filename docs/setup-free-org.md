@@ -1,14 +1,14 @@
 # Setting up a GitHub Free test organization
 
-The fast path is [onboarding.md](onboarding.md): `otterdog-e2e setup --target <instance>` asks for everything below
-interactively (prefilled token URLs, checks, env file, App, bootstrap), and `otterdog-e2e ci-sync` creates the CI
+The fast path is [onboarding.md](onboarding.md): `otterdog-acceptance setup --target <instance>` asks for everything below
+interactively (prefilled token URLs, checks, env file, App, bootstrap), and `otterdog-acceptance ci-sync` creates the CI
 environments. This page is the reference of the same steps done by hand.
 
 This guide prepares an instance of the profile `free` (`targets/free.yaml`): a dedicated GitHub Free organization,
 its machine accounts and tokens, the harness repositories and teams, and the GitHub App of the webapp tiers. The
 examples use the instance `free`, which is bound to the profile of the same name. Any other instance name works the
 same way with `E2E_PROFILE=free` in its env file, for example `--target acme-a` and
-`~/.config/otterdog-e2e/acme-a.env` (names: lower-case letters, digits and `-`, at most 39 characters, not ending
+`~/.config/otterdog-acceptance/acme-a.env` (names: lower-case letters, digits and `-`, at most 39 characters, not ending
 with `-untrusted` or `-webui`, not `lists`; [onboarding.md](onboarding.md#instances-and-profiles)). Budget about an
 hour the first time. Commands assume the repository root and `make init` done.
 
@@ -66,8 +66,8 @@ or a secret path names its account at once (`config_reader` is written `config-r
 |---|---|---|
 | email | `csi-bot+otterdog-e2e-<instance>-<role>@mydomain.com` | `csi-bot+otterdog-e2e-enterprise-config-reader@mydomain.com` |
 | GitHub login | `csi-e2e-<instance>-<role>` | `csi-e2e-enterprise-config-reader` |
-| profile name and bio | `otterdog-e2e <instance> <role>`, `machine account of <team>, contact csi-bot@mydomain.com` | `otterdog-e2e enterprise config_reader` |
-| env file | `E2E_<ROLE>_LOGIN`, `E2E_<ROLE>_TOKEN` of `~/.config/otterdog-e2e/<instance>.env` | `E2E_CONFIG_READER_LOGIN=csi-e2e-enterprise-config-reader` |
+| profile name and bio | `otterdog-acceptance <instance> <role>`, `machine account of <team>, contact csi-bot@mydomain.com` | `otterdog-acceptance enterprise config_reader` |
+| env file | `E2E_<ROLE>_LOGIN`, `E2E_<ROLE>_TOKEN` of `~/.config/otterdog-acceptance/<instance>.env` | `E2E_CONFIG_READER_LOGIN=csi-e2e-enterprise-config-reader` |
 | secret store | `<prefix>/<instance>/<role>/token` ([reference layout](security.md#reference-layout)) | `otterdog-e2e/enterprise/config_reader/token` |
 
 A GitHub login has at most 39 characters (letters, digits, single hyphens): with the longest instance and role above
@@ -131,7 +131,7 @@ organizations. The price: a leaked classic token of a shared account reaches bot
 
 Classic PATs are created in each account's settings (Developer settings, Personal access tokens, Tokens (classic));
 set an expiry and a reminder to rotate them. `setup` prints a creation URL per role with these scopes preselected
-(`https://github.com/settings/tokens/new?scopes=...`), see [onboarding.md](onboarding.md#tokens); `otterdog-e2e
+(`https://github.com/settings/tokens/new?scopes=...`), see [onboarding.md](onboarding.md#tokens); `otterdog-acceptance
 accounts` creates them in a browser window instead, enrolling 2FA when missing, with the secrets in pass or Vault
 ([machine accounts in the browser](onboarding.md#machine-accounts-in-the-browser)).
 
@@ -155,9 +155,9 @@ except the `outsider`: see [Fine-grained personal access tokens](#fine-grained-p
 `setup` writes this file for you (mode 0600). By hand:
 
 ```bash
-install -d -m 700 ~/.config/otterdog-e2e
-install -m 600 .env.example ~/.config/otterdog-e2e/free.env
-$EDITOR ~/.config/otterdog-e2e/free.env
+install -d -m 700 ~/.config/otterdog-acceptance
+install -m 600 .env.example ~/.config/otterdog-acceptance/free.env
+$EDITOR ~/.config/otterdog-acceptance/free.env
 ```
 
 Uncomment and fill at least:
@@ -180,7 +180,7 @@ E2E_CONFIG_READER_TOKEN=github_pat_xxxxxxxxxxxxxxxxxxxxxx
 
 Notes:
 
-- files are read in this order and the first value wins: `~/.config/otterdog-e2e/free.env`, `.env.e2e.free`,
+- files are read in this order and the first value wins: `~/.config/otterdog-acceptance/free.env`, `.env.e2e.free`,
   `.env.e2e` (for the instance `acme-a`: `acme-a.env`, `.env.e2e.acme-a`, `.env.e2e`); an exported variable always
   wins over every file. There is no `${...}` interpolation in env files;
 - if the same machine accounts also serve another test organization (for example the enterprise instance), list the
@@ -189,7 +189,7 @@ Notes:
   writes it once the token passed every check ([onboarding.md](onboarding.md#tokens)); otherwise set it by hand;
 - per-instance values of the profile: `E2E_SAML_SSO`, `E2E_CAPABILITIES_ADD`, `E2E_CAPABILITIES_REMOVE`,
   `E2E_WEB_PROBE_APP_SLUG` ([.env.example](../.env.example));
-- `otterdog-e2e targets` lists the instances found and their profile, organization and env file;
+- `otterdog-acceptance targets` lists the instances found and their profile, organization and env file;
 - process options (`E2E_TARGET`, `E2E_SUT`, `E2E_CACHE_DIR`, `E2E_ARTIFACTS`, ...) are not read from env files:
   export them or use the command line flags;
 - in a custom target file, quote `${...}` values inside YAML flow mappings (`{login: "${E2E_X}"}`), and keep the
@@ -202,7 +202,7 @@ Notes:
 ## 5. First doctor run
 
 ```bash
-.venv/bin/otterdog-e2e doctor --target free
+.venv/bin/otterdog-acceptance doctor --target free
 ```
 
 doctor is read-only. On a fresh organization expect `FAIL` rows for the marker, the repositories
@@ -237,9 +237,9 @@ idempotent). An invitation expires after 7 days: bootstrap then invites again.
 ## 7. Bootstrap
 
 ```bash
-.venv/bin/otterdog-e2e bootstrap --target free                  # dry run: reports what it would do
-.venv/bin/otterdog-e2e bootstrap --target free --apply          # asks you to type the organization login
-.venv/bin/otterdog-e2e bootstrap --target free --apply --wait   # also waits for the invitations and the App
+.venv/bin/otterdog-acceptance bootstrap --target free                  # dry run: reports what it would do
+.venv/bin/otterdog-acceptance bootstrap --target free --apply          # asks you to type the organization login
+.venv/bin/otterdog-acceptance bootstrap --target free --apply --wait   # also waits for the invitations and the App
 ```
 
 `setup` offers to run `bootstrap --apply --wait` itself. `bootstrap --apply` is idempotent and runs, in order:
@@ -277,7 +277,7 @@ organization, installed on test organizations only) and waits for its installati
 ([onboarding.md](onboarding.md#the-app-step)); the short version by hand:
 
 ```bash
-.venv/bin/otterdog-e2e app-manifest --target free --webhook-url https://<a-sink-you-control>/otterdog-e2e
+.venv/bin/otterdog-acceptance app-manifest --target free --webhook-url https://<a-sink-you-control>/otterdog-e2e
 ```
 
 The webhook URL is only a **sink**: any HTTPS endpoint you control that answers 2xx, or a smee.io channel used only
@@ -286,10 +286,10 @@ them from the deliveries API and relays them to the webapp under test; nothing e
 
 1. Open the printed `http://127.0.0.1:8765/` URL in a browser signed in as the admin account and confirm the App.
 2. The command exchanges the code and writes the private key, the webhook secret and an env snippet to
-   `~/.config/otterdog-e2e/<instance>/` (here `~/.config/otterdog-e2e/free/`, mode 0600). Append the snippet:
+   `~/.config/otterdog-acceptance/<instance>/` (here `~/.config/otterdog-acceptance/free/`, mode 0600). Append the snippet:
 
     ```bash
-    cat ~/.config/otterdog-e2e/free/app-<id>.env >> ~/.config/otterdog-e2e/free.env
+    cat ~/.config/otterdog-acceptance/free/app-<id>.env >> ~/.config/otterdog-acceptance/free.env
     ```
 
 3. Install the App on the organization for **All repositories** with the printed URL
@@ -301,7 +301,7 @@ them from the deliveries API and relays them to the webapp under test; nothing e
 ## 9. Check and run
 
 ```bash
-.venv/bin/otterdog-e2e doctor --target free    # every row OK (WARN rows explain what will be skipped)
+.venv/bin/otterdog-acceptance doctor --target free    # every row OK (WARN rows explain what will be skipped)
 make offline                                   # no GitHub involved
 make cli TARGET=free                           # live CLI tier
 make webhooks TARGET=free
@@ -321,7 +321,7 @@ reachable through the UI ([web-ui-testing.md](web-ui-testing.md)). It is off unl
 
 1. On the admin account, use an **authenticator app** as the two-factor method and store its setup key (base32, or
    the `otpauth://` URI) when you enroll it; keep TOTP the only 2FA method (no passkey, no security key, no SMS).
-2. Add the web login to `~/.config/otterdog-e2e/free.env` (`setup` asks for both in hidden prompts, or
+2. Add the web login to `~/.config/otterdog-acceptance/free.env` (`setup` asks for both in hidden prompts, or
    `setup --rotate web` later):
 
     ```bash
@@ -337,7 +337,7 @@ reachable through the UI ([web-ui-testing.md](web-ui-testing.md)). It is off unl
 4. Optional: a probe App for `install-app`/`uninstall-app` (a second App of the org without permissions, not
    installed), declared with `E2E_WEB_PROBE_APP_SLUG` (`web_ui.probe_app_slug` of the profile).
 5. Run it explicitly (logins are never a side effect):
-   `E2E_ALLOW_WEB_UI=1 .venv/bin/otterdog-e2e run --target free --suite cli --scenario 'webui.*' tests/web_ui`.
+   `E2E_ALLOW_WEB_UI=1 .venv/bin/otterdog-acceptance run --target free --suite cli --scenario 'webui.*' tests/web_ui`.
 
 ## CI
 
@@ -349,8 +349,8 @@ web-UI lane), holding its variables and secrets, and must be listed in the repos
 unless `--apply` ([onboarding.md](onboarding.md#ci-ci-sync)):
 
 ```bash
-.venv/bin/otterdog-e2e ci-sync --target free                    # dry run: operations and names, never values
-.venv/bin/otterdog-e2e ci-sync --target free --nightly --apply  # also adds free to E2E_TARGETS (nightly, janitor)
+.venv/bin/otterdog-acceptance ci-sync --target free                    # dry run: operations and names, never values
+.venv/bin/otterdog-acceptance ci-sync --target free --nightly --apply  # also adds free to E2E_TARGETS (nightly, janitor)
 gh workflow run e2e.yml -f target=free -f sut=release:latest
 ```
 
@@ -374,8 +374,8 @@ By hand, the same steps for the instance `free`:
       gh secret set E2E_APPROVER_TOKEN --env "$env" < ~/secrets/e2e-approver.token
       gh secret set E2E_OUTSIDER_TOKEN --env "$env" < ~/secrets/e2e-outsider.token
       gh secret set E2E_CONFIG_READER_TOKEN --env "$env" < ~/secrets/e2e-reader.token
-      gh secret set E2E_APP_PRIVATE_KEY --env "$env" < ~/.config/otterdog-e2e/free/app-<id>.private-key.pem
-      gh secret set E2E_APP_WEBHOOK_SECRET --env "$env" < ~/.config/otterdog-e2e/free/app-<id>.webhook-secret
+      gh secret set E2E_APP_PRIVATE_KEY --env "$env" < ~/.config/otterdog-acceptance/free/app-<id>.private-key.pem
+      gh secret set E2E_APP_WEBHOOK_SECRET --env "$env" < ~/.config/otterdog-acceptance/free/app-<id>.webhook-secret
     done
     ```
 

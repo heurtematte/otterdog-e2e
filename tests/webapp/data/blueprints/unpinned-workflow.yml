@@ -1,4 +1,4 @@
-# otterdog-e2e @RUN@: action references for the pin_workflow blueprint (W-BP-PIN); never dispatched.
+# otterdog-acceptance @RUN@: action references for the pin_workflow blueprint (W-BP-PIN); never dispatched.
 # Expected remediation: only the checkout line is pinned to '<commit sha> # <tag>' (otterdog/webapp/tasks/blueprints/
 # pin_workflow.py:99-144); an 'ignore' comment, a main/master reference and a local action stay as they are.
 name: @NAME@

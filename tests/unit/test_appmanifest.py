@@ -1,4 +1,4 @@
-"""Unit tests of otterdog_e2e.appmanifest: permissions, manifest, auto-posting form and the code exchange."""
+"""Unit tests of otterdog_acceptance.appmanifest: permissions, manifest, auto-posting form and the code exchange."""
 
 from __future__ import annotations
 
@@ -13,8 +13,8 @@ from typing import Any
 import pytest
 import responses
 
-from otterdog_e2e import appmanifest
-from otterdog_e2e.appmanifest import (
+from otterdog_acceptance import appmanifest
+from otterdog_acceptance.appmanifest import (
     AUTO_SUBMIT_SCRIPT,
     DEFAULT_EVENTS,
     DEFAULT_PERMISSIONS,
@@ -27,10 +27,10 @@ from otterdog_e2e.appmanifest import (
     manifest_form_html,
     script_hash,
 )
-from otterdog_e2e.redact import REDACTOR
-from otterdog_e2e.safety import SafetyError
-from otterdog_e2e.settings import Target, WebappSpec, parse_env_text
-from otterdog_e2e.testing.fakes import FakeGitHubHttp, HttpCall
+from otterdog_acceptance.redact import REDACTOR
+from otterdog_acceptance.safety import SafetyError
+from otterdog_acceptance.settings import Target, WebappSpec, parse_env_text
+from otterdog_acceptance.testing.fakes import FakeGitHubHttp, HttpCall
 
 DATA = Path(__file__).parent / "data"
 ORG = "e2e-test-org"
@@ -326,8 +326,8 @@ def test_exchange_code_writes_private_files_and_returns_no_secret(
 ) -> None:
     """pem + webhook secret (+ env snippet) in 0600 files of a 0700 dir; client id/secret discarded."""
     github.add("POST", f"/app-manifests/{CODE}/conversions", status=201, json=conversion_answer())
-    out_dir = tmp_path / "config" / "otterdog-e2e" / "free"
-    with caplog.at_level(logging.DEBUG, logger="otterdog_e2e.appmanifest"):
+    out_dir = tmp_path / "config" / "otterdog-acceptance" / "free"
+    with caplog.at_level(logging.DEBUG, logger="otterdog_acceptance.appmanifest"):
         result = exchange_code(CODE, out_dir=out_dir)
     assert github.calls == [HttpCall("POST", f"/app-manifests/{CODE}/conversions", None, None)]
     assert (result["id"], result["slug"], result["owner"], result["secret_generated"]) == (
@@ -357,7 +357,7 @@ def test_exchange_code_generates_a_missing_webhook_secret(
 ) -> None:
     """A null webhook_secret is replaced by a random 64-hex secret (registered, flagged, warned about)."""
     github.add("POST", f"/app-manifests/{CODE}/conversions", status=201, json=conversion_answer(webhook_secret=None))
-    with caplog.at_level(logging.WARNING, logger="otterdog_e2e.appmanifest"):
+    with caplog.at_level(logging.WARNING, logger="otterdog_acceptance.appmanifest"):
         result = exchange_code(CODE, out_dir=tmp_path / "out")
     secret = result["secret_path"].read_text().strip()
     assert result["secret_generated"] is True and len(secret) == 64 and int(secret, 16) >= 0
@@ -368,11 +368,11 @@ def test_exchange_code_generates_a_missing_webhook_secret(
 def test_exchange_code_expands_the_home_directory(
     github: FakeGitHubHttp, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """``~/.config/otterdog-e2e/<target>`` is expanded (never a literal ``~`` directory)."""
+    """``~/.config/otterdog-acceptance/<target>`` is expanded (never a literal ``~`` directory)."""
     github.add("POST", f"/app-manifests/{CODE}/conversions", status=201, json=conversion_answer())
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
-    result = exchange_code(CODE, out_dir=Path("~/.config/otterdog-e2e/free"))
-    assert result["pem_path"].parent == tmp_path / "home" / ".config" / "otterdog-e2e" / "free"
+    result = exchange_code(CODE, out_dir=Path("~/.config/otterdog-acceptance/free"))
+    assert result["pem_path"].parent == tmp_path / "home" / ".config" / "otterdog-acceptance" / "free"
 
 
 def test_exchange_code_tightens_an_existing_directory(github: FakeGitHubHttp, tmp_path: Path) -> None:
@@ -503,7 +503,12 @@ def test_env_value_promises_the_harness_parser_only(tmp_path: Path) -> None:
 
 def test_plain_env_values_stay_bare_and_unrepresentable_ones_are_refused() -> None:
     """Paths, slugs and hex secrets are written bare; line boundaries no escape can carry raise ValueError."""
-    for value in ("otterdog-e2e-org", "/home/u/.config/otterdog-e2e/free/app-7.private-key.pem", "0123abcdef", "4242"):
+    for value in (
+        "otterdog-e2e-org",
+        "/home/u/.config/otterdog-acceptance/free/app-7.private-key.pem",
+        "0123abcdef",
+        "4242",
+    ):
         assert appmanifest._env_value(value) == value
     for value in ("line\u2028separator", "form\ffeed", "vertical\vtab"):
         with pytest.raises(ValueError, match="cannot hold"):

@@ -131,7 +131,7 @@ jobs:
           TARGETS: ${{ steps.inputs.outputs.targets }}
         run: |
           set -euo pipefail
-          head="$(GITHUB_OUTPUT=/dev/null .venv/bin/otterdog-e2e sut classify "$SUT")"
+          head="$(GITHUB_OUTPUT=/dev/null .venv/bin/otterdog-acceptance sut classify "$SUT")"
           trust="$(jq -r .trust <<< "$head")"
           sut="$(jq -r .sut <<< "$head")"
           if [[ "$trust" != trusted ]]; then
@@ -292,7 +292,7 @@ jobs:
         run: |
           set -euo pipefail
           # tests/web_ui only: the cli suite is collected for its scenario ids, none of which matches webui.*
-          .venv/bin/otterdog-e2e run --target "$TARGET" --sut "$SUT" --suite cli --scenario 'webui.*' tests/web_ui
+          .venv/bin/otterdog-acceptance run --target "$TARGET" --sut "$SUT" --suite cli --scenario 'webui.*' tests/web_ui
       - name: Locate the run artifacts
         if: always()
         env:
@@ -331,7 +331,7 @@ jobs:
               echo "run $id never reached the test organization: nothing to sweep"
               continue
             fi
-            .venv/bin/otterdog-e2e janitor --target "$TARGET" --run-id "$id" --apply || status=1
+            .venv/bin/otterdog-acceptance janitor --target "$TARGET" --run-id "$id" --apply || status=1
           done
           exit "$status"
       - name: Scrub the artifacts (fails on leaked secrets)
@@ -352,7 +352,7 @@ jobs:
             echo "no artifacts to scrub"
             exit 0
           fi
-          .venv/bin/otterdog-e2e scrub-artifacts "$E2E_ARTIFACTS"
+          .venv/bin/otterdog-acceptance scrub-artifacts "$E2E_ARTIFACTS"
       - name: Upload the artifacts
         if: always() && steps.scrub.outcome == 'success'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -371,7 +371,7 @@ jobs:
         run: |
           set -euo pipefail
           {
-            echo "### otterdog-e2e web-UI session"
+            echo "### otterdog-acceptance web-UI session"
             echo
             echo "| item | value |"
             echo "|---|---|"

@@ -12,9 +12,9 @@ import jinja2
 import pytest
 import yaml
 
-from otterdog_e2e import RESOURCE_NAMES, read_resource, resource
-from otterdog_e2e.otterdog.render import CACHE_LIMIT_OVERRIDES, FRAGMENT_KEYS, ConfigFragments
-from otterdog_e2e.webapp.stack import (
+from otterdog_acceptance import RESOURCE_NAMES, read_resource, resource
+from otterdog_acceptance.otterdog.render import CACHE_LIMIT_OVERRIDES, FRAGMENT_KEYS, ConfigFragments
+from otterdog_acceptance.webapp.stack import (
     COMPOSE_REQUIRED_VARIABLES,
     COMPOSE_VARIABLES,
     DTRACK_CONTAINER_PORT,
@@ -66,7 +66,7 @@ def _balanced(text: str) -> bool:
 def test_resources_are_package_data() -> None:
     """Every resource is reachable through importlib.resources."""
     for name in RESOURCE_NAMES:
-        assert (files("otterdog_e2e") / "resources" / name).is_file()
+        assert (files("otterdog_acceptance") / "resources" / name).is_file()
         assert resource(name).read_text()
     with pytest.raises(ValueError):
         resource("unknown.txt")
@@ -231,7 +231,7 @@ def test_compose_webapp_environment(compose: dict[str, Any]) -> None:
     assert env["CACHE_CONTROL"] == ""
     assert env["DEBUG"] == "True"
     assert env["GHPROXY_URI"] == "https://api.github.com"
-    assert env["MONGO_URI"] == "mongodb://mongodb:27017/otterdog_e2e"
+    assert env["MONGO_URI"] == "mongodb://mongodb:27017/otterdog_acceptance"
     assert env["REDIS_URI"] == "redis://redis:6379"
     assert env["GITHUB_APP_PRIVATE_KEY"] == "/run/secrets/github_app_key"
     assert env["GITHUB_WEBHOOK_ENDPOINT"] == "/github-webhook/receive"
@@ -290,7 +290,7 @@ def test_compose_dtrack_mock_service(compose: dict[str, Any]) -> None:
 def test_dtrack_mock_resource_is_package_data() -> None:
     """resources/dtrack_mock.py ships with the package (pyproject includes resources/*) and runs on the stdlib only."""
     source = read_dtrack_mock()
-    assert (files("otterdog_e2e") / "resources" / DTRACK_MOCK_RESOURCE).is_file()
+    assert (files("otterdog_acceptance") / "resources" / DTRACK_MOCK_RESOURCE).is_file()
     imports = {line.split()[1].split(".")[0] for line in source.splitlines() if line.startswith(("import ", "from "))}
     assert imports <= {
         "__future__",

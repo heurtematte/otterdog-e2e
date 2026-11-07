@@ -16,14 +16,14 @@ import pytest
 import responses
 from cryptography.hazmat.primitives import serialization
 
-from otterdog_e2e import read_resource
-from otterdog_e2e.redact import REDACTOR
-from otterdog_e2e.safety import SafetyError
-from otterdog_e2e.settings import AppCredentials
-from otterdog_e2e.testing.fakes import FAKE_ORG, make_run_context, make_verified_org
-from otterdog_e2e.webapp import stack as stack_module
-from otterdog_e2e.webapp.api import RemoteEndpointError, WebappApi
-from otterdog_e2e.webapp.stack import (
+from otterdog_acceptance import read_resource
+from otterdog_acceptance.redact import REDACTOR
+from otterdog_acceptance.safety import SafetyError
+from otterdog_acceptance.settings import AppCredentials
+from otterdog_acceptance.testing.fakes import FAKE_ORG, make_run_context, make_verified_org
+from otterdog_acceptance.webapp import stack as stack_module
+from otterdog_acceptance.webapp.api import RemoteEndpointError, WebappApi
+from otterdog_acceptance.webapp.stack import (
     COMPOSE_VARIABLES,
     DUMMY_CONFIG_TOKEN,
     ExternalWebapp,

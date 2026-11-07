@@ -2,14 +2,14 @@
 name: otterdog-pr-tests
 description: >-
   Generates the e2e tests of an upstream eclipse-csi/otterdog pull request: gathers the PR context with
-  otterdog-e2e assist pr-context, decides which behaviours the PR changes and which must not change, extends the
+  otterdog-acceptance assist pr-context, decides which behaviours the PR changes and which must not change, extends the
   functional scenarios of those behaviours (or writes generic ones named after the behaviour) and adds the PR to
   their references, validates them, runs the offline and differential tiers on the pinned PR inside docker and turns
   the observed deltas into expected_deltas of the references or suspected regressions. Use when asked to test, write tests for, check or review the behaviour
   change of an otterdog pull request, given its number and optionally a 40-hex commit sha.
 license: EPL-2.0
 compatibility: >-
-  Requires the otterdog-e2e checkout with .venv (make init), docker (a PR is untrusted code and only runs in its own
+  Requires the otterdog-acceptance checkout with .venv (make init), docker (a PR is untrusted code and only runs in its own
   image), unshare, network for public GitHub reads and to fetch the PR. No test organization: live tiers are only
   suggested to the user.
 ---
@@ -34,8 +34,8 @@ that commit only (a later push changes nothing).
 1. **Gather the context** (anonymous public reads, nothing written to GitHub):
 
    ```bash
-   .venv/bin/otterdog-e2e assist pr-context 790 --sha 0cee9e302282fefa092b4e0767248a997a9272ea
-   .venv/bin/otterdog-e2e assist pr-context 790 --json            # no --sha: pins and prints the current head
+   .venv/bin/otterdog-acceptance assist pr-context 790 --sha 0cee9e302282fefa092b4e0767248a997a9272ea
+   .venv/bin/otterdog-acceptance assist pr-context 790 --json            # no --sha: pins and prints the current head
    ```
 
    Read `artifacts/assist/pr-<n>-<sha12>/context.md`, then `context.json` and `diff.patch` as needed: the PR (title,
@@ -111,19 +111,19 @@ that commit only (a later push changes nothing).
 7. **Check** until clean (exit 0):
 
    ```bash
-   .venv/bin/otterdog-e2e assist check scenarios/offline/rulesets/val-ruleset-strict.yaml
-   .venv/bin/otterdog-e2e assist check --sut pr:790@0cee9e302282fefa092b4e0767248a997a9272ea scenarios/cli/rulesets/ruleset-public.yaml
+   .venv/bin/otterdog-acceptance assist check scenarios/offline/rulesets/val-ruleset-strict.yaml
+   .venv/bin/otterdog-acceptance assist check --sut pr:790@0cee9e302282fefa092b4e0767248a997a9272ea scenarios/cli/rulesets/ruleset-public.yaml
    ```
 
    The second form lints live scenarios with the PR's own CLI (in docker). Then confirm the new offline scenarios
-   pass on the release CI runs: `.venv/bin/otterdog-e2e run --suite offline --sut release:latest --scenario <id>`.
+   pass on the release CI runs: `.venv/bin/otterdog-acceptance run --suite offline --sut release:latest --scenario <id>`.
 8. **Run the offline and differential tiers on the pinned PR** (docker, no target, no GitHub writes; about 30 minutes:
    each session builds the PR's image again). Never run two sessions on the same `pr:` SUT at once (an `assist check
    --sut pr:<n>` during a `run`): the image of the running one vanishes ("No such image", exit 125, reported as product
    failures).
 
    ```bash
-   .venv/bin/otterdog-e2e run --sut pr:790@0cee9e302282fefa092b4e0767248a997a9272ea --base-sut auto \
+   .venv/bin/otterdog-acceptance run --sut pr:790@0cee9e302282fefa092b4e0767248a997a9272ea --base-sut auto \
      --suite offline,differential
    ```
 
@@ -131,13 +131,13 @@ that commit only (a later push changes nothing).
    `--sut sha:9bdeb75`). Leave out `--base-sut auto` when a reference declares `base` (it is then the default);
    without any base SUT the differential items are skipped. `run` records every observed offline scenario; add
    `--tags <suggested tags>` to restrict the differential tier like the PR lane does (the referencing scenarios are
-   always kept). `otterdog-e2e pr <n> --sha <sha>` without `--target` is the same offline run with that tag selection.
+   always kept). `otterdog-acceptance pr <n> --sha <sha>` without `--target` is the same offline run with that tag selection.
    The run ends with `pytest exit code N; artifacts: <dir>` and the delta counts. To check declared deltas again, rerun
    only the referencing scenarios: `--scenario <id>,<id>,...` takes ONE comma-separated list (a repeated option keeps
    the last one only).
 9. **Read the results** in that directory: `differential.md` first (verdict, unexpected deltas with unified diffs,
    expected deltas, expected deltas not observed, not comparable scenarios), then `summary.md`; for failures of the
-   head's offline tier use the `triage-e2e-run` skill (`.venv/bin/otterdog-e2e assist triage <dir>`). A recording
+   head's offline tier use the `triage-e2e-run` skill (`.venv/bin/otterdog-acceptance assist triage <dir>`). A recording
    step passes whatever its outcome, so a head crash in it shows only here: read the head's `exit_code` and the end of
    its output for every delta (an `Error:` with exit 2 in the middle of a `show` or `local-plan` is a crash), not just
    the diff. Many deltas usually share a cause: group them (`differential.json`, `deltas`) by their added and removed
@@ -192,7 +192,7 @@ PR #790 "fix: validate required status checks of rulesets" pinned at 0cee9e3 (he
 Files: scenarios/offline/rulesets/val-ruleset-strict.yaml (step no-strict, references: #790 with 2 expected deltas),
        scenarios/offline/rulesets/val-org-ruleset-strict.yaml (new, references #790 without expected delta)
 Gates: assist check clean; offline on release:latest green; make unit green
-Run: otterdog-e2e run --sut pr:790@0cee9e3... --suite offline,differential   (base from the references)
+Run: otterdog-acceptance run --sut pr:790@0cee9e3... --suite offline,differential   (base from the references)
      363 passed, 29 skipped, 27 xfailed; differential: 2 expected, 1 unexpected
 | Delta                                          | Verdict              | Evidence / note                          |
 | O-VAL-RULESET-STRICT / no-strict / cli / validate         | expected             | head: missing 'strict' is an error       |
@@ -201,5 +201,5 @@ Run: otterdog-e2e run --sut pr:790@0cee9e3... --suite offline,differential   (ba
 Requests: none changed (validation only); states: repository and organization rulesets (both covered)
 Known bugs fixed: none
 Open questions: should the org-level crash block the PR?
-Live (yours to run, needs a test org): .venv/bin/otterdog-e2e pr 790 --sha 0cee9e3... --target free
+Live (yours to run, needs a test org): .venv/bin/otterdog-acceptance pr 790 --sha 0cee9e3... --target free
 ```

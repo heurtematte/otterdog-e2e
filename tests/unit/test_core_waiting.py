@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from otterdog_e2e import waiting
+from otterdog_acceptance import waiting
 
 
 class Clock:

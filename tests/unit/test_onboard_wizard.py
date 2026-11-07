@@ -1,4 +1,4 @@
-"""``otterdog-e2e setup`` (onboard.wizard.SetupWizard): every flow with injected I/O and fake GitHub clients; the
+"""``otterdog-acceptance setup`` (onboard.wizard.SetupWizard): every flow with injected I/O and fake GitHub clients; the
 instance env file is real (tmp HOME) and checked with settings.parse_env_text."""
 
 from __future__ import annotations
@@ -16,15 +16,15 @@ from typing import Any
 import pytest
 from click.testing import CliRunner
 
-from otterdog_e2e import appmanifest, cli
-from otterdog_e2e.appmanifest import DEFAULT_EVENTS, DEFAULT_PERMISSIONS
-from otterdog_e2e.cli import onboarding as cli_onboarding
-from otterdog_e2e.onboard.accounts import AccountError, AccountResult, MachineAccount
-from otterdog_e2e.onboard.wizard import SetupError, SetupOptions, SetupWizard, WizardIO
-from otterdog_e2e.safety import SafetyError
-from otterdog_e2e.settings import HarnessSettings, Target, parse_env_text
-from otterdog_e2e.testing.fakes import FakeGitHubHttp, make_settings
-from otterdog_e2e.vaults import VaultError
+from otterdog_acceptance import appmanifest, cli
+from otterdog_acceptance.appmanifest import DEFAULT_EVENTS, DEFAULT_PERMISSIONS
+from otterdog_acceptance.cli import onboarding as cli_onboarding
+from otterdog_acceptance.onboard.accounts import AccountError, AccountResult, MachineAccount
+from otterdog_acceptance.onboard.wizard import SetupError, SetupOptions, SetupWizard, WizardIO
+from otterdog_acceptance.safety import SafetyError
+from otterdog_acceptance.settings import HarnessSettings, Target, parse_env_text
+from otterdog_acceptance.testing.fakes import FakeGitHubHttp, make_settings
+from otterdog_acceptance.vaults import VaultError
 
 ROOT = Path(__file__).resolve().parents[2]
 ORG, ORG_ID = "e2e-test-org", 424242
@@ -256,8 +256,8 @@ class World:
 
     @property
     def config_dir(self) -> Path:
-        """~/.config/otterdog-e2e of the tmp HOME."""
-        return Path(self.environ["HOME"]) / ".config" / "otterdog-e2e"
+        """~/.config/otterdog-acceptance of the tmp HOME."""
+        return Path(self.environ["HOME"]) / ".config" / "otterdog-acceptance"
 
     def env(self, instance: str = "org2") -> dict[str, str]:
         """Values of an instance env file."""
@@ -422,12 +422,12 @@ def test_fresh_instance_with_the_admin_only(world: World) -> None:
     }
     path = world.config_dir / "org2.env"
     assert stat.S_IMODE(path.stat().st_mode) == 0o600 and stat.S_IMODE(world.config_dir.stat().st_mode) == 0o700
-    assert path.read_text().startswith("# otterdog-e2e instance org2: written by `otterdog-e2e setup`")
+    assert path.read_text().startswith("# otterdog-acceptance instance org2: written by `otterdog-acceptance setup`")
     assert "https://github.com/settings/tokens/new?scopes=repo,workflow,admin:org,admin:org_hook,delete_repo&" in (
         script.output
     )
     assert "\u2713 free (targets/free.yaml), plan free" in script.output
-    assert "otterdog-e2e ci-sync --target org2" in script.output
+    assert "otterdog-acceptance ci-sync --target org2" in script.output
     assert not script.opened and not world.bootstraps and not world.doctors
     assert_no_secret(script.output)
 
@@ -1064,7 +1064,7 @@ def test_shared_orgs_are_written_only_once_the_token_passed_every_check(world: W
 @pytest.mark.parametrize(
     ("admin", "marker", "reason"),
     [
-        (False, True, "holds no validated admin token (complete `otterdog-e2e setup --target first` first)"),
+        (False, True, "holds no validated admin token (complete `otterdog-acceptance setup --target first` first)"),
         (True, False, "the description of first-org lacks the safety marker '[otterdog-e2e]'"),
     ],
 )
@@ -1267,10 +1267,10 @@ def test_unknown_rotation_and_invalid_instances_are_refused(world: World) -> Non
 def _cli_world(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
     """Patch the collaborators of the setup command onto the world."""
     monkeypatch.setenv("HOME", world.environ["HOME"])
-    monkeypatch.setattr("otterdog_e2e.settings.harness_settings", lambda environ=None: world.settings)
+    monkeypatch.setattr("otterdog_acceptance.settings.harness_settings", lambda environ=None: world.settings)
     patched: Callable[..., FakeGitHubHttp] = lambda token, **kwargs: world.http(token, kwargs["identity"])
-    monkeypatch.setattr("otterdog_e2e.github.http.GitHubHttp", patched)
-    monkeypatch.setattr("otterdog_e2e.redact.install_logging_filter", lambda *args: None)
+    monkeypatch.setattr("otterdog_acceptance.github.http.GitHubHttp", patched)
+    monkeypatch.setattr("otterdog_acceptance.redact.install_logging_filter", lambda *args: None)
 
 
 def test_cli_setup_end_to_end(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1305,7 +1305,7 @@ def test_cli_setup_errors_are_one_line(world: World, monkeypatch: pytest.MonkeyP
 
 def test_cli_rotation_choices_match_the_wizard() -> None:
     """The --rotate choices of the CLI are the wizard's."""
-    from otterdog_e2e.onboard.wizard import ROTATABLE
+    from otterdog_acceptance.onboard.wizard import ROTATABLE
 
     assert tuple(cli_onboarding.SETUP_ROTATABLE) == ROTATABLE
 
@@ -1396,7 +1396,7 @@ def vault(monkeypatch: pytest.MonkeyPatch) -> dict[str, str]:
             raise VaultError(f"{value}: not found")
         return REFERENCES[value]
 
-    monkeypatch.setattr("otterdog_e2e.onboard.wizard.resolve", resolve)
+    monkeypatch.setattr("otterdog_acceptance.onboard.wizard.resolve", resolve)
     return REFERENCES
 
 
@@ -1461,9 +1461,9 @@ def secret_store(monkeypatch: pytest.MonkeyPatch) -> dict[str, str]:
         """entries[value] = secret."""
         entries[value] = secret
 
-    monkeypatch.setattr("otterdog_e2e.onboard.wizard.resolve", resolve)
-    monkeypatch.setattr("otterdog_e2e.onboard.wizard.store", store)
-    monkeypatch.setattr("otterdog_e2e.settings.resolve", resolve)
+    monkeypatch.setattr("otterdog_acceptance.onboard.wizard.resolve", resolve)
+    monkeypatch.setattr("otterdog_acceptance.onboard.wizard.store", store)
+    monkeypatch.setattr("otterdog_acceptance.settings.resolve", resolve)
     return entries
 
 
@@ -1534,14 +1534,14 @@ def test_an_invalid_store_is_refused(world: World, secret_store: dict[str, str])
         run_wizard(world, Script(secrets=[]), store="bitwarden:x")
 
 
-# --- machine accounts (onboard/accounts.py: the accounts section of setup.yaml, `otterdog-e2e accounts`, --browser) ---
+# --- machine accounts (onboard/accounts.py: the accounts section of setup.yaml, `otterdog-acceptance accounts`, --browser) ---
 ACCOUNTS_STORE = "pass:bots/technology.csi/github.com"
 ADMIN_ACCOUNT = f"{ACCOUNTS_STORE}/otterdog-e2e-org2-admin"
 ADMIN_ACCOUNT_TOKEN = f"{ADMIN_ACCOUNT}-api-token"
 
 
 def write_setup_config(world: World, store: str = ACCOUNTS_STORE) -> None:
-    """~/.config/otterdog-e2e/setup.yaml with an accounts store (the default entry and item names)."""
+    """~/.config/otterdog-acceptance/setup.yaml with an accounts store (the default entry and item names)."""
     path = world.config_dir / "setup.yaml"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(f"accounts:\n  store: {store}\n")

@@ -1,5 +1,5 @@
-# otterdog-e2e developer entry points: `make help` lists the targets and the variables they read.
-# Every harness target runs .venv/bin/otterdog-e2e (create the venv with `make init`).
+# otterdog-acceptance developer entry points: `make help` lists the targets and the variables they read.
+# Every harness target runs .venv/bin/otterdog-acceptance (create the venv with `make init`).
 #
 #   make offline                          offline tier of release:latest (no GitHub)
 #   make cli TARGET=free                  live CLI tier on the instance free (profile targets/free.yaml)
@@ -12,7 +12,7 @@
 #   make setup TARGET=acme                 interactive onboarding of a new test org (docs/onboarding.md)
 #   make bootstrap TARGET=acme APPLY=1 WAIT=1
 #   make ci-sync TARGET=acme APPLY=1       GitHub environments, variables and secrets of the instance (gh)
-#   make targets                          the instances (~/.config/otterdog-e2e/<instance>.env) and profiles
+#   make targets                          the instances (~/.config/otterdog-acceptance/<instance>.env) and profiles
 #   make docs                             strict build of the documentation site (poetry install --with docs)
 
 SHELL := /bin/bash
@@ -23,11 +23,11 @@ SHELL := /bin/bash
 unexport OTTERDOG_CONFIG_ROOT
 
 VENV ?= .venv
-E2E := $(VENV)/bin/otterdog-e2e
+E2E := $(VENV)/bin/otterdog-acceptance
 PYTHON := $(VENV)/bin/python
 POETRY ?= poetry
-# `make init` links the command otterdog-e2e of the venv here (a directory of the PATH), as otterdog's links otterdog
-E2E_LINK ?= $(HOME)/.local/bin/otterdog-e2e
+# `make init` links the command otterdog-acceptance of the venv here (a directory of the PATH), as otterdog's links otterdog
+E2E_LINK ?= $(HOME)/.local/bin/otterdog-acceptance
 # Python files outside the package: the staging of the documentation site (docs_site.py and its modules)
 HOOKS := docs_hooks.py docs_scenarios.py docs_site.py
 
@@ -72,16 +72,16 @@ help: ## Show this help
 	@echo "           TARGET=a,b|@all|@<list> runs several instances (run-based targets, pr, doctor, janitor);"
 	@echo "           PARALLEL=<n> runs up to n of them at once"
 
-init: ## Create .venv with the harness, its dev tools and Playwright's Firefox, link otterdog-e2e into E2E_LINK
+init: ## Create .venv with the harness, its dev tools and Playwright's Firefox, link otterdog-acceptance into E2E_LINK
 	$(POETRY) install --with dev --extras browser
 	$(PYTHON) -m playwright install firefox
-	@target="$(abspath $(VENV))/bin/otterdog-e2e"; link="$(E2E_LINK)"; \
+	@target="$(abspath $(VENV))/bin/otterdog-acceptance"; link="$(E2E_LINK)"; \
 	if [ -e "$$link" ] && [ ! -L "$$link" ]; then \
-		echo "$$link exists and is not a symlink: left alone (run $(VENV)/bin/otterdog-e2e)"; \
+		echo "$$link exists and is not a symlink: left alone (run $(VENV)/bin/otterdog-acceptance)"; \
 	elif [ "$$(readlink "$$link")" != "$$target" ]; then \
 		mkdir -p "$$(dirname "$$link")" && ln -sfn "$$target" "$$link" && echo "Updated symlink: $$link -> $$target"; \
 	fi; \
-	case ":$$PATH:" in *":$$(dirname "$$link"):"*) ;; *) echo "$$(dirname "$$link") is not on the PATH: add it to run otterdog-e2e";; esac
+	case ":$$PATH:" in *":$$(dirname "$$link"):"*) ;; *) echo "$$(dirname "$$link") is not on the PATH: add it to run otterdog-acceptance";; esac
 
 unit: ## Unit tier: harness self-tests (no network, no docker)
 	$(PYTHON) -m pytest -q -p no:cacheprovider tests/unit $(ARGS)
@@ -156,7 +156,7 @@ relay: require-target ## Forward the App deliveries of TARGET to FORWARD_TO (hol
 report: ## Print the summary of RUN=<artifacts dir> (default: the newest run)
 	$(E2E) report "$(RUN)"
 
-targets: ## List the target instances (~/.config/otterdog-e2e/<instance>.env) and the profiles of targets/
+targets: ## List the target instances (~/.config/otterdog-acceptance/<instance>.env) and the profiles of targets/
 	$(E2E) targets
 
 scrub: ## Scrub RUN=<artifacts dir> (exit 1 when a file leaked a secret)

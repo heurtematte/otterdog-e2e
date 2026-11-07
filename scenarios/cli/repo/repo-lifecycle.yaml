@@ -17,7 +17,7 @@ steps:
           orgs.newRepo('{{ p }}-lifecycle') {
             description: "otterdog e2e: repository lifecycle",
             homepage: "https://example.org/otterdog-e2e/{{ run }}",
-            topics: ["otterdog-e2e", "lifecycle"],
+            topics: ["otterdog-acceptance", "lifecycle"],
             has_wiki: false,
             allow_merge_commit: true,
             allow_rebase_merge: false,
@@ -52,7 +52,7 @@ steps:
           default_branch: main
       - kind: repo_topics
         name: "{{ p }}-lifecycle"
-        match: {$unordered: [otterdog-e2e, lifecycle]}
+        match: {$unordered: [otterdog-acceptance, lifecycle]}
 
   - name: update
     fragments:
@@ -61,7 +61,7 @@ steps:
           orgs.newRepo('{{ p }}-lifecycle') {
             description: "otterdog e2e: repository lifecycle (updated)",
             homepage: "https://example.org/otterdog-e2e/{{ run }}/updated",
-            topics: ["otterdog-e2e", "updated"],
+            topics: ["otterdog-acceptance", "updated"],
             has_wiki: false,
             has_issues: false,
             allow_merge_commit: false,
@@ -92,7 +92,7 @@ steps:
           delete_branch_on_merge: true
       - kind: repo_topics
         name: "{{ p }}-lifecycle"
-        match: {$unordered: [otterdog-e2e, updated]}
+        match: {$unordered: [otterdog-acceptance, updated]}
 
   - name: delete
     plan:

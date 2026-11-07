@@ -7,7 +7,7 @@ is skipped when one is missing, and how a scenario, the roles, otterdog and the 
 The setup of the accounts and their tokens is in [setup-free-org.md](setup-free-org.md) (by hand; its
 [list of accounts](setup-free-org.md#email-aliases-names-and-the-list-of-accounts) names every account of a Free and
 an Enterprise instance with its email alias) and
-[onboarding.md](onboarding.md) (`otterdog-e2e setup`); the security rules are in [security.md](security.md).
+[onboarding.md](onboarding.md) (`otterdog-acceptance setup`); the security rules are in [security.md](security.md).
 
 ## Why roles
 

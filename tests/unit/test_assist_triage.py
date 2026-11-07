@@ -1,4 +1,4 @@
-"""otterdog_e2e.assist.triage and ``otterdog-e2e assist triage``: scrub first (refusal on leaks), pre-classification
+"""otterdog_acceptance.assist.triage and ``otterdog-acceptance assist triage``: scrub first (refusal on leaks), pre-classification
 rules with their evidence, commands and artifacts of each failure, baseline comparison, untrusted output fenced."""
 
 from __future__ import annotations
@@ -10,11 +10,11 @@ from typing import Any
 import pytest
 from click.testing import CliRunner
 
-from otterdog_e2e import cli
-from otterdog_e2e.assist import triage
-from otterdog_e2e.assist.bundle import UNTRUSTED_INTRO, AssistError, AssistUsageError
-from otterdog_e2e.redact import Redactor
-from otterdog_e2e.testing.fakes import make_settings
+from otterdog_acceptance import cli
+from otterdog_acceptance.assist import triage
+from otterdog_acceptance.assist.bundle import UNTRUSTED_INTRO, AssistError, AssistUsageError
+from otterdog_acceptance.redact import Redactor
+from otterdog_acceptance.testing.fakes import make_settings
 
 RUN_ID = "tmfidc6a"
 OLDER = "tmb5ds2f"
@@ -72,13 +72,13 @@ def results() -> list[dict[str, Any]]:
             DELIVERY,
             "failed",
             infra=True,
-            failure="otterdog_e2e.config_repo.DeliveryTimeoutError: delivery not observed within 300 s (infra)",
+            failure="otterdog_acceptance.config_repo.DeliveryTimeoutError: delivery not observed within 300 s (infra)",
         ),
         line(
             FIXTURE,
             "failed",
             when="setup",
-            failure="otterdog_e2e.context.ContextError: target 'free' declares no identity 'approver'",
+            failure="otterdog_acceptance.context.ContextError: target 'free' declares no identity 'approver'",
         ),
         line(ODD, "failed", failure="RuntimeError: the page answered something odd"),
         line(CONVERGE, "passed", wasxfail="KB-020: converge loop on webhooks", known_bug="KB-020"),
@@ -94,7 +94,7 @@ def write_run(root: Path, run_id: str, rows: list[dict[str, Any]], *, live_outpu
         json.dumps(
             {
                 "run_id": run_id,
-                "command": "otterdog-e2e run --suite offline,cli",
+                "command": "otterdog-acceptance run --suite offline,cli",
                 "sut": {"label": "v1.6.1", "spec": "release:latest"},
             }
         )
@@ -160,7 +160,9 @@ def test_every_failure_is_pre_classified_with_evidence(project: Path) -> None:
         "known-bug: the output carries the crash signature \"object has no attribute 'get_model_header'\" of KB-008"
     )
     assert failures[DELIVERY]["evidence"][0].startswith("infrastructure: results.jsonl marks the failure")
-    assert failures[FIXTURE]["evidence"][0].startswith("harness: harness error type: otterdog_e2e.context.ContextError")
+    assert failures[FIXTURE]["evidence"][0].startswith(
+        "harness: harness error type: otterdog_acceptance.context.ContextError"
+    )
     assert failures[FIXTURE]["phase"] == "setup"
     assert failures[ODD]["evidence"] == []
 
@@ -252,7 +254,7 @@ def test_xpass_run_info_and_pointers(project: Path) -> None:
             "network error",
         ),
         (
-            "otterdog_e2e.config_repo.DeliveryTimeoutError: delivery not observed within 300 s",
+            "otterdog_acceptance.config_repo.DeliveryTimeoutError: delivery not observed within 300 s",
             "call",
             "failed",
             False,
@@ -268,7 +270,7 @@ def test_xpass_run_info_and_pointers(project: Path) -> None:
             "docker/compose failure",
         ),
         (
-            "otterdog_e2e.github.lease.LeaseBusy: org lease held by 'ci:x' (run 'tmb5ds2f')",
+            "otterdog_acceptance.github.lease.LeaseBusy: org lease held by 'ci:x' (run 'tmb5ds2f')",
             "setup",
             "error",
             False,
@@ -276,7 +278,7 @@ def test_xpass_run_info_and_pointers(project: Path) -> None:
             "org lease busy",
         ),
         (
-            "otterdog_e2e.safety.SafetyError: refusing a request outside https://api.github.com",
+            "otterdog_acceptance.safety.SafetyError: refusing a request outside https://api.github.com",
             "call",
             "failed",
             False,
@@ -284,7 +286,7 @@ def test_xpass_run_info_and_pointers(project: Path) -> None:
             "harness error type",
         ),
         (
-            "otterdog_e2e.settings.TargetError: invalid target name 'a,b'",
+            "otterdog_acceptance.settings.TargetError: invalid target name 'a,b'",
             "call",
             "failed",
             False,
@@ -292,7 +294,7 @@ def test_xpass_run_info_and_pointers(project: Path) -> None:
             "harness error type",
         ),
         (
-            "TypeError: unhashable type: 'dict'\n\nsrc/otterdog_e2e/scenarios/engine.py:512: TypeError",
+            "TypeError: unhashable type: 'dict'\n\nsrc/otterdog_acceptance/scenarios/engine.py:512: TypeError",
             "call",
             "failed",
             False,
@@ -342,8 +344,8 @@ def test_precedence_and_other_signals() -> None:
 
 def test_linked_bugs_flag_regressions_and_mentions(project: Path) -> None:
     """A fixed bug linked to a failure is flagged as a possible regression; a KB id only mentioned is noted."""
-    from otterdog_e2e.known_bugs import load
-    from otterdog_e2e.report import TestRecord
+    from otterdog_acceptance.known_bugs import load
+    from otterdog_acceptance.report import TestRecord
 
     bugs = load(project / "scenarios" / "known_bugs.yaml")
     record = TestRecord(CONVERGE, "cli", outcome="failed", scenario="cli.webhook.converge", failure="see KB-030")
@@ -446,7 +448,7 @@ def test_triage_without_failures(project: Path, tmp_path: Path) -> None:
 @pytest.fixture
 def settings(project: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Settings of the checkout (artifacts below it); returns the artifacts root."""
-    monkeypatch.setattr("otterdog_e2e.settings.harness_settings", lambda environ=None: make_settings(project))
+    monkeypatch.setattr("otterdog_acceptance.settings.harness_settings", lambda environ=None: make_settings(project))
     return project / "artifacts"
 
 

@@ -6,7 +6,7 @@ flags, every property of the configuration model grouped into features, validati
 CHANGELOG fixes. Each feature says which existing scenario ids (scenarios/{offline,cli,enterprise}) or
 pytest node ids (tests/<tier>/...::test_x) cover it, and gaps carry an outline precise enough to write the missing test.
 
-These tests keep the file honest (the checks live in otterdog_e2e.coverage_matrix, shared with ``otterdog-e2e assist
+These tests keep the file honest (the checks live in otterdog_acceptance.coverage_matrix, shared with ``otterdog-acceptance assist
 check scenarios/coverage.yaml``):
 
 * strict schema (keys, types, enums, unique dotted ids, status rules: covered/partial need covering items,
@@ -35,7 +35,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-from otterdog_e2e.coverage_matrix import (
+from otterdog_acceptance.coverage_matrix import (
     REGENERATE,
     MatrixProject,
     counts,
@@ -164,7 +164,7 @@ def test_markdown_text_escapes_outside_code_spans() -> None:
 
 
 def test_the_assist_check_reports_the_same_problems() -> None:
-    """MatrixProject.all_problems (otterdog-e2e assist check scenarios/coverage.yaml) is clean for the committed
+    """MatrixProject.all_problems (otterdog-acceptance assist check scenarios/coverage.yaml) is clean for the committed
     matrix: it runs every check above."""
     assert PROJECT.all_problems() == []
 

@@ -12,9 +12,9 @@ from typing import Any
 import pytest
 from filelock import FileLock, Timeout
 
-from otterdog_e2e import procs
-from otterdog_e2e.safety import SafetyError
-from otterdog_e2e.sut.image import (
+from otterdog_acceptance import procs
+from otterdog_acceptance.safety import SafetyError
+from otterdog_acceptance.sut.image import (
     OCI_VERSION_LABEL,
     REVISION_LABEL,
     TRUSTED_LABEL,
@@ -26,7 +26,7 @@ from otterdog_e2e.sut.image import (
     docker_available,
     prebuilt_image,
 )
-from otterdog_e2e.sut.spec import ResolvedSut, parse_sut_spec
+from otterdog_acceptance.sut.spec import ResolvedSut, parse_sut_spec
 
 SHA = "d0d3b0832d8e21a9da86e0ef967859d2634af894"
 IMAGE_ID = "sha256:" + "ab" * 32

@@ -20,15 +20,15 @@ from typing import TYPE_CHECKING
 import pytest
 
 if TYPE_CHECKING:
-    from otterdog_e2e.context import E2EContext
-    from otterdog_e2e.otterdog.baseline import BaselineManager
-    from otterdog_e2e.otterdog.output import PlanObject
-    from otterdog_e2e.otterdog.runner import OtterdogCli
-    from otterdog_e2e.otterdog.workspace import ConfigWorkspace
-    from otterdog_e2e.safety import VerifiedOrg
-    from otterdog_e2e.settings import Target
-    from otterdog_e2e.sut.cli_install import InstalledCli
-    from otterdog_e2e.sut.template import TemplateRef
+    from otterdog_acceptance.context import E2EContext
+    from otterdog_acceptance.otterdog.baseline import BaselineManager
+    from otterdog_acceptance.otterdog.output import PlanObject
+    from otterdog_acceptance.otterdog.runner import OtterdogCli
+    from otterdog_acceptance.otterdog.workspace import ConfigWorkspace
+    from otterdog_acceptance.safety import VerifiedOrg
+    from otterdog_acceptance.settings import Target
+    from otterdog_acceptance.sut.cli_install import InstalledCli
+    from otterdog_acceptance.sut.template import TemplateRef
 
 pytestmark = [pytest.mark.tags("cli", "repo", "teams", "org-settings")]
 

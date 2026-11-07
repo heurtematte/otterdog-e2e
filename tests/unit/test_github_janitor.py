@@ -9,13 +9,13 @@ from typing import Any
 import pytest
 import responses
 
-from otterdog_e2e.github.http import GITHUB_API, GitHubError, GitHubHttp
-from otterdog_e2e.github.janitor import JANITOR_KINDS, SWEEP_ORDER, Janitor, JanitorItem
-from otterdog_e2e.github.lease import format_time
-from otterdog_e2e.github.mutate import Mutator
-from otterdog_e2e.naming import HOOK_BASE
-from otterdog_e2e.safety import SafetyError
-from otterdog_e2e.testing.fakes import FAKE_ORG, FakeOracle, RecordingMutator, fake_sha, make_verified_org
+from otterdog_acceptance.github.http import GITHUB_API, GitHubError, GitHubHttp
+from otterdog_acceptance.github.janitor import JANITOR_KINDS, SWEEP_ORDER, Janitor, JanitorItem
+from otterdog_acceptance.github.lease import format_time
+from otterdog_acceptance.github.mutate import Mutator
+from otterdog_acceptance.naming import HOOK_BASE
+from otterdog_acceptance.safety import SafetyError
+from otterdog_acceptance.testing.fakes import FAKE_ORG, FakeOracle, RecordingMutator, fake_sha, make_verified_org
 
 NOW = datetime(2030, 3, 1, 12, 0, tzinfo=UTC)
 CONFIGS, DEFAULTS, FIXTURE = "otterdog-e2e-configs", "otterdog-e2e-defaults", "otterdog-e2e-fixture-a"
@@ -378,7 +378,7 @@ def test_sweep_with_the_real_mutator_guards(api: responses.RequestsMock) -> None
 
 def test_janitor_with_the_official_fakes() -> None:
     """The janitor runs on testing.fakes' FakeOracle, RecordingMutator and FakeLease (as other packages use it)."""
-    from otterdog_e2e.testing.fakes import FakeLease
+    from otterdog_acceptance.testing.fakes import FakeLease
 
     oracle = FakeOracle()
     oracle.add_repo(f"e2e-{OLD}-basic")

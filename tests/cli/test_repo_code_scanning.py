@@ -25,17 +25,17 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from otterdog_e2e import waiting
-from otterdog_e2e.scenarios.model import load_scenario
+from otterdog_acceptance import waiting
+from otterdog_acceptance.scenarios.model import load_scenario
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from otterdog_e2e.github.mutate import Mutator
-    from otterdog_e2e.github.oracle import Oracle
-    from otterdog_e2e.naming import RunContext
-    from otterdog_e2e.scenarios.engine import ScenarioEngine
-    from otterdog_e2e.scenarios.model import Scenario
+    from otterdog_acceptance.github.mutate import Mutator
+    from otterdog_acceptance.github.oracle import Oracle
+    from otterdog_acceptance.naming import RunContext
+    from otterdog_acceptance.scenarios.engine import ScenarioEngine
+    from otterdog_acceptance.scenarios.model import Scenario
 
 pytestmark = [pytest.mark.tags("repo", "workflows")]
 
@@ -45,13 +45,13 @@ LANGUAGE_TIMEOUT = 300.0  # GitHub's language detection runs after the push
 LANGUAGE_INTERVAL = 10.0
 PROBE_FILES = {
     "src/e2e_probe.py": (
-        '"""otterdog-e2e code scanning probe (never imported)."""\n\n\n'
+        '"""otterdog-acceptance code scanning probe (never imported)."""\n\n\n'
         "def answer() -> int:\n"
         '    """Return the answer."""\n'
         "    return 42\n"
     ),
     ".github/workflows/e2e-probe.yml": (
-        "# otterdog-e2e code scanning probe: dispatch only, never triggered by a push\n"
+        "# otterdog-acceptance code scanning probe: dispatch only, never triggered by a push\n"
         "name: e2e-probe\n"
         "on: workflow_dispatch\n"
         "permissions: {}\n"
@@ -59,7 +59,7 @@ PROBE_FILES = {
         "  noop:\n"
         "    runs-on: ubuntu-latest\n"
         "    steps:\n"
-        "      - run: echo otterdog-e2e\n"
+        "      - run: echo otterdog-acceptance\n"
     ),
 }
 
@@ -183,7 +183,7 @@ def test_code_scanning_default_setup(
         branch = waiting.wait_until(
             lambda: oracle.default_branch(repo), timeout=60.0, interval=5.0, what=f"default branch of {repo}"
         )
-        mutator.commit_files(repo, branch, PROBE_FILES, "otterdog-e2e: code scanning probe sources")
+        mutator.commit_files(repo, branch, PROBE_FILES, "otterdog-acceptance: code scanning probe sources")
         languages = waiting.wait_until(
             lambda: python_detected(oracle, repo),
             timeout=LANGUAGE_TIMEOUT,

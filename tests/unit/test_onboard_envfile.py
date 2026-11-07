@@ -11,8 +11,8 @@ from pathlib import Path
 
 import pytest
 
-from otterdog_e2e.onboard import envfile
-from otterdog_e2e.onboard.envfile import (
+from otterdog_acceptance.onboard import envfile
+from otterdog_acceptance.onboard.envfile import (
     EnvFileError,
     InstanceNameError,
     check_instance_name,
@@ -23,12 +23,12 @@ from otterdog_e2e.onboard.envfile import (
     read_env_file,
     update_env_file,
 )
-from otterdog_e2e.safety import SafetyError
-from otterdog_e2e.settings import parse_env_text
+from otterdog_acceptance.safety import SafetyError
+from otterdog_acceptance.settings import parse_env_text
 
 # every character class the quoting must survive: quotes, backslashes, $, # (inline comments), blanks, line breaks
 ALPHABET = list("abcXYZ019_-./:@%+,=~^") + list("\"'\\$#` \t\n\r") + ["é", "€", "${", "\\n", "\\$", " #", '\\"']
-EXISTING = """# otterdog-e2e instance test
+EXISTING = """# otterdog-acceptance instance test
 # a comment that mentions E2E_ADMIN_TOKEN=not-a-value
 
 export E2E_ORG=e2e-test-org   # inline comment
@@ -85,7 +85,7 @@ def test_invalid_instance_names(name: str) -> None:
 
 
 def test_the_lists_directory_is_no_instance(tmp_path: Path) -> None:
-    """~/.config/otterdog-e2e/lists/ holds the target lists (@<list>): ``lists`` is refused as an instance, so the
+    """~/.config/otterdog-acceptance/lists/ holds the target lists (@<list>): ``lists`` is refused as an instance, so the
     App credentials of the manifest exchange (instance_app_dir) never land among the lists."""
     with pytest.raises(InstanceNameError, match=r"invalid instance name 'lists': the name is reserved"):
         instance_app_dir("lists", {"HOME": str(tmp_path)})
@@ -95,17 +95,17 @@ def test_the_lists_directory_is_no_instance(tmp_path: Path) -> None:
 
 
 def test_instance_paths_use_the_home_of_the_environ(tmp_path: Path) -> None:
-    """~/.config/otterdog-e2e/<instance>.env and the App credentials dir, HOME taken from the given environ."""
+    """~/.config/otterdog-acceptance/<instance>.env and the App credentials dir, HOME taken from the given environ."""
     environ = {"HOME": str(tmp_path)}
-    assert instance_env_path("free2", environ) == tmp_path / ".config" / "otterdog-e2e" / "free2.env"
-    assert instance_app_dir("free2", environ) == tmp_path / ".config" / "otterdog-e2e" / "free2"
+    assert instance_env_path("free2", environ) == tmp_path / ".config" / "otterdog-acceptance" / "free2.env"
+    assert instance_app_dir("free2", environ) == tmp_path / ".config" / "otterdog-acceptance" / "free2"
     with pytest.raises(InstanceNameError):
         instance_env_path("../x", environ)
 
 
 def test_known_instances_lists_valid_env_files(tmp_path: Path) -> None:
     """Every <instance>.env with a valid name; other files and the App directories are ignored."""
-    directory = tmp_path / ".config" / "otterdog-e2e"
+    directory = tmp_path / ".config" / "otterdog-acceptance"
     (directory / "free").mkdir(parents=True)
     for name in ("free.env", "org-b.env", "Bad_Name.env", "notes.txt", "x-webui.env"):
         (directory / name).write_text("")
@@ -125,8 +125,8 @@ def test_known_instances_lists_valid_env_files(tmp_path: Path) -> None:
         ("1\n", '"1\\n"'),
         ("123456", "123456"),
         (
-            "/home/u/.config/otterdog-e2e/free/app-1.private-key.pem",
-            "/home/u/.config/otterdog-e2e/free/app-1.private-key.pem",
+            "/home/u/.config/otterdog-acceptance/free/app-1.private-key.pem",
+            "/home/u/.config/otterdog-acceptance/free/app-1.private-key.pem",
         ),
         ("https://example.org/hook?a=1", "https://example.org/hook?a=1"),
         ("", '""'),
@@ -247,7 +247,7 @@ def test_new_keys_are_appended_after_a_last_line_without_newline(tmp_path: Path)
 
 def test_a_new_file_gets_the_header_dir_0700_and_mode_0600(tmp_path: Path) -> None:
     """Created with the header comment lines, the missing directory 0700, the file 0600."""
-    path = tmp_path / "home" / ".config" / "otterdog-e2e" / "x.env"
+    path = tmp_path / "home" / ".config" / "otterdog-acceptance" / "x.env"
     assert update_env_file(path, {"E2E_ORG": "org"}, header="instance x\n# second line") == ["E2E_ORG"]
     assert path.read_text() == "# instance x\n# second line\nE2E_ORG=org\n"
     assert _mode(path) == 0o600 and _mode(path.parent) == 0o700
