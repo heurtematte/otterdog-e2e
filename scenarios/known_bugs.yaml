@@ -18,15 +18,15 @@
 
 - id: KB-001
   title: apply exits 0 (and the webapp reports success) when validation fails
-  status: confirmed
+  status: fixed
   evidence:
     - otterdog/operations/plan.py:121-126
     - otterdog/operations/plan.py:128-139
     - otterdog/operations/apply.py:97-108
     - otterdog/webapp/tasks/apply_changes.py:139-143
     - otterdog/webapp/tasks/apply_changes.py:209-211
-  upstream: null
-  fixed_in: null
+  upstream: https://github.com/eclipse-csi/otterdog/pull/923
+  fixed_in: 1.8.0
   scenarios: [cli.kb.apply-exit-code]
 
 - id: KB-002

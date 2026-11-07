@@ -75,7 +75,7 @@ shortened to the relevant lines.
 
 | id | title | status | area | linked scenarios |
 |----|-------|--------|------|------------------|
-| KB-001 | apply exits 0 (webapp reports success) when validation fails | confirmed | CLI, webapp | `cli.kb.apply-exit-code` |
+| KB-001 | apply exits 0 (webapp reports success) when validation fails | fixed (#923, 1.8.0) | CLI, webapp | `cli.kb.apply-exit-code` |
 | KB-002 | install-app/uninstall-app: token-only credentials but a web login | suspected | CLI | `webui.cmd.install-app` |
 | KB-003 | variables read without pagination (10 per page) | suspected | provider | `cli.kb.variables-pagination` |
 | KB-004 | webhook URL change through `aliases` never applied | confirmed | model | `cli.kb.webhook-url-alias`, `H-ORG-HOOK-ALIAS` |
@@ -161,7 +161,14 @@ shortened to the relevant lines.
 
 ### KB-001 — apply exits 0 (and the webapp reports success) when validation fails
 
-Status: **confirmed** · Upstream: none · Scenarios: `cli.kb.apply-exit-code` (tests/cli/test_known_bugs.py)
+Status: **fixed** (1.8.0) · Upstream: https://github.com/eclipse-csi/otterdog/pull/923 · Scenarios: `cli.kb.apply-exit-code`
+(tests/cli/test_known_bugs.py)
+
+Fixed by #923 (a196494, after v1.7.1; "return the validation errors from apply"): `ApplyOperation.handle_finish`
+returns the validation error count when validation fails (`otterdog/operations/apply.py:102-104` at main a196494),
+so `apply` exits non-zero and the webapp's ApplyChangesTask no longer reports success. `cli.kb.apply-exit-code` runs
+strict on SUTs from 1.8.0 (its dev builds included) and stays an expected failure on older ones. The text below
+describes the defect as it was.
 
 Evidence: `otterdog/operations/plan.py:121-126`, `otterdog/operations/plan.py:128-139`,
 `otterdog/operations/apply.py:97-108`, `otterdog/webapp/tasks/apply_changes.py:139-143`,
