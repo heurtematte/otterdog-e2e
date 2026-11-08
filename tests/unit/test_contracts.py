@@ -471,6 +471,7 @@ PUBLIC_NAMES: dict[str, list[str]] = {
     "otterdog_acceptance.cli.common": ["main", "check_passthrough", "target_names", "TerminationGuard"],
     "otterdog_acceptance.cli.doctor": ["Doctor", "CheckRow", "render_rows", "doctor"],
     "otterdog_acceptance.cli.bootstrap": ["Bootstrap", "bootstrap"],
+    "otterdog_acceptance.cli.completion": ["COMMAND_NAMES", "completion_script", "completion_var", "completion"],
     "otterdog_acceptance.cli.sut": ["RISKY_PATHS", "sut"],
     "otterdog_acceptance.cli.run": ["RunRequest", "run_pytest", "run_targets", "plan_pr", "run", "pr"],
     "otterdog_acceptance.cli.ops": ["relay_loop", "janitor_filter", "relay", "janitor"],

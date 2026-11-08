@@ -7,7 +7,7 @@ Otterdog Acceptance is a Python package (`src/otterdog_acceptance`) with two ent
   sessions (`run`, `pr`, which call `pytest.main` in-process for one target, and start one child process per target
   for several); `cli/common.py` holds the click group and the helpers every command shares, and each command family
   has its module (`doctor`, `bootstrap`, `sut`, `run`, `ops`, `maintenance`, `app_manifest`, `inject`, `onboarding`,
-  `assist`);
+  `assist`, `completion`);
 - a pytest plugin (`pytest_plugin.py`, registered through the `pytest11` entry point), which turns tiers, scenario
   YAML files and markers into test items, gates them and reports them.
 

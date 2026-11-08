@@ -16,6 +16,19 @@ project from its own location; a file that is not a symlink is left alone).
 linked as `~/.local/bin/oda` (`ODA_LINK=<path>` elsewhere). The documentation, the Makefile and the workflows write
 `otterdog-acceptance`.
 
+### Shell completion
+
+`completion` prints click's completion script of both names; one line of the shell's startup file completes the
+commands, options and choices of `oda` and `otterdog-acceptance`:
+
+```bash
+eval "$(oda completion zsh)"      # ~/.zshrc, after compinit
+eval "$(oda completion bash)"     # ~/.bashrc
+oda completion fish | source      # ~/.config/fish/config.fish
+```
+
+Each completion runs the command (about 150 ms: its collaborators are imported lazily).
+
 ### `OTTERDOG_CONFIG_ROOT` pitfall
 
 Without `-c`, otterdog looks for `otterdog.jsonnet` or `otterdog.json` in `$OTTERDOG_CONFIG_ROOT` (default: the

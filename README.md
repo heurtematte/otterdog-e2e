@@ -177,6 +177,7 @@ All commands are subcommands of `.venv/bin/otterdog-acceptance` (`--help` on eac
 | `report DIR` | print the summary of a run artifacts directory |
 | `scrub-artifacts DIR` | delete non-text files and files leaking a secret (the secret values of its environment included; exit 1 on leaks) |
 | `cache prune [--keep 3]` | drop old builds, sources, runs and images from the harness cache (never an entry whose lock a running session or build holds) |
+| `completion bash\|zsh\|fish` | print the shell completion script of `otterdog-acceptance` and `oda` (`eval "$(oda completion zsh)"` in `~/.zshrc`, [local-development.md](docs/local-development.md#shell-completion)) |
 | `app-manifest --target T --webhook-url URL [--port 8765] [--exchange CODE]` | create the e2e GitHub App from a manifest |
 | `inject [--target T] [--sut S] --fragment KIND=FILE [--library NAME=FILE] [--overlay FILE] [--config/--base FILE] [--apply] [--print]` | try jsonnet files against a SUT without writing a scenario (offline by default; `--target`: live validate + plan, `--apply` with guards and cleanup) |
 | `assist pr-context N [--sha SHA] \| check [PATHS] [--sut S] [--no-lint] \| triage DIR\|latest [--baseline DIR] \| coverage [--status ...] [--feature ID]` | deterministic helpers of AI-assisted test writing: the context bundle of an otterdog PR, validation of the files an agent wrote, triage of a run's failures (after a scrub), the coverage gaps; `--json` on each ([ai-assistance.md](docs/ai-assistance.md)) |
