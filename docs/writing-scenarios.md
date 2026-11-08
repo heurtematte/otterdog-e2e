@@ -557,6 +557,8 @@ every 5 s for up to 60 s (a check's own `timeout:` in seconds extends the budget
 | `org_fork_pr_workflows_private_repos` | | `{run_workflows_from_fork_pull_requests, send_write_tokens_to_workflows, send_secrets_and_variables, require_approval_for_fork_pr_workflows}`; otterdog does not manage it: assert that it stays unchanged |
 | `org_cache_storage_limit` | | `{max_cache_size_gb}` of the documented `/organizations/{org}/actions/cache/storage-limit` |
 | `org_cache_storage_limit_orgs_path` | | the same through `/orgs/{org}/...`, the path otterdog calls (KB-006 evidence: `unavailable: true` means that path does not work) |
+| `org_immutable_releases` | | the immutable releases policy `{enforced_repositories: all\|none\|selected}` (402/403/404: unavailable) |
+| `org_immutable_releases_repos` | | *list*: names of the repositories the `selected` policy enforces immutable releases for |
 | `org_secret` | `name` | secret metadata (never the value) |
 | `org_dependabot_secret`, `org_codespaces_secret` | `name` | Dependabot or Codespaces secret metadata (otterdog from main d9dac78, #890) |
 | `org_dependabot_secret_repos` | `name` | *list* of the selected repository names of an org Dependabot secret |

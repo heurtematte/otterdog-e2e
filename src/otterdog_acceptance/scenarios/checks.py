@@ -72,6 +72,8 @@ CHECK_KINDS: dict[str, tuple[str, tuple[str, ...]]] = {
     "org_fork_pr_workflows_private_repos": ("org_fork_pr_workflows_private_repos", ()),
     "org_cache_storage_limit": ("org_cache_storage_limit", ()),
     "org_cache_storage_limit_orgs_path": ("org_cache_storage_limit_orgs_path", ()),
+    "org_immutable_releases": ("org_immutable_releases", ()),
+    "org_immutable_releases_repos": ("org_immutable_releases_repositories", ()),
     # organization security, roles, members and invitations
     "security_managers": ("security_managers", ()),
     "org_role_teams": ("org_role_teams", ("name",)),
@@ -126,6 +128,7 @@ LIST_KINDS = frozenset(
         "org_webhook_deliveries",
         "repo_webhook_deliveries",
         "org_actions_selected_repositories",
+        "org_immutable_releases_repos",
         "security_managers",
         "org_role_teams",
         "code_security_defaults",

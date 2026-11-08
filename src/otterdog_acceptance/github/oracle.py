@@ -84,6 +84,7 @@ _GRAPHQL_STATUS = {"NOT_FOUND": 404, "FORBIDDEN": 403}
 # also 402, like otterdog's _get_optional_json in otterdog/providers/github/rest/__init__.py)
 FEATURE_UNAVAILABLE = (403, 404)
 CACHE_LIMIT_UNAVAILABLE = (402, 403, 404)
+IMMUTABLE_RELEASES_UNAVAILABLE = (402, 403, 404)
 # the predefined organization role holding the security managers (the legacy GET /orgs/{org}/security-managers is
 # closing down since 2026-01-01; otterdog itself reads GET /orgs/{org}/organization-roles/{id}/teams)
 SECURITY_MANAGER_ROLE = "security_manager"
@@ -383,6 +384,19 @@ class Oracle:
         manage these settings: use it to check that they stay unchanged)."""
         path = f"/orgs/{self._org}/actions/permissions/fork-pr-workflows-private-repos"
         return self._feature("org_fork_pr_workflows_private_repos", (), path)
+
+    def org_immutable_releases(self) -> dict[str, Any] | None:
+        """GET /orgs/{org}/settings/immutable-releases: the immutable releases policy {enforced_repositories: all |
+        none | selected, ...} (feature lookup, 402/403/404 unavailable: otterdog reads 404 as 'none' and leaves the
+        setting unset on 402/403, otterdog/providers/github/rest/org_client.py:138-156)."""
+        path = f"/orgs/{self._org}/settings/immutable-releases"
+        return self._feature("org_immutable_releases", (), path, unavailable=IMMUTABLE_RELEASES_UNAVAILABLE)
+
+    def org_immutable_releases_repositories(self) -> list[str]:
+        """Names of GET /orgs/{org}/settings/immutable-releases/repositories (``repositories``), the repositories the
+        'selected' policy enforces immutable releases for ([] on 409; 403/404 recorded unavailable)."""
+        path = f"/orgs/{self._org}/settings/immutable-releases/repositories"
+        return self._selected_repositories("org_immutable_releases_repositories", (), path)
 
     def org_cache_storage_limit(self) -> dict[str, Any] | None:
         """GET /organizations/{org}/actions/cache/storage-limit (the documented path): max_cache_size_gb (feature

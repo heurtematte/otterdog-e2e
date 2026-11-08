@@ -605,6 +605,14 @@ class FakeOracle:
         """Stored feature value or None."""
         return self._feature("org_fork_pr_approval")
 
+    def org_immutable_releases(self) -> dict[str, Any] | None:
+        """Stored feature value or None."""
+        return self._feature("org_immutable_releases")
+
+    def org_immutable_releases_repositories(self) -> list[str]:
+        """Stored list or []."""
+        return self._list("org_immutable_releases_repositories")
+
     def org_fork_pr_workflows_private_repos(self) -> dict[str, Any] | None:
         """Stored feature value or None."""
         return self._feature("org_fork_pr_workflows_private_repos")

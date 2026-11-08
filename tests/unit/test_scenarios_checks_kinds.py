@@ -71,6 +71,8 @@ NEW_KINDS = {
     "repo_codespaces_secret",
     "repo_code_security_configuration",
     "repo_immutable_releases",
+    "org_immutable_releases",
+    "org_immutable_releases_repos",
 }
 
 
@@ -131,6 +133,10 @@ def test_actions_and_feature_kinds() -> None:
     ok(oracle, {"kind": "org_selected_actions", "match": {"github_owned_allowed": True}})
     ok(oracle, {"kind": "org_actions_selected_repositories", "contains": [REPO]})
     ok(oracle, {"kind": "org_fork_pr_approval", "match": {"approval_policy": "all_external_contributors"}})
+    oracle.set("org_immutable_releases", value={"enforced_repositories": "selected"})
+    oracle.set("org_immutable_releases_repositories", value=[REPO])
+    ok(oracle, {"kind": "org_immutable_releases", "match": {"enforced_repositories": "selected"}})
+    ok(oracle, {"kind": "org_immutable_releases_repos", "equals": [REPO]})
     ok(oracle, {"kind": "repo_cache_storage_limit", "repo": REPO, "match": {"max_cache_size_gb": 5}})
     ok(oracle, {"kind": "org_cache_storage_limit_orgs_path", "unavailable": True})
     fails(oracle, {"kind": "org_cache_storage_limit_orgs_path", "absent": True}, "cannot be trusted")

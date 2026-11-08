@@ -186,6 +186,27 @@ def test_code_security_configuration_and_immutable_releases(api: responses.Reque
     assert oracle.repo_immutable_releases("r") == {"enabled": False}
 
 
+def test_org_immutable_releases(api: responses.RequestsMock, oracle: Oracle) -> None:
+    """The organization policy: 200 -> the body, 402/403/404 recorded unavailable; its selected repositories: the
+    names of the listing, [] on 409 (the policy is not 'selected')."""
+    url = f"{ORG}/settings/immutable-releases"
+    api.add(responses.GET, url, json={"enforced_repositories": "selected"})
+    api.add(responses.GET, url, status=402, json={"message": "Payment Required"})
+    assert oracle.org_immutable_releases() == {"enforced_repositories": "selected"}
+    assert oracle.org_immutable_releases() is None
+    assert oracle.unavailable == {("org_immutable_releases", FAKE_ORG): 402}
+    url = f"{ORG}/settings/immutable-releases/repositories"
+    api.add(
+        responses.GET,
+        url,
+        json={"total_count": 2, "repositories": [{"name": "e2e-a"}, {"name": "e2e-b"}]},
+        match=per_page(),
+    )
+    api.add(responses.GET, url, status=409, json={"message": "Conflict"})
+    assert oracle.org_immutable_releases_repositories() == ["e2e-a", "e2e-b"]
+    assert oracle.org_immutable_releases_repositories() == []
+
+
 def test_dependabot_and_codespaces_secrets(api: responses.RequestsMock, oracle: Oracle) -> None:
     """Organization and repository Dependabot and Codespaces secrets: metadata, None on 404, selected repositories."""
     api.add(responses.GET, f"{ORG}/dependabot/secrets/S", json={"name": "S", "visibility": "selected"})
