@@ -201,6 +201,29 @@ def test_each_step_gets_its_workspace_layout(tmp_path: Path, vendored: list[Path
     assert "orgs.newOrg('e2e-offline', 'e2e-offline')" in jsonnet_write
 
 
+def test_a_local_template_layout_copies_the_template(
+    tmp_path: Path, vendored: list[Path], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A step with local_template gets the SUT's template copied into that directory of the workspace (once per
+    switch), besides or instead of the vendored copy; the next default step only vendors again."""
+    copies: list[tuple[Path, Path, Path]] = []
+    monkeypatch.setattr(sut_template, "copy_template", lambda src, target, *, root: copies.append((src, target, root)))
+    fake = cli(strict=False)
+    for _ in range(3):
+        fake.queue("validate", canned("validate", validated()))
+    text = (
+        "id: o.local\ntitle: local\nsteps:\n"
+        "  - {name: local, fragments: {}, workspace: {vendor: false, local_template: local/template}}\n"
+        "  - {name: same, fragments: {}, workspace: {vendor: false, local_template: local/template}}\n"
+        "  - {name: default, fragments: {}}\n"
+    )
+    outcome = engine(fake).run(write(tmp_path, text, "local"))
+    assert outcome.ok, outcome.failures
+    root = fake.workspace.root
+    assert copies == [(Path("/nonexistent/template"), root / "local" / "template", root)]
+    assert vendored == [root / "orgs" / OFFLINE_ORG, root / "orgs" / OFFLINE_ORG]
+
+
 def test_steps_without_workspace_never_touch_the_layout(tmp_path: Path) -> None:
     """Stand-in workspaces without a layout keep working while no step asks for one; a step that does fails."""
 

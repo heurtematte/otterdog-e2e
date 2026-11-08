@@ -238,6 +238,17 @@ def dir_name_problem(value: Any, what: str) -> str | None:
     return None
 
 
+def relative_dir_problem(value: Any, what: str) -> str | None:
+    """Why ``value`` cannot be a directory below the workspace root given as a relative path (segments of
+    dir_name_problem joined with '/', no '.' or '..'), None when it can."""
+    if not isinstance(value, str) or not value or any(dir_name_problem(part, what) for part in value.split("/")):
+        return (
+            f"{what} {value!r} is not a relative directory ([A-Za-z0-9_][A-Za-z0-9_.-]* segments separated by '/', "
+            "no '.' or '..')"
+        )
+    return None
+
+
 def jsonnet_config_text(document: Mapping[str, Any]) -> str:
     """otterdog.jsonnet holding ``document`` behind a jsonnet ``local`` (a JSON parser would refuse it, so a working
     command proves otterdog evaluated it as jsonnet)."""
@@ -265,6 +276,10 @@ class WorkspaceLayout:
     * ``config_dir``: ``defaults.jsonnet.config_dir``; the org configs live in ``<root>/<config dir>/<org>/`` with
       the override's ``jsonnet.config_dir`` winning (ConfigWorkspace.config_dir);
     * ``vendor``: False tells the engines not to vendor the template (the workspace itself never vendors);
+    * ``local_template``: a directory below the root (relative_dir_problem) the engines copy the SUT's template into,
+      for a local base template (eclipse-csi/otterdog#917: a ``base_template`` path, which otterdog links as
+      ``vendor/<directory name>`` of the organization); the step names it in ``defaults_override`` or ``org_entry``
+      (None: no copy);
     * ``document``: a complete document written as it is instead of the generated one (Python tests only: the YAML
       ``workspace`` key cannot set it), e.g. one without ``defaults.jsonnet.base_template``.
 
@@ -278,6 +293,7 @@ class WorkspaceLayout:
     base_url: str | None = None
     config_dir: str = CONFIG_DIR
     vendor: bool = True
+    local_template: str | None = None
     document: Mapping[str, Any] | None = None
 
     def __post_init__(self) -> None:
@@ -312,6 +328,10 @@ class WorkspaceLayout:
         override_dir = _override_config_dir(self.defaults_override)
         if override_dir is not None:
             problem = dir_name_problem(override_dir, "defaults_override.jsonnet.config_dir")
+            if problem:
+                raise ValueError(problem)
+        if self.local_template is not None:
+            problem = relative_dir_problem(self.local_template, "local_template")
             if problem:
                 raise ValueError(problem)
 

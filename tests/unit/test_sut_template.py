@@ -20,6 +20,7 @@ from otterdog_acceptance.sut.template import (
     TemplatePublisher,
     TemplateRef,
     content_hash8,
+    copy_template,
     git_blob_sha,
     hide_template_functions,
     needs_publisher,
@@ -158,6 +159,29 @@ def test_vendor_template_offline_and_subdir(tmp_path: Path) -> None:
         vendor_template(src, org_dir, TemplateRef("u", "template", "missing.libsonnet", "offline"))
     with pytest.raises(ValueError):
         vendor_template(src, org_dir, TemplateRef("u", "..", "otterdog-defaults.libsonnet", "offline"))
+
+
+def test_copy_template_into_a_local_template_directory(tmp_path: Path) -> None:
+    """copy_template writes every *.libsonnet into the directory (created), keeps its other files, replaces a link
+    planted in place of a template file without following it and refuses a directory outside the root."""
+    sut = make_sut(tmp_path)
+    src = sut.source_dir / "examples" / "template"
+    (src / "hook.py").write_text("print('never copied')\n")
+    workspace = tmp_path / "ws"
+    target = workspace / "orgs"
+    (target / "o").mkdir(parents=True)
+    outside = tmp_path / "outside.libsonnet"
+    outside.write_text("{}")
+    (target / "otterdog-defaults.libsonnet").symlink_to(outside)
+    written = copy_template(src, target, root=workspace)
+    assert sorted(path.name for path in written) == sorted(TEMPLATE)
+    assert sorted(path.name for path in target.iterdir()) == sorted([*TEMPLATE, "o"])
+    assert not (target / "otterdog-defaults.libsonnet").is_symlink() and outside.read_text() == "{}"
+    assert (target / "otterdog-defaults.libsonnet").read_text() == TEMPLATE["otterdog-defaults.libsonnet"]
+    with pytest.raises(SafetyError, match="resolves outside"):
+        copy_template(src, tmp_path / "elsewhere", root=workspace)
+    with pytest.raises(FileNotFoundError):
+        copy_template(tmp_path / "empty", target, root=workspace)
 
 
 def test_vendor_template_writes_hook_files_at_the_template_root(tmp_path: Path) -> None:

@@ -1183,6 +1183,31 @@ features:
     covered_by: [tests/offline/test_config_loading.py::test_invalid_template_url, tests/offline/test_config_loading.py::test_organization_entry_variants]
     notes: "Also 'failed to parse file from template url' (no fragment)"
 
+  - id: config.local-base-template
+    area: config
+    title: "base_template as a local path (#917): relative to otterdog.json, linked as vendor/<directory name> on every run (--local included); missing file and a template directory holding the organization are load errors"
+    source: ["otterdog/config.py:134-137", "otterdog/jsonnet.py:80-100", "otterdog/jsonnet.py:144-148", "otterdog/jsonnet.py:533-556", "otterdog/utils.py:517-519"]
+    operations: [config, error]
+    min_plan: free
+    tier: offline
+    ui_only: false
+    priority: P2
+    status: partial
+    covered_by: [O-VAL-LOCAL-BASE-TEMPLATE]
+    known_bugs: [KB-084]
+    notes: "sources at main a196494 (1.8.0.dev). Offline (O-VAL-LOCAL-BASE-TEMPLATE, fixed_in 1.8.0): a relative default and a relative organization base_template validate, plan and show without a vendored copy; a missing local file (a vendored copy present) and a template directory holding the organization stop the loading (exit 2); a null organization base_template escapes as a TypeError (KB-084). Not covered: absolute and '~' paths (the workspace root differs between the host and a container), the template's own imports and validation scripts through the link, the webapp (unchanged, URL templates only)."
+    gap_outline:
+      scenario: O-LOCAL-BASE-TEMPLATE-PATHS
+      file: tests/offline/test_config_loading.py
+      steps:
+        - "Python test on a host runtime: base_template set to the absolute path of a copy of the template, then to '~/<dir>/<file>' with HOME inside the workspace"
+        - "the copy imports a sibling libsonnet and carries a validate-org-settings.py script"
+      assertions:
+        - "validate --local succeeds for both paths and the script runs (its validation error is reported)"
+      needs:
+        - "offline"
+        - "available: WorkspaceLayout(local_template=...), OtterdogCli.invoke(..., env={'HOME': ...})"
+
   - id: config.template-clone
     area: config
     title: "non-local runs clone the template (unauthenticated) into <config_dir>/templates/<owner>/<repo>/<ref>, pull branch refs, never refresh tags/SHAs, copy into vendor/"

@@ -185,12 +185,22 @@ def test_clean_template_cache_and_export_follow_the_layout(tmp_path: Path) -> No
         ({"org_entry": ["x"]}, "must be a mapping"),
         ({"org_entry": {"github_id": "x"}}, r"unknown key\(s\) \['github_id'\]"),
         ({"org_entry": {"credentials": None}}, r"unknown key\(s\) \['credentials'\]"),
+        ({"local_template": "../out"}, "is not a relative directory"),
+        ({"local_template": "/abs/template"}, "is not a relative directory"),
+        ({"local_template": "a/./template"}, "is not a relative directory"),
+        ({"local_template": ""}, "is not a relative directory"),
     ],
 )
 def test_invalid_layouts_are_refused(kwargs: dict[str, object], match: str) -> None:
     """Unknown formats, directories leaving the workspace and badly typed entries are ValueErrors."""
     with pytest.raises(ValueError, match=match):
         WorkspaceLayout(**kwargs)  # type: ignore[arg-type]
+
+
+def test_local_template_is_a_relative_directory() -> None:
+    """local_template names a directory below the root, nested or not; the engines copy the template there."""
+    assert WorkspaceLayout(local_template="local-templates/template").local_template == "local-templates/template"
+    assert not WorkspaceLayout(local_template="orgs").is_default
 
 
 def test_layout_lists_become_tuples_and_compare_by_value() -> None:

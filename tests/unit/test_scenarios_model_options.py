@@ -153,6 +153,7 @@ workspace:
   base_url: https://otterdog-e2e.invalid/base
   config_dir: orgs-alt
   vendor: false
+  local_template: local-templates/template
 """
 
 
@@ -162,6 +163,7 @@ def test_offline_workspace_layout(tmp_path: Path) -> None:
     assert step.offline and isinstance(step.workspace, WorkspaceLayout)
     layout = step.workspace
     assert (layout.format, layout.config_dir, layout.vendor) == ("jsonnet", "orgs-alt", False)
+    assert layout.local_template == "local-templates/template"
     assert layout.effective_config_dir == "orgs-override" and layout.base_url == "https://otterdog-e2e.invalid/base"
     rendered = render_step(step, {**VARIABLES, "org": "e2e-offline"}).workspace
     assert rendered.orgs[0] == "e2e-offline-2" and rendered.orgs[1] == {"github_id": "e2e-archived", "archived": True}
@@ -196,6 +198,8 @@ def test_offline_workspace_layout(tmp_path: Path) -> None:
         ("workspace: {org_entry: [name]}", "expected a mapping"),
         ("workspace: {defaults_override: {secrets: {provider: pass}}}", r"unknown key\(s\) \['provider'\]"),
         ("workspace: {vendor: no-thanks}", "expected true or false"),
+        ("workspace: {local_template: ../out}", "is not a relative directory"),
+        ("workspace: {local_template: /tmp/template}", "is not a relative directory"),
     ],
 )
 def test_offline_workspace_refusals(tmp_path: Path, step: str, match: str) -> None:
@@ -323,4 +327,5 @@ def test_schema_knows_the_new_keys() -> None:
         "base_url",
         "config_dir",
         "vendor",
+        "local_template",
     }

@@ -9,14 +9,14 @@ otterdog feature coverage of the e2e battery
 
 Inventory of otterdog main @d9dac78 (after v1.7.1; release:latest is v1.7.1), first built at main 9bdeb75 (after v1.6.1): every CLI command and its flags, every property of the configuration model grouped by feature, validation rules, diff semantics, the webapp (webhook events, comment commands, tasks, auto-merge, apply, blueprints, policies, /api and /internal), the webhook receiver contract and notable CHANGELOG fixes, mapped to the existing scenarios and tests of this repository. Gaps and partial coverage carry the outline of the missing test.
 
-**361 features** in 27 areas: 309 covered, 41 partial, 11 gaps; covered 86%, weighted 91% (a partial feature counts half). *Offline-verified* counts the covered or partial features with at least one covering item in the offline tier; *live-verified* those with a recorded green live run of their covering items (`verified_on`: target, SUT, run id, date); *unverified* the others: their coverage is implemented but has never run, so it is a claim, not evidence. A covered feature needs at least one covering item that runs strictly on the default SUT (not only known-bug xfails or scenarios skipped by `fixed_in`).
+**362 features** in 27 areas: 309 covered, 42 partial, 11 gaps; covered 85%, weighted 91% (a partial feature counts half). *Offline-verified* counts the covered or partial features with at least one covering item in the offline tier; *live-verified* those with a recorded green live run of their covering items (`verified_on`: target, SUT, run id, date); *unverified* the others: their coverage is implemented but has never run, so it is a claim, not evidence. A covered feature needs at least one covering item that runs strictly on the default SUT (not only known-bug xfails or scenarios skipped by `fixed_in`).
 
 ## Summary by area
 
 | Area | Features | Covered | Partial | Gap | Covered % | Weighted % | Offline-verified | Live-verified | Unverified |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
 | [CLI commands and global options](#cli) | 59 | 53 | 6 | 0 | 90% | 95% | 30 | 0 | 29 |
-| [otterdog.json, base template and credentials](#config) | 26 | 14 | 6 | 6 | 54% | 65% | 15 | 0 | 5 |
+| [otterdog.json, base template and credentials](#config) | 27 | 14 | 7 | 6 | 52% | 65% | 16 | 0 | 5 |
 | [Validation rules](#validation) | 38 | 37 | 1 | 0 | 97% | 99% | 37 | 0 | 1 |
 | [Diff engine and plan semantics](#plan-semantics) | 18 | 17 | 1 | 0 | 94% | 97% | 16 | 0 | 2 |
 | [Organization settings](#org-settings) | 14 | 10 | 4 | 0 | 71% | 86% | 3 | 0 | 11 |
@@ -42,13 +42,13 @@ Inventory of otterdog main @d9dac78 (after v1.7.1; release:latest is v1.7.1), fi
 | [Policies](#policies) | 3 | 3 | 0 | 0 | 100% | 100% | 0 | 0 | 3 |
 | [CHANGELOG fixes (regression guards)](#regressions) | 36 | 33 | 1 | 2 | 92% | 93% | 10 | 0 | 24 |
 | [Unmerged otterdog changes (pull requests and local branches)](#pending) | 5 | 4 | 1 | 0 | 80% | 90% | 0 | 0 | 5 |
-| **Total** | 361 | 309 | 41 | 11 | 86% | 91% | 158 | 0 | 192 |
+| **Total** | 362 | 309 | 42 | 11 | 85% | 91% | 159 | 0 | 192 |
 
 ## Summary by tier
 
 | Tier | Features | Covered | Partial | Gap | Covered % | Weighted % | Offline-verified | Live-verified | Unverified |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| `offline` | 117 | 108 | 9 | 0 | 92% | 96% | 117 | 0 | 0 |
+| `offline` | 118 | 108 | 10 | 0 | 92% | 96% | 118 | 0 | 0 |
 | `cli` | 144 | 121 | 18 | 5 | 84% | 90% | 35 | 0 | 104 |
 | `webhooks` | 4 | 3 | 1 | 0 | 75% | 88% | 2 | 0 | 2 |
 | `webapp` | 80 | 68 | 8 | 4 | 85% | 90% | 3 | 0 | 73 |
@@ -61,7 +61,7 @@ Inventory of otterdog main @d9dac78 (after v1.7.1; release:latest is v1.7.1), fi
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
 | P0 | 62 | 62 | 0 | 0 | 100% | 100% | 31 | 0 | 31 |
 | P1 | 142 | 121 | 19 | 2 | 85% | 92% | 65 | 0 | 75 |
-| P2 | 157 | 126 | 22 | 9 | 80% | 87% | 62 | 0 | 86 |
+| P2 | 158 | 126 | 23 | 9 | 80% | 87% | 63 | 0 | 86 |
 
 Tiers:
 
@@ -458,7 +458,7 @@ Details:
 
 ## otterdog.json, base template and credentials
 
-`config`: 26 features, 14 covered, 6 partial, 6 gaps (weighted 65%).
+`config`: 27 features, 14 covered, 7 partial, 6 gaps (weighted 65%).
 
 | Id | Feature | Tier | Plan | Prio | Status | Verified | Covered by |
 |---|---|---|---|---|---|---|---|
@@ -472,6 +472,7 @@ Details:
 | `config.config-dir-layout` | working layout: &lt;config_dir\|orgs&gt;/&lt;github_id&gt;/&lt;github_id&gt;.jsonnet, vendor/&lt;template repo&gt;/, import 'vendor/&lt;repo&gt;/&lt;file&gt;' | offline | free | P1 | covered | offline | `O-VAL-OK`, `cli.repo.lifecycle` |
 | `config.exclude-teams` | defaults.github.exclude_teams (regexes): matching teams are not loaded (import, plan) and configuring one is a validation error | cli | free | P2 | covered | **unverified** | `tests/cli/test_org_config.py::test_excluded_teams_are_neither_loaded_nor_configurable` |
 | `config.template-url` | base_template URL `https://github.com/<owner>/<repo>#<file>@<ref>`: only github.com, ref mandatory (exit 2 at load) | offline | free | P1 | covered | offline | `tests/offline/test_config_loading.py::test_invalid_template_url`, `tests/offline/test_config_loading.py::test_organization_entry_variants` |
+| `config.local-base-template` | base_template as a local path (#917): relative to otterdog.json, linked as vendor/&lt;directory name&gt; on every run (--local included); missing file and a template directory holding the organization are load errors | offline | free | P2 | **partial** | offline | `O-VAL-LOCAL-BASE-TEMPLATE` |
 | `config.template-clone` | non-local runs clone the template (unauthenticated) into &lt;config_dir&gt;/templates/&lt;owner&gt;/&lt;repo&gt;/&lt;ref&gt;, pull branch refs, never refresh tags/SHAs, copy into vendor/ | cli | free | P1 | **partial** | **unverified** | `tests/cli/test_baseline.py::test_baseline_in_sync_after_reset`, `cli.repo.lifecycle` |
 | `config.template-feature-gating` | the template drives what is managed: missing constructors skip a resource type, only template org-settings keys are fetched, hidden '::' fields are unmanaged | cli | free | P2 | **partial** | **unverified** | `tests/cli/test_baseline.py::test_baseline_in_sync_after_reset`, `tests/cli/test_org_config.py::test_hidden_fields_are_unmanaged` |
 | `config.hook.validate-org-settings` | template hook validate-org-settings.py (exec'ed at validation, context.property_equals -&gt; "&lt;h&gt; has '&lt;k&gt;' set to '&lt;v&gt;' but '&lt;r&gt;' is required.") | offline | free | P0 | covered | offline | `tests/offline/test_config_template_hooks.py::test_validate_org_settings_hook`, `tests/offline/test_config_template_hooks.py::test_without_the_hook_the_template_default_validates` |
@@ -531,6 +532,20 @@ Details:
     - Source: `otterdog/utils.py:490-517`, `otterdog/jsonnet.py:51-68`
     - Operations: config, error
     - Notes: Also 'failed to parse file from template url' (no fragment)
+- **`config.local-base-template`** (partial, P2, `offline`): base_template as a local path (#917): relative to otterdog.json, linked as vendor/&lt;directory name&gt; on every run (--local included); missing file and a template directory holding the organization are load errors
+    - Source: `otterdog/config.py:134-137`, `otterdog/jsonnet.py:80-100`, `otterdog/jsonnet.py:144-148`, `otterdog/jsonnet.py:533-556`, `otterdog/utils.py:517-519`
+    - Operations: config, error
+    - Known bugs: KB-084
+    - Notes: sources at main a196494 (1.8.0.dev). Offline (O-VAL-LOCAL-BASE-TEMPLATE, fixed_in 1.8.0): a relative default and a relative organization base_template validate, plan and show without a vendored copy; a missing local file (a vendored copy present) and a template directory holding the organization stop the loading (exit 2); a null organization base_template escapes as a TypeError (KB-084). Not covered: absolute and '\~' paths (the workspace root differs between the host and a container), the template's own imports and validation scripts through the link, the webapp (unchanged, URL templates only).
+    - Suggested: `O-LOCAL-BASE-TEMPLATE-PATHS` in `tests/offline/test_config_loading.py`
+    - Steps:
+        - Python test on a host runtime: base_template set to the absolute path of a copy of the template, then to '\~/&lt;dir&gt;/&lt;file&gt;' with HOME inside the workspace
+        - the copy imports a sibling libsonnet and carries a validate-org-settings.py script
+    - Assert:
+        - validate --local succeeds for both paths and the script runs (its validation error is reported)
+    - Needs:
+        - offline
+        - available: WorkspaceLayout(local_template=...), OtterdogCli.invoke(..., env={'HOME': ...})
 - **`config.template-clone`** (partial, P1, `cli`): non-local runs clone the template (unauthenticated) into &lt;config_dir&gt;/templates/&lt;owner&gt;/&lt;repo&gt;/&lt;ref&gt;, pull branch refs, never refresh tags/SHAs, copy into vendor/
     - Source: `otterdog/jsonnet.py:372-426`
     - Operations: config

@@ -158,6 +158,7 @@ shortened to the relevant lines.
 | KB-081 | org ruleset requiring deployments: AttributeError 'environments' | confirmed | model | step of `O-VAL-ORG-RULESETS` |
 | KB-082 | archiving with a topics change: requests sent after the archiving PATCH | suspected | provider | step of `cli.repo.archive-side-requests` |
 | KB-083 | default branch of an archived repository planned and sent | suspected | model | step of `cli.repo.archive-side-requests` |
+| KB-084 | organization entry with `base_template: null`: TypeError at load (since #917) | confirmed | config | step of `O-VAL-LOCAL-BASE-TEMPLATE` |
 
 ## Issues
 
@@ -2667,3 +2668,30 @@ read-only repository (403 "Repository was archived so is read-only."). The corre
 default branch change of a repository that stays archived plans nothing, like the other read-only fields. Same
 family as KB-058 (topics) and otterdog#924 (team permissions). A live run must confirm GitHub's answer before the
 status becomes confirmed.
+
+### KB-084 — an organization entry with `base_template: null` stops the loading with a TypeError
+
+Status: **confirmed** · Upstream: none · Scenarios: step `organization-template-null` of `O-VAL-LOCAL-BASE-TEMPLATE`
+(scenarios/offline/template/val-local-base-template.yaml)
+
+Evidence: `otterdog/config.py:134-137`, `otterdog/utils.py:517-519` (main a196494).
+
+Since #917 (local base templates, 1.8.0) `OrganizationConfig.from_dict` asks `is_local_template(base_template)`, which
+tests `"://" not in base_template`. An organization entry with `"base_template": null` (the key present, its value
+null) reaches it with `None`: the `TypeError` escapes and every command stops with `Error: argument of type
+'NoneType' is not iterable` (Python 3.14: `... is not a container or iterable`), exit 2, without naming the entry or
+the key. Before #917 the same entry was refused by the template URL parser, `only github.com is supported for template
+urls: b''` (exit 2), not a good message either but one that points at the template. A configuration error naming
+`base_template` and the organization is expected; found by the differential run of #917 (main a196494, offline).
+
+#### Reproduction
+
+```json
+{"organizations": [{"name": "e2e-test-org", "github_id": "e2e-test-org", "base_template": null, "credentials": {"provider": "env", "api_token": "E2E_TOKEN"}}],
+ "defaults": {"jsonnet": {"base_template": "https://github.com/eclipse-csi/otterdog#otterdog/resources/defaults/otterdog-defaults.libsonnet@main"}}}
+```
+
+```console
+$ otterdog validate -c otterdog.json --local e2e-test-org         # exit code 2
+│ Error:   argument of type 'NoneType' is not iterable
+```

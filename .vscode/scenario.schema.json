@@ -1779,6 +1779,13 @@
               "vendor": {
                 "type": "boolean",
                 "description": "false: no vendored template (--local commands fail)"
+              },
+              "local_template": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "directory below the workspace the SUT's template is copied into (a local base_template)"
               }
             },
             "additionalProperties": false

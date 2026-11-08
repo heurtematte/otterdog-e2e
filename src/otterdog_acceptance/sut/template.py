@@ -329,6 +329,24 @@ def vendor_template(
         (vendor_root / name).write_text(source_text, encoding="utf-8")
 
 
+def copy_template(template_src_dir: Path, target_dir: Path, *, root: Path) -> list[Path]:
+    """Copy *.libsonnet of ``template_src_dir`` into ``target_dir``, a local base template (eclipse-csi/otterdog#917:
+    otterdog links the directory of a ``base_template`` path as vendor/<directory name> of the organization).
+
+    ``target_dir`` must resolve inside ``root`` (the workspace, where an untrusted SUT may have left links); the other
+    files of the directory stay (it may be the config dir holding the organizations) and a file of the same name is
+    replaced without following a link (write_private_text). Returns the written files."""
+    from otterdog_acceptance.otterdog.workspace import write_private_text
+
+    sources = sorted(p for p in template_src_dir.glob("*.libsonnet") if p.is_file() and not p.is_symlink())
+    if not sources:
+        raise FileNotFoundError(f"{template_src_dir} has no *.libsonnet")
+    return [
+        write_private_text(target_dir / source.name, source.read_text(encoding="utf-8"), within=root)
+        for source in sources
+    ]
+
+
 HIDDEN_TEMPLATE_SUFFIX = "-sut"
 # template functions the offline local-apply tests hide: since eclipse-csi/otterdog#892 local-apply reads the code
 # security configurations of the organization from GitHub before its plan whenever the template defines them

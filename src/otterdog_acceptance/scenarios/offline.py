@@ -243,7 +243,8 @@ class OfflineEngine:
 
     def use_layout(self, layout: WorkspaceLayout | None) -> None:
         """Switch the workspace to ``layout`` (None = the harness layout) when it is not the current one: write its
-        configuration, then vendor the template into the org dir (``vendor``) or remove the vendored copies."""
+        configuration, then vendor the template into the org dir (``vendor``) or remove the vendored copies, and copy
+        it into the layout's ``local_template`` directory (a local base template)."""
         layout = layout or DEFAULT_LAYOUT
         if layout == self._layout:
             return
@@ -255,6 +256,9 @@ class OfflineEngine:
             sut_template.vendor_template(self.template_src, self.workspace.org_dir, self.workspace.template)
         else:
             self.workspace.clean_template_cache()
+        if layout.local_template is not None:
+            root = self.workspace.root
+            sut_template.copy_template(self.template_src, root / layout.local_template, root=root)
         self._layout = layout
 
     def plan_for(self, scenario: Scenario) -> str:

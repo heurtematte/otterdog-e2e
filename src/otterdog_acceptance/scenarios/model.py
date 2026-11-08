@@ -101,6 +101,7 @@ from otterdog_acceptance.otterdog.workspace import (
     OWN_ORG_ENTRY_KEYS,
     WorkspaceLayout,
     dir_name_problem,
+    relative_dir_problem,
 )
 from otterdog_acceptance.scenarios.checks import validate_check
 from otterdog_acceptance.selection import MODEL_TAGS
@@ -218,7 +219,16 @@ COUNT_KEYS = ("add", "change", "delete")
 # offline step ``workspace`` (otterdog.workspace.WorkspaceLayout); its defaults override may only set these keys (no
 # credential provider settings: a provider would run its CLI or contact a server; ``secrets`` is the secret access
 # policy of eclipse-csi/otterdog#923, patterns of references that offline commands never resolve)
-WORKSPACE_KEYS = ("format", "orgs", "org_entry", "defaults_override", "base_url", "config_dir", "vendor")
+WORKSPACE_KEYS = (
+    "format",
+    "orgs",
+    "org_entry",
+    "defaults_override",
+    "base_url",
+    "config_dir",
+    "vendor",
+    "local_template",
+)
 DEFAULTS_OVERRIDE_KEYS: Mapping[str, tuple[str, ...] | None] = {
     "base_url": None,
     "jsonnet": ("base_template", "config_dir"),
@@ -1061,6 +1071,11 @@ def _parse_workspace(value: Any, where: str) -> WorkspaceLayout | None:
     if orgs is not None and not isinstance(orgs, list):
         raise ScenarioError(f"{where}.orgs: expected a list of organization entries, got {type(orgs).__name__}")
     base_url = data.get("base_url")
+    local_template = data.get("local_template")
+    if local_template is not None:
+        problem = relative_dir_problem(local_template, f"{where}.local_template")
+        if problem:
+            raise ScenarioError(problem)
     try:
         return WorkspaceLayout(
             format=_choice(data.get("format", "json"), CONFIG_FORMATS, f"{where}.format"),
@@ -1070,6 +1085,7 @@ def _parse_workspace(value: Any, where: str) -> WorkspaceLayout | None:
             base_url=None if base_url is None else _str(base_url, f"{where}.base_url"),
             config_dir=config_dir,
             vendor=_bool(data.get("vendor", True), f"{where}.vendor"),
+            local_template=local_template,
         )
     except ScenarioError:
         raise
@@ -1959,6 +1975,10 @@ def json_schema() -> dict[str, Any]:
             "base_url": {"type": ["string", "null"]},
             "config_dir": {"type": "string", "pattern": r"^[A-Za-z0-9_][A-Za-z0-9_.-]*$"},
             "vendor": {"type": "boolean", "description": "false: no vendored template (--local commands fail)"},
+            "local_template": {
+                "type": ["string", "null"],
+                "description": "directory below the workspace the SUT's template is copied into (a local base_template)",
+            },
         },
         "additionalProperties": False,
     }

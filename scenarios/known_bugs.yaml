@@ -1017,3 +1017,15 @@
   upstream: null
   fixed_in: null
   scenarios: []
+
+- id: KB-084
+  title: an organization entry of otterdog.json with base_template null stops the loading with a TypeError ('argument of type 'NoneType' is not iterable') since the local base templates
+  status: confirmed
+  crash_signature: "argument of type 'NoneType' is not"
+  evidence:
+    - otterdog/config.py:134-137
+    - otterdog/utils.py:517-519
+    - "e2e: scenarios/offline/template/val-local-base-template.yaml (step organization-template-null declares the bug)"
+  upstream: null
+  fixed_in: null
+  scenarios: []

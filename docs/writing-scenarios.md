@@ -894,6 +894,7 @@ string, except `config_dir` (a literal directory name).
 | `base_url` | `null` | `defaults.base_url` (default `https://otterdog.invalid`) |
 | `config_dir` | `orgs` | `defaults.jsonnet.config_dir`; the harness writes the org configs and the vendored template to `<config dir>/e2e-offline/`, the override's `jsonnet.config_dir` winning (one path segment) |
 | `vendor` | `true` | `false`: no vendored template, `--local` commands then fail with `template file '...' does not exist` |
+| `local_template` | `null` | a directory below the workspace root (`a/b`, no `..`) the engine copies the SUT's template (`*.libsonnet`) into, for a local base template (otterdog#917): set `base_template` to its path in `defaults_override.jsonnet` or `org_entry`, and name its last directory `template` (the directory of `import_path`) so the rendered import resolves through the `vendor/template` link otterdog creates |
 
 ```yaml
 id: offline.example.workspace

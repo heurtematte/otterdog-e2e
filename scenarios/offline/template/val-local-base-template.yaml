@@ -1,0 +1,99 @@
+# Offline tier (battery, configuration): a base template given as a local path (eclipse-csi/otterdog#917).
+id: O-VAL-LOCAL-BASE-TEMPLATE
+tier: offline
+title: A base template given as a local path is linked into the organization and evaluated
+description: >-
+  Since #917 (main after v1.7.1) a base_template without '://' (defaults.jsonnet.base_template or the base_template of
+  an organization) is the path of a local .libsonnet file, relative to the directory of otterdog.json:
+  OrganizationConfig.from_dict joins it with the working directory and JsonnetConfig._init_local_base_template links
+  its directory as vendor/<directory name> of the organization on every run, --local included (nothing to clone), so
+  the configuration's import 'vendor/<directory name>/<file>' and the template's own imports resolve as for a template
+  of a repository. The harness copies the SUT's standard template into a directory named after its offline template
+  repository ('template', the directory of import_path) and does not vendor it, so a working command proves the local
+  file was evaluated; a missing file and a template directory that contains the organization configuration are load
+  errors (exit 2), and so should be a null base_template of an organization (KB-084: a TypeError since #917). Older
+  SUTs only accept https://github.com/ URLs and skip the scenario; absolute and '~' paths stay untested (the
+  workspace root differs between the host and a container).
+priority: P2
+tags: [offline, template]
+observe: true
+fixed_in: 1.8.0
+variables: {plan: free}
+references:
+  - pr: 917
+    note: >-
+      "feat: support a local base template" (head a0e0694, squash 95af217, 1.8.0): head links the local template and
+      evaluates the configuration, or reports the missing file and the template directory holding the organization;
+      base refuses every path with "only github.com is supported for template urls: " (exit 2). The base_template
+      URLs of every other scenario must not change. Step organization-template-null is a regression of #917 (KB-084,
+      a TypeError instead of base's template url error), left undeclared.
+    expected_deltas:
+      - {step: relative-default-template, kind: cli, key: validate}
+      - {step: relative-default-template, kind: cli, key: local-plan}
+      - {step: relative-default-template, kind: cli, key: show}
+      - {step: relative-default-template, kind: cli, key: show-default}
+      - {step: relative-organization-template, kind: cli, key: validate}
+      - {step: relative-organization-template, kind: cli, key: show}
+      - {step: missing-local-template, kind: cli, key: validate}
+      - {step: missing-local-template, kind: cli, key: show}
+      - {step: template-directory-contains-the-organization, kind: cli, key: validate}
+      - {step: template-directory-contains-the-organization, kind: cli, key: show}
+steps:
+  - name: relative-default-template
+    workspace:
+      vendor: false
+      local_template: local-templates/template
+      defaults_override: {jsonnet: {base_template: local-templates/template/otterdog-defaults.libsonnet}}
+    base_fragments: {}
+    fragments:
+      repositories: ["orgs.newRepo('{{ p }}-local') { description: 'otterdog e2e: local base template' }"]
+    validate: {ok: true, errors: 0, exit_code: 0}
+    plan:
+      expect: changes
+      counts: {add: 1, change: 0, delete: 0}
+      contains: ['+ add repository[name="{{ p }}-local"]']
+    commands:
+      show-default: {exit_code: 0, contains: ["newRepo"]}
+  - name: relative-organization-template
+    # the default stays the harness URL; the organization entry names the local file
+    workspace:
+      vendor: false
+      local_template: local-templates/template
+      org_entry: {base_template: local-templates/template/otterdog-defaults.libsonnet}
+    fragments:
+      repositories: ["orgs.newRepo('{{ p }}-local') { description: 'otterdog e2e: local base template' }"]
+    validate: {ok: true, errors: 0, exit_code: 0}
+  - name: missing-local-template
+    # a vendored copy of the template exists, the local file does not: otterdog checks the local file
+    workspace:
+      defaults_override: {jsonnet: {base_template: absent/template/otterdog-defaults.libsonnet}}
+    fragments: {}
+    validate:
+      ok: false
+      exit_code: 2
+      contains: ["Error: local base template '", "/absent/template/otterdog-defaults.libsonnet' does not exist"]
+  - name: template-directory-contains-the-organization
+    workspace:
+      vendor: false
+      local_template: orgs
+      defaults_override: {jsonnet: {base_template: orgs/otterdog-defaults.libsonnet}}
+    fragments: {}
+    validate:
+      ok: false
+      exit_code: 2
+      contains:
+        - "Error: the directory '"
+        - >-
+          /orgs' of the local base template contains the configuration of organization '{{ org }}', move the template
+          into a directory of its own
+  - name: organization-template-null
+    # a null base_template of an organization entry is a configuration error, never a Python error (KB-084: since
+    # #917 is_local_template tests "'://' not in None" and the TypeError escapes)
+    known_bug: KB-084
+    workspace:
+      org_entry: {base_template: null}
+    fragments: {}
+    validate:
+      ok: false
+      exit_code: 2
+      not_contains: ["NoneType"]
