@@ -197,10 +197,35 @@ def test_inventory_loads_and_names_unknown_endpoints(tmp_path: Path) -> None:
     ) == ["PUT /orgs/{org}/x"]
 
 
+UNTESTABLE = (
+    "  - {endpoint: 'DELETE /orgs/{org}/teams/{name}/external-groups', source: tc.py:3, trigger: t, untestable: %s}\n"
+)
+
+
+def test_inventory_untestable_endpoints(tmp_path: Path) -> None:
+    """An entry of the CLI with ``untestable: <reason>`` is listed by untestable() and is not testable; the others
+    are testable unless the webapp sends them."""
+    path = tmp_path / "api_endpoints.yaml"
+    path.write_text(INVENTORY % ("a" * 40) + UNTESTABLE % "'needs Enterprise Managed Users'")
+    inventory = load_inventory(path)
+    assert inventory.untestable() == {
+        "DELETE /orgs/{org}/teams/{name}/external-groups": "needs Enterprise Managed Users"
+    }
+    assert [entry.testable for entry in inventory.endpoints] == [True, False, False]
+    assert inventory.endpoints[2].untestable == "needs Enterprise Managed Users"
+    assert "DELETE /orgs/{org}/teams/{name}/external-groups" in inventory.names()
+
+
 @pytest.mark.parametrize(
     ("text", "message"),
     [
         (INVENTORY % "main", "otterdog.ref"),
+        (INVENTORY % ("a" * 40) + UNTESTABLE % "''", "'untestable' must be a non-empty string"),
+        (INVENTORY % ("a" * 40) + UNTESTABLE % "true", "'untestable' must be a non-empty string"),
+        (
+            INVENTORY % ("a" * 40) + "  - {endpoint: 'POST /x', source: x, trigger: y, scope: webapp, untestable: z}\n",
+            "'untestable' only applies to scope cli",
+        ),
         (INVENTORY % ("a" * 40) + "  - {endpoint: 'GET /orgs/{org}', source: x, trigger: y}\n", "not a write request"),
         (INVENTORY % ("a" * 40) + "  - {endpoint: 'mutation minimizeComment', source: x, trigger: y}\n", "duplicate"),
         (INVENTORY % ("a" * 40) + "  - {endpoint: 'POST /orgs/{org}/repos', source: x}\n", "'trigger' must be"),

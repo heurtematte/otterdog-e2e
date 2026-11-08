@@ -1181,9 +1181,14 @@ def section_api_writes(data: RunData) -> str:
     ]
     inventory = _api_inventory(data)
     if inventory is not None:
-        missing = [e.endpoint for e in inventory.endpoints if e.scope == "cli" and e.endpoint not in sent]
+        missing = [e.endpoint for e in inventory.endpoints if e.testable and e.endpoint not in sent]
+        untestable = sum(1 for e in inventory.endpoints if e.scope == "cli" and not e.testable)
         unknown = sorted(endpoint for endpoint in sent if endpoint not in inventory.names())
         lines += ["", f"{len(missing)} endpoint(s) of scenarios/api_endpoints.yaml sent by no command of this run."]
+        if untestable:
+            lines[-1] += (
+                f" Not counted: {untestable} marked untestable (no test organization makes otterdog send them)."
+            )
         if unknown:
             lines += ["", f"**Not in the inventory** (add them): {', '.join(f'`{e}`' for e in unknown)}"]
     return "\n".join(lines)

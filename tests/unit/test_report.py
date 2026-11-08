@@ -853,8 +853,12 @@ def test_summary_lists_the_write_requests_of_the_scenario_commands(live_run: Pat
         "otterdog: {ref: " + "a" * 40 + "}\nendpoints:\n"
         "  - {endpoint: 'PATCH /repos/{owner}/{repo}', source: s, trigger: t}\n"
         "  - {endpoint: 'DELETE /repos/{owner}/{repo}', source: s, trigger: t}\n"
+        "  - {endpoint: 'DELETE /orgs/{org}/teams/{name}/external-groups', source: s, trigger: t, untestable: EMU}\n"
     )
     text = summary_text(RunData.load(live_run, coverage_file=matrix))
     assert "## GitHub write requests" in text and "| `PATCH /repos/{owner}/{repo}` | 1 |" in text
-    assert "1 endpoint(s) of scenarios/api_endpoints.yaml sent by no command of this run." in text
+    assert (
+        "1 endpoint(s) of scenarios/api_endpoints.yaml sent by no command of this run. Not counted: 1 marked "
+        "untestable (no test organization makes otterdog send them)." in text
+    )
     assert "**Not in the inventory** (add them): `PUT /orgs/{org}/x/{name}`" in text

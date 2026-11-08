@@ -16,7 +16,9 @@ is then skipped with a note (``API_USAGE_SINCE``).
 
 ``scenarios/api_endpoints.yaml`` is the inventory of the write requests otterdog sends (load_inventory); every
 endpoint a scenario names must be in it, and docs/api-coverage.md, generated from both, shows which ones a scenario
-asserts.
+asserts. An entry of the CLI may carry ``untestable: <reason>`` when no test organization can make otterdog send it
+(team synchronization needs SAML SSO with an identity provider, external groups need Enterprise Managed Users): the
+documentation lists it apart instead of as a gap, and a scenario asserting it as sent is a problem.
 """
 
 from __future__ import annotations
@@ -41,7 +43,7 @@ ENDPOINT_RE = re.compile(
     r"|(?P<operation>query|mutation) (?P<name>[A-Za-z][A-Za-z0-9_-]*))$"
 )
 INVENTORY_FILE = Path("scenarios") / "api_endpoints.yaml"
-INVENTORY_KEYS = ("endpoint", "source", "trigger", "feature", "scope", "notes")
+INVENTORY_KEYS = ("endpoint", "source", "trigger", "feature", "scope", "notes", "untestable")
 INVENTORY_SCOPES = ("cli", "webapp")  # who sends it: the CLI (plan/apply/import) or only the webapp
 
 
@@ -145,7 +147,8 @@ def api_problems(spec: ApiSpec, usage: ApiUsage, *, what: str = "apply") -> list
 @dataclass(frozen=True)
 class InventoryEndpoint:
     """One write request otterdog sends: where (``source``), on which configuration change (``trigger``), the
-    coverage feature it belongs to, and whether the CLI or only the webapp sends it."""
+    coverage feature it belongs to, whether the CLI or only the webapp sends it, and, for a request of the CLI that no
+    test organization can make otterdog send (an identity provider, Enterprise Managed Users), why (``untestable``)."""
 
     endpoint: str
     source: str
@@ -153,6 +156,12 @@ class InventoryEndpoint:
     feature: str | None = None
     scope: str = "cli"
     notes: str | None = None
+    untestable: str | None = None
+
+    @property
+    def testable(self) -> bool:
+        """A request of the CLI that a step of a live scenario can make otterdog send (and assert)."""
+        return self.scope == "cli" and self.untestable is None
 
 
 @dataclass(frozen=True)
@@ -165,6 +174,10 @@ class ApiInventory:
     def names(self) -> set[str]:
         """Every endpoint of the inventory."""
         return {entry.endpoint for entry in self.endpoints}
+
+    def untestable(self) -> dict[str, str]:
+        """endpoint -> the reason no test organization can make otterdog send it (the ``untestable`` entries)."""
+        return {entry.endpoint: entry.untestable for entry in self.endpoints if entry.untestable is not None}
 
 
 def load_inventory(path: Path) -> ApiInventory:
@@ -203,6 +216,14 @@ def load_inventory(path: Path) -> ApiInventory:
         scope = item.get("scope", "cli")
         if scope not in INVENTORY_SCOPES:
             problems.append(f"{where} ({endpoint}): scope must be one of {list(INVENTORY_SCOPES)}")
+        untestable = item.get("untestable")
+        if "untestable" in item and (not isinstance(untestable, str) or not untestable.strip()):
+            problems.append(f"{where} ({endpoint}): 'untestable' must be a non-empty string (why it cannot be tested)")
+            untestable = None
+        elif untestable is not None and scope != "cli":
+            problems.append(
+                f"{where} ({endpoint}): 'untestable' only applies to scope cli (no step asserts the webapp)"
+            )
         entries.append(
             InventoryEndpoint(
                 endpoint,
@@ -211,6 +232,7 @@ def load_inventory(path: Path) -> ApiInventory:
                 item.get("feature"),
                 scope,
                 item.get("notes"),
+                untestable,
             )
         )
     if problems:

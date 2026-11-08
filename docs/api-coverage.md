@@ -4,17 +4,17 @@
 
 Every write request otterdog sends to GitHub (REST `POST`, `PUT`, `PATCH`, `DELETE` and GraphQL mutations), listed in [scenarios/api_endpoints.yaml](../scenarios/api_endpoints.yaml) at otterdog `a196494`, and the live scenario steps whose `apply.api` asserts it. A step asserts the requests of its apply from otterdog's request statistics (otterdog 1.7.0 and later, [writing scenarios](writing-scenarios.md#http-requests-of-an-apply)): `sent` means the apply sent at least one such request, `not sent` that it sent none (for instance no `PATCH /repos/{owner}/{repo}` when only `team_permissions` change, otterdog#924).
 
-**94 of 101** endpoints the CLI sends are asserted as sent by at least one step.
+**94 of 98** testable endpoints the CLI sends are asserted as sent by at least one step; 3 more cannot be tested on a test organization ([not testable](#not-testable)).
 
-| Method | Asserted sent | Endpoints |
-|---|---:|---:|
-| POST | 17 | 19 |
-| PUT | 34 | 35 |
-| PATCH | 12 | 14 |
-| DELETE | 28 | 30 |
-| mutation | 3 | 3 |
+| Method | Asserted sent | Testable endpoints | Not testable |
+|---|---:|---:|---:|
+| POST | 17 | 19 | 0 |
+| PUT | 34 | 35 | 0 |
+| PATCH | 12 | 12 | 2 |
+| DELETE | 28 | 29 | 1 |
+| mutation | 3 | 3 | 0 |
 
-Endpoints nobody asserts yet are the gaps of this page: a scenario that adds, changes or removes the object should name them in the `apply.api.sent` of the step (the `fill-coverage-gap` skill).
+Testable endpoints nobody asserts yet are the gaps of this page: a scenario that adds, changes or removes the object should name them in the `apply.api.sent` of the step (the `fill-coverage-gap` skill).
 
 ## Endpoints
 
@@ -47,11 +47,11 @@ Endpoints nobody asserts yet are the gaps of this page: a scenario that adds, ch
 | `DELETE /orgs/{org}/teams/{name}` | a team is removed (apply -d) | `cli.team/remove` |  |
 | `PUT /orgs/{org}/teams/{name}/memberships/{name}` | a member is added to a team (or a maintainer's role changes) | `cli.team.members/approver`, `cli.team.members/author` |  |
 | `DELETE /orgs/{org}/teams/{name}/memberships/{name}` | a member is removed from a team | `cli.team.members/approver` |  |
-| `PATCH /orgs/{org}/teams/{name}/team-sync/group-mappings` | a team's identity provider groups change (team sync, enterprise, | **none** |  |
-| `PATCH /orgs/{org}/teams/{name}/external-groups` | a team's external group is set (enterprise managed users, | **none** |  |
-| `DELETE /orgs/{org}/teams/{name}/external-groups` | a team's external group is removed (enterprise managed users, | **none** |  |
+| `PATCH /orgs/{org}/teams/{name}/team-sync/group-mappings` | a team's identity provider groups change (team sync, enterprise, otterdog#911) | _not testable_ |  |
+| `PATCH /orgs/{org}/teams/{name}/external-groups` | a team's external group is set (enterprise managed users, otterdog#911) | _not testable_ |  |
+| `DELETE /orgs/{org}/teams/{name}/external-groups` | a team's external group is removed (enterprise managed users, otterdog#911) | _not testable_ |  |
 | `PUT /orgs/{org}/teams/{name}/repos/{owner}/{repo}` | a team is added to a repository's team_permissions or its permission changes | `cli.team/create`, `cli.team/update`, `regression.archived-repo-team-permissions/archived-change`, `regression.archived-repo-team-permissions/create`, `regression.archived-repo-team-permissions/permission-only` | `regression.archived-repo-team-permissions/archive`, `regression.archived-repo-team-permissions/archived-remove` |
-| `DELETE /orgs/{org}/teams/{name}/repos/{owner}/{repo}` | a team is removed from a repository's team_permissions (KB-005 fixed in 1.7.0, | `cli.kb.team-permissions-removal/remove-permission`, `regression.archived-repo-team-permissions/archived-remove` | `regression.archived-repo-team-permissions/archive` |
+| `DELETE /orgs/{org}/teams/{name}/repos/{owner}/{repo}` | a team is removed from a repository's team_permissions (KB-005 fixed in 1.7.0, otterdog#842) | `cli.kb.team-permissions-removal/remove-permission`, `regression.archived-repo-team-permissions/archived-remove` | `regression.archived-repo-team-permissions/archive` |
 | `POST /orgs/{org}/hooks` | an organization webhook is added | `cli.org.webhook/create` | `cli.org.webhook/update` |
 | `PATCH /orgs/{org}/hooks/{id}` | an organization webhook changes, or --update-webhooks forces it | `cli.org.webhook/update` | `cli.org.webhook/create`, `cli.org.webhook/remove` |
 | `DELETE /orgs/{org}/hooks/{id}` | an organization webhook is removed (apply -d) | `cli.org.webhook/remove` | `cli.org.webhook/update` |
@@ -123,3 +123,13 @@ Endpoints nobody asserts yet are the gaps of this page: a scenario that adds, ch
 | `POST /repos/{owner}/{repo}/pulls` | open-pr opens the pull request of that branch (operations/open_pull_request.py:186) | **none** |  |
 | `POST /repos/{owner}/{repo}/actions/workflows/{name}/dispatches` | the webapp dispatches a workflow (blueprints, policies) | _webapp only_ |  |
 | `mutation minimizeComment` | the webapp minimizes its outdated pull request comments | _webapp only_ |  |
+
+## Not testable
+
+Endpoints of the CLI that no test organization can make otterdog send (`untestable` in the inventory). They are not gaps: a step asserting one of them as sent is refused, a `not_sent` assertion stays possible. Remove the mark when a test organization gets the prerequisite.
+
+| Endpoint | Trigger | Why it cannot be tested |
+|---|---|---|
+| `PATCH /orgs/{org}/teams/{name}/team-sync/group-mappings` | a team's identity provider groups change (team sync, enterprise, otterdog#911) | team synchronization needs an organization on GitHub Enterprise Cloud with SAML single sign-on through an identity provider and team synchronization enabled by an owner (GitHub REST "Team synchronization": "Team synchronization must be enabled to use these endpoints", not available with Enterprise Managed Users); the test organizations are Free organizations and an Enterprise Cloud organization without an identity provider. otterdog reads the groups only when the template defines newTeamSync and skips the mechanism where GitHub answers 400/402/403/404/422 (team_client.py:22, :209-224; docs/reference/organization/team/index.md) |
+| `PATCH /orgs/{org}/teams/{name}/external-groups` | a team's external group is set (enterprise managed users, otterdog#911) | external groups exist only in the organizations of an enterprise with Enterprise Managed Users, provisioned from its identity provider (GitHub REST "External groups": "only available for organizations that are part of an enterprise using Enterprise Managed Users"); no test organization is an EMU organization. otterdog takes 400/402/403/404/422 on GET .../external-groups as "not available" and skips the mechanism (team_client.py:22, :239-253) |
+| `DELETE /orgs/{org}/teams/{name}/external-groups` | a team's external group is removed (enterprise managed users, otterdog#911) | external groups exist only in the organizations of an enterprise with Enterprise Managed Users, provisioned from its identity provider (GitHub REST "External groups": "only available for organizations that are part of an enterprise using Enterprise Managed Users"); no test organization is an EMU organization. otterdog takes 400/402/403/404/422 on GET .../external-groups as "not available" and skips the mechanism (team_client.py:22, :239-253) |

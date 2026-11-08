@@ -235,8 +235,9 @@ Four registries keep the battery honest:
 - **the HTTP request inventory** `scenarios/api_endpoints.yaml`: every write request otterdog sends to GitHub, named
   as otterdog's request statistics name it, with its source and trigger. Live steps assert the requests of their
   apply with `apply.api` (the runner sets `OTTERDOG_STATS_FILE`); `tests/unit/test_api_endpoints.py` refuses an
-  endpoint missing from the inventory and keeps [api-coverage.md](api-coverage.md) current, and every run's
-  `summary.md` lists the write endpoints its scenario commands sent;
+  endpoint missing from the inventory and a step asserting as sent one it marks `untestable` (no test organization
+  can make otterdog send it), keeps [api-coverage.md](api-coverage.md) current, and every run's `summary.md` lists
+  the write endpoints its scenario commands sent;
 - **the known bugs** `scenarios/known_bugs.yaml` ([known-issues.md](known-issues.md)): an item linked to a bug is a
   non-strict xfail scoped to the exception that reports the bug (`KnownBugReproduced` for a YAML scenario,
   `AssertionError` for a Python test; setup and teardown errors are never covered), so a fix shows up as XPASS and a

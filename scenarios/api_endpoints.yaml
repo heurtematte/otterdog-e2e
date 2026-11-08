@@ -15,6 +15,9 @@
 #   feature   the coverage feature of scenarios/coverage.yaml it belongs to
 #   scope     cli (plan/apply/import) or webapp (only the webapp sends it; the cli tier cannot assert it)
 #   notes     caveats (object states, conditions, known bugs)
+#   untestable  (scope cli only) why no test organization can make otterdog send it (a prerequisite none has):
+#             docs/api-coverage.md counts and lists it apart instead of as a gap, and a step asserting it as sent
+#             is refused (src/otterdog_acceptance/api_coverage.py); remove the mark once an organization can
 #
 # Paths were normalized with otterdog's own rest_endpoint at otterdog.ref. The REST clients are
 # otterdog/providers/github/rest/*.py, the GraphQL mutations otterdog/providers/github/graphql.py. Settings that
@@ -148,16 +151,35 @@ endpoints:
     feature: teams.members
   - endpoint: PATCH /orgs/{org}/teams/{name}/team-sync/group-mappings
     source: otterdog/providers/github/rest/team_client.py:232
-    trigger: a team's identity provider groups change (team sync, enterprise, #911)
+    trigger: a team's identity provider groups change (team sync, enterprise, otterdog#911)
     feature: teams.lifecycle
+    untestable: >-
+      team synchronization needs an organization on GitHub Enterprise Cloud with SAML single sign-on through an
+      identity provider and team synchronization enabled by an owner (GitHub REST "Team synchronization": "Team
+      synchronization must be enabled to use these endpoints", not available with Enterprise Managed Users); the test
+      organizations are Free organizations and an Enterprise Cloud organization without an identity provider.
+      otterdog reads the groups only when the template defines newTeamSync and skips the mechanism where GitHub
+      answers 400/402/403/404/422 (team_client.py:22, :209-224; docs/reference/organization/team/index.md)
   - endpoint: PATCH /orgs/{org}/teams/{name}/external-groups
     source: otterdog/providers/github/rest/team_client.py:328
-    trigger: a team's external group is set (enterprise managed users, #911)
+    trigger: a team's external group is set (enterprise managed users, otterdog#911)
     feature: teams.lifecycle
+    untestable: >-
+      external groups exist only in the organizations of an enterprise with Enterprise Managed Users, provisioned
+      from its identity provider (GitHub REST "External groups": "only available for organizations that are part of
+      an enterprise using Enterprise Managed Users"); no test organization is an EMU organization. otterdog takes
+      400/402/403/404/422 on GET .../external-groups as "not available" and skips the mechanism (team_client.py:22,
+      :239-253)
   - endpoint: DELETE /orgs/{org}/teams/{name}/external-groups
     source: otterdog/providers/github/rest/team_client.py:340
-    trigger: a team's external group is removed (enterprise managed users, #911)
+    trigger: a team's external group is removed (enterprise managed users, otterdog#911)
     feature: teams.lifecycle
+    untestable: >-
+      external groups exist only in the organizations of an enterprise with Enterprise Managed Users, provisioned
+      from its identity provider (GitHub REST "External groups": "only available for organizations that are part of
+      an enterprise using Enterprise Managed Users"); no test organization is an EMU organization. otterdog takes
+      400/402/403/404/422 on GET .../external-groups as "not available" and skips the mechanism (team_client.py:22,
+      :239-253)
   - endpoint: PUT /orgs/{org}/teams/{name}/repos/{owner}/{repo}
     source: otterdog/providers/github/rest/repo_client.py:1026
     trigger: a team is added to a repository's team_permissions or its permission changes
@@ -167,7 +189,7 @@ endpoints:
       refused (403) on an archived repository before this request was sent.
   - endpoint: DELETE /orgs/{org}/teams/{name}/repos/{owner}/{repo}
     source: otterdog/providers/github/rest/repo_client.py:1044
-    trigger: a team is removed from a repository's team_permissions (KB-005 fixed in 1.7.0, #842)
+    trigger: a team is removed from a repository's team_permissions (KB-005 fixed in 1.7.0, otterdog#842)
     feature: teams.repository-permissions
 
   # --- organization webhooks ----------------------------------------------------------------------------------------

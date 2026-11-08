@@ -320,6 +320,42 @@ def test_scenario_problems(project: Path, relative: str, text: str, expected: tu
     assert len(found) == 1 and found[0][0] == expected[0] and expected[1] in found[0][1], found
 
 
+def test_live_api_endpoints_are_listed_and_testable(project: Path) -> None:
+    """apply.api names endpoints of scenarios/api_endpoints.yaml (a misspelt one asserts nothing), and never asserts
+    as sent one the inventory marks untestable (no test organization makes otterdog send it); not_sent stays free."""
+    write(
+        project,
+        "scenarios/api_endpoints.yaml",
+        "otterdog: {ref: " + "a" * 40 + "}\nendpoints:\n"
+        "  - {endpoint: 'PATCH /repos/{owner}/{repo}', source: s, trigger: t}\n"
+        "  - {endpoint: 'PATCH /orgs/{org}/teams/{name}/external-groups', source: s, trigger: t, untestable: needs EMU}\n",
+    )
+    idp = "PATCH /orgs/{org}/teams/{name}/external-groups"
+    api = (
+        "    apply:\n      api:\n"
+        f"        sent: ['PATCH /repos/{{owner}}/{{repo}}', '{idp}']\n"
+        "        not_sent: ['DELETE /repos/{owner}/{repo}/x']\n"
+    )
+    write(project, "scenarios/cli/repo/repo.yaml", LIVE + api)
+    missing = (
+        "DELETE /repos/{owner}/{repo}/x is not in scenarios/api_endpoints.yaml: add it there (with its otterdog "
+        "source) or fix it"
+    )
+    untestable = (
+        f"{idp} is marked untestable in scenarios/api_endpoints.yaml (needs EMU): no test organization makes "
+        "otterdog send it"
+    )
+    assert messages(project, "scenarios/cli/repo/repo.yaml") == [
+        ("step update: apply.api.not_sent", missing),
+        ("step update: apply.api.sent", untestable),
+    ]
+    not_sent = (
+        "    apply:\n      api:\n        sent: ['PATCH /repos/{owner}/{repo}']\n" + f"        not_sent: ['{idp}']\n"
+    )
+    write(project, "scenarios/cli/repo/repo.yaml", LIVE + not_sent)
+    assert messages(project, "scenarios/cli/repo/repo.yaml") == []
+
+
 def test_live_known_bug_conventions_and_step_bugs(project: Path) -> None:
     """A live scenario linked to a bug: listed by it, tagged known-bug, not P0; a step-level bug must not list it."""
     text = LIVE.replace("tags: [repo]", "tags: [repo]\nknown_bug: KB-001\npriority: P0")

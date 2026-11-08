@@ -387,7 +387,7 @@ class Checker:
 
     def _api_endpoints(self, path: Path, scenario: Scenario) -> None:
         """The write endpoints of the scenario's ``apply.api`` are in scenarios/api_endpoints.yaml (a misspelt one
-        asserts nothing)."""
+        asserts nothing), and none it asserts as sent is marked untestable there (no test organization sends it)."""
         from otterdog_acceptance.api_coverage import collect_assertions
         from otterdog_acceptance.otterdog.api_usage import INVENTORY_FILE, is_write, load_inventory
 
@@ -395,16 +395,25 @@ class Checker:
         if not assertions:
             return
         try:
-            names = load_inventory(self.root / INVENTORY_FILE).names()
+            inventory = load_inventory(self.root / INVENTORY_FILE)
         except (OSError, ValueError) as exc:
             self.problem(path, "", f"{INVENTORY_FILE} cannot be read: {exc}")
             return
+        names, untestable = inventory.names(), inventory.untestable()
         for assertion in assertions:
+            where = f"step {assertion.step}: apply.api.{assertion.expectation}"
             if is_write(assertion.endpoint) and assertion.endpoint not in names:
                 self.problem(
                     path,
-                    f"step {assertion.step}: apply.api.{assertion.expectation}",
+                    where,
                     f"{assertion.endpoint} is not in {INVENTORY_FILE}: add it there (with its otterdog source) or fix it",
+                )
+            elif assertion.expectation == "sent" and assertion.endpoint in untestable:
+                self.problem(
+                    path,
+                    where,
+                    f"{assertion.endpoint} is marked untestable in {INVENTORY_FILE} "
+                    f"({untestable[assertion.endpoint]}): no test organization makes otterdog send it",
                 )
 
     # --- coverage matrix and known bugs ----------------------------------------------------------------------------

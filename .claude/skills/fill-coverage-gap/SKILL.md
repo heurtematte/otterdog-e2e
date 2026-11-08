@@ -48,6 +48,10 @@ The text after the skill name (`$ARGUMENTS` in Claude Code): a feature id (`conf
    grep '\*\*none\*\*' docs/api-coverage.md                   # the endpoints no step asserts yet
    ```
 
+   Endpoints marked _not testable_ (`untestable: <reason>` in `scenarios/api_endpoints.yaml`, listed apart on the
+   page) are not gaps: no test organization can make otterdog send them, and a step asserting one as sent is
+   refused. Mark an endpoint so only with the reason verified in otterdog's source and GitHub's documentation.
+
    Such a gap is closed by a step of the feature's live scenario that makes otterdog send the request and names it
    in `apply.api.sent` (a removal: a step with `apply: {delete: true}`, the cleanup runs another CLI); prefer
    extending the journey of the object over a new scenario.

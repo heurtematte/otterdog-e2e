@@ -6,10 +6,12 @@ request statistics name them. A live scenario step asserts the requests of its a
 
 * every write endpoint a scenario names is in the inventory (a typo would assert nothing: ``not_sent`` of a misspelt
   endpoint always passes);
+* no step asserts as sent an endpoint the inventory marks ``untestable`` (no test organization can make otterdog
+  send it: the step could never pass, or the mark is wrong);
 * every ``feature`` of the inventory exists in scenarios/coverage.yaml;
 * docs/api-coverage.md is exactly what render_markdown() produces: per endpoint the steps that assert it is sent,
-  the steps that assert it is not, and the endpoints of the CLI no step asserts yet (the gaps), with the shares per
-  HTTP method.
+  the steps that assert it is not, and the testable endpoints of the CLI no step asserts yet (the gaps), with the
+  shares per HTTP method; the untestable endpoints are counted and listed apart with their reason.
 
 tests/unit/test_api_endpoints.py runs these checks (``--write`` regenerates the documentation); ``otterdog-acceptance assist
 check scenarios/api_endpoints.yaml`` reports the same problems.
@@ -115,7 +117,8 @@ class ApiCoverageProject:
         return {str(feature["id"]) for feature in data.get("features", []) if isinstance(feature, dict)}
 
     def problems(self) -> list[str]:
-        """Unknown endpoints named by scenarios, unknown features of the inventory."""
+        """Unknown endpoints named by scenarios, untestable endpoints asserted as sent, unknown features of the
+        inventory."""
         names = self.inventory.names()
         problems = [
             f"{a.label}: apply.api.{a.expectation} names {a.endpoint}, which scenarios/api_endpoints.yaml does not "
@@ -123,6 +126,7 @@ class ApiCoverageProject:
             for a in self.assertions
             if is_write(a.endpoint) and a.endpoint not in names
         ]
+        problems += [untestable_problem(a.label, a.endpoint, reason) for a, reason in self.untestable_assertions()]
         features = self.feature_ids()
         problems += [
             f"api_endpoints.yaml: {entry.endpoint}: unknown feature {entry.feature!r} of scenarios/coverage.yaml"
@@ -142,6 +146,13 @@ class ApiCoverageProject:
         """Every problem (assist check scenarios/api_endpoints.yaml)."""
         return self.problems() + self.markdown_problems()
 
+    def untestable_assertions(self) -> list[tuple[ApiAssertion, str]]:
+        """The ``sent`` assertions of endpoints the inventory marks untestable, with the inventory's reason."""
+        untestable = self.inventory.untestable()
+        return [
+            (a, untestable[a.endpoint]) for a in self.assertions if a.expectation == "sent" and a.endpoint in untestable
+        ]
+
     # --- rendering -------------------------------------------------------------------------------------------------
     def by_endpoint(self) -> dict[str, dict[str, list[str]]]:
         """endpoint -> {"sent": [labels], "not_sent": [labels]} (sorted, unique)."""
@@ -156,12 +167,13 @@ class ApiCoverageProject:
         return result
 
     def shares(self) -> dict[str, tuple[int, int]]:
-        """Per method (POST, PUT, PATCH, DELETE, mutation): (endpoints a step asserts sent, CLI endpoints)."""
+        """Per method (POST, PUT, PATCH, DELETE, mutation): (endpoints a step asserts sent, testable CLI endpoints);
+        the untestable endpoints count in neither (untestable_shares)."""
         asserted = self.by_endpoint()
         totals: Counter[str] = Counter()
         covered: Counter[str] = Counter()
         for entry in self.inventory.endpoints:
-            if entry.scope != "cli":
+            if not entry.testable:
                 continue
             method = method_of(entry.endpoint)
             totals[method] += 1
@@ -169,13 +181,20 @@ class ApiCoverageProject:
                 covered[method] += 1
         return {method: (covered[method], totals[method]) for method in METHOD_ORDER if totals[method]}
 
+    def untestable_shares(self) -> dict[str, int]:
+        """Per method: the CLI endpoints the inventory marks untestable."""
+        counts = Counter(method_of(e.endpoint) for e in self.inventory.endpoints if e.scope == "cli" and not e.testable)
+        return {method: counts[method] for method in METHOD_ORDER if counts[method]}
+
     def render_markdown(self) -> str:
         """docs/api-coverage.md."""
         inventory = self.inventory
         asserted = self.by_endpoint()
         shares = self.shares()
+        not_testable = self.untestable_shares()
         covered = sum(c for c, _ in shares.values())
         total = sum(t for _, t in shares.values())
+        untestable = [entry for entry in inventory.endpoints if entry.scope == "cli" and not entry.testable]
         lines = [
             "# HTTP request coverage",
             "",
@@ -191,15 +210,21 @@ class ApiCoverageProject:
                 "when only `team_permissions` change, otterdog#924)."
             ),
             "",
-            f"**{covered} of {total}** endpoints the CLI sends are asserted as sent by at least one step.",
+            (
+                f"**{covered} of {total}** testable endpoints the CLI sends are asserted as sent by at least one step"
+                + (
+                    f"; {len(untestable)} more cannot be tested on a test organization ([not testable](#not-testable))."
+                    if untestable
+                    else "."
+                )
+            ),
             "",
-            "| Method | Asserted sent | Endpoints |",
-            "|---|---:|---:|",
-            *(f"| {method} | {c} | {t} |" for method, (c, t) in shares.items()),
+            *self._method_table(shares, not_testable),
             "",
             (
-                "Endpoints nobody asserts yet are the gaps of this page: a scenario that adds, changes or removes the "
-                "object should name them in the `apply.api.sent` of the step (the `fill-coverage-gap` skill)."
+                "Testable endpoints nobody asserts yet are the gaps of this page: a scenario that adds, changes or "
+                "removes the object should name them in the `apply.api.sent` of the step (the `fill-coverage-gap` "
+                "skill)."
             ),
             "",
         ]
@@ -208,11 +233,67 @@ class ApiCoverageProject:
         entry: InventoryEndpoint
         for entry in inventory.endpoints:
             found = asserted.get(entry.endpoint, {"sent": [], "not_sent": []})
-            sent = _labels(found["sent"]) or ("_webapp only_" if entry.scope == "webapp" else "**none**")
+            sent = _labels(found["sent"]) or _no_assertion(entry)
             not_sent = _labels(found["not_sent"])
             lines.append(f"| `{entry.endpoint}` | {_cell(entry.trigger)} | {sent} | {not_sent} |")
         lines.append("")
+        if untestable:
+            lines += [
+                "## Not testable",
+                "",
+                (
+                    "Endpoints of the CLI that no test organization can make otterdog send (`untestable` in the "
+                    "inventory). They are not gaps: a step asserting one of them as sent is refused, a `not_sent` "
+                    "assertion stays possible. Remove the mark when a test organization gets the prerequisite."
+                ),
+                "",
+                "| Endpoint | Trigger | Why it cannot be tested |",
+                "|---|---|---|",
+                *(
+                    f"| `{entry.endpoint}` | {_cell(entry.trigger)} | {_cell(entry.untestable or '')} |"
+                    for entry in untestable
+                ),
+                "",
+            ]
         return "\n".join(lines)
+
+    @staticmethod
+    def _method_table(shares: dict[str, tuple[int, int]], not_testable: dict[str, int]) -> list[str]:
+        """The table of the shares per method; a 'Not testable' column (and a row for a method whose endpoints are all
+        untestable) only when the inventory marks some endpoint untestable."""
+        if not not_testable:
+            return [
+                "| Method | Asserted sent | Endpoints |",
+                "|---|---:|---:|",
+                *(f"| {method} | {c} | {t} |" for method, (c, t) in shares.items()),
+            ]
+        methods = [method for method in METHOD_ORDER if method in shares or method in not_testable]
+        return [
+            "| Method | Asserted sent | Testable endpoints | Not testable |",
+            "|---|---:|---:|---:|",
+            *(
+                f"| {method} | {shares.get(method, (0, 0))[0]} | {shares.get(method, (0, 0))[1]} | "
+                f"{not_testable.get(method, 0)} |"
+                for method in methods
+            ),
+        ]
+
+
+def untestable_problem(label: str, endpoint: str, reason: str) -> str:
+    """The problem of a step asserting an untestable endpoint as sent."""
+    return (
+        f"{label}: apply.api.sent names {endpoint}, which scenarios/api_endpoints.yaml marks untestable ({reason}): "
+        "no test organization makes otterdog send it; remove the mark if this one can"
+    )
+
+
+def _no_assertion(entry: InventoryEndpoint) -> str:
+    """The 'asserted sent by' cell of an endpoint no step asserts: webapp only, not testable or a gap."""
+    if entry.scope == "webapp":
+        return "_webapp only_"
+    if entry.untestable is not None:
+        return "_not testable_"
+    return "**none**"
 
 
 def _labels(labels: list[str]) -> str:
