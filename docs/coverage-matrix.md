@@ -9,13 +9,13 @@ otterdog feature coverage of the e2e battery
 
 Inventory of otterdog main @d9dac78 (after v1.7.1; release:latest is v1.7.1), first built at main 9bdeb75 (after v1.6.1): every CLI command and its flags, every property of the configuration model grouped by feature, validation rules, diff semantics, the webapp (webhook events, comment commands, tasks, auto-merge, apply, blueprints, policies, /api and /internal), the webhook receiver contract and notable CHANGELOG fixes, mapped to the existing scenarios and tests of this repository. Gaps and partial coverage carry the outline of the missing test.
 
-**362 features** in 27 areas: 309 covered, 42 partial, 11 gaps; covered 85%, weighted 91% (a partial feature counts half). *Offline-verified* counts the covered or partial features with at least one covering item in the offline tier; *live-verified* those with a recorded green live run of their covering items (`verified_on`: target, SUT, run id, date); *unverified* the others: their coverage is implemented but has never run, so it is a claim, not evidence. A covered feature needs at least one covering item that runs strictly on the default SUT (not only known-bug xfails or scenarios skipped by `fixed_in`).
+**363 features** in 27 areas: 309 covered, 43 partial, 11 gaps; covered 85%, weighted 91% (a partial feature counts half). *Offline-verified* counts the covered or partial features with at least one covering item in the offline tier; *live-verified* those with a recorded green live run of their covering items (`verified_on`: target, SUT, run id, date); *unverified* the others: their coverage is implemented but has never run, so it is a claim, not evidence. A covered feature needs at least one covering item that runs strictly on the default SUT (not only known-bug xfails or scenarios skipped by `fixed_in`).
 
 ## Summary by area
 
 | Area | Features | Covered | Partial | Gap | Covered % | Weighted % | Offline-verified | Live-verified | Unverified |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| [CLI commands and global options](#cli) | 59 | 53 | 6 | 0 | 90% | 95% | 30 | 0 | 29 |
+| [CLI commands and global options](#cli) | 60 | 53 | 7 | 0 | 88% | 94% | 31 | 0 | 29 |
 | [otterdog.json, base template and credentials](#config) | 27 | 14 | 7 | 6 | 52% | 65% | 16 | 0 | 5 |
 | [Validation rules](#validation) | 38 | 37 | 1 | 0 | 97% | 99% | 37 | 0 | 1 |
 | [Diff engine and plan semantics](#plan-semantics) | 18 | 17 | 1 | 0 | 94% | 97% | 16 | 0 | 2 |
@@ -42,13 +42,13 @@ Inventory of otterdog main @d9dac78 (after v1.7.1; release:latest is v1.7.1), fi
 | [Policies](#policies) | 3 | 3 | 0 | 0 | 100% | 100% | 0 | 0 | 3 |
 | [CHANGELOG fixes (regression guards)](#regressions) | 36 | 33 | 1 | 2 | 92% | 93% | 10 | 0 | 24 |
 | [Unmerged otterdog changes (pull requests and local branches)](#pending) | 5 | 4 | 1 | 0 | 80% | 90% | 0 | 0 | 5 |
-| **Total** | 362 | 309 | 42 | 11 | 85% | 91% | 159 | 0 | 192 |
+| **Total** | 363 | 309 | 43 | 11 | 85% | 91% | 160 | 0 | 192 |
 
 ## Summary by tier
 
 | Tier | Features | Covered | Partial | Gap | Covered % | Weighted % | Offline-verified | Live-verified | Unverified |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| `offline` | 118 | 108 | 10 | 0 | 92% | 96% | 118 | 0 | 0 |
+| `offline` | 119 | 108 | 11 | 0 | 91% | 95% | 119 | 0 | 0 |
 | `cli` | 144 | 121 | 18 | 5 | 84% | 90% | 35 | 0 | 104 |
 | `webhooks` | 4 | 3 | 1 | 0 | 75% | 88% | 2 | 0 | 2 |
 | `webapp` | 80 | 68 | 8 | 4 | 85% | 90% | 3 | 0 | 73 |
@@ -61,7 +61,7 @@ Inventory of otterdog main @d9dac78 (after v1.7.1; release:latest is v1.7.1), fi
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
 | P0 | 62 | 62 | 0 | 0 | 100% | 100% | 31 | 0 | 31 |
 | P1 | 142 | 121 | 19 | 2 | 85% | 92% | 65 | 0 | 75 |
-| P2 | 158 | 126 | 23 | 9 | 80% | 87% | 63 | 0 | 86 |
+| P2 | 159 | 126 | 24 | 9 | 79% | 87% | 64 | 0 | 86 |
 
 Tiers:
 
@@ -124,7 +124,7 @@ Defects found while building the inventory (not yet in `scenarios/known_bugs.yam
 
 ## CLI commands and global options
 
-`cli`: 59 features, 53 covered, 6 partial, 0 gaps (weighted 95%).
+`cli`: 60 features, 53 covered, 7 partial, 0 gaps (weighted 94%).
 
 | Id | Feature | Tier | Plan | Prio | Status | Verified | Covered by |
 |---|---|---|---|---|---|---|---|
@@ -160,6 +160,7 @@ Defects found while building the inventory (not yet in `scenarios/known_bugs.yam
 | `cli.open-pr` | open-pr -b BRANCH -t TITLE -a AUTHOR: branch otterdog/&lt;branch&gt;, the local file, a PR with the fixed body (always prompts) | cli | free | P1 | covered | **unverified** | `tests/cli/test_config_repo_cli.py::test_open_pr`, `tests/cli/test_commands_config_repo.py::test_open_pr_opens_nothing_when_it_must_not`, `tests/cli/test_commands_config_repo.py::test_open_pr_title_and_body`, `tests/cli/test_commands_config_repo.py::test_config_repo_commands_report_a_missing_repository` |
 | `cli.plan` | plan -n: 'Planning execution:', legend, '+ add' / '\~' / '!' / '- remove' blocks, 'Plan: A to add, C to change, D to delete.' against the live org | cli | free | P0 | covered | **unverified** | `cli.repo.lifecycle`, `cli.team`, `cli.bpr.public`, `cli.ruleset.public`, `cli.environment`, `cli.plan-mismatch` |
 | `cli.plan.no-web-ui` | -n/--no-web-ui: token-only credentials, web-UI org settings neither read, diffed nor applied | cli | free | P0 | covered | **unverified** | `tests/cli/test_baseline.py::test_baseline_in_sync_after_reset`, `cli.repo.lifecycle` |
+| `cli.no-web-ui-default` | defaults.github.no_web_ui of otterdog.json is the default of -n/--no-web-ui (show-live, import, plan, check-status, apply, local-apply); --web-ui overrides it (#913) | offline | free | P2 | **partial** | offline | `tests/offline/test_cli_no_web_ui.py::test_no_web_ui_defaults_to_the_configuration`, `tests/offline/test_cli_no_web_ui.py::test_every_command_offers_both_flags` |
 | `cli.plan.web-ui` | plan/apply without -n: full credentials (username, password, TOTP), web-UI settings read through Playwright; 'invalid credentials' when they are missing (UI only) | web_ui | free | P2 | covered | **unverified** | `tests/web_ui/test_web_settings.py::test_web_settings_round_trip`, `tests/cli/test_commands_errors.py::test_web_commands_need_the_web_credentials` |
 | `cli.plan.repo-filter` | -r/--repo-filter PATTERN: only matching repositories are loaded and planned; organization-level objects are always diffed | cli | free | P0 | covered | offline | `cli.repo.lifecycle`, `cli.team`, `O-LPLAN-FILTER` |
 | `cli.plan.update-secrets` | --update-secrets [--update-filter PATTERN]: forced '!' update of secrets whose name matches (values are never compared) | cli | free | P1 | covered | offline | `cli.secrets`, `O-LPLAN-FORCED-SECRETS`, `cli.org.secret`, `cli.environment.secrets` |
@@ -316,6 +317,18 @@ Details:
     - Source: `otterdog/cli.py:427-434`, `otterdog/operations/diff_operation.py:131-132`, `otterdog/providers/github/__init__.py:104-124`
     - Operations: coerce, config
     - Notes: every live command of the harness passes -n; the baseline renders the template defaults of the web keys and still converges, which proves they are ignored
+- **`cli.no-web-ui-default`** (partial, P2, `offline`): defaults.github.no_web_ui of otterdog.json is the default of -n/--no-web-ui (show-live, import, plan, check-status, apply, local-apply); --web-ui overrides it (#913)
+    - Source: `otterdog/cli.py:259-266`, `otterdog/cli.py:985-987`, `otterdog/config.py:418-420`, `otterdog/operations/local_apply.py:91-92`
+    - Operations: config, run
+    - Notes: sources at main a196494 (1.8.0.dev). Offline (O-CONFIG-NO-WEB-UI): local-apply skips the change of a web UI setting when no_web_ui is in effect, from -n/--no-web-ui or from the configured default, and plans it with --web-ui or without either; the six commands document the flag pair; SUTs without #913 ignore the setting and refuse --web-ui (both asserted per SUT history). The other five commands resolve the option with the same _resolve_no_web_ui but need GitHub.
+    - Suggested: `cli.config.no-web-ui-default` in `tests/cli/test_org_config.py`
+    - Steps:
+        - live workspace whose .otterdog-defaults.json sets github.no_web_ui: true; plan and apply without -n (the runner always passes -n: a raw invoke)
+    - Assert:
+        - the commands run with token-only credentials (no web login) and plan no web UI setting; with --web-ui they ask for the web credentials
+    - Needs:
+        - target
+        - available: WorkspaceLayout(defaults_override=...) on a live workspace, OtterdogCli.invoke
 - **`cli.plan.web-ui`** (covered, P2, `web_ui`): plan/apply without -n: full credentials (username, password, TOTP), web-UI settings read through Playwright; 'invalid credentials' when they are missing
     - Source: `otterdog/operations/diff_operation.py:131-132`, `otterdog/providers/github/web.py:57-252`, `otterdog/credentials/__init__.py:52-74`
     - Operations: plan, config

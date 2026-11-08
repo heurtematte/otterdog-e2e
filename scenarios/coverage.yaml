@@ -673,6 +673,29 @@ features:
     covered_by: [tests/cli/test_baseline.py::test_baseline_in_sync_after_reset, cli.repo.lifecycle]
     notes: "every live command of the harness passes -n; the baseline renders the template defaults of the web keys and still converges, which proves they are ignored"
 
+  - id: cli.no-web-ui-default
+    area: cli
+    title: "defaults.github.no_web_ui of otterdog.json is the default of -n/--no-web-ui (show-live, import, plan, check-status, apply, local-apply); --web-ui overrides it (#913)"
+    source: ["otterdog/cli.py:259-266", "otterdog/cli.py:985-987", "otterdog/config.py:418-420", "otterdog/operations/local_apply.py:91-92"]
+    operations: [config, run]
+    min_plan: free
+    tier: offline
+    ui_only: false
+    priority: P2
+    status: partial
+    covered_by: [tests/offline/test_cli_no_web_ui.py::test_no_web_ui_defaults_to_the_configuration, tests/offline/test_cli_no_web_ui.py::test_every_command_offers_both_flags]
+    notes: "sources at main a196494 (1.8.0.dev). Offline (O-CONFIG-NO-WEB-UI): local-apply skips the change of a web UI setting when no_web_ui is in effect, from -n/--no-web-ui or from the configured default, and plans it with --web-ui or without either; the six commands document the flag pair; SUTs without #913 ignore the setting and refuse --web-ui (both asserted per SUT history). The other five commands resolve the option with the same _resolve_no_web_ui but need GitHub."
+    gap_outline:
+      scenario: cli.config.no-web-ui-default
+      file: tests/cli/test_org_config.py
+      steps:
+        - "live workspace whose .otterdog-defaults.json sets github.no_web_ui: true; plan and apply without -n (the runner always passes -n: a raw invoke)"
+      assertions:
+        - "the commands run with token-only credentials (no web login) and plan no web UI setting; with --web-ui they ask for the web credentials"
+      needs:
+        - "target"
+        - "available: WorkspaceLayout(defaults_override=...) on a live workspace, OtterdogCli.invoke"
+
   - id: cli.plan.web-ui
     area: cli
     title: "plan/apply without -n: full credentials (username, password, TOTP), web-UI settings read through Playwright; 'invalid credentials' when they are missing"
