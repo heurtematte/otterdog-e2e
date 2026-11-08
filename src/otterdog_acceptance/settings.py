@@ -172,6 +172,16 @@ def user_config_dir(environ: Mapping[str, str] | None = None) -> Path:
     return _current_or_legacy(home / USER_CONFIG_SUBDIR, home / LEGACY_USER_CONFIG_SUBDIR)
 
 
+def user_config_display(environ: Mapping[str, str] | None = None) -> str:
+    """user_config_dir for messages, below ``~`` (``~/.config/otterdog-e2e`` while that one is in use)."""
+    env = os.environ if environ is None else environ
+    directory = user_config_dir(env)
+    try:
+        return f"~/{directory.relative_to(_home(env)).as_posix()}"
+    except ValueError:
+        return str(directory)
+
+
 def default_cache_dir(environ: Mapping[str, str] | None = None) -> Path:
     """The cache dir without E2E_CACHE_DIR: ``~/.cache/otterdog-acceptance``, or ``~/.cache/otterdog-e2e`` while only
     that one exists (its SUT installs, browser profile and pending web-UI restores are kept)."""
@@ -1057,7 +1067,7 @@ def instance_name_problem(name: str) -> str | None:
         return f"invalid instance name {name!r} (expected {INSTANCE_NAME_RE.pattern})"
     if name in RESERVED_INSTANCE_NAMES:
         return (
-            f"invalid instance name {name!r}: the name is reserved (~/{USER_CONFIG_SUBDIR}/{name}/ holds the target"
+            f"invalid instance name {name!r}: the name is reserved ({user_config_display()}/{name}/ holds the target"
             " lists @<list>)"
         )
     reserved = next((suffix for suffix in RESERVED_INSTANCE_SUFFIXES if name.endswith(suffix)), None)
@@ -1094,7 +1104,7 @@ def resolve_target_ref(
             raise TargetError(
                 f"target {name!r} is ambiguous: targets/{own.name} is the profile {name!r} but {PROFILE_ENV}={declared}"
                 f" binds the instance to the profile {declared!r}: unset {PROFILE_ENV} (or fix it in"
-                f" ~/{USER_CONFIG_SUBDIR}/{name}.env), or give the instance another name"
+                f" {user_config_display(env)}/{name}.env), or give the instance another name"
             )
         return TargetRef(name, name, own)
     problem = instance_name_problem(name)
@@ -1105,7 +1115,7 @@ def resolve_target_ref(
         raise TargetError(
             f"target {name!r} not found: no profile targets/{name}.yaml (available: {available}) and {PROFILE_ENV} is"
             f" not set for the instance {name}: run `otterdog-acceptance setup --target {name}`, or add"
-            f" {PROFILE_ENV}=<profile> to ~/{USER_CONFIG_SUBDIR}/{name}.env"
+            f" {PROFILE_ENV}=<profile> to {user_config_display(env)}/{name}.env"
         )
     bound = _profile_path(declared, settings) if TARGET_NAME_RE.fullmatch(declared) else None
     if bound is None:

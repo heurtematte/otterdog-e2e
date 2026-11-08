@@ -22,7 +22,6 @@ from typing import TYPE_CHECKING, Any
 import click
 
 from otterdog_acceptance.cli.common import (
-    CONFIG_HOME,
     FULL_SHA_RE,
     TARGETS_HELP,
     _context,
@@ -32,6 +31,7 @@ from otterdog_acceptance.cli.common import (
     _handled,
     _is_loopback_url,
     _public_member,
+    config_home,
     main,
     target_names,
 )
@@ -158,7 +158,7 @@ class Doctor:
         except Exception as exc:  # noqa: BLE001 - reported as the first FAIL
             hint = (
                 f"check targets/<profile>.yaml and the env vars of the instance (export them or write"
-                f" {CONFIG_HOME}/<instance>.env with E2E_PROFILE=<profile>, .env.e2e.<instance> or .env.e2e;"
+                f" {config_home()}/<instance>.env with E2E_PROFILE=<profile>, .env.e2e.<instance> or .env.e2e;"
                 " otterdog-acceptance targets lists the instances)"
             )
             self.add("target", FAIL, describe_error(exc), hint)
@@ -179,7 +179,9 @@ class Doctor:
             self.add("env:admin", OK, f"{admin.token_env if admin else 'admin token'} set")
         else:
             env = admin.token_env if admin else "E2E_ADMIN_TOKEN"
-            self.add("env:admin", FAIL, f"{env} is not set", f"export it or add it to {CONFIG_HOME}/{target.name}.env")
+            self.add(
+                "env:admin", FAIL, f"{env} is not set", f"export it or add it to {config_home()}/{target.name}.env"
+            )
         for name in ("author", "approver", "outsider", "config_reader"):
             spec = target.identities.get(name)
             if spec is not None and spec.login and name not in self.ctx.identities:

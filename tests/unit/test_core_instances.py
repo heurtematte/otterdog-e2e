@@ -43,6 +43,15 @@ def redactor(monkeypatch: pytest.MonkeyPatch) -> Redactor:
     return fresh
 
 
+@pytest.fixture(autouse=True)
+def home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """An empty HOME: the messages name the config dir in use, which must not depend on the developer's own HOME."""
+    directory = tmp_path / "home"
+    directory.mkdir()
+    monkeypatch.setenv("HOME", str(directory))
+    return directory
+
+
 @pytest.fixture
 def harness(tmp_path: Path) -> HarnessSettings:
     """Settings whose targets dir holds copies of the repository's profiles."""
@@ -87,6 +96,19 @@ def test_an_instance_uses_the_profile_of_e2e_profile(harness: HarnessSettings) -
     assert (target.name, target.profile, target.expected_plan) == ("acme", "team", "team")
     assert target.source_path == harness.targets_dir / "team.yaml"
     assert target.org == "e2e-test-org" and target.org_id == 424242
+
+
+def test_the_messages_name_the_config_dir_of_the_former_name_while_it_is_in_use(
+    harness: HarnessSettings, home: Path
+) -> None:
+    """While only ~/.config/otterdog-e2e exists (settings.user_config_dir), the env file to edit is named there."""
+    (home / ".config" / "otterdog-e2e").mkdir(parents=True)
+    with pytest.raises(TargetError) as info:
+        load_target("acme", harness, ENV)
+    assert f"{PROFILE_ENV}=<profile> to ~/.config/otterdog-e2e/acme.env" in str(info.value)
+    assert "~/.config/otterdog-e2e/lists/ holds the target lists" in str(instance_name_problem("lists"))
+    (home / ".config" / "otterdog-acceptance").mkdir()
+    assert "~/.config/otterdog-acceptance/lists/ holds the target lists" in str(instance_name_problem("lists"))
 
 
 def test_an_instance_without_profile_explains_how_to_bind_it(harness: HarnessSettings) -> None:

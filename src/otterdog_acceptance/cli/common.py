@@ -23,7 +23,6 @@ import sys
 import threading
 import urllib.parse
 from collections.abc import Callable, Iterator, Mapping, Sequence
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypeVar
 
 import click
@@ -59,7 +58,13 @@ _SHORT_REJECTED = frozenset(prefix[1] for prefix in REJECTED_PASSTHROUGH if len(
 _SHORT_WITH_VALUE = frozenset("kmrcopW")  # pytest short options taking a value: the rest of the cluster is that value
 FULL_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 RUN_ID_ARG_RE = re.compile(r"^[0-9a-z]{6}[0-9a-f]{2}$")
-CONFIG_HOME = Path("~/.config/otterdog-acceptance")
+
+
+def config_home() -> str:
+    """The per-user config dir for messages (settings.user_config_display: the former name's while in use)."""
+    from otterdog_acceptance.settings import user_config_display
+
+    return user_config_display()
 
 
 # --- shared helpers -------------------------------------------------------------------------------------------------

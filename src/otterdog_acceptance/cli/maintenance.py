@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING
 
 import click
 
-from otterdog_acceptance.cli.common import CONFIG_HOME, _echo, _echo_json, _handled, _settings, main
+from otterdog_acceptance.cli.common import _echo, _echo_json, _handled, _settings, config_home, main
 from otterdog_acceptance.redact import REDACTOR
 
 if TYPE_CHECKING:
@@ -49,7 +49,7 @@ def render_instances(instances: Sequence[InstanceInfo]) -> str:
     """Table of ``otterdog-acceptance targets``: instance, profile, shard, org and env file, a ``problem:`` line under the
     instances whose target cannot be loaded."""
     if not instances:
-        return f"no target instance: no {CONFIG_HOME}/<instance>.env file and no targets/<profile>.yaml"
+        return f"no target instance: no {config_home()}/<instance>.env file and no targets/<profile>.yaml"
     header = ("INSTANCE", "PROFILE", "SHARD", "ORG", "ENV FILE")
     rows = [
         (info.name, info.profile or "-", info.shard or "-", info.org or "-", info.env_file or "-") for info in instances
