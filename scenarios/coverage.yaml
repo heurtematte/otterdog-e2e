@@ -898,7 +898,7 @@ features:
 
   - id: cli.apply.validation-errors
     area: cli
-    title: "apply with validation errors prints 'Planning aborted due to validation errors.' + 'No changes required.' and exits 0"
+    title: "apply with validation errors prints 'Planning aborted due to validation errors.' and exits with the error count (#923, 1.8.0; before: 'No changes required.' and exit 0, KB-001)"
     source: ["otterdog/operations/plan.py:121-126", "otterdog/operations/apply.py:97-108"]
     operations: [validate, exit-code]
     min_plan: free
@@ -906,17 +906,17 @@ features:
     ui_only: false
     priority: P1
     status: partial
-    covered_by: [tests/cli/test_known_bugs.py::test_apply_fails_on_validation_errors]
+    covered_by: [tests/cli/test_known_bugs.py::test_apply_fails_on_validation_errors, tests/offline/test_cli_local_apply.py::test_validation_errors_fail_the_local_apply]
     known_bugs: [KB-001]
-    notes: "offline counterpart: `apply --local -f -n` with a validation error exits 0 without network (tests/unit/data/apply-validation-error.txt)"
+    notes: "KB-001 fixed by #923 (main a196494, 1.8.0): ApplyOperation.handle_finish returns the validation error count (otterdog/operations/apply.py:102-104 at a196494). Both tests run strict from 1.8.0 and xfail before; the offline one runs local-apply, which shares handle_finish (exit 1, no 'No changes required.'); the live one has not run yet."
     gap_outline:
       scenario: cli.kb.apply-exit-code
       steps:
-        - "tests/cli/test_known_bugs.py::test_apply_fails_on_validation_errors asserts the correct exit status: an XFAIL while KB-001 exists, so the live behaviour is only observed through the expected failure"
+        - "no new test: both tests assert the fixed behaviour strictly on SUTs from 1.8.0 (branch:main, PR builds) and stay known-bug xfails on release:latest (v1.7.1)"
       assertions:
-        - "covered once KB-001 is fixed (the test then passes strictly, XPASS first) or by a strict check of the printed texts"
+        - "covered once release:latest contains #923 (otterdog 1.8.0): then the default SUT runs them strictly"
       needs:
-        - "a fix of KB-001, or a strict live assertion of the current output"
+        - "the otterdog 1.8.0 release"
 
   - id: cli.apply.failed-patches
     area: cli
@@ -1364,7 +1364,7 @@ features:
     status: partial
     covered_by: [cli.secrets, O-VAL-OK, O-VAL-SECRETS, cli.org.secret]
     known_bugs: [KB-025, KB-026, KB-057]
-    notes: "offline (O-VAL-SECRETS): a 'pass:' reference validates silently, an unknown provider prefix 'foo:e2e/b' warns, several ':' crash (KB-025); live (cli.org.secret): 'pass:' validates silently (validate-only step), 'foo:e2e/...' warns and is applied literally, '********' is skipped; webhook secrets with an unknown prefix do not warn (KB-057). Not covered: the resolution of references at apply time (pass, bitwarden, vault)."
+    notes: "offline (O-VAL-SECRETS): a 'pass:' reference validates silently, an unknown provider prefix 'foo:e2e/b' warns, several ':' crashed before #923 (KB-025, fixed in 1.8.0); live (cli.org.secret): 'pass:' validates silently (validate-only step), 'foo:e2e/...' warns and is applied literally, '********' is skipped; webhook secrets with an unknown prefix do not warn (KB-057). Not covered: the resolution of references at apply time (pass, bitwarden, vault)."
     gap_outline:
       scenario: O-SECRET-RESOLUTION
       file: tests/offline/test_config_credentials.py
@@ -1373,6 +1373,31 @@ features:
         - "local-apply --local -n answering 'n' (secrets are resolved before the prompt), then the same with 'bitwarden:' and an unknown 'foo:' prefix"
       assertions:
         - "the stub was asked for e2e/b exactly once and the value never appears in the output; 'foo:' is not resolved (literal) and warns at validation"
+      needs:
+        - "offline"
+        - "available: OtterdogCli.invoke(..., env={'PATH': '<stub dir>:<system PATH>'})"
+
+  - id: config.secret-access-policy
+    area: config
+    title: "secret access policy of otterdog.json (#923): defaults.secrets {mode, allowed_references} and organizations[].secrets restrict the provider references of an organization"
+    source: ["otterdog/credentials/secret_access_policy.py:1-251", "otterdog/config.py:168-182", "otterdog/config.py:234-305", "otterdog/config.py:354-401", "otterdog/models/__init__.py:84-95", "otterdog/models/secret.py:65", "otterdog/models/webhook.py:99", "otterdog/operations/diff_operation.py:247"]
+    operations: [config, validate, security, error]
+    min_plan: free
+    tier: offline
+    ui_only: false
+    priority: P1
+    status: partial
+    covered_by: [O-VAL-SECRET-ACCESS-POLICY]
+    known_bugs: [KB-050]
+    notes: "sources at main a196494 (1.8.0.dev). Offline (O-VAL-SECRET-ACCESS-POLICY, fixed_in 1.8.0): organization, repository, archived repository and environment secrets and organization and repository webhook secrets outside the patterns are errors (warnings in warn mode); '*', '**' (at least one segment at the end, zero in the middle), {org_name}/{github_id} from otterdog.json (not the jsonnet newOrg names), bitwarden item ids, '..' segments, a provider without patterns, organization patterns added to the defaults or alone; plain values, dummies and unknown providers unchecked; malformed policies stop the loading (exit 2; the organization name of 'organizations[<name>].secrets' is lost to rich markup, KB-050). Not covered: the apply-time check before a secret is resolved (needs a provider) and the webapp playground validation."
+    gap_outline:
+      scenario: O-SECRET-ACCESS-POLICY-APPLY
+      file: tests/offline/test_config_credentials.py
+      steps:
+        - "defaults.secrets in warn mode and a stub 'pass' CLI on PATH (as test_pass_provider_with_a_stub_store); BASE without the org secret, head with 'pass:bots/e2e-other/token'"
+        - "local-apply --local -n answering 'n' (secrets are resolved before the prompt); in enforce mode validation refuses the same reference first (validation and resolution share SecretAccessPolicy.check)"
+      assertions:
+        - "warn mode prints \"organization '<name>' is not allowed to reference secret 'pass:...'\" as a warning and the stub is still asked for the path"
       needs:
         - "offline"
         - "available: OtterdogCli.invoke(..., env={'PATH': '<stub dir>:<system PATH>'})"

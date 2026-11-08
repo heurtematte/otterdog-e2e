@@ -774,7 +774,8 @@ otterdog prints secret values in validate and plan output and in PR comments. Ev
 | `e2e-dummy-<8 chars [0-9a-z]>`, usually `'e2e-dummy-{{ run }}'` | all | a plain value otterdog applies as it is (Warning "does not use a credential provider"); webhook secrets too |
 | `pass:<path>` (`[A-Za-z0-9_][A-Za-z0-9._/-]*`, e.g. `pass:bots/technology.csi/github.com/otterdog-token`) | all | a provider reference as in real configurations: validated silently, shown as is by plan; a live apply resolves it with the `pass` CLI, which the harness never provides (the apply fails) |
 | `<provider>:e2e/<path>` of another provider than pass, bitwarden or vault (e.g. `foo:e2e/b`) | all | otterdog warns that it does not use a credential provider and applies the literal |
-| `pass:<path>:<more>` (several `:`, e.g. `pass:a:b`) | offline only | reproduces KB-025: validation crashes with `too many values to unpack (expected 2)` (exit 2) |
+| `pass:<path>:<more>` (several `:`, e.g. `pass:a:b`) | offline only | reproduces KB-025 on SUTs before otterdog#923 (1.8.0): validation crashes with `too many values to unpack (expected 2)` (exit 2) |
+| `vault:<path>`, `bitwarden:<item id>@<field>` (`[A-Za-z0-9_][A-Za-z0-9._/@+-]*`) | offline only | references of the providers the secret access policy checks (otterdog#923); offline commands never resolve a secret, a live apply would |
 | empty string or `null` | all | |
 
 Paths are restricted to shell-safe characters: otterdog resolves `pass:` references with a shell command at apply time.
@@ -887,8 +888,9 @@ string, except `config_dir` (a literal directory name).
 | Key | Default | Meaning |
 |---|---|---|
 | `format` | `json` | `jsonnet` writes `otterdog.jsonnet` instead of `otterdog.json` (the document behind a jsonnet `local`, so only jsonnet evaluation reads it); the `-c` file follows |
-| `orgs` | `[]` | extra `organizations` entries: a string is the github_id (and name) of an ordinary organization; a mapping of `name`, `github_id`, `config_repo`, `base_template`, `archived`, `approval_teams`, `admin_teams`, `credentials` (null only) is merged over `{name: <github_id>, config_repo, credentials: env provider}`; `null` values are written as null (otterdog then reports the missing key). Their configurations are not written: the step's commands run on `e2e-offline` |
-| `defaults_override` | `null` | content of `.otterdog-defaults.json` next to the config file: keys `base_url`, `jsonnet` (`base_template`, `config_dir`), `github` (`config_repo`, `exclude_teams`), `cost_policy`; otterdog merges it OVER the defaults of the config file (a null value too). No credential provider settings |
+| `orgs` | `[]` | extra `organizations` entries: a string is the github_id (and name) of an ordinary organization; a mapping of `name`, `github_id`, `config_repo`, `base_template`, `archived`, `approval_teams`, `admin_teams`, `credentials` (null only), `secrets` is merged over `{name: <github_id>, config_repo, credentials: env provider}`; `null` values are written as null (otterdog then reports the missing key). Their configurations are not written: the step's commands run on `e2e-offline` |
+| `org_entry` | `null` | keys merged over the entry of `e2e-offline` itself: `name` (another project name than its github_id), `config_repo`, `base_template`, `approval_teams`, `admin_teams`, `secrets` (`allowed_references` of the organization, otterdog#923); never its `github_id`, `credentials` or `archived` |
+| `defaults_override` | `null` | content of `.otterdog-defaults.json` next to the config file: keys `base_url`, `jsonnet` (`base_template`, `config_dir`), `github` (`config_repo`, `exclude_teams`), `cost_policy`, `secrets` (`mode`, `allowed_references`: the secret access policy of otterdog#923); otterdog merges it OVER the defaults of the config file (a null value too). No credential provider settings |
 | `base_url` | `null` | `defaults.base_url` (default `https://otterdog.invalid`) |
 | `config_dir` | `orgs` | `defaults.jsonnet.config_dir`; the harness writes the org configs and the vendored template to `<config dir>/e2e-offline/`, the override's `jsonnet.config_dir` winning (one path segment) |
 | `vendor` | `true` | `false`: no vendored template, `--local` commands then fail with `template file '...' does not exist` |

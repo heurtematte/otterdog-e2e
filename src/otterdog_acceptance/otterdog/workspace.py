@@ -65,7 +65,8 @@ CONFIG_FILES: Mapping[str, str] = {"json": CONFIG_FILE, "jsonnet": JSONNET_CONFI
 CONFIG_FORMATS = tuple(CONFIG_FILES)
 DEFAULTS_OVERRIDE_FILE = ".otterdog-defaults.json"  # next to the config file, deep-merged over its "defaults"
 BASE_SUFFIX = "-BASE"  # the other side of local-plan (otterdog's default -s)
-# keys of an extra organization entry (OrganizationConfig.from_dict) and of a layout's defaults override
+# keys of an extra organization entry (OrganizationConfig.from_dict; ``secrets``: the references to secrets this
+# organization may use in addition to defaults.secrets, eclipse-csi/otterdog#923)
 ORG_ENTRY_KEYS = (
     "name",
     "github_id",
@@ -75,7 +76,11 @@ ORG_ENTRY_KEYS = (
     "approval_teams",
     "admin_teams",
     "credentials",
+    "secrets",
 )
+# keys of the workspace's own organization entry a layout may set (WorkspaceLayout.org_entry): never its github_id
+# (the organization of the run), its credentials (the env provider) nor ``archived`` (otterdog would ignore it)
+OWN_ORG_ENTRY_KEYS = ("name", "config_repo", "base_template", "approval_teams", "admin_teams", "secrets")
 _DIR_NAME_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.-]*$")
 _SUFFIX_RE = re.compile(r"^[A-Za-z0-9_.-]*$")
 UNTRUSTED_READ_LIMIT = 64 * 1024 * 1024  # bytes read_untrusted_text accepts (an org config of a large org fits)
@@ -252,6 +257,8 @@ class WorkspaceLayout:
     * ``orgs``: extra entries of ``organizations`` after the workspace's own; a string is the github_id (and name) of
       an ordinary organization, a mapping (keys ORG_ENTRY_KEYS) is merged over ``{name: <github_id>, config_repo,
       credentials: env provider}``: a key set to None is written as null (otterdog then reports the missing key);
+    * ``org_entry``: keys merged over the workspace's own organization entry (OWN_ORG_ENTRY_KEYS), e.g. another
+      ``name`` than the github_id or the ``secrets`` it may reference (None: the harness entry as it is);
     * ``defaults_override``: content of .otterdog-defaults.json (None: no such file; otterdog merges it OVER the
       config file's defaults, a null value included);
     * ``base_url``: ``defaults.base_url`` (None: the workspace's, else DEFAULT_BASE_URL);
@@ -266,6 +273,7 @@ class WorkspaceLayout:
 
     format: str = "json"
     orgs: tuple[str | Mapping[str, Any], ...] = ()
+    org_entry: Mapping[str, Any] | None = None
     defaults_override: Mapping[str, Any] | None = None
     base_url: str | None = None
     config_dir: str = CONFIG_DIR
@@ -290,9 +298,17 @@ class WorkspaceLayout:
             elif not isinstance(entry, str) or not entry:
                 raise ValueError(f"organization entry {entry!r} is neither a github_id nor a mapping")
         object.__setattr__(self, "orgs", orgs)
-        for name, value in (("defaults_override", self.defaults_override), ("document", self.document)):
+        for name, value in (
+            ("org_entry", self.org_entry),
+            ("defaults_override", self.defaults_override),
+            ("document", self.document),
+        ):
             if value is not None and not isinstance(value, Mapping):
                 raise ValueError(f"{name} must be a mapping or None, got {type(value).__name__}")
+        if self.org_entry is not None:
+            unknown = sorted(set(map(str, self.org_entry)) - set(OWN_ORG_ENTRY_KEYS))
+            if unknown:
+                raise ValueError(f"org_entry {dict(self.org_entry)!r}: unknown key(s) {unknown}")
         override_dir = _override_config_dir(self.defaults_override)
         if override_dir is not None:
             problem = dir_name_problem(override_dir, "defaults_override.jsonnet.config_dir")
@@ -415,6 +431,7 @@ class ConfigWorkspace:
             "config_repo": self.config_repo,
             "credentials": self._credentials(),
         }
+        organization.update(copy.deepcopy(dict(self.layout.org_entry or {})))
         defaults = _defaults(
             self.template,
             config_repo=self.config_repo,

@@ -1,4 +1,5 @@
-"""local-apply without GitHub: the deletion hints and the approval prompt (O-LOCAL-APPLY-HINTS, O-LOCAL-APPLY-PROMPT).
+"""local-apply without GitHub: the deletion hints, the approval prompt and validation errors (O-LOCAL-APPLY-HINTS,
+O-LOCAL-APPLY-PROMPT, O-LOCAL-APPLY-VALIDATION-ERRORS).
 
 ``local-apply`` plans the configuration against ``<org>.jsonnet-BASE`` and applies the result to GitHub
 (otterdog/operations/apply.py:100-163): with nothing but removals and no ``-d`` it prints ``No changes required.`` and
@@ -7,6 +8,10 @@
 asks ``Do you want to perform these actions? (Only 'yes' or 'y' will be accepted to approve)`` and reads one line
 (otterdog/utils.py get_approval): anything else than ``yes``/``y`` prints ``Apply cancelled.`` (exit 0), end of input
 raises EOFError (``Error: EOF when reading a line``, exit 2). Verified offline on v1.6.1 and main 9bdeb75.
+
+A validation error aborts the planning ('Planning aborted due to validation errors.'); before eclipse-csi/otterdog#923
+(1.8.0) ApplyOperation.handle_finish then saw an empty diff, printed ``No changes required.`` and exited 0 (KB-001);
+since, it returns the validation error count.
 
 Since eclipse-csi/otterdog#892 (main after v1.7.1) local-apply first reads the code security configurations of the
 organization and the configuration attached to each repository from GitHub (local_apply.py:90-92) whenever the template
@@ -63,6 +68,7 @@ WOULD_DELETE = "1 resource(s) would be deleted with flag '--delete-resources'."
 NOT_REMOVED = "No resource will be removed, use flag '--delete-resources' to delete them."
 EOF_ERROR = "EOF when reading a line"
 EXECUTED = "Executed plan:"
+PLANNING_ABORTED = "Planning aborted due to validation errors."  # operations/plan.py handle_validation_status
 
 
 def render_org(workspace: ConfigWorkspace, fragments: ConfigFragments) -> str:
@@ -144,6 +150,38 @@ def test_end_of_input_at_the_prompt_exits_2(local_apply_cli: OtterdogCli) -> Non
     assert PROMPT in text and EOF_ERROR in text, tail(result)
     assert text.find(PROMPT) < text.find(EOF_ERROR), tail(result)
     assert CANCELLED not in text and EXECUTED not in text and NOT_REMOVED not in text, tail(result)
+
+
+@pytest.mark.scenario(
+    "O-LOCAL-APPLY-VALIDATION-ERRORS",
+    references=[
+        {
+            "pr": 923,
+            "note": (
+                "'feat: restrict the secrets that an organization can reference' also makes "
+                "ApplyOperation.handle_finish return the validation error count (KB-001): local-apply then exits 1 "
+                "instead of printing 'No changes required.' and exiting 0"
+            ),
+        }
+    ],
+)
+@pytest.mark.known_bug("KB-001")
+def test_validation_errors_fail_the_local_apply(local_apply_cli: OtterdogCli) -> None:
+    """A configuration with one validation error (a secret named with the reserved GITHUB_ prefix) and something to
+    add: validation aborts the planning, nothing is planned nor asked, and local-apply exits with the error (1), never
+    with 'No changes required.' and 0 (KB-001, fixed by #923 in 1.8.0: the same ApplyOperation.handle_finish as apply)."""
+    invalid = ConfigFragments(
+        repositories=[f"orgs.newRepo('{NEW}')"],
+        secrets=[f"orgs.newOrgSecret('GITHUB_{RUN.const_prefix}LOCAL') {{ value: 'pass:e2e/local' }}"],
+    )
+    sides(local_apply_cli, base=ConfigFragments(), head=invalid)
+    result = local_apply(local_apply_cli, "-f", input="")
+    text = normalize_text(result.output)
+    assert "starts with prefix 'GITHUB_' which is not allowed for secrets." in text, tail(result)
+    assert PLANNING_ABORTED in text and f'+ add repository[name="{NEW}"]' not in text, tail(result)
+    assert PROMPT not in text and EXECUTED not in text, tail(result)
+    assert NO_CHANGES not in text, f"local-apply reports success despite the validation error (KB-001)\n{tail(result)}"
+    assert result.exit_code == 1, f"exit {result.exit_code} despite 1 validation error (KB-001)\n{tail(result)}"
 
 
 @pytest.mark.scenario("O-LOCAL-APPLY-CODE-SECURITY", references=[{"pr": 892}])

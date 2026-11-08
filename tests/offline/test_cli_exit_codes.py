@@ -229,11 +229,14 @@ def test_validation_errors_never_exit_like_a_crash(vendored_cli: OtterdogCli) ->
     assert codes == dict.fromkeys(codes, 1), f"validation errors must exit 1: {codes}"
 
 
-@pytest.mark.scenario("O-KB-SECRET-WITH-COLONS")
+@pytest.mark.scenario(
+    "O-KB-SECRET-WITH-COLONS",
+    references=[{"pr": 923, "note": "splits a secret value at its first ':' only (KB-025 fixed in 1.8.0)"}],
+)
 @pytest.mark.known_bug("KB-025")
 def test_secret_reference_with_colons_validates(vendored_cli: OtterdogCli) -> None:
-    """A secret value 'pass:a:b' (provider pass, path 'a:b') should validate; today the split into exactly two parts
-    crashes the validation ('too many values to unpack (expected 2)', exit 2), KB-025."""
+    """A secret value 'pass:a:b' (provider pass, path 'a:b') validates; before #923 (1.8.0) the split into exactly two
+    parts crashed the validation ('too many values to unpack (expected 2)', exit 2), KB-025."""
     result = validate(vendored_cli, SECRET_WITH_COLONS)
     assert "too many values to unpack" not in text_of(result), tail(result)
     assert result.exit_code == 0 and result.validation().ok, tail(result)

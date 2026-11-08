@@ -1713,12 +1713,43 @@
                         },
                         "credentials": {
                           "type": "null"
+                        },
+                        "secrets": {
+                          "description": "otterdog.json organization entry key"
                         }
                       },
                       "additionalProperties": false
                     }
                   ]
                 }
+              },
+              "org_entry": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "description": "keys merged over the workspace's own organization entry",
+                "properties": {
+                  "name": {
+                    "description": "otterdog.json organization entry key"
+                  },
+                  "config_repo": {
+                    "description": "otterdog.json organization entry key"
+                  },
+                  "base_template": {
+                    "description": "otterdog.json organization entry key"
+                  },
+                  "approval_teams": {
+                    "description": "otterdog.json organization entry key"
+                  },
+                  "admin_teams": {
+                    "description": "otterdog.json organization entry key"
+                  },
+                  "secrets": {
+                    "description": "otterdog.json organization entry key"
+                  }
+                },
+                "additionalProperties": false
               },
               "defaults_override": {
                 "type": [
@@ -1730,7 +1761,8 @@
                   "base_url": {},
                   "jsonnet": {},
                   "github": {},
-                  "cost_policy": {}
+                  "cost_policy": {},
+                  "secrets": {}
                 },
                 "additionalProperties": false
               },

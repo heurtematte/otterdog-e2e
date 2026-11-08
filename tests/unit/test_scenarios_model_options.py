@@ -145,7 +145,11 @@ fragments: {}
 workspace:
   format: jsonnet
   orgs: ["{{ org }}-2", {github_id: e2e-archived, archived: true}, {name: null, github_id: e2e-x, credentials: null}]
-  defaults_override: {jsonnet: {config_dir: orgs-override, base_template: null}, github: {exclude_teams: [x]}}
+  org_entry: {name: "{{ org }}-project", secrets: {allowed_references: {pass: ["bots/{org_name}/**"]}}}
+  defaults_override:
+    jsonnet: {config_dir: orgs-override, base_template: null}
+    github: {exclude_teams: [x]}
+    secrets: {mode: warn, allowed_references: {vault: ["{github_id}/**"]}}
   base_url: https://otterdog-e2e.invalid/base
   config_dir: orgs-alt
   vendor: false
@@ -161,6 +165,14 @@ def test_offline_workspace_layout(tmp_path: Path) -> None:
     assert layout.effective_config_dir == "orgs-override" and layout.base_url == "https://otterdog-e2e.invalid/base"
     rendered = render_step(step, {**VARIABLES, "org": "e2e-offline"}).workspace
     assert rendered.orgs[0] == "e2e-offline-2" and rendered.orgs[1] == {"github_id": "e2e-archived", "archived": True}
+    assert rendered.org_entry == {
+        "name": "e2e-offline-project",
+        "secrets": {"allowed_references": {"pass": ["bots/{org_name}/**"]}},
+    }
+    assert rendered.defaults_override["secrets"] == {
+        "mode": "warn",
+        "allowed_references": {"vault": ["{github_id}/**"]},
+    }
     assert load(tmp_path, "fragments: {}\nworkspace: {}", tier_dir="offline").steps[0].workspace.is_default
 
 
@@ -178,6 +190,11 @@ def test_offline_workspace_layout(tmp_path: Path) -> None:
         ("workspace: {orgs: [{github_id: x, credentials: {provider: pass}}]}", "credentials: only null"),
         ("workspace: {orgs: [{github_id: x, token: t}]}", r"unknown key\(s\) \['token'\]"),
         ("workspace: {orgs: e2e-x}", "expected a list"),
+        ("workspace: {org_entry: {github_id: other}}", r"unknown key\(s\) \['github_id'\]"),
+        ("workspace: {org_entry: {credentials: null}}", r"unknown key\(s\) \['credentials'\]"),
+        ("workspace: {org_entry: {archived: true}}", r"unknown key\(s\) \['archived'\]"),
+        ("workspace: {org_entry: [name]}", "expected a mapping"),
+        ("workspace: {defaults_override: {secrets: {provider: pass}}}", r"unknown key\(s\) \['provider'\]"),
         ("workspace: {vendor: no-thanks}", "expected true or false"),
     ],
 )
@@ -240,8 +257,12 @@ def test_commands_show_holds_the_show_expectations(tmp_path: Path) -> None:
         ("pass:$(id)", True, False),
         ("pass:a b", True, False),
         ("pass:-x", False, False),
-        ("vault:e2e/x", True, False),
-        ("bitwarden:e2e/x", True, False),
+        ("vault:e2e/x", True, True),
+        ("vault:e2e/x", False, False),
+        ("bitwarden:0f1e2d3c-item@password", True, True),
+        ("bitwarden:0f1e2d3c-item@password", False, False),
+        ("vault:$(id)", True, False),
+        ("bitwarden:item field", True, False),
         ("foo:bar", True, False),
         ("hunter2", True, False),
         ("e2e-dummy-TOOSHORT", True, False),
@@ -249,7 +270,8 @@ def test_commands_show_holds_the_show_expectations(tmp_path: Path) -> None:
     ],
 )
 def test_dummy_secret_values(value: str, offline: bool, accepted: bool) -> None:
-    """Dummies and references are not secrets; shell metacharacters and resolvable vault providers are refused."""
+    """Dummies and references are not secrets; shell metacharacters are refused, and the vault providers otterdog
+    resolves (vault, bitwarden) are refused live: only offline commands, which never resolve a secret, may name them."""
     assert is_dummy_secret(value, offline=offline) is accepted
 
 
@@ -296,6 +318,7 @@ def test_schema_knows_the_new_keys() -> None:
     assert set(step["workspace"]["properties"]) == {
         "format",
         "orgs",
+        "org_entry",
         "defaults_override",
         "base_url",
         "config_dir",

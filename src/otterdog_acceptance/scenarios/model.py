@@ -98,6 +98,7 @@ from otterdog_acceptance.otterdog.workspace import (
     CONFIG_DIR,
     CONFIG_FORMATS,
     ORG_ENTRY_KEYS,
+    OWN_ORG_ENTRY_KEYS,
     WorkspaceLayout,
     dir_name_problem,
 )
@@ -123,6 +124,9 @@ SECRET_REFERENCE_RE = re.compile(r"^pass:[A-Za-z0-9_][A-Za-z0-9._/-]*$")
 E2E_SECRET_REFERENCE_RE = re.compile(r"^(?!(?:pass|bitwarden|vault):)[a-z][a-z0-9_-]*:e2e/[A-Za-z0-9._/-]+$")
 # offline only: a reference with several ':' (KB-025, 'pass:a:b' crashes validation with a ValueError)
 OFFLINE_SECRET_RE = re.compile(r"^pass:[A-Za-z0-9._/-]+(?::[A-Za-z0-9._/-]+)+$")
+# offline only: vault and bitwarden references ('<path>', '<item id>@<field>'), checked by the secret access policy of
+# eclipse-csi/otterdog#923; offline commands (validate, local-plan, show, ...) never resolve a secret, live ones would
+OFFLINE_PROVIDER_REFERENCE_RE = re.compile(r"^(?:vault|bitwarden):[A-Za-z0-9_][A-Za-z0-9._/@+-]*$")
 DUMMY_HINT = "'********', 'e2e-dummy-<8 chars [0-9a-z]>' or a 'pass:<path>' reference"
 IGNORED_FILES = ("known_bugs.yaml", "shards.yaml", "api_endpoints.yaml")
 SCENARIO_SUFFIXES = (".yaml", ".yml")
@@ -212,13 +216,15 @@ ENDPOINT_PATTERN = ENDPOINT_RE.pattern
 COMMAND_KEYS = ("exit_code", "contains", "not_contains")
 COUNT_KEYS = ("add", "change", "delete")
 # offline step ``workspace`` (otterdog.workspace.WorkspaceLayout); its defaults override may only set these keys (no
-# credential provider settings: a provider would run its CLI or contact a server)
-WORKSPACE_KEYS = ("format", "orgs", "defaults_override", "base_url", "config_dir", "vendor")
+# credential provider settings: a provider would run its CLI or contact a server; ``secrets`` is the secret access
+# policy of eclipse-csi/otterdog#923, patterns of references that offline commands never resolve)
+WORKSPACE_KEYS = ("format", "orgs", "org_entry", "defaults_override", "base_url", "config_dir", "vendor")
 DEFAULTS_OVERRIDE_KEYS: Mapping[str, tuple[str, ...] | None] = {
     "base_url": None,
     "jsonnet": ("base_template", "config_dir"),
     "github": ("config_repo", "exclude_teams"),
     "cost_policy": ("free_max_cache_size_gb",),
+    "secrets": ("mode", "allowed_references"),
 }
 
 ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.\-]*$")
@@ -1059,6 +1065,7 @@ def _parse_workspace(value: Any, where: str) -> WorkspaceLayout | None:
         return WorkspaceLayout(
             format=_choice(data.get("format", "json"), CONFIG_FORMATS, f"{where}.format"),
             orgs=tuple(_workspace_org(item, f"{where}.orgs[{index}]") for index, item in enumerate(orgs or [])),
+            org_entry=_own_org_entry(data.get("org_entry"), f"{where}.org_entry"),
             defaults_override=_defaults_override(data.get("defaults_override"), f"{where}.defaults_override"),
             base_url=None if base_url is None else _str(base_url, f"{where}.base_url"),
             config_dir=config_dir,
@@ -1079,6 +1086,16 @@ def _workspace_org(value: Any, where: str) -> str | dict[str, Any]:
     _check_keys(data, ORG_ENTRY_KEYS, where)
     if data.get("credentials") is not None:
         raise ScenarioError(f"{where}.credentials: only null (the harness writes the env credential provider)")
+    return copy.deepcopy(data)
+
+
+def _own_org_entry(value: Any, where: str) -> dict[str, Any] | None:
+    """Keys merged over the workspace's own organization entry: OWN_ORG_ENTRY_KEYS only (never its github_id, its
+    credentials or ``archived``)."""
+    if value is None:
+        return None
+    data = dict(_mapping(value, where))
+    _check_keys(data, OWN_ORG_ENTRY_KEYS, where)
     return copy.deepcopy(data)
 
 
@@ -1758,12 +1775,12 @@ class _SecretScanner:
 def is_dummy_secret(value: str, *, offline: bool = False) -> bool:
     """True for a secret value a scenario may hold: empty, ``****``, ``e2e-dummy-<8 [0-9a-z]>``, a ``pass:<path>``
     reference (shell-safe path), a ``<provider>:e2e/<path>`` reference of a provider otterdog does not resolve, and
-    offline the KB-025 literal (``pass:a:b``, several ``:``)."""
+    offline the KB-025 literal (``pass:a:b``, several ``:``) and vault/bitwarden references (never resolved there)."""
     if not value or DUMMY_SECRET_RE.match(value) or SECRET_REFERENCE_RE.match(value):
         return True
     if E2E_SECRET_REFERENCE_RE.match(value):
         return True
-    return offline and bool(OFFLINE_SECRET_RE.match(value))
+    return offline and bool(OFFLINE_SECRET_RE.match(value) or OFFLINE_PROVIDER_REFERENCE_RE.match(value))
 
 
 def _dummy_problem(name: str, tokens: list[_Token], index: int, *, offline: bool = False) -> str | None:
@@ -1920,12 +1937,19 @@ def json_schema() -> dict[str, Any]:
         | {"credentials": {"type": "null"}},
         "additionalProperties": False,
     }
+    own_org_entry = {
+        "type": ["object", "null"],
+        "description": "keys merged over the workspace's own organization entry",
+        "properties": {key: {"description": "otterdog.json organization entry key"} for key in OWN_ORG_ENTRY_KEYS},
+        "additionalProperties": False,
+    }
     workspace = {
         "type": ["object", "null"],
         "description": "offline only: otterdog's own configuration for this step (WorkspaceLayout)",
         "properties": {
             "format": {"enum": list(CONFIG_FORMATS)},
             "orgs": {"type": "array", "items": {"oneOf": [{"type": "string"}, org_entry]}},
+            "org_entry": own_org_entry,
             "defaults_override": {
                 "type": ["object", "null"],
                 "description": "content of .otterdog-defaults.json (merged over the defaults of otterdog.json)",

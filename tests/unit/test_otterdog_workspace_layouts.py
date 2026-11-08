@@ -86,6 +86,25 @@ def test_extra_organizations(tmp_path: Path) -> None:
     assert ws.org_config_file_for("o2") == tmp_path / "ws" / "orgs" / "o2" / "o2.jsonnet"
 
 
+def test_org_entry_is_merged_over_the_own_organization(tmp_path: Path) -> None:
+    """org_entry changes the workspace's own entry (another name, the secrets it may reference) and keeps its
+    github_id and env credentials; the next layout without it writes the harness entry again."""
+    secrets = {"allowed_references": {"pass": ["bots/shared/**"]}}
+    ws = workspace(tmp_path)
+    ws.use_layout(WorkspaceLayout(org_entry={"name": "o-project", "secrets": secrets}))
+    own = json.loads(ws.config_file.read_text())["organizations"][0]
+    assert own == {
+        "name": "o-project",
+        "github_id": "o",
+        "config_repo": ".otterdog",
+        "credentials": ENV_PROVIDER,
+        "secrets": secrets,
+    }
+    assert ws.org_ids == ["o"] and ws.org_dir == tmp_path / "ws" / "orgs" / "o"
+    ws.use_layout(WorkspaceLayout())
+    assert json.loads(ws.config_file.read_text())["organizations"][0]["name"] == "o"
+
+
 def test_defaults_override_base_url_and_config_dir(tmp_path: Path) -> None:
     """.otterdog-defaults.json is written next to the config file (removed again without an override); its
     jsonnet.config_dir wins over the layout's, like otterdog's deep merge; base_url overrides the workspace's."""
@@ -163,6 +182,9 @@ def test_clean_template_cache_and_export_follow_the_layout(tmp_path: Path) -> No
         ({"orgs": (3,)}, "neither a github_id nor a mapping"),
         ({"orgs": ({"github_id": "x", "token": "t"},)}, r"unknown key\(s\) \['token'\]"),
         ({"defaults_override": ["x"]}, "must be a mapping"),
+        ({"org_entry": ["x"]}, "must be a mapping"),
+        ({"org_entry": {"github_id": "x"}}, r"unknown key\(s\) \['github_id'\]"),
+        ({"org_entry": {"credentials": None}}, r"unknown key\(s\) \['credentials'\]"),
     ],
 )
 def test_invalid_layouts_are_refused(kwargs: dict[str, object], match: str) -> None:

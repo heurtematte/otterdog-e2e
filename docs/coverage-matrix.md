@@ -9,14 +9,14 @@ otterdog feature coverage of the e2e battery
 
 Inventory of otterdog main @d9dac78 (after v1.7.1; release:latest is v1.7.1), first built at main 9bdeb75 (after v1.6.1): every CLI command and its flags, every property of the configuration model grouped by feature, validation rules, diff semantics, the webapp (webhook events, comment commands, tasks, auto-merge, apply, blueprints, policies, /api and /internal), the webhook receiver contract and notable CHANGELOG fixes, mapped to the existing scenarios and tests of this repository. Gaps and partial coverage carry the outline of the missing test.
 
-**360 features** in 27 areas: 309 covered, 40 partial, 11 gaps; covered 86%, weighted 91% (a partial feature counts half). *Offline-verified* counts the covered or partial features with at least one covering item in the offline tier; *live-verified* those with a recorded green live run of their covering items (`verified_on`: target, SUT, run id, date); *unverified* the others: their coverage is implemented but has never run, so it is a claim, not evidence. A covered feature needs at least one covering item that runs strictly on the default SUT (not only known-bug xfails or scenarios skipped by `fixed_in`).
+**361 features** in 27 areas: 309 covered, 41 partial, 11 gaps; covered 86%, weighted 91% (a partial feature counts half). *Offline-verified* counts the covered or partial features with at least one covering item in the offline tier; *live-verified* those with a recorded green live run of their covering items (`verified_on`: target, SUT, run id, date); *unverified* the others: their coverage is implemented but has never run, so it is a claim, not evidence. A covered feature needs at least one covering item that runs strictly on the default SUT (not only known-bug xfails or scenarios skipped by `fixed_in`).
 
 ## Summary by area
 
 | Area | Features | Covered | Partial | Gap | Covered % | Weighted % | Offline-verified | Live-verified | Unverified |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| [CLI commands and global options](#cli) | 59 | 53 | 6 | 0 | 90% | 95% | 29 | 0 | 30 |
-| [otterdog.json, base template and credentials](#config) | 25 | 14 | 5 | 6 | 56% | 66% | 14 | 0 | 5 |
+| [CLI commands and global options](#cli) | 59 | 53 | 6 | 0 | 90% | 95% | 30 | 0 | 29 |
+| [otterdog.json, base template and credentials](#config) | 26 | 14 | 6 | 6 | 54% | 65% | 15 | 0 | 5 |
 | [Validation rules](#validation) | 38 | 37 | 1 | 0 | 97% | 99% | 37 | 0 | 1 |
 | [Diff engine and plan semantics](#plan-semantics) | 18 | 17 | 1 | 0 | 94% | 97% | 16 | 0 | 2 |
 | [Organization settings](#org-settings) | 14 | 10 | 4 | 0 | 71% | 86% | 3 | 0 | 11 |
@@ -42,14 +42,14 @@ Inventory of otterdog main @d9dac78 (after v1.7.1; release:latest is v1.7.1), fi
 | [Policies](#policies) | 3 | 3 | 0 | 0 | 100% | 100% | 0 | 0 | 3 |
 | [CHANGELOG fixes (regression guards)](#regressions) | 36 | 33 | 1 | 2 | 92% | 93% | 10 | 0 | 24 |
 | [Unmerged otterdog changes (pull requests and local branches)](#pending) | 5 | 4 | 1 | 0 | 80% | 90% | 0 | 0 | 5 |
-| **Total** | 360 | 309 | 40 | 11 | 86% | 91% | 156 | 0 | 193 |
+| **Total** | 361 | 309 | 41 | 11 | 86% | 91% | 158 | 0 | 192 |
 
 ## Summary by tier
 
 | Tier | Features | Covered | Partial | Gap | Covered % | Weighted % | Offline-verified | Live-verified | Unverified |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| `offline` | 116 | 108 | 8 | 0 | 93% | 97% | 116 | 0 | 0 |
-| `cli` | 144 | 121 | 18 | 5 | 84% | 90% | 34 | 0 | 105 |
+| `offline` | 117 | 108 | 9 | 0 | 92% | 96% | 117 | 0 | 0 |
+| `cli` | 144 | 121 | 18 | 5 | 84% | 90% | 35 | 0 | 104 |
 | `webhooks` | 4 | 3 | 1 | 0 | 75% | 88% | 2 | 0 | 2 |
 | `webapp` | 80 | 68 | 8 | 4 | 85% | 90% | 3 | 0 | 73 |
 | `web_ui` | 14 | 7 | 5 | 2 | 50% | 68% | 1 | 0 | 11 |
@@ -60,7 +60,7 @@ Inventory of otterdog main @d9dac78 (after v1.7.1; release:latest is v1.7.1), fi
 | Priority | Features | Covered | Partial | Gap | Covered % | Weighted % | Offline-verified | Live-verified | Unverified |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
 | P0 | 62 | 62 | 0 | 0 | 100% | 100% | 31 | 0 | 31 |
-| P1 | 141 | 121 | 18 | 2 | 86% | 92% | 63 | 0 | 76 |
+| P1 | 142 | 121 | 19 | 2 | 85% | 92% | 65 | 0 | 75 |
 | P2 | 157 | 126 | 22 | 9 | 80% | 87% | 62 | 0 | 86 |
 
 Tiers:
@@ -177,7 +177,7 @@ Defects found while building the inventory (not yet in `scenarios/known_bugs.yam
 | `cli.apply.delete-resources` | -d/--delete-resources: REMOVE patches are applied only with -d (else skipped) | cli | free | P0 | covered | **unverified** | `cli.repo.lifecycle`, `cli.team`, `cli.bpr.public`, `cli.ruleset.public`, `cli.repo.webhook` |
 | `cli.apply.deletion-hints` | without -d: 'No changes required.' + '&lt;n&gt; resource(s) would be deleted with flag '--delete-resources'.' or 'No resource will be removed, use flag ...' | offline | free | P1 | covered | offline | `tests/offline/test_cli_local_apply.py::test_removals_without_delete_flag_are_only_hinted`, `tests/offline/test_cli_local_apply.py::test_declined_approval_cancels_the_apply` |
 | `cli.apply.prompt` | apply/local-apply without -f: "Do you want to perform these actions? (Only 'yes' or 'y' ...)"; 'n' -&gt; 'Apply cancelled.' (exit 0); EOF -&gt; exit 2 | offline | free | P2 | covered | offline | `tests/offline/test_cli_local_apply.py::test_declined_approval_cancels_the_apply`, `tests/offline/test_cli_local_apply.py::test_end_of_input_at_the_prompt_exits_2`, `tests/cli/test_commands_local_apply.py::test_local_apply_applies_the_local_diff` |
-| `cli.apply.validation-errors` | apply with validation errors prints 'Planning aborted due to validation errors.' + 'No changes required.' and exits 0 | cli | free | P1 | **partial** | **unverified** | `tests/cli/test_known_bugs.py::test_apply_fails_on_validation_errors` |
+| `cli.apply.validation-errors` | apply with validation errors prints 'Planning aborted due to validation errors.' and exits with the error count (#923, 1.8.0; before: 'No changes required.' and exit 0, KB-001) | cli | free | P1 | **partial** | offline | `tests/cli/test_known_bugs.py::test_apply_fails_on_validation_errors`, `tests/offline/test_cli_local_apply.py::test_validation_errors_fail_the_local_apply` |
 | `cli.apply.failed-patches` | a failing patch prints 'failed to apply patch: &lt;TYPE&gt; - &lt;header&gt;' and the exit code is the number of failed patches | cli | free | P1 | covered | **unverified** | `tests/cli/test_commands_errors.py::test_failed_patches_set_the_exit_code` |
 | `cli.local-apply` | local-apply [-s SUFFIX] [-f] [-n] [-d]: applies the BASE -&gt; config diff to live GitHub (what the webapp does after a merge) | cli | free | P1 | covered | **unverified** | `tests/webapp/test_merge_apply.py::test_merge_applies_config`, `tests/cli/test_commands_local_apply.py::test_local_apply_applies_the_local_diff` |
 | `cli.web-login` | web-login: opens a headful browser logged in as the bot, waits for input, logs out (UI only) | web_ui | free | P2 | covered | **unverified** | `tests/web_ui/test_web_commands.py::test_web_login_opens_a_session` |
@@ -368,18 +368,18 @@ Details:
     - Source: `otterdog/operations/apply.py:110-121`, `otterdog/utils.py:580-585`
     - Operations: prompt, exit-code
     - Notes: offline (local-apply): 'n', 'no' and 'YES' cancel ('Apply cancelled.', exit 0, nothing executed), end of input fails with 'EOF when reading a line' (exit 2); live: local-apply answering 'n' creates nothing (cli.local-apply).
-- **`cli.apply.validation-errors`** (partial, P1, `cli`): apply with validation errors prints 'Planning aborted due to validation errors.' + 'No changes required.' and exits 0
+- **`cli.apply.validation-errors`** (partial, P1, `cli`): apply with validation errors prints 'Planning aborted due to validation errors.' and exits with the error count (#923, 1.8.0; before: 'No changes required.' and exit 0, KB-001)
     - Source: `otterdog/operations/plan.py:121-126`, `otterdog/operations/apply.py:97-108`
     - Operations: validate, exit-code
     - Known bugs: KB-001
-    - Notes: offline counterpart: `apply --local -f -n` with a validation error exits 0 without network (tests/unit/data/apply-validation-error.txt)
+    - Notes: KB-001 fixed by #923 (main a196494, 1.8.0): ApplyOperation.handle_finish returns the validation error count (otterdog/operations/apply.py:102-104 at a196494). Both tests run strict from 1.8.0 and xfail before; the offline one runs local-apply, which shares handle_finish (exit 1, no 'No changes required.'); the live one has not run yet.
     - Suggested: `cli.kb.apply-exit-code`
     - Steps:
-        - tests/cli/test_known_bugs.py::test_apply_fails_on_validation_errors asserts the correct exit status: an XFAIL while KB-001 exists, so the live behaviour is only observed through the expected failure
+        - no new test: both tests assert the fixed behaviour strictly on SUTs from 1.8.0 (branch:main, PR builds) and stay known-bug xfails on release:latest (v1.7.1)
     - Assert:
-        - covered once KB-001 is fixed (the test then passes strictly, XPASS first) or by a strict check of the printed texts
+        - covered once release:latest contains #923 (otterdog 1.8.0): then the default SUT runs them strictly
     - Needs:
-        - a fix of KB-001, or a strict live assertion of the current output
+        - the otterdog 1.8.0 release
 - **`cli.apply.failed-patches`** (covered, P1, `cli`): a failing patch prints 'failed to apply patch: &lt;TYPE&gt; - &lt;header&gt;' and the exit code is the number of failed patches
     - Source: `otterdog/operations/apply.py:139-153`
     - Operations: error, exit-code
@@ -457,7 +457,7 @@ Details:
 
 ## otterdog.json, base template and credentials
 
-`config`: 25 features, 14 covered, 5 partial, 6 gaps (weighted 66%).
+`config`: 26 features, 14 covered, 6 partial, 6 gaps (weighted 65%).
 
 | Id | Feature | Tier | Plan | Prio | Status | Verified | Covered by |
 |---|---|---|---|---|---|---|---|
@@ -482,6 +482,7 @@ Details:
 | `config.credentials.other-providers` | plain, pass, bitwarden and vault providers; 'no credential provider configured' / "unsupported credential provider '&lt;x&gt;'" | offline | free | P2 | **partial** | offline | `tests/offline/test_config_credentials.py::test_plain_and_default_providers`, `tests/offline/test_config_credentials.py::test_pass_provider_with_a_stub_store`, `tests/offline/test_config_credentials.py::test_pass_store_dir_from_the_defaults_override`, `tests/offline/test_config_credentials.py::test_bitwarden_provider_with_a_stub_vault` |
 | `config.credentials.inmemory` | inmemory provider: the webapp runs every operation with the installation token (only_token) | webapp | free | P2 | covered | **unverified** | `tests/webapp/test_boot.py::test_webapp_boot`, `tests/webapp/test_pr_validation.py::test_valid_config_pr` |
 | `config.secret-references` | secret values: 'pass:', 'bitwarden:', 'vault:' references resolved at apply; other values used literally with a validation warning; '\*\*\*\*\*\*\*\*' = dummy | cli | free | P1 | **partial** | offline | `cli.secrets`, `O-VAL-OK`, `O-VAL-SECRETS`, `cli.org.secret` |
+| `config.secret-access-policy` | secret access policy of otterdog.json (#923): defaults.secrets {mode, allowed_references} and organizations[].secrets restrict the provider references of an organization | offline | free | P1 | **partial** | offline | `O-VAL-SECRET-ACCESS-POLICY` |
 | `config.http-cache` | otterdog's HTTP cache (.cache/async_http relative to the cwd, always revalidated) must not hide out-of-band changes | cli | free | P1 | covered | **unverified** | `tests/cli/test_org_config.py::test_http_cache_does_not_hide_out_of_band_changes` |
 | `config.exclude-environments` | defaults.github.exclude_environments (regexes, re.match, case-sensitive): matching live environments that the configuration does not declare are ignored by plan, apply -d, import and show-live (#887) | cli | free | P2 | **gap** | - | - |
 | `config.exclude-teams.repository-permissions` | repository permissions of excluded teams (exclude_teams) are ignored unless the repository declares the team (#879) | cli | free | P2 | **gap** | - | - |
@@ -617,13 +618,27 @@ Details:
     - Source: `otterdog/config.py:230-244`, `otterdog/models/secret.py:45-61`, `otterdog/models/webhook.py:83-95`
     - Operations: validate, security
     - Known bugs: KB-025, KB-026, KB-057
-    - Notes: offline (O-VAL-SECRETS): a 'pass:' reference validates silently, an unknown provider prefix 'foo:e2e/b' warns, several ':' crash (KB-025); live (cli.org.secret): 'pass:' validates silently (validate-only step), 'foo:e2e/...' warns and is applied literally, '\*\*\*\*\*\*\*\*' is skipped; webhook secrets with an unknown prefix do not warn (KB-057). Not covered: the resolution of references at apply time (pass, bitwarden, vault).
+    - Notes: offline (O-VAL-SECRETS): a 'pass:' reference validates silently, an unknown provider prefix 'foo:e2e/b' warns, several ':' crashed before #923 (KB-025, fixed in 1.8.0); live (cli.org.secret): 'pass:' validates silently (validate-only step), 'foo:e2e/...' warns and is applied literally, '\*\*\*\*\*\*\*\*' is skipped; webhook secrets with an unknown prefix do not warn (KB-057). Not covered: the resolution of references at apply time (pass, bitwarden, vault).
     - Suggested: `O-SECRET-RESOLUTION` in `tests/offline/test_config_credentials.py`
     - Steps:
         - BASE with org secret &lt;P&gt;_A 'pass:e2e/a', head with 'pass:e2e/b'; a stub 'pass' CLI on PATH logging the requested path (as test_pass_provider_with_a_stub_store)
         - local-apply --local -n answering 'n' (secrets are resolved before the prompt), then the same with 'bitwarden:' and an unknown 'foo:' prefix
     - Assert:
         - the stub was asked for e2e/b exactly once and the value never appears in the output; 'foo:' is not resolved (literal) and warns at validation
+    - Needs:
+        - offline
+        - available: OtterdogCli.invoke(..., env={'PATH': '&lt;stub dir&gt;:&lt;system PATH&gt;'})
+- **`config.secret-access-policy`** (partial, P1, `offline`): secret access policy of otterdog.json (#923): defaults.secrets {mode, allowed_references} and organizations[].secrets restrict the provider references of an organization
+    - Source: `otterdog/credentials/secret_access_policy.py:1-251`, `otterdog/config.py:168-182`, `otterdog/config.py:234-305`, `otterdog/config.py:354-401`, `otterdog/models/__init__.py:84-95`, `otterdog/models/secret.py:65`, `otterdog/models/webhook.py:99`, `otterdog/operations/diff_operation.py:247`
+    - Operations: config, validate, security, error
+    - Known bugs: KB-050
+    - Notes: sources at main a196494 (1.8.0.dev). Offline (O-VAL-SECRET-ACCESS-POLICY, fixed_in 1.8.0): organization, repository, archived repository and environment secrets and organization and repository webhook secrets outside the patterns are errors (warnings in warn mode); '\*', '\*\*' (at least one segment at the end, zero in the middle), {org_name}/{github_id} from otterdog.json (not the jsonnet newOrg names), bitwarden item ids, '..' segments, a provider without patterns, organization patterns added to the defaults or alone; plain values, dummies and unknown providers unchecked; malformed policies stop the loading (exit 2; the organization name of 'organizations[&lt;name&gt;].secrets' is lost to rich markup, KB-050). Not covered: the apply-time check before a secret is resolved (needs a provider) and the webapp playground validation.
+    - Suggested: `O-SECRET-ACCESS-POLICY-APPLY` in `tests/offline/test_config_credentials.py`
+    - Steps:
+        - defaults.secrets in warn mode and a stub 'pass' CLI on PATH (as test_pass_provider_with_a_stub_store); BASE without the org secret, head with 'pass:bots/e2e-other/token'
+        - local-apply --local -n answering 'n' (secrets are resolved before the prompt); in enforce mode validation refuses the same reference first (validation and resolution share SecretAccessPolicy.check)
+    - Assert:
+        - warn mode prints "organization '&lt;name&gt;' is not allowed to reference secret 'pass:...'" as a warning and the stub is still asked for the path
     - Needs:
         - offline
         - available: OtterdogCli.invoke(..., env={'PATH': '&lt;stub dir&gt;:&lt;system PATH&gt;'})

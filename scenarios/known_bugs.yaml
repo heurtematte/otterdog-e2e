@@ -27,7 +27,7 @@
     - otterdog/webapp/tasks/apply_changes.py:209-211
   upstream: https://github.com/eclipse-csi/otterdog/pull/923
   fixed_in: 1.8.0
-  scenarios: [cli.kb.apply-exit-code]
+  scenarios: [cli.kb.apply-exit-code, O-LOCAL-APPLY-VALIDATION-ERRORS]
 
 - id: KB-002
   title: install-app/uninstall-app resolve token-only credentials but need a web login (username not available)
@@ -300,13 +300,13 @@
 
 - id: KB-025
   title: a secret value containing two or more ':' crashes validation and apply (ValueError, exit 2)
-  status: confirmed
+  status: fixed
   evidence:
     - otterdog/models/secret.py:50-53
     - otterdog/config.py:234-236
     - "e2e: scenarios/offline/secrets/val-secrets.yaml (step two-colons declares the bug)"
-  upstream: null
-  fixed_in: null
+  upstream: https://github.com/eclipse-csi/otterdog/pull/923
+  fixed_in: 1.8.0
   scenarios: [O-KB-SECRET-WITH-COLONS]
 
 - id: KB-026
@@ -620,6 +620,7 @@
     - otterdog/operations/canonical_diff.py:68
     - otterdog/operations/import_configuration.py:122
     - "e2e: scenarios/offline/template/canonical-diff.yaml (step bracketed-description declares the bug)"
+    - "e2e: scenarios/offline/secrets/val-secret-access-policy.yaml (step mode-of-an-organization declares the bug)"
   upstream: null
   fixed_in: null
   scenarios: [cli.kb.list-advisories-markup, O-KB-SHOW-MARKDOWN-LINKS, O-KB-VALIDATION-MARKUP]

@@ -75,7 +75,7 @@ shortened to the relevant lines.
 
 | id | title | status | area | linked scenarios |
 |----|-------|--------|------|------------------|
-| KB-001 | apply exits 0 (webapp reports success) when validation fails | fixed (#923, 1.8.0) | CLI, webapp | `cli.kb.apply-exit-code` |
+| KB-001 | apply exits 0 (webapp reports success) when validation fails | fixed (#923, 1.8.0) | CLI, webapp | `cli.kb.apply-exit-code`, `O-LOCAL-APPLY-VALIDATION-ERRORS` |
 | KB-002 | install-app/uninstall-app: token-only credentials but a web login | suspected | CLI | `webui.cmd.install-app` |
 | KB-003 | variables read without pagination (10 per page) | suspected | provider | `cli.kb.variables-pagination` |
 | KB-004 | webhook URL change through `aliases` never applied | confirmed | model | `cli.kb.webhook-url-alias`, `H-ORG-HOOK-ALIAS` |
@@ -99,7 +99,7 @@ shortened to the relevant lines.
 | KB-022 | org variable selecting a repo created by the same apply fails | suspected | apply order | `cli.kb.org-variable-same-apply` |
 | KB-023 | org ruleset repo-name patterns after the first warn spuriously | confirmed | model | `enterprise.kb.org-ruleset-repo-patterns` |
 | KB-024 | imported Free org fails validation (members_can_create_private_pages) | suspected | import | `cli.import.validate` |
-| KB-025 | secret value with two or more `:` crashes (ValueError) | confirmed | model | `O-KB-SECRET-WITH-COLONS` |
+| KB-025 | secret value with two or more `:` crashes (ValueError) | fixed (#923, 1.8.0) | model | `O-KB-SECRET-WITH-COLONS` |
 | KB-026 | plain secret values echoed in output and PR comments | confirmed | model, webapp | - |
 | KB-027 | auto-merge eligibility compares team names with slugs | suspected | webapp | - |
 | KB-028 | organization variables are never validated (F-01) | confirmed | model | - |
@@ -164,13 +164,14 @@ shortened to the relevant lines.
 ### KB-001 — apply exits 0 (and the webapp reports success) when validation fails
 
 Status: **fixed** (1.8.0) · Upstream: https://github.com/eclipse-csi/otterdog/pull/923 · Scenarios: `cli.kb.apply-exit-code`
-(tests/cli/test_known_bugs.py)
+(tests/cli/test_known_bugs.py), `O-LOCAL-APPLY-VALIDATION-ERRORS` (tests/offline/test_cli_local_apply.py)
 
 Fixed by #923 (a196494, after v1.7.1; "return the validation errors from apply"): `ApplyOperation.handle_finish`
 returns the validation error count when validation fails (`otterdog/operations/apply.py:102-104` at main a196494),
-so `apply` exits non-zero and the webapp's ApplyChangesTask no longer reports success. `cli.kb.apply-exit-code` runs
-strict on SUTs from 1.8.0 (its dev builds included) and stays an expected failure on older ones. The text below
-describes the defect as it was.
+so `apply` exits non-zero and the webapp's ApplyChangesTask no longer reports success. `local-apply` shares
+`handle_finish`, which `O-LOCAL-APPLY-VALIDATION-ERRORS` asserts offline (exit 1, no 'No changes required.').
+`cli.kb.apply-exit-code` and `O-LOCAL-APPLY-VALIDATION-ERRORS` run strict on SUTs from 1.8.0 (their dev builds
+included) and stay expected failures on older ones. The text below describes the defect as it was.
 
 Evidence: `otterdog/operations/plan.py:121-126`, `otterdog/operations/plan.py:128-139`,
 `otterdog/operations/apply.py:97-108`, `otterdog/webapp/tasks/apply_changes.py:139-143`,
@@ -815,9 +816,16 @@ the key.
 
 ### KB-025 — a secret value containing two or more `:` crashes validation and apply
 
-Status: **confirmed** · Upstream: none · Scenarios: `O-KB-SECRET-WITH-COLONS` (tests/offline/test_cli_exit_codes.py)
+Status: **fixed** (1.8.0) · Upstream: https://github.com/eclipse-csi/otterdog/pull/923 · Scenarios: `O-KB-SECRET-WITH-COLONS`
+(tests/offline/test_cli_exit_codes.py)
 
 Evidence: `otterdog/models/secret.py:50-53`, `otterdog/config.py:234-236`.
+
+Fixed by #923 (a196494, after v1.7.1; "restrict the secrets that an organization can reference"): `Secret.validate`
+and `CredentialResolver.get_secret` split the value at its first `:` only (`re.split(":", value, maxsplit=1)`), so
+`pass:a:b` is provider `pass` with path `a:b`. `O-KB-SECRET-WITH-COLONS` and the step `two-colons` of `O-VAL-SECRETS`
+run strict on SUTs from 1.8.0 (their dev builds included) and stay expected failures on older ones. The text below
+describes the defect as it was.
 
 `provider_type, _ = re.split(":", value)` unpacks into exactly two names. `a:b:c` raises ValueError "too many values
 to unpack" and the command exits 2. `CredentialResolver.get_secret` has the same split, so an apply crashes too.
@@ -1812,6 +1820,11 @@ outputs still hand free text to the console unescaped (follow-up of #440):
 - `show --markdown` writes its pages through the same printer: the link texts `[<repo>]` of the repository page title
   and of the Repositories table of `configuration.md` are swallowed as style tags.
 - validation messages are rich table cells (`_print_message`): a message quoting a value with markup loses it.
+- the errors that stop a command (`print_exception` prints `str(exc)` through `print_error`): since #923 (1.8.0) a
+  malformed `secrets` entry of an organization of otterdog.json is reported as `invalid 'organizations.secrets':
+  unexpected keys ['mode']` instead of `invalid 'organizations[<name>].secrets': ...` (`otterdog/config.py:172` at
+  main a196494): the organization name, the only clue to the faulty entry, is read as a style tag (step
+  `mode-of-an-organization` of `O-VAL-SECRET-ACCESS-POLICY`, offline on main a196494).
 - the canonical form of a configuration: `GitHubOrganization.to_jsonnet` writes into a `StringIO` through an
   `IndentingPrinter`, i.e. a rich console, and `write_patch_object_as_json` prints the `json.dumps` of every value
   unescaped. A description `[e2e] canonical form` becomes `" canonical form"` in the canonical form, so
@@ -2062,6 +2075,11 @@ provider (`pass`, `bitwarden`, `vault`). Webhook secrets only check that a `:` i
 `foo:e2e/b` validates silently and the apply then sends the literal value (`get_secret` returns it for an unknown
 provider). A value with several `:` validates too and makes the apply crash on the unpacking of `re.split` (the
 webhook side of KB-025, where secrets already crash at validation).
+
+#923 (1.8.0) splits the value at its first `:` in `CredentialResolver.get_secret` (KB-025), which removes the apply
+crash of a webhook secret with several `:` (read from the code: the apply resolves secrets through a provider, which
+the offline tier cannot run). The unknown prefix still validates silently: since #923 a webhook secret with a `:` is
+checked by the secret access policy, which ignores providers other than pass, vault and bitwarden.
 
 #### Reproduction
 
