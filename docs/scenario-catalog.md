@@ -46,7 +46,7 @@ items with `--scenario` / `--e2e-scenario`.
 | O-LPLAN-CHANGE | `local-plan` of changed attributes | P0 | verified | `O-LPLAN-CHANGE` | CLI-03, MOD-LOCALPLAN-01 |
 | O-LPLAN-REMOVE | `local-plan` of a removed repository and nested objects | P0 | verified | `O-LPLAN-REMOVE` | CLI-03, MOD-LOCALPLAN-01 |
 | O-SHOW-DEFAULT | `show-default` of the vendored template | P0 | verified | `O-SHOW-DEFAULT` (YAML) and `tests/offline/test_cli_basics.py` | CLI-18 |
-| O-CANON | `canonical-diff` of a configuration: diff content, an already canonical file gives an empty diff; steps declare KB-010 (swapped labels) and KB-050 (bracketed words dropped from the canonical form) | P1 | verified | `O-CANON` (`canonical-diff.yaml`) | CLI-18 |
+| O-CANON | `canonical-diff` of a configuration: diff content, an already canonical file gives an empty diff, lists with a null template default replace it (#916); steps declare KB-010 (swapped labels) and KB-050 (bracketed words dropped from the canonical form) | P1 | verified | `O-CANON` (`canonical-diff.yaml`) | CLI-18 |
 | O-WEB-BOOT | webapp boots with dummy credentials: health, deployed version | P0 | verified | `tests/offline/test_webapp_contract.py` (`O-WEB-BOOT`) | APP-HEALTH-01, DEP-BOOT-01 |
 | O-WEB-SIG | receiver contract: missing/invalid/sha256-only signature 400, `application/json; charset=utf-8` 415, valid ping 204, unknown event 204, unknown installation 204 + log line | P0 | verified | `tests/offline/test_webapp_contract.py` (`O-WEB-SIG`) | WH-SIG-01, WH-SIG-001, APP-WH-01, DEP-WH-01, REG-WEBHOOK-ROBUST, WH-NEG-01 |
 

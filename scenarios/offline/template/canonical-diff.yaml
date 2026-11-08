@@ -13,7 +13,12 @@ description: >-
   configuration written by import), so the diff is not empty and the step declares the bug. The labels are known to
   be swapped (KB-010: the lines of the original file are shown on the 'canonical' side): the 'labels' step asserts the
   correct orientation ('--- original', '+++ canonical') and declares the bug. A fix of either bug shows as a
-  KnownBugNotReproducedWarning instead of a failure (BAT-12).
+  KnownBugNotReproducedWarning instead of a failure (BAT-12). The steps custom-property-list-default and
+  code-security-bypass-reviewers write a list whose template default is null (a multi_select default_value, the
+  secret scanning bypass reviewers) in canonical form: since #916 (1.8.0) the canonical form replaces such a list
+  (':'), before it appended to null ('+:', which jsonnet cannot evaluate, so a configuration written by import failed
+  to load); their outcome depends on the SUT and expect_canonical_list_replacement of tests/offline/test_scenarios.py
+  asserts it, with the neighbouring 'allowed_values+:' unchanged.
 priority: P1
 tags: [offline, template, repo, rulesets]
 observe: true
@@ -28,6 +33,26 @@ references:
       - {step: ruleset-rule-lists, kind: cli, key: canonical-diff}
       - {step: ruleset-rule-lists, kind: cli, key: show}
       - {step: ruleset-rule-lists, kind: cli, key: validate}
+  - pr: 916
+    note: >-
+      "fix: write lists with a null default as replacement in generated jsonnet" (head 37af54b, squash 1373708,
+      1.8.0): CustomProperty.default_value and OrganizationCodeSecurityConfiguration
+      secret_scanning_delegated_bypass_reviewers become replace_on_patch, so the canonical form (and import) writes
+      them with ':' instead of '+:'; the lists with a non-null default ('allowed_values+:') and every other step must
+      not change.
+    expected_deltas:
+      - step: custom-property-list-default
+        kind: cli
+        key: canonical-diff
+        note: >-
+          head prints an empty diff (exit 0); base writes 'default_value+: [' in the canonical form, a one-line hunk
+          against the file's 'default_value: [' (exit 0)
+      - step: code-security-bypass-reviewers
+        kind: cli
+        key: canonical-diff
+        note: >-
+          head prints an empty diff (exit 0); base writes 'secret_scanning_delegated_bypass_reviewers+: [', a one-line
+          hunk (exit 0)
 steps:
   - name: canonical
     fragments:
@@ -95,3 +120,17 @@ steps:
       canonical-diff:
         exit_code: 0
         contains: ["--- original", "+++ canonical"]
+  - name: custom-property-list-default
+    # canonical form: a list 'default_value' replaces the null default, 'allowed_values' extends []; whether the diff is
+    # empty depends on the SUT (#916): expect_canonical_list_replacement of tests/offline/test_scenarios.py asserts it
+    config: {file: files/canonical-custom-property.jsonnet}
+    validate: {ok: true, errors: 0}
+    commands:
+      canonical-diff: {exit_code: 0, contains: ["Showing canonical diff"]}
+  - name: code-security-bypass-reviewers
+    # canonical form: the bypass reviewers replace the null default; SUTs before #892 (v1.7.1) cannot load the
+    # configuration, so every command records only (expect_canonical_list_replacement)
+    config: {file: files/canonical-code-security.jsonnet}
+    commands:
+      canonical-diff: {exit_code: null}
+      show: {exit_code: null}

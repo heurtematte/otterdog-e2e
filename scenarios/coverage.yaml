@@ -414,6 +414,7 @@ features:
     status: covered
     covered_by: [O-CANON]
     known_bugs: [KB-010, KB-050]
+    notes: "a list whose template default is null is written as a replacement (':') since #916 (1.8.0; '+:' before, null + array fails to evaluate): steps custom-property-list-default (default_value of a multi_select custom property, 'allowed_values+:' unchanged) and code-security-bypass-reviewers (secret_scanning_delegated_bypass_reviewers, SUTs with #892) of O-CANON, asserted per SUT by expect_canonical_list_replacement; import writes the same form (live, not asserted)"
 
   - id: cli.list-projects
     area: cli

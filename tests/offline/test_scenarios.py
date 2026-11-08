@@ -534,6 +534,19 @@ def has_commit(history: History, commit: str, what: str) -> bool | None:
     return found
 
 
+def has_any_commit(history: History, commits: tuple[str, ...], what: str) -> bool | None:
+    """Whether the SUT contains one of ``commits`` (a fix as squashed on main and as the head of its pull request: a
+    pr: SUT of that head does not contain the squash commit): True when one is an ancestor, False when the mirror
+    rules one out and none is, None (with a warning) when it cannot decide."""
+    found = [history.contains(commit) for commit in commits]
+    if True in found:
+        return True
+    if False in found:
+        return False
+    warnings.warn(f"cannot tell whether {history.label} contains {what} ({commits[0][:7]})", stacklevel=2)
+    return None
+
+
 def expect_ruleset_strict(step: StepOutcome, history: History) -> None:
     """O-VAL-RULESET-STRICT step no-strict: SUTs containing #790 refuse the ruleset at validation (and local-plan
     aborts); older SUTs validate it and plan the repository and its ruleset."""
@@ -657,11 +670,55 @@ def expect_enum_schema_error(spec: EnumSchemaStep, step: StepOutcome, history: H
     )
 
 
+# eclipse-csi/otterdog#916 "fix: write lists with a null default as replacement in generated jsonnet": squash commit on
+# main, head of the pull request; #892 (squash commit on main) added the code security configurations
+FIX_916 = ("1373708a456d85d4e5b16e480b6a1155b7c7b9a3", "37af54b00ebe07af598cb12e65817e4ecd7f572e")
+FIX_892 = "d9dac7868f3cd2d1bae1bf1b1675b572547d9136"
+NO_CODE_SECURITY = "no such field: newOrgCodeSecurityConfiguration"
+
+
+def changed_lines(text: str) -> list[str]:
+    """The removed and added lines of a unified diff, stripped of their marker and whitespace, sorted."""
+    lines = [line for line in text.splitlines() if line.startswith(("-", "+")) and not line.startswith(("---", "+++"))]
+    return sorted(line[1:].strip() for line in lines)
+
+
+def expect_canonical_list_replacement(field: str, needs_892: bool, step: StepOutcome, history: History) -> None:
+    """O-CANON steps writing a list whose template default is null (``field``) in canonical form: since #916 the
+    canonical form replaces it (':'), so the diff is empty; before, it appends to null ('+:'): the diff is exactly that
+    line, the neighbouring lists keep '+:' on both. A SUT without the model (#892) cannot load the configuration."""
+    diff = result_of(step, "canonical-diff")
+    text = normalize_text(diff.output)
+    if needs_892 and has_commit(history, FIX_892, "#892") is False:
+        assert diff.exit_code != 0 and NO_CODE_SECURITY in text, f"{history.label} predates #892\n{tail(diff)}"
+        return
+    has_fix = has_any_commit(history, FIX_916, "#916")
+    if has_fix is None:
+        has_fix = "@@ " not in text
+    assert diff.exit_code == 0 and "Showing canonical diff" in text, f"exit {diff.exit_code}\n{tail(diff)}"
+    if has_fix:
+        assert "@@ " not in text and f"{field}+:" not in text, (
+            f"{history.label} contains #916: the canonical form must replace the null default of {field!r} (empty "
+            f"diff)\n{tail(diff)}"
+        )
+        return
+    assert changed_lines(text) == sorted([f"{field}+: [", f"{field}: ["]), (
+        f"{history.label} predates #916: the canonical form appends {field!r} to its null default, nothing else "
+        f"differs\n{tail(diff)}"
+    )
+
+
 # (scenario id, step) -> the check of that step's outcome
 SUT_EXPECTATIONS: dict[tuple[str, str], Callable[[StepOutcome, History], None]] = {
     ("O-VAL-RULESET-STRICT", "no-strict"): expect_ruleset_strict,
     ("O-VAL-ORG-RULESET-STRICT", "org-no-strict"): expect_org_ruleset_strict,
     ("O-VAL-SECRETS", "lowercase-name"): expect_secret_name_case,
+    ("O-CANON", "custom-property-list-default"): functools.partial(
+        expect_canonical_list_replacement, "default_value", False
+    ),
+    ("O-CANON", "code-security-bypass-reviewers"): functools.partial(
+        expect_canonical_list_replacement, "secret_scanning_delegated_bypass_reviewers", True
+    ),
     **{
         (scenario, step): functools.partial(expect_schema_error, message, schema_path)
         for scenario, steps in SCHEMA_ERROR_STEPS.items()

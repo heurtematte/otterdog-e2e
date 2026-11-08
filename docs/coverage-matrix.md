@@ -241,6 +241,7 @@ Details:
     - Source: `otterdog/cli.py:820-827`, `otterdog/operations/canonical_diff.py:35-105`
     - Operations: run
     - Known bugs: KB-010, KB-050
+    - Notes: a list whose template default is null is written as a replacement (':') since #916 (1.8.0; '+:' before, null + array fails to evaluate): steps custom-property-list-default (default_value of a multi_select custom property, 'allowed_values+:' unchanged) and code-security-bypass-reviewers (secret_scanning_delegated_bypass_reviewers, SUTs with #892) of O-CANON, asserted per SUT by expect_canonical_list_replacement; import writes the same form (live, not asserted)
 - **`cli.check-token-permissions`** (covered, P1, `cli`): check-token-permissions [-l]: X-OAuth-Scopes must include admin:org, admin:org_hook, delete_repo, repo, workflow ('Missing scopes: ...', exit 1)
     - Source: `otterdog/cli.py:935-950`, `otterdog/operations/check_token_permissions.py:26-78`
     - Operations: run, exit-code, permission
