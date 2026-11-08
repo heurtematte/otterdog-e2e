@@ -216,3 +216,38 @@ def test_known_issues_sections_name_their_finding() -> None:
     for finding_id, bug_id in FINDING_BUGS.items():
         assert f"Coverage finding {finding_id}." in sections[bug_id], bug_id
         assert f"| {bug_id} |" in KNOWN_ISSUES.read_text(encoding="utf-8"), f"{bug_id} missing from the summary table"
+
+
+def known_bug_tests_with_their_own_xfail(source: str) -> list[str]:
+    """Test functions combining ``pytest.mark.known_bug(...)`` with a ``pytest.mark.xfail(...)`` decorator."""
+    import ast
+
+    found = []
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+            continue
+        marks = {
+            decorator.func.attr
+            for decorator in node.decorator_list
+            if isinstance(decorator, ast.Call) and isinstance(decorator.func, ast.Attribute)
+        }
+        if {"known_bug", "xfail"} <= marks:
+            found.append(f"line {node.lineno}: {node.name}")
+    return found
+
+
+def test_known_bug_tests_never_carry_their_own_xfail() -> None:
+    """The plugin's xfail of a known bug follows its status (none once fixed, except on SUTs predating fixed_in); a
+    test's own xfail would keep hiding a regression after the fix, so the exception goes on the marker instead:
+    ``known_bug(id, raises=...)``."""
+    offenders = {
+        str(path.relative_to(ROOT)): found
+        for path in sorted((ROOT / "tests").glob("*/test_*.py"))
+        if path.parent.name != "unit" and (found := known_bug_tests_with_their_own_xfail(path.read_text("utf-8")))
+    }
+    assert not offenders, f"known_bug tests with their own xfail (use known_bug(id, raises=...)): {offenders}"
+    code = (
+        "@pytest.mark.known_bug('KB-1', raises=E)\ndef test_a():\n    pass\n\n"
+        "@pytest.mark.known_bug('KB-1')\n@pytest.mark.xfail(raises=E, strict=False)\ndef test_b():\n    pass\n"
+    )
+    assert known_bug_tests_with_their_own_xfail(code) == ["line 7: test_b"]

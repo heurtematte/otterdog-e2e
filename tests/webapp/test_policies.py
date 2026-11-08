@@ -304,12 +304,7 @@ def test_policy_definitions_are_loaded_and_merged(
 
 @pytest.mark.scenario("W-POL-LOAD-MALFORMED", priority="P2")
 @pytest.mark.tags("webapp")
-@pytest.mark.known_bug("KB-069")
-@pytest.mark.xfail(
-    raises=PolicyLoadingError,
-    strict=False,
-    reason="KB-069: one unreadable definition file fails the whole FetchPoliciesTask",
-)
+@pytest.mark.known_bug("KB-069", raises=PolicyLoadingError)
 def test_malformed_policy_does_not_block_the_others(
     webapp_scenario: WebappScenario, blueprints: BlueprintHelper
 ) -> None:

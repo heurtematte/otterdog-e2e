@@ -431,12 +431,7 @@ def test_imports_are_confined_to_the_org_directory(
 
 @pytest.mark.scenario("W-SYNC-PROPAGATION-DRIFT", priority="P2")
 @pytest.mark.tags("webapp", "repo")
-@pytest.mark.known_bug("KB-066")
-@pytest.mark.xfail(
-    raises=PropagatedSyncStatusError,
-    strict=False,
-    reason="KB-066: a sync status copied to a new commit always reads 'completed successfully'",
-)
+@pytest.mark.known_bug("KB-066", raises=PropagatedSyncStatusError)
 def test_out_of_sync_status_survives_a_new_commit(webapp_scenario: WebappScenario, mutator: Mutator) -> None:
     """Drifted org, PR out of sync; a second commit pushed within the hour copies the previous sync status. The
     copy must keep "otterdog sync check failed" and /api in_sync false: the state of both outcomes is success, so

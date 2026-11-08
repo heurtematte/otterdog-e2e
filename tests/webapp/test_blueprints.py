@@ -28,11 +28,14 @@ Facts verified in otterdog main 9bdeb75 (identical in v1.6.1; texts unchanged si
 
 W-BP-LOAD: definitions load on push and init, a definition without type is skipped, a global id wins, removal unloads.
 W-BP-LOAD-YAML (KB-069): invalid YAML in one definition must not block the others (non-strict xfail, scoped).
-W-BP-GLOBAL-PUSH (KB-015): a push to the configs repo should reload the global definitions (non-strict xfail, scoped).
+W-BP-GLOBAL-PUSH (KB-015, fixed in 1.8.0 by #906): a push to the configs repo reloads the global definitions (scoped
+xfail on older SUTs).
 W-BP-UPDATE (KB-070): one fetch must store every changed field of a definition; ``recheck or update_if_changed(...)``
-stops at the first changed one (db/service.py:933-961), so a new name is stored with the old config (scoped xfail).
+stopped at the first changed one (db/service.py:933-961), so a new name was stored with the old config (fixed in 1.7.0:
+scoped xfail on older SUTs).
 W-BP-RECHECK-LOST (KB-071): a changed definition must be rechecked even when another fetch runs before the check;
-every fetch assigns recheck_needed (db/service.py:958), so the second one clears it (scoped xfail).
+every fetch assigned recheck_needed (db/service.py:958), so the second one cleared it (fixed in 1.7.0: scoped xfail on
+older SUTs).
 W-BP-TYPE-CHANGE (KB-072): a definition that keeps its id and changes its type must keep /internal/check working;
 the stored blueprint is keyed by its type (db/models.py:245-258) and never re-typed, so the new config fails the old
 type's validation and /internal/check answers 500 on every call (scoped xfail; the test removes the definition).
@@ -488,12 +491,7 @@ def test_blueprint_definitions_are_loaded(
 
 @pytest.mark.scenario("W-BP-LOAD-YAML", priority="P2")
 @pytest.mark.tags("webapp")
-@pytest.mark.known_bug("KB-069")
-@pytest.mark.xfail(
-    raises=DefinitionLoadingError,
-    strict=False,
-    reason="KB-069: one unreadable definition file fails the whole FetchBlueprintsTask",
-)
+@pytest.mark.known_bug("KB-069", raises=DefinitionLoadingError)
 def test_invalid_yaml_definition_does_not_block_the_others(
     webapp_scenario: WebappScenario, blueprints: BlueprintHelper
 ) -> None:
@@ -520,12 +518,7 @@ def test_invalid_yaml_definition_does_not_block_the_others(
 
 @pytest.mark.scenario("W-BP-GLOBAL-PUSH", priority="P2")
 @pytest.mark.tags("webapp", "webhooks-app")
-@pytest.mark.known_bug("KB-015")
-@pytest.mark.xfail(
-    raises=GlobalPushReloadError,
-    strict=False,
-    reason="KB-015: pushes to the configs repo arrive as App deliveries and never reach the reload branch",
-)
+@pytest.mark.known_bug("KB-015", raises=GlobalPushReloadError)
 def test_global_definitions_reload_on_configs_push(
     webapp_scenario: WebappScenario, blueprints: BlueprintHelper, relay: DeliveryRelay
 ) -> None:
@@ -560,12 +553,7 @@ def test_global_definitions_reload_on_configs_push(
 
 @pytest.mark.scenario("W-BP-UPDATE", priority="P2")
 @pytest.mark.tags("webapp")
-@pytest.mark.known_bug("KB-070")
-@pytest.mark.xfail(
-    raises=BlueprintUpdateError,
-    strict=False,
-    reason="KB-070: a definition change touching several fields is stored one field per FetchBlueprintsTask",
-)
+@pytest.mark.known_bug("KB-070", raises=BlueprintUpdateError)
 def test_changed_definition_is_stored_by_one_fetch(
     webapp_scenario: WebappScenario, blueprints: BlueprintHelper, relay: DeliveryRelay
 ) -> None:
@@ -597,12 +585,7 @@ def test_changed_definition_is_stored_by_one_fetch(
 
 @pytest.mark.scenario("W-BP-RECHECK-LOST", priority="P2")
 @pytest.mark.tags("webapp")
-@pytest.mark.known_bug("KB-071")
-@pytest.mark.xfail(
-    raises=RecheckLostError,
-    strict=False,
-    reason="KB-071: every FetchBlueprintsTask overwrites recheck_needed, a second fetch drops a pending recheck",
-)
+@pytest.mark.known_bug("KB-071", raises=RecheckLostError)
 def test_changed_definition_is_rechecked_after_another_fetch(
     webapp_scenario: WebappScenario, blueprints: BlueprintHelper, relay: DeliveryRelay
 ) -> None:
@@ -641,12 +624,7 @@ def test_changed_definition_is_rechecked_after_another_fetch(
 
 @pytest.mark.scenario("W-BP-TYPE-CHANGE", priority="P2")
 @pytest.mark.tags("webapp")
-@pytest.mark.known_bug("KB-072")
-@pytest.mark.xfail(
-    raises=BlueprintTypeChangeError,
-    strict=False,
-    reason="KB-072: a blueprint keeps its type when its definition changes type, /internal/check then fails",
-)
+@pytest.mark.known_bug("KB-072", raises=BlueprintTypeChangeError)
 def test_changed_type_keeps_the_check_working(
     webapp_scenario: WebappScenario, blueprints: BlueprintHelper, relay: DeliveryRelay
 ) -> None:
@@ -968,13 +946,8 @@ def test_closed_remediation_dismisses_the_blueprint(
 # --- pin_workflow ---------------------------------------------------------------------------------------------------
 @pytest.mark.scenario("W-BP-PIN", priority="P2")
 @pytest.mark.tags("webapp", "workflows")
-@pytest.mark.known_bug("KB-073")
+@pytest.mark.known_bug("KB-073", raises=DockerActionPinningError)
 @pytest.mark.timeout(LONG_TIMEOUT, func_only=True)
-@pytest.mark.xfail(
-    raises=DockerActionPinningError,
-    strict=False,
-    reason="KB-073: pin_workflow skips a workflow that references a docker:// action",
-)
 def test_pin_workflow_remediation(webapp_scenario: WebappScenario, blueprints: BlueprintHelper) -> None:
     """The remediation PR pins ``actions/checkout@v4`` to its tag's commit and keeps the other references; merging it
     gives success. Last (scoped xfail): a workflow with a docker:// step must get its checkout pinned too."""

@@ -522,12 +522,7 @@ def test_drifted_org_still_auto_merges(webapp_scenario: WebappScenario, mutator:
 
 @pytest.mark.scenario("W-MERGE-TEAM-HOOK", priority="P2")
 @pytest.mark.tags("webapp", "teams", "webhooks", "repo")
-@pytest.mark.known_bug("KB-068")
-@pytest.mark.xfail(
-    raises=WildcardWebhookUpdateError,
-    strict=False,
-    reason="KB-068: a changed wildcard webhook is PATCHed with the pattern as its url and without its secret",
-)
+@pytest.mark.known_bug("KB-068", raises=WildcardWebhookUpdateError)
 def test_team_and_wildcard_webhook_are_applied(webapp_scenario: WebappScenario) -> None:
     """A run team and a run repository whose webhook url carries a token, declared on main with a wildcard url
     (``.../<slug>*``): the merged PR changing the team description and the webhook events is applied by the webapp

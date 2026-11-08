@@ -89,7 +89,7 @@ shortened to the relevant lines.
 | KB-012 | Helm chart sets WEBHOOK_ENDPOINT | confirmed | deployment | - |
 | KB-013 | GITHUB_ADMIN_TEAMS entries not stripped | confirmed | webapp | `W-RT-ADMIN-TEAMS-SPACES` |
 | KB-014 | FetchAllPullRequestsTask hard-codes `main` | suspected | webapp | - |
-| KB-015 | otterdog.json not reloaded on App push deliveries | suspected | webapp | `W-BP-GLOBAL-PUSH` |
+| KB-015 | otterdog.json not reloaded on App push deliveries | fixed (#906, 1.8.0) | webapp | `W-BP-GLOBAL-PUSH` |
 | KB-016 | `_` in a custom property name forbids multi_select values | confirmed | schema | `cli.kb.custom-property-underscore` |
 | KB-017 | author_association FIRST_TIMER drops the event | confirmed | webapp | - |
 | KB-018 | stale snapshot overwrites a merged PR status (#792) | fixed (#792, 1.7.0) | webapp | - |
@@ -565,7 +565,15 @@ Webapp scenarios belong to the webapp tier (tests/webapp).
 
 ### KB-015 — otterdog.json is not reloaded when the push arrives as an App delivery
 
-Status: **suspected** · Upstream: none · Scenarios: `W-BP-GLOBAL-PUSH` (tests/webapp/test_blueprints.py)
+Status: **fixed** (1.8.0) · Upstream: https://github.com/eclipse-csi/otterdog/pull/906 · Scenarios:
+`W-BP-GLOBAL-PUSH` (tests/webapp/test_blueprints.py)
+
+Fixed by #906 ("Fix/installation before config", b79c7b9, after v1.7.1): `on_push_received` checks the push to the
+default branch of the otterdog config repository first and schedules the refresh of otterdog.json, the global
+policies and blueprints and the installations, before the branch of the pushes delivered through an installation
+(`otterdog/webapp/webhook/__init__.py:260-275` at main a196494). `W-BP-GLOBAL-PUSH` runs strict on SUTs from 1.8.0
+(its dev builds included) and stays an expected failure on older ones; it has not run live against the fix yet (it
+needs the instance where the App is installed). The text below describes the defect as it was.
 
 Evidence: `otterdog/webapp/webhook/__init__.py:262-317`, `otterdog/webapp/webhook/__init__.py:319-334`.
 

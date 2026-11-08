@@ -149,7 +149,14 @@ def inner(pytester: pytest.Pytester, monkeypatch: pytest.MonkeyPatch) -> Inner:
 def test_markers_and_options_are_registered(inner: Inner) -> None:
     """--markers lists the SPEC 15 markers, --help the --e2e-* options."""
     result = inner.pytester.runpytest("--markers")
-    for marker in ("live", "requires(*caps)", "plan(*plans)", "identities(*names)", "known_bug(id)", "differential"):
+    for marker in (
+        "live",
+        "requires(*caps)",
+        "plan(*plans)",
+        "identities(*names)",
+        "known_bug(id, raises=AssertionError)",
+        "differential",
+    ):
         result.stdout.fnmatch_lines([f"@pytest.mark.{marker}:*"])
     help_text = inner.pytester.runpytest("--help").stdout.str()
     assert "--e2e-target" in help_text and "--e2e-strict-diff" in help_text and "--e2e-trust-code" in help_text
@@ -433,8 +440,8 @@ def test_known_bug_xfails_never_hide_fixture_errors(inner: Inner, monkeypatch: p
 
 def test_python_known_bug_xfails_accept_only_assertions(inner: Inner, monkeypatch: pytest.MonkeyPatch) -> None:
     """BAT-03: the xfail of a Python known-bug test accepts only AssertionError (the asserts that report the bug). A
-    harness error in the body (a GitHub error, a broken helper, pytest.fail) is a failure. The test's own
-    xfail(raises=...) takes precedence."""
+    harness error in the body (a GitHub error, a broken helper, pytest.fail) is a failure. known_bug(id, raises=...)
+    scopes it to another exception instead (an assertion is then a failure)."""
     scenarios_dir = inner.settings.scenarios_dir
     scenarios_dir.mkdir(parents=True)
     (scenarios_dir / "known_bugs.yaml").write_text("- {id: KB-001, title: t}\n")
@@ -461,10 +468,13 @@ def test_python_known_bug_xfails_accept_only_assertions(inner: Inner, monkeypatc
         def test_explicit_failure():
             pytest.fail("the harness gave up")
 
-        @pytest.mark.known_bug("KB-001")
-        @pytest.mark.xfail(raises=BugSeen, strict=False, reason="KB-001: as the test reports it")
+        @pytest.mark.known_bug("KB-001", raises=BugSeen)
         def test_own_exception():
             raise BugSeen("the bug")
+
+        @pytest.mark.known_bug("KB-001", raises=BugSeen)
+        def test_assertion_of_a_scoped_test():
+            assert 0 == 1, "an oracle timed out"
         """
     )
     result = inner.run("-rA")
@@ -474,6 +484,7 @@ def test_python_known_bug_xfails_accept_only_assertions(inner: Inner, monkeypatc
         "test_harness_error": "failed",
         "test_explicit_failure": "failed",
         "test_own_exception": "xfailed",
+        "test_assertion_of_a_scoped_test": "failed",
     }, result.stdout.str()
     result.stdout.fnmatch_lines(["*GET /orgs/e2e/repos: HTTP 502*"])
 
@@ -531,15 +542,19 @@ def test_yaml_scenario_items_xfail_only_on_their_engines_expected_failures(
 @pytest.mark.parametrize(
     ("sut_version", "outcomes"),
     [
-        ("1.7.0.dev15+e2e.g9bdeb75", {"test_regressed": "failed", "test_still_fixed": "passed"}),
-        ("1.6.1", {"test_regressed": "xfailed", "test_still_fixed": "xpassed"}),
-        (None, {"test_regressed": "failed", "test_still_fixed": "passed"}),
+        (
+            "1.7.0.dev15+e2e.g9bdeb75",
+            {"test_regressed": "failed", "test_still_fixed": "passed", "test_scoped_regression": "failed"},
+        ),
+        ("1.6.1", {"test_regressed": "xfailed", "test_still_fixed": "xpassed", "test_scoped_regression": "xfailed"}),
+        (None, {"test_regressed": "failed", "test_still_fixed": "passed", "test_scoped_regression": "failed"}),
     ],
 )
 def test_fixed_known_bugs_only_xfail_on_older_suts(
     inner: Inner, monkeypatch: pytest.MonkeyPatch, sut_version: str | None, outcomes: dict[str, str]
 ) -> None:
-    """A bug with status fixed no longer hides failures (regression guard), except on SUTs predating fixed_in."""
+    """A bug with status fixed no longer hides failures (regression guard), except on SUTs predating fixed_in; the
+    exception of known_bug(id, raises=...) follows the same rule (KB-015, KB-070, KB-071 of the webapp tier)."""
     scenarios_dir = inner.settings.scenarios_dir
     scenarios_dir.mkdir(parents=True)
     (scenarios_dir / "known_bugs.yaml").write_text("- {id: KB-008, title: t}\n")
@@ -557,6 +572,13 @@ def test_fixed_known_bugs_only_xfail_on_older_suts(
         @pytest.mark.known_bug("KB-008")
         def test_still_fixed():
             pass
+
+        class ReloadLost(Exception):
+            pass
+
+        @pytest.mark.known_bug("KB-008", raises=ReloadLost)
+        def test_scoped_regression():
+            raise ReloadLost("the definitions were not reloaded")
         """
     )
     result = inner.run("-rxX")

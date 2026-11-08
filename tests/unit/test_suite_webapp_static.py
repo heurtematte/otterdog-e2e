@@ -394,38 +394,37 @@ def test_xfails_are_scoped_to_their_regression(trees: dict[Path, ast.Module]) ->
 
 
 def known_bug_tests_without_scoped_xfail(tree: ast.Module) -> list[str]:
-    """Test functions carrying ``pytest.mark.known_bug(...)`` without a ``pytest.mark.xfail(..., raises=...)``
-    decorator (the plugin's xfail of a known bug would otherwise tolerate any failure of the body)."""
+    """Test functions carrying ``pytest.mark.known_bug(...)`` without ``raises=`` on that marker (the plugin's xfail
+    of a known bug would otherwise tolerate any assertion of the body)."""
     found = []
     for node in ast.walk(tree):
         if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) or not node.name.startswith("test_"):
             continue
-        calls = [decorator for decorator in node.decorator_list if isinstance(decorator, ast.Call)]
-        names = {call.func.attr for call in calls if isinstance(call.func, ast.Attribute)}
-        scoped = any(
-            isinstance(call.func, ast.Attribute)
-            and call.func.attr == "xfail"
-            and any(keyword.arg == "raises" for keyword in call.keywords)
-            for call in calls
-        )
-        if "known_bug" in names and not scoped:
+        known = [
+            decorator
+            for decorator in node.decorator_list
+            if isinstance(decorator, ast.Call)
+            and isinstance(decorator.func, ast.Attribute)
+            and decorator.func.attr == "known_bug"
+        ]
+        if known and not any(keyword.arg == "raises" for call in known for keyword in call.keywords):
             found.append(f"line {node.lineno}: {node.name}")
     return found
 
 
 def test_known_bug_tests_name_the_exception_they_tolerate(trees: dict[Path, ast.Module]) -> None:
-    """BAT-08: every webapp and webhooks test marked known_bug pairs it with an xfail(raises=...) decorator (or the
-    webapp_case machinery's own raises=, for tests without the marker), so oracle timeouts, the first apply or the
-    teardown never become XFAIL."""
+    """BAT-08: every webapp and webhooks test marked known_bug names the exception it tolerates on the marker,
+    ``known_bug(id, raises=...)`` (or the webapp_case machinery's own raises=, for tests without the marker), so oracle
+    timeouts, the first apply or the teardown never become XFAIL."""
     offenders = {
         str(path.relative_to(PROJECT)): found
         for path, tree in trees.items()
         if (found := known_bug_tests_without_scoped_xfail(tree))
     }
-    assert not offenders, f"known-bug tests without xfail(raises=...): {offenders}"
+    assert not offenders, f"known-bug tests without known_bug(..., raises=...): {offenders}"
     code = (
         "@pytest.mark.known_bug('KB-1')\ndef test_a():\n    pass\n\n"
-        "@pytest.mark.known_bug('KB-1')\n@pytest.mark.xfail(raises=E, strict=False)\ndef test_b():\n    pass\n"
+        "@pytest.mark.known_bug('KB-1', raises=E)\ndef test_b():\n    pass\n"
     )
     assert known_bug_tests_without_scoped_xfail(ast.parse(code)) == ["line 2: test_a"]
 

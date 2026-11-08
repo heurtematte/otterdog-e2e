@@ -26,7 +26,7 @@ every field. `tests/unit/test_coverage_matrix.py` validates it and generates `do
 - `covered` and `partial` need at least one `covered_by` item; `gap` has none;
 - `partial` and `gap` need a `gap_outline`; `covered` has none;
 - `covered` needs at least one covering item that runs strictly on the default SUT: an item that is only a known-bug
-  XFAIL (a scenario-level bug, a Python `known_bug` test without its own `xfail(raises=...)`) or a scenario skipped
+  XFAIL (a scenario-level bug, a Python `known_bug` test without `raises=`) or a scenario skipped
   on `release:latest` by `fixed_in` leaves the feature `partial`;
 - every `covered_by` item must exist (scenario ids through the loader, node ids through the test file's AST).
 

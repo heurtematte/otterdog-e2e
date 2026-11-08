@@ -74,12 +74,7 @@ def test_import_writes_config(imported: tuple[ConfigWorkspace, OtterdogCli], tar
 
 
 @pytest.mark.scenario("cli.import.validate")
-@pytest.mark.known_bug("KB-024")
-@pytest.mark.xfail(
-    raises=PrivatePagesNotAllowedError,
-    strict=False,
-    reason="KB-024: an imported organization below Enterprise fails validation on members_can_create_private_pages",
-)
+@pytest.mark.known_bug("KB-024", raises=PrivatePagesNotAllowedError)
 def test_import_validates(imported: tuple[ConfigWorkspace, OtterdogCli], verified_org: VerifiedOrg) -> None:
     """``validate`` accepts the imported configuration (no error); KB-024 alone (not on enterprise) is the only
     tolerated failure, any other error fails the test."""

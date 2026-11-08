@@ -172,12 +172,7 @@ def test_organization_teams_override_the_environment(
 
 @pytest.mark.scenario("W-RT-ADMIN-TEAMS-SPACES", priority="P2")
 @pytest.mark.tags("webapp", "teams")
-@pytest.mark.known_bug("KB-013")
-@pytest.mark.xfail(
-    raises=AdminTeamsSplitError,
-    strict=False,
-    reason="KB-013: GITHUB_ADMIN_TEAMS entries are split on ',' without stripping",
-)
+@pytest.mark.known_bug("KB-013", raises=AdminTeamsSplitError)
 def test_admin_teams_list_with_spaces(
     webapp_scenario: WebappScenario,
     webapp_env: Callable[[Mapping[str, str]], None],
@@ -273,13 +268,8 @@ class ApplyStatusLostError(AssertionError):
 
 @pytest.mark.scenario("W-RT-INIT-APPLY-STATUS", priority="P2")
 @pytest.mark.tags("webapp", "secrets", "repo")
-@pytest.mark.known_bug("KB-074")
+@pytest.mark.known_bug("KB-074", raises=ApplyStatusLostError)
 @pytest.mark.timeout(LONG_TIMEOUT, func_only=True)
-@pytest.mark.xfail(
-    raises=ApplyStatusLostError,
-    strict=False,
-    reason="KB-074: FetchAllPullRequestsTask imports every merged PR as completed, also over partially_applied",
-)
 def test_init_keeps_the_apply_status(
     e2e: E2EContext, webapp: WebappStack | ExternalWebapp, webapp_scenario: WebappScenario
 ) -> None:

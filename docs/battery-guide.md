@@ -103,8 +103,9 @@ otterdog prints secret values.
   objects behind) is reported as an error, also in `results.jsonl`. It accepts only `AssertionError`
   (`raises=AssertionError`): the test reports the bug with `assert` (or an AssertionError subclass), and any other
   exception of the body (a GitHub error of the harness, a broken helper, `pytest.fail`, a pytest-timeout) stays a
-  failure. A bug that surfaces as another exception needs the test's own `pytest.mark.xfail(raises=...)`, which takes
-  precedence. In the webapp and webhooks tiers that extra `pytest.mark.xfail` naming the exception it tolerates is
+  failure. A bug that surfaces as another exception names it on the marker, `known_bug("KB-nnn", raises=SomeError)`,
+  never with the test's own `pytest.mark.xfail`: the plugin's xfail follows the bug's status, an own xfail would keep
+  hiding a regression once the bug is fixed (a unit test refuses it). In the webapp and webhooks tiers `raises=` is
   required, and `pytest.xfail()` is not used.
 - A fixed bug (`status: fixed`, `fixed_in: 1.7.0`) turns its tests into regression guards; [SUTs](glossary.md#systems-under-test) older than
   `fixed_in` still xfail (a dev build counts as the release it leads to).
@@ -627,7 +628,7 @@ After the test runs green (live tests on a target), edit the feature in `scenari
    checks that it exists;
 2. `status`: `covered` when every operation of the feature is exercised with assertions, else `partial`; a covered
    feature needs at least one covering item that runs strictly on the default SUT: an item that is only a known-bug
-   xfail (a scenario-level bug, a Python `known_bug` test without its own `xfail(raises=...)`) or a scenario skipped on
+   xfail (a scenario-level bug, a Python `known_bug` test without `raises=`) or a scenario skipped on
    `release:latest` by `fixed_in` leaves the feature `partial` (the matrix test refuses it);
 3. `gap_outline`: remove it for `covered`, shrink it to what is still missing for `partial`;
 4. `known_bugs`: the bugs the test hit (new ones registered first);

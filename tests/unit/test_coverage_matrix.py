@@ -117,14 +117,14 @@ def test_markdown_is_up_to_date() -> None:
 
 def test_covered_needs_an_item_that_runs_strictly_on_the_default_sut() -> None:
     """BAT-13: known-bug xfails (scenario-level bugs, unscoped known_bug tests) and fixed_in scenarios alone do not make
-    a feature covered; a scoped known-bug test (xfail(raises=...)) and a plain scenario do."""
+    a feature covered; a scoped known-bug test (known_bug(id, raises=...)) and a plain scenario do."""
     strict = PROJECT.strict_on_default_sut
     assert strict("regression.user-bypass-actors")  # fixed_in 1.7.0 (release v1.7.1)
     assert not strict("O-VAL-CODE-SECURITY")  # fixed_in 1.8.0: main after v1.7.1
     assert strict("cli.kb.team-permissions-removal")  # a step-level bug: the rest stays strict
     assert not strict("cli.kb.variables-pagination")  # scenario-level KB-003
     assert not strict("tests/cli/test_known_bugs.py::test_apply_fails_on_validation_errors")
-    assert strict("tests/webapp/test_commands.py::test_sync_check_crash")  # xfail(raises=...)
+    assert strict("tests/webapp/test_commands.py::test_sync_check_crash")  # known_bug(id, raises=...)
     assert strict("cli.repo.visibility")
     entry = {"status": "covered", "covered_by": ["O-VAL-CODE-SECURITY"], "gap_outline": None}
     assert any("runs strictly on the default SUT" in problem for problem in PROJECT.status_problems(entry))

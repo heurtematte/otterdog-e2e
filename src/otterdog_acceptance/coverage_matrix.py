@@ -428,9 +428,9 @@ class MatrixProject:
         }
 
     def known_bug_tests(self, relative: str) -> frozenset[str]:
-        """Test functions of a module decorated with ``pytest.mark.known_bug(...)`` and no scoped
-        ``pytest.mark.xfail(raises=...)``: the whole body is an expected failure while the bug exists (``name`` and
-        ``Class::name``). A scoped xfail tolerates only its exception: the rest of the test stays strict."""
+        """Test functions of a module decorated with ``pytest.mark.known_bug(...)`` without ``raises=``: the whole
+        body is an expected failure while the bug exists (``name`` and ``Class::name``). A scoped xfail
+        (``known_bug(id, raises=...)``) tolerates only its exception: the rest of the test stays strict."""
         if relative not in self._known_bug_tests:
             found: set[str] = set()
             tree = self._module(relative)
@@ -929,7 +929,8 @@ class MatrixProject:
 
 
 def _known_bug_test(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
-    """True when the test is a known-bug test (``known_bug`` mark) without a scoped xfail (``xfail(raises=...)``)."""
+    """True when the test is a known-bug test (``known_bug`` mark) whose xfail is not scoped to an exception of its own
+    (``known_bug(id, raises=...)``, or a former ``xfail(raises=...)``)."""
 
     def mark_calls(name: str) -> list[ast.Call]:
         """The ``<...>.<name>(...)`` decorators of the test function."""
@@ -941,8 +942,9 @@ def _known_bug_test(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
             and decorator.func.attr == name
         ]
 
-    scoped = any(any(k.arg == "raises" for k in call.keywords) for call in mark_calls("xfail"))
-    return bool(mark_calls("known_bug")) and not scoped
+    known = mark_calls("known_bug")
+    scoped = any(any(k.arg == "raises" for k in call.keywords) for call in [*known, *mark_calls("xfail")])
+    return bool(known) and not scoped
 
 
 # --- the example template --------------------------------------------------------------------------------------------

@@ -1088,7 +1088,7 @@ Values inside one option are ORed, the two options are ANDed. `pytest -m` works 
 Python tests in `tests/<tier>/` use the plugin's fixtures and markers; gating happens before any fixture runs.
 
 Markers: `live`, `offline`, `webapp`, `docker`, `differential`, `requires(*caps)`, `plan(*plans)`,
-`identities(*names)`, `tags(*tags)`, `known_bug(id)`, `org_level`, `scenario(id)`, `slow`.
+`identities(*names)`, `tags(*tags)`, `known_bug(id, raises=AssertionError)`, `org_level`, `scenario(id)`, `slow`.
 
 Session fixtures: `harness`, `run_ctx`, `e2e`, `target`, `identities`, `verified_org`, `oracle`, `mutator`,
 `mutators`, `outsider_mutator`, `approver_mutator`, `contributor_mutator` (the author identity; these three gate on

@@ -277,12 +277,7 @@ def test_org_webhook_secret(
 
 
 @pytest.mark.scenario("H-ORG-HOOK-ALIAS", priority="P2")
-@pytest.mark.known_bug("KB-004")
-@pytest.mark.xfail(
-    raises=UrlAliasNotAppliedError,
-    strict=False,
-    reason="KB-004: a webhook URL change through 'aliases' is never applied (url is excluded from diffs)",
-)
+@pytest.mark.known_bug("KB-004", raises=UrlAliasNotAppliedError)
 @pytest.mark.tags("webhooks")
 @pytest.mark.usefixtures("org_level_reset")
 def test_org_webhook_url_change_through_aliases(

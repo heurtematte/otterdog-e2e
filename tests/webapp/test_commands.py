@@ -283,8 +283,7 @@ def test_comment_matching_and_edits(
 
 @pytest.mark.scenario("W-SYNC-FAILURE", priority="P2")
 @pytest.mark.tags("webapp", "teams", "repo")
-@pytest.mark.known_bug("KB-040")
-@pytest.mark.xfail(raises=MisleadingSyncFailureError, strict=False, reason="KB-040: misleading sync failure status")
+@pytest.mark.known_bug("KB-040", raises=MisleadingSyncFailureError)
 def test_sync_check_crash(webapp_scenario: WebappScenario) -> None:
     """Main raises while it loads (team_permissions schema error, KB-032): the sync check of a PR and of
     ``/otterdog check-sync`` crash: status failure, no check-sync comment, failed tasks, in_sync never set. The
@@ -318,12 +317,7 @@ def test_sync_check_crash(webapp_scenario: WebappScenario) -> None:
 
 @pytest.mark.scenario("W-SYNC-INVALID-MAIN", priority="P2")
 @pytest.mark.tags("webapp", "repo")
-@pytest.mark.known_bug("KB-067")
-@pytest.mark.xfail(
-    raises=SyncCheckIgnoresValidationErrorsError,
-    strict=False,
-    reason="KB-067: a sync check of a main that fails validation reports the configuration as in sync",
-)
+@pytest.mark.known_bug("KB-067", raises=SyncCheckIgnoresValidationErrorsError)
 def test_sync_check_of_an_invalid_main(webapp_scenario: WebappScenario) -> None:
     """Main declares a repository with an invalid topic (validation error): the sync plan of main aborts before
     comparing anything with GitHub, so the sync check cannot tell whether the org is in sync. otterdog's callback

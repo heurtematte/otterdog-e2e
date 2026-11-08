@@ -103,7 +103,8 @@ MARKERS: dict[str, str] = {
     "docker": "needs a working docker daemon",
     "org_level": "touches org-level objects: full baseline reset in cleanup, plan counts not filtered",
     "tags(*tags)": "scenario tags used by --e2e-tags selection",
-    "known_bug(id)": "covered by a known otterdog bug (scenarios/known_bugs.yaml): non-strict xfail",
+    "known_bug(id, raises=AssertionError)": "covered by a known otterdog bug (scenarios/known_bugs.yaml): non-strict"
+    " xfail scoped to raises, unless the bug is fixed in the SUT under test",
     "differential": "records observations on base and head SUTs (--e2e-base-sut)",
     "scenario(id)": "the YAML scenario a test item runs",
     "slow": "long-running test",
@@ -563,20 +564,30 @@ def _selected(item: pytest.Item, tags: Sequence[str], globs: Sequence[str], extr
     return item_selected(scenario_id, (), globs=globs, tags=tags, extra_scenarios=extra(), case_id=case_id)
 
 
-def known_bug_xfail(item: pytest.Item, reason: str) -> pytest.MarkDecorator:
+def known_bug_xfail(item: pytest.Item, reason: str, bug_id: str | None = None) -> pytest.MarkDecorator:
     """The non-strict xfail of a known bug, scoped to the exception that reports the bug (``raises=``, BAT-03).
 
     A YAML scenario item accepts only KnownBugReproduced: its engine reports the bug's expected failures with
     pytest.xfail itself, so a strict step, a harness error or a failed cleanup stays a failure, and a run without the
     bug is an XPASS. A Python test accepts only AssertionError (its asserts report the bug): any other exception of the
     body (a GitHub error of the harness, a broken helper, a pytest-timeout or pytest.fail) stays a failure. A test
-    whose bug surfaces as another exception declares its own ``xfail(raises=...)``, which takes precedence (the
-    webapp and webhooks tiers always do)."""
+    whose bug surfaces as another exception names it on the marker, ``known_bug(id, raises=SomeError)`` (the webapp
+    and webhooks tiers always do), never with its own ``xfail``: the plugin's xfail follows the bug's status, and an
+    own xfail would still hide a regression once the bug is fixed."""
     from otterdog_acceptance.known_bugs import KnownBugReproduced
 
     if scenario_param(item) is not None:
         return pytest.mark.xfail(reason=reason, strict=False, raises=KnownBugReproduced)
-    return pytest.mark.xfail(reason=reason, strict=False, raises=AssertionError)
+    return pytest.mark.xfail(reason=reason, strict=False, raises=_known_bug_raises(item, bug_id) or AssertionError)
+
+
+def _known_bug_raises(item: pytest.Item, bug_id: str | None) -> type[BaseException] | None:
+    """The exception a ``known_bug(bug_id, raises=...)`` marker of the item names (None without one)."""
+    for marker in item.iter_markers("known_bug"):
+        raises = marker.kwargs.get("raises")
+        if raises is not None and (bug_id is None or bug_id in marker.args):
+            return raises
+    return None
 
 
 def _apply_known_bugs(item: pytest.Item, bugs: dict[str, KnownBug]) -> None:
@@ -597,7 +608,7 @@ def _apply_known_bugs(item: pytest.Item, bugs: dict[str, KnownBug]) -> None:
             item.stash.setdefault(_FIXED_BUGS_KEY, []).append(bug_id)
             continue
         reason = bug.xfail_reason if bug is not None else f"{bug_id}: not listed in known_bugs.yaml"
-        item.add_marker(known_bug_xfail(item, reason))
+        item.add_marker(known_bug_xfail(item, reason, bug_id))
         item.stash.setdefault(_KNOWN_BUG_KEY, bug_id)
 
 
@@ -612,7 +623,7 @@ def _xfail_fixed_bugs_on_older_suts(item: pytest.Item, context: E2EContext) -> N
         if bug is None or not bug.affects(version):
             continue
         reason = f"{bug.xfail_reason} (fixed in {bug.fixed_in}; SUT {version} predates the fix)"
-        item.add_marker(known_bug_xfail(item, reason))
+        item.add_marker(known_bug_xfail(item, reason, bug_id))
         item.stash.setdefault(_KNOWN_BUG_KEY, bug_id)
 
 
