@@ -455,6 +455,31 @@ endpoints:
     trigger: a branch protection rule is removed (apply -d)
     feature: branch-protection.lifecycle
 
+  # --- configuration repository and file commands (not apply: a step's apply.api cannot assert them) ----------------
+  - endpoint: PUT /repos/{owner}/{repo}/contents/{path}
+    source: otterdog/providers/github/rest/content_client.py:116
+    trigger: >-
+      push-config writes otterdog/<org>.jsonnet (operations/push_config.py:114), open-pr writes it on its branch
+      (operations/open_pull_request.py:176); also an apply creating a repository from a template whose
+      post_process_template_content renders differently (repo_client.py:288), and sync-template (repo_client.py:1421)
+    feature: cli.push-config
+    notes: seen in the first live run (to5n30ed) from the Python cli tests of these commands
+  - endpoint: DELETE /repos/{owner}/{repo}/contents/{path}
+    source: otterdog/providers/github/rest/content_client.py:146
+    trigger: delete-file -r REPO --path P deletes an existing file (operations/delete_file.py:92)
+    feature: cli.delete-file
+    notes: seen in the first live run (to5n30ed); nothing is sent for a missing file
+  - endpoint: POST /repos/{owner}/{repo}/git/refs
+    source: otterdog/providers/github/rest/reference_client.py:51
+    trigger: open-pr creates the branch otterdog/<branch> of the configuration repository (operations/open_pull_request.py:169)
+    feature: cli.open-pr
+    notes: seen in the first live run (to5n30ed)
+  - endpoint: POST /repos/{owner}/{repo}/pulls
+    source: otterdog/providers/github/rest/pull_request_client.py:57
+    trigger: open-pr opens the pull request of that branch (operations/open_pull_request.py:186)
+    feature: cli.open-pr
+    notes: seen in the first live run (to5n30ed)
+
   # --- webapp only --------------------------------------------------------------------------------------------------
   - endpoint: POST /repos/{owner}/{repo}/actions/workflows/{name}/dispatches
     source: otterdog/providers/github/rest/repo_client.py:1362

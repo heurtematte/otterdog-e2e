@@ -4,14 +4,14 @@
 
 Every write request otterdog sends to GitHub (REST `POST`, `PUT`, `PATCH`, `DELETE` and GraphQL mutations), listed in [scenarios/api_endpoints.yaml](../scenarios/api_endpoints.yaml) at otterdog `a196494`, and the live scenario steps whose `apply.api` asserts it. A step asserts the requests of its apply from otterdog's request statistics (otterdog 1.7.0 and later, [writing scenarios](writing-scenarios.md#http-requests-of-an-apply)): `sent` means the apply sent at least one such request, `not sent` that it sent none (for instance no `PATCH /repos/{owner}/{repo}` when only `team_permissions` change, otterdog#924).
 
-**94 of 97** endpoints the CLI sends are asserted as sent by at least one step.
+**94 of 101** endpoints the CLI sends are asserted as sent by at least one step.
 
 | Method | Asserted sent | Endpoints |
 |---|---:|---:|
-| POST | 17 | 17 |
-| PUT | 34 | 34 |
+| POST | 17 | 19 |
+| PUT | 34 | 35 |
 | PATCH | 12 | 14 |
-| DELETE | 28 | 29 |
+| DELETE | 28 | 30 |
 | mutation | 3 | 3 |
 
 Endpoints nobody asserts yet are the gaps of this page: a scenario that adds, changes or removes the object should name them in the `apply.api.sent` of the step (the `fill-coverage-gap` skill).
@@ -117,5 +117,9 @@ Endpoints nobody asserts yet are the gaps of this page: a scenario that adds, ch
 | `mutation createBranchProtectionRule` | a branch protection rule is added | `cli.bpr.public/create` |  |
 | `mutation updateBranchProtectionRule` | a branch protection rule changes | `cli.bpr.public/update` |  |
 | `mutation deleteBranchProtectionRule` | a branch protection rule is removed (apply -d) | `cli.bpr.public/remove-rule` |  |
+| `PUT /repos/{owner}/{repo}/contents/{path}` | push-config writes otterdog/&lt;org&gt;.jsonnet (operations/push_config.py:114), open-pr writes it on its branch (operations/open_pull_request.py:176); also an apply creating a repository from a template whose post_process_template_content renders differently (repo_client.py:288), and sync-template (repo_client.py:1421) | **none** |  |
+| `DELETE /repos/{owner}/{repo}/contents/{path}` | delete-file -r REPO --path P deletes an existing file (operations/delete_file.py:92) | **none** |  |
+| `POST /repos/{owner}/{repo}/git/refs` | open-pr creates the branch otterdog/&lt;branch&gt; of the configuration repository (operations/open_pull_request.py:169) | **none** |  |
+| `POST /repos/{owner}/{repo}/pulls` | open-pr opens the pull request of that branch (operations/open_pull_request.py:186) | **none** |  |
 | `POST /repos/{owner}/{repo}/actions/workflows/{name}/dispatches` | the webapp dispatches a workflow (blueprints, policies) | _webapp only_ |  |
 | `mutation minimizeComment` | the webapp minimizes its outdated pull request comments | _webapp only_ |  |
