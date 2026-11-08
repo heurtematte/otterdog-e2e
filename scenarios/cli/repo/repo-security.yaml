@@ -14,10 +14,18 @@ description: |
   updates off), then security updates and private vulnerability reporting are enabled while the alerts stay on;
   the disable step turns push protection, the security updates, the alerts and private vulnerability reporting
   off in one apply (RepoClient.update_repo sends the security_and_analysis PATCH before DELETE vulnerability-alerts,
-  the order GitHub needs: the security updates depend on the alerts). The last step creates a second repository with
+  the order GitHub needs: the security updates depend on the alerts). Every creation sends PUT
+  .../vulnerability-alerts (the template's dependabot_alerts_enabled true is applied after POST /orgs/{org}/repos,
+  repo_client.py:296-339); the re-enable step turns the alerts back on alone, which is that PUT and nothing else (no
+  PATCH /repos/{owner}/{repo}: the setting has its own request). The next step creates a second repository with
   the security updates enabled from the start; there the same order means that the security updates are requested
   before PUT vulnerability-alerts enables the alerts of the new repository, and the result must still be both enabled
-  and converged. Secret scanning stays enabled throughout (GitHub offers it on public repositories of every plan).
+  and converged. The SUT removes both repositories in the last step (apply -d). Secret scanning stays enabled
+  throughout (GitHub offers it on public repositories of every plan). State variants: on a private repository otterdog
+  leaves out secret scanning, push protection, the security updates and private vulnerability reporting
+  (models/repository.py:146-154, 1132-1137) but sends the alerts request unchanged (no step needed); while a
+  repository stays archived these settings are ignored, and archiving in the same apply as a change sent by its own
+  request is KB-082 (cli.repo.archive-side-requests).
 priority: P1
 min_plan: free
 requires: [secret_scanning_public]
@@ -35,6 +43,13 @@ steps:
       contains:
         - '+ add repository[name="{{ p }}-security"]'
       counts: {add: 1, change: 0, delete: 0}
+    apply:
+      api:
+        sent:
+          - 'POST /orgs/{org}/repos'
+          - 'PUT /repos/{owner}/{repo}/vulnerability-alerts'
+        not_sent:
+          - 'DELETE /repos/{owner}/{repo}/vulnerability-alerts'
     state:
       - kind: repo_security_and_analysis
         repo: "{{ p }}-security"
@@ -109,17 +124,41 @@ steps:
       - {kind: repo_automated_security_fixes, repo: "{{ p }}-security", match: {enabled: false}}
       - {kind: repo_private_vulnerability_reporting, repo: "{{ p }}-security", match: {enabled: false}}
 
-  - name: create-with-updates
+  - name: re-enable-alerts
     fragments:
       repositories:
-        - |
+        - &alerts-on |
           orgs.newRepo('{{ p }}-security') {
             description: "otterdog e2e: security settings",
             secret_scanning_push_protection: "disabled",
             dependabot_security_updates_enabled: false,
-            dependabot_alerts_enabled: false,
+            dependabot_alerts_enabled: true,
             private_vulnerability_reporting_enabled: false,
           }
+    plan:
+      expect: changes
+      contains:
+        - '~ repository[name="{{ p }}-security"]'
+        - "~ dependabot_alerts_enabled = false -> true"
+      counts: {add: 0, change: 1, delete: 0}
+    apply:
+      api:
+        sent:
+          - 'PUT /repos/{owner}/{repo}/vulnerability-alerts'
+        not_sent:
+          - 'PATCH /repos/{owner}/{repo}'
+          - 'DELETE /repos/{owner}/{repo}/vulnerability-alerts'
+    state:
+      - {kind: repo_vulnerability_alerts, repo: "{{ p }}-security", match: {enabled: true}}
+      - {kind: repo_automated_security_fixes, repo: "{{ p }}-security", match: {enabled: false}}
+      - kind: repo_security_and_analysis
+        repo: "{{ p }}-security"
+        match: {secret_scanning_push_protection: {status: disabled}}
+
+  - name: create-with-updates
+    fragments:
+      repositories:
+        - *alerts-on
         - |
           orgs.newRepo('{{ p }}-security-new') {
             description: "otterdog e2e: security updates from the start",
@@ -130,9 +169,34 @@ steps:
       contains:
         - '+ add repository[name="{{ p }}-security-new"]'
       counts: {add: 1, change: 0, delete: 0}
+    apply:
+      api:
+        sent:
+          - 'POST /orgs/{org}/repos'
+          - 'PATCH /repos/{owner}/{repo}'
+          - 'PUT /repos/{owner}/{repo}/vulnerability-alerts'
     state:
       - kind: repo_security_and_analysis
         repo: "{{ p }}-security-new"
         match: {dependabot_security_updates: {status: enabled}}
       - {kind: repo_vulnerability_alerts, repo: "{{ p }}-security-new", match: {enabled: true}}
       - {kind: repo_automated_security_fixes, repo: "{{ p }}-security-new", match: {enabled: true}}
+
+  - name: remove
+    fragments: {}
+    plan:
+      expect: changes
+      contains:
+        - '- remove repository[name="{{ p }}-security"]'
+        - '- remove repository[name="{{ p }}-security-new"]'
+      counts: {add: 0, change: 0, delete: 2}
+    apply:
+      delete: true
+      api:
+        sent:
+          - 'DELETE /repos/{owner}/{repo}'
+        not_sent:
+          - 'DELETE /repos/{owner}/{repo}/vulnerability-alerts'
+    state:
+      - {kind: repo, name: "{{ p }}-security", absent: true}
+      - {kind: repo, name: "{{ p }}-security-new", absent: true}

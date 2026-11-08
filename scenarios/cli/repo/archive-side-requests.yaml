@@ -11,8 +11,12 @@ description: |
   applies both (the topics before the archiving, or the topics in a request GitHub accepts), and a topics change of
   a repository that stays archived plans nothing, like the other read-only fields. The same family as otterdog#924
   (team permissions sent with the settings of an archived repository). Each step declares its own suspected bug, so
-  a live run tells which request GitHub refuses; the other steps stay strict. The cleanup deletes the archived
-  repository (allowed).
+  a live run tells which request GitHub refuses; the other steps stay strict. Two plan-only steps follow on the
+  archived repository: Dependabot alerts and the code scanning default setup, both sent by their own requests (PUT
+  .../vulnerability-alerts, PATCH .../code-scanning/default-setup), are among the ignored fields and must not be
+  planned (strict); a default branch change, which is not, is still planned and would be sent as a branch rename or a
+  PATCH (KB-083, suspected). They assert the plan only (no apply, no convergence): the topics may differ from the
+  configuration after the known-bug steps. The cleanup deletes the archived repository (allowed).
 priority: P1
 min_plan: free
 tags: [repo]
@@ -91,3 +95,41 @@ steps:
       - kind: repo
         name: "{{ p }}-arch-side"
         match: {archived: true}
+
+  # plan-only steps: whatever the topics steps left (KB-082, KB-058), these settings must not be planned
+  - name: archived-security
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-arch-side') {
+            description: "otterdog e2e: archive side requests",
+            topics: ["otterdog-acceptance", "side-b"],
+            archived: true,
+            dependabot_alerts_enabled: false,
+            code_scanning_default_setup_enabled: true,
+          }
+    plan:
+      expect: any
+      not_contains:
+        - dependabot_alerts_enabled
+        - code_scanning_default_setup_enabled
+    apply: null
+    converge: false
+
+  - name: archived-default-branch
+    known_bug: KB-083
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-arch-side') {
+            description: "otterdog e2e: archive side requests",
+            topics: ["otterdog-acceptance", "side-b"],
+            archived: true,
+            default_branch: "trunk",
+          }
+    plan:
+      expect: any
+      not_contains:
+        - default_branch
+    apply: null
+    converge: false

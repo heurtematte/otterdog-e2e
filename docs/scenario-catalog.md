@@ -98,7 +98,7 @@ non-strict xfail while its bug is open, see [known-issues.md](known-issues.md)):
 |---|---|---|---|---|---|
 | H-APP-DELIVERY | a config PR produces a `pull_request` delivery of the installation, relayed with 204 | P0 | implemented | `tests/webhooks/test_app_delivery.py` | DEP-WH-03, WH-RELAY-001, PRV-HOOKAPP-01 |
 | H-REPO-HOOK-PING | managed repository webhook ping (covered by C-REPO-WEBHOOK) | P0 | implemented | the probe of `cli.repo.webhook` | PRV-HOOK-01 |
-| H-ORG-HOOK | managed organization webhook, ping and deliveries (org level) | P1 | implemented | `tests/webhooks/test_org_hook.py` | MOD-OWH-01, WH-ORGHOOK-001 |
+| H-ORG-HOOK | managed organization webhook, ping and deliveries (org level) | P1 | implemented | `tests/webhooks/test_org_hook.py`; its requests: `cli.org.webhook` | MOD-OWH-01, WH-ORGHOOK-001 |
 
 ### Webapp (`tests/webapp`)
 
@@ -298,9 +298,14 @@ yet. Known-bug items assert the correct behaviour and run as non-strict expected
 | `cli.repo.visibility` | Switch an existing repository between public and private | P1 | implemented | `cli/repo/repo-visibility.yaml` | `repositories.visibility-forking` |
 | `cli.repo.webhook-secret` | Repository webhook secrets (plain value, dummy, --update-webhooks, removal) | P1 | implemented | `cli/webhooks/repo-webhook-secret.yaml` | `cli.plan.update-webhooks`, `webhooks.repo.secret` |
 | `cli.repo.webhook-settings` | Repository webhook settings (events, content_type, active, insecure_ssl) | P1 | implemented | `cli/webhooks/repo-webhook-settings.yaml` | `webhooks.repo.settings` |
-| `cli.code-security.configuration` | Code security configuration (create, attach to a new repository, change, delete) | P1 | implemented (fixed_in 1.8.0, lint-clean on main d9dac78) | `cli/code-security/configuration.yaml` | `code-security.configuration.lifecycle`, `code-security.configuration.settings`, `code-security.repository-attachment` |
+| `cli.code-security.configuration` | Code security configuration (create, attach to a new repository, change, default for new repositories, delete) | P1 | implemented (fixed_in 1.8.0, lint-clean on main a196494) | `cli/code-security/configuration.yaml` | `code-security.configuration.lifecycle`, `code-security.configuration.settings`, `code-security.repository-attachment` |
 | `cli.secrets.dependabot-codespaces` | Dependabot and Codespaces secrets (organization and repository, visibility, removal) | P1 | implemented (fixed_in 1.8.0, lint-clean on main d9dac78) | `cli/secrets/dependabot-codespaces-secrets.yaml` | `secrets-variables.org-dependabot-codespaces-secrets`, `secrets-variables.repo-dependabot-codespaces-secrets` |
 | `cli.repo.immutable-releases` | Immutable releases of a repository (enabled at creation, then disabled) | P2 | implemented (fixed_in 1.7.0, lint-clean on main d9dac78) | `cli/repo/immutable-releases.yaml` | `repositories.immutable-releases` |
+| `cli.org.immutable-releases` | Immutable releases policy of the organization (selected repositories, more of them, then none) | P2 | implemented (fixed_in 1.7.0, lint-clean on v1.7.1) | `cli/org-settings/immutable-releases.yaml` | `org-settings.immutable-releases` |
+| `cli.org.webhook` | Organization webhook (create, update, remove) | P0 | implemented (lint-clean on v1.7.1) | `cli/webhooks/org-webhook.yaml` | `webhooks.org.lifecycle`, `webhooks.org.settings` |
+| `cli.repo.generate` | Repositories generated from a template repository (public and private, changed, removed) | P2 | implemented (fixed_in 1.7.0, lint-clean on v1.7.1) | `cli/repo/repo-generate.yaml` | `repositories.template-repositories` |
+| `cli.repo.default-branch` | Rename and switch the default branch of a repository | P0 | implemented (lint-clean on v1.7.1) | `cli/repo/default-branch.yaml` + the branch probe of `tests/cli/conftest.py` | `repositories.default-branch` |
+| `cli.repo.code-scanning` | Code scanning default setup of an existing repository | P1 | implemented (lint-clean on v1.7.1) | `cli/repo/code-scanning.yaml` + the language probe of `tests/cli/conftest.py` | `repositories.code-scanning`, `regression.458-411-435-code-scanning-live` |
 
 ### Regressions (tag `regression`, in `scenarios/cli/<domain>/`)
 
@@ -392,8 +397,6 @@ yet. Known-bug items assert the correct behaviour and run as non-strict expected
 | `cli.org.code-security-defaults` | A default configuration makes otterdog plan 'false -> true'; the apply removes every default; enabling (true -> false) is never planned | - | implemented | `tests/cli/test_org_code_security.py` (1 test) | `org-settings.code-security-defaults` |
 | `cli.plan.missing-web-credentials` | Without ``-n`` and without web credentials the command stops at 'invalid credentials' (exit 1) naming the missing username variable; import writes no file | P2 | implemented | `tests/cli/test_commands_errors.py` (1 test) | `cli.plan.web-ui` |
 | `cli.push-config.variants` | ``push-config -m <msg>`` shows the local-plan diff against the current definition and asks: 'n' pushes nothing, 'y' pushes with the message; pushing the... | P0 | implemented | `tests/cli/test_commands_config_repo.py` (4 tests) | `cli.push-config` |
-| `cli.repo.code-scanning` | The default setup is configured with the extended suite for actions and python, converges, then is disabled | - | implemented | `tests/cli/test_repo_code_scanning.py` (1 test) | `repositories.code-scanning`, `regression.458-411-435-code-scanning-live` |
-| `cli.repo.default-branch` | A missing default branch is a rename of the current one, an existing one a switch that keeps the old branch | - | implemented | `tests/cli/test_repo_default_branch.py` (1 test) | `repositories.default-branch` |
 | `cli.repo.from-template` | The generated repository has the template's files, README.md rendered for it, NOTICE.md left as it is | - | implemented | `tests/cli/test_repo_template.py` (1 test) | `repositories.template-repositories` |
 | `cli.repo.ghsa-ignored` | Neither plan nor ``apply -d`` touches the advisory's temporary private fork, which keeps existing | - | implemented | `tests/cli/test_repo_ghsa.py` (1 test) | `repositories.ghsa-forks-ignored` |
 | `cli.show-live` | ``show-live -n``: the settings block holds the REST values and no web-only key, and every repository and team the oracle lists (the baseline ones included)... | P2 | implemented | `tests/cli/test_commands_read.py` (1 test) | `cli.show-live` |

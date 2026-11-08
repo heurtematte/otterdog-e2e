@@ -400,6 +400,8 @@ UNRELEASED_FIXES = {  # scenario -> first otterdog release with the change it as
     "regression.user-bypass-actors": "1.7.0",  # #779, 1.7.0.dev7
     "enterprise.org-ruleset.missing-strict": "1.7.0",  # #790 behaviour (BAT-05: KB-008 needs #790)
     "cli.repo.immutable-releases": "1.7.0",  # #665
+    "cli.org.immutable-releases": "1.7.0",  # #665, the organization policy
+    "cli.repo.generate": "1.7.0",  # #791, a private repository generated directly
     "cli.secrets.dependabot-codespaces": "1.8.0",  # #890, main after v1.7.1
     "cli.code-security.configuration": "1.8.0",  # #892, main after v1.7.1
     "cli.ruleset.copilot-code-scanning": "1.8.0",  # #900 not merged: the release its head leads to, until the merge

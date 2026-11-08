@@ -19,6 +19,10 @@ Probes:
   (POST /repos/{org}/{repo}/hooks/{id}/pings) must appear in the hook's delivery log within 300 s (delivery logs lag
   "a few minutes", GH-04). The hook URL lies under naming.HOOK_BASE (reserved TLD .invalid): GitHub logs a failed
   delivery but never reaches a server.
+- ``cli.repo.default-branch`` after ``rename``: creates the run branch ``e2e/<run>/develop`` from ``trunk`` (the target
+  of the ``switch`` step) with the admin Mutator and waits until GitHub lists it.
+- ``cli.repo.code-scanning`` after ``create``: commits a Python file and a dispatch-only workflow to the default branch
+  and waits (up to 300 s) until GitHub's language detection lists Python, which the ``enable`` step's languages need.
 
 Helpers of the command tests (tests/cli/test_commands_*.py), all bound to run objects only:
 - ``live_config`` (LiveConfig): renders baseline + fragments, applies them with the SUT under test
@@ -129,8 +133,82 @@ def webhook_ping_probe(env: ProbeEnv) -> None:
     logger.info("hook %s: ping delivered, status %s", hook_id, new[0].get("status"))
 
 
+BRANCH_TIMEOUT = 60.0
+BRANCH_INTERVAL = 5.0
+DEFAULT_BRANCH_REPO_SLUG = "def-branch"
+DEVELOP_BRANCH_SLUG = "develop"
+CODE_SCAN_REPO_SLUG = "code-scan"
+LANGUAGE_TIMEOUT = 300.0  # GitHub's language detection runs after the push
+LANGUAGE_INTERVAL = 10.0
+CODE_SCAN_FILES = {
+    "src/e2e_probe.py": (
+        '"""otterdog-acceptance code scanning probe (never imported)."""\n\n\n'
+        "def answer() -> int:\n"
+        '    """Return the answer."""\n'
+        "    return 42\n"
+    ),
+    ".github/workflows/e2e-probe.yml": (
+        "# otterdog-acceptance code scanning probe: dispatch only, never triggered by a push\n"
+        "name: e2e-probe\n"
+        "on: workflow_dispatch\n"
+        "permissions: {}\n"
+        "jobs:\n"
+        "  noop:\n"
+        "    runs-on: ubuntu-latest\n"
+        "    steps:\n"
+        "      - run: echo otterdog-acceptance\n"
+    ),
+}
+
+
+def develop_branch_probe(env: ProbeEnv) -> None:
+    """Create the run branch e2e/<run>/develop from trunk (the switch target) and wait until GitHub lists it."""
+    repo = env.run_ctx.name(DEFAULT_BRANCH_REPO_SLUG)
+    develop = env.run_ctx.branch(DEVELOP_BRANCH_SLUG)
+    sha = waiting.wait_until(
+        lambda: env.oracle.branch_sha(repo, "trunk"),
+        timeout=BRANCH_TIMEOUT,
+        interval=BRANCH_INTERVAL,
+        what=f"head of branch trunk of {repo}",
+    )
+    env.mutator.create_branch(repo, develop, sha)
+    waiting.wait_until(
+        lambda: env.oracle.repo_branch(repo, develop),
+        timeout=BRANCH_TIMEOUT,
+        interval=BRANCH_INTERVAL,
+        what=f"branch {develop} of {repo}",
+    )
+
+
+def python_detected(oracle: Oracle, repo: str) -> dict[str, Any] | None:
+    """The detected languages of ``repo`` once they include Python, else None."""
+    languages = oracle.repo_languages(repo) or {}
+    return dict(languages) if "Python" in languages else None
+
+
+def code_scanning_sources_probe(env: ProbeEnv) -> None:
+    """Commit a Python file and a dispatch-only workflow, then wait until GitHub detects Python."""
+    repo = env.run_ctx.name(CODE_SCAN_REPO_SLUG)
+    branch = waiting.wait_until(
+        lambda: env.oracle.default_branch(repo),
+        timeout=BRANCH_TIMEOUT,
+        interval=BRANCH_INTERVAL,
+        what=f"default branch of {repo}",
+    )
+    env.mutator.commit_files(repo, branch, CODE_SCAN_FILES, "otterdog-acceptance: code scanning probe sources")
+    languages = waiting.wait_until(
+        lambda: python_detected(env.oracle, repo),
+        timeout=LANGUAGE_TIMEOUT,
+        interval=LANGUAGE_INTERVAL,
+        what=f"Python among the detected languages of {repo}",
+    )
+    assert "Python" in languages, languages
+
+
 PROBES: Mapping[str, Probe] = {
     "cli.repo.webhook": Probe(after="update", check=webhook_ping_probe),
+    "cli.repo.default-branch": Probe(after="rename", check=develop_branch_probe),
+    "cli.repo.code-scanning": Probe(after="create", check=code_scanning_sources_probe),
 }
 
 

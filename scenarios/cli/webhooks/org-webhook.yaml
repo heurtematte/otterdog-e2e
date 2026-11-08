@@ -1,0 +1,97 @@
+# webhooks.org.lifecycle (P0) and webhooks.org.settings (P1), org_level: the requests of an organization webhook.
+id: cli.org.webhook
+title: Organization webhook (create, update, remove)
+tier: cli
+description: |
+  An organization webhook keyed by its URL, created with POST /orgs/{org}/hooks, changed with
+  PATCH /orgs/{org}/hooks/{id} (the whole hook config, events and active) and removed with DELETE
+  /orgs/{org}/hooks/{id} (otterdog/models/organization_webhook.py:36-65,
+  otterdog/providers/github/rest/org_client.py:576-603), each step asserting its request and that the neighbouring
+  verbs are not sent. The webhooks tier covers the rest of the model with Python tests (H-ORG-HOOK: the ping
+  delivery; H-ORG-HOOK-UPDATE / -SECRET / -ALIAS: every setting, the secret, --update-webhooks, KB-004); they predate
+  apply.api, so no step asserted the requests. Safety is the one of the repository webhook scenarios: the URL lies
+  under naming.HOOK_BASE (https://otterdog-e2e.invalid/<run>/..., a reserved TLD: GitHub logs failed deliveries,
+  nothing is reached), the janitor sweeps the organization hooks under HOOK_BASE that carry a purgeable run id
+  (github/janitor.py), the guarded apply -d only removes run objects, and the org lease keeps one session per
+  organization. Organization webhooks are organization-level objects, always diffed: the scenario is org_level
+  (unfiltered plans, full baseline reset as cleanup, the org-level shard), like the organization secrets and
+  variables. The update makes the hook inactive, so GitHub delivers nothing more; the last step removes it with the
+  SUT (apply -d).
+priority: P0
+org_level: true
+min_plan: free
+tags: [webhooks]
+steps:
+  - name: create
+    fragments:
+      webhooks:
+        - |
+          orgs.newOrgWebhook('{{ hook_base }}org-hook') {
+            content_type: "json",
+            events+: ["push"],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '+ add org_webhook[url="{{ hook_base }}org-hook"]'
+    apply:
+      api:
+        sent:
+          - 'POST /orgs/{org}/hooks'
+        not_sent:
+          - 'PATCH /orgs/{org}/hooks/{id}'
+          - 'PATCH /orgs/{org}'
+    state:
+      - kind: org_webhook
+        url: "{{ hook_base }}org-hook"
+        match:
+          active: true
+          events: [push]
+          config: {url: "{{ hook_base }}org-hook", content_type: json, insecure_ssl: "0"}
+
+  - name: update
+    fragments:
+      webhooks:
+        - |
+          orgs.newOrgWebhook('{{ hook_base }}org-hook') {
+            content_type: "form",
+            events+: ["push", "repository"],
+            active: false,
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ org_webhook[url="{{ hook_base }}org-hook"]'
+      not_contains:
+        - '+ add org_webhook[url="{{ hook_base }}org-hook"]'
+        - '- remove org_webhook[url="{{ hook_base }}org-hook"]'
+    apply:
+      api:
+        sent:
+          - 'PATCH /orgs/{org}/hooks/{id}'
+        not_sent:
+          - 'POST /orgs/{org}/hooks'
+          - 'DELETE /orgs/{org}/hooks/{id}'
+    state:
+      - kind: org_webhook
+        url: "{{ hook_base }}org-hook"
+        match:
+          active: false
+          events: {$unordered: [push, repository]}
+          config: {url: "{{ hook_base }}org-hook", content_type: form}
+
+  - name: remove
+    fragments: {}
+    plan:
+      expect: changes
+      contains:
+        - '- remove org_webhook[url="{{ hook_base }}org-hook"]'
+    apply:
+      delete: true
+      api:
+        sent:
+          - 'DELETE /orgs/{org}/hooks/{id}'
+        not_sent:
+          - 'PATCH /orgs/{org}/hooks/{id}'
+    state:
+      - {kind: org_webhook, url: "{{ hook_base }}org-hook", absent: true}

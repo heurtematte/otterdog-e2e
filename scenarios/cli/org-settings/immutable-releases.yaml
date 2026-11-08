@@ -1,0 +1,143 @@
+# org-settings.immutable-releases (P2), org_level: the immutable releases policy of the organization end to end
+# (eclipse-csi/otterdog#665).
+id: cli.org.immutable-releases
+title: Immutable releases policy of the organization (selected repositories, more of them, then none)
+tier: cli
+description: |
+  Since #665 (v1.7.0) otterdog manages the immutable releases policy of the organization through dedicated
+  endpoints, never PATCH /orgs/{org} (otterdog/providers/github/rest/org_client.py:80-120, :158-199): a change of
+  settings.immutable_releases_enforced_repositories is one PUT /orgs/{org}/settings/immutable-releases, which carries
+  the selected repository ids when the policy becomes 'selected'; a change of immutable_releases_selected_repositories
+  alone, while the policy stays 'selected', is one PUT /orgs/{org}/settings/immutable-releases/repositories. The
+  selection is resolved to repository ids at apply time and the organization settings are applied before the
+  repositories, so a first step creates two public run repositories. The policy then selects the first one, both,
+  and goes back to the template's 'none'; the oracle reads the policy and its repositories after each apply
+  (org_immutable_releases, org_immutable_releases_repos). A repository the policy enforces is coerced: its own
+  immutable_releases_enabled is not compared (otterdog/models/repository.py:374-410). Once the policy is 'none'
+  again, otterdog may plan immutable_releases_enabled of the formerly enforced repositories back to the template's
+  false (if GitHub reports them enabled), so that step pins the policy request only. 'all' is left out on purpose: it
+  would enforce immutable releases on every repository of the organization, the baseline's included. The last step
+  removes the repositories with the SUT (apply -d). Older SUTs skip it (fixed_in). Unverified on a live
+  organization: whether every plan offers the policy (otterdog leaves the setting unset on 402/403, the state
+  checks would then report it unavailable). org_level: unfiltered plans, full baseline reset as cleanup.
+priority: P2
+org_level: true
+min_plan: free
+fixed_in: 1.7.0
+tags: [org-settings, repo]
+references:
+  - pr: 665
+    note: >-
+      "Apply fixes from PR 664": adds the organization policy immutable_releases_enforced_repositories (all | none |
+      selected) and immutable_releases_selected_repositories; older SUTs have no such settings (fixed_in).
+steps:
+  - name: repositories
+    fragments:
+      repositories: &repos
+        - "orgs.newRepo('{{ p }}-imm-a') { description: 'otterdog e2e: immutable releases policy, first' }"
+        - "orgs.newRepo('{{ p }}-imm-b') { description: 'otterdog e2e: immutable releases policy, second' }"
+    plan:
+      expect: changes
+      contains:
+        - '+ add repository[name="{{ p }}-imm-a"]'
+        - '+ add repository[name="{{ p }}-imm-b"]'
+      not_contains: [immutable_releases_enforced_repositories]
+    apply:
+      api:
+        sent:
+          - 'POST /orgs/{org}/repos'
+        not_sent:
+          - 'PUT /orgs/{org}/settings/immutable-releases'
+          - 'PUT /orgs/{org}/settings/immutable-releases/repositories'
+    state:
+      - {kind: org_immutable_releases, match: {enforced_repositories: none}}
+      - {kind: repo, name: "{{ p }}-imm-a", match: {private: false}}
+      - {kind: repo, name: "{{ p }}-imm-b", match: {private: false}}
+
+  - name: select-one
+    fragments:
+      settings:
+        - "immutable_releases_enforced_repositories: 'selected'"
+        - "immutable_releases_selected_repositories: ['{{ p }}-imm-a']"
+      repositories: *repos
+    plan:
+      expect: changes
+      contains:
+        - "~ settings {"
+        - '~ immutable_releases_enforced_repositories = "none" -> "selected"'
+        - immutable_releases_selected_repositories
+      not_contains:
+        - '~ repository[name="{{ p }}-imm-a"]'
+    apply:
+      api:
+        sent:
+          - 'PUT /orgs/{org}/settings/immutable-releases'
+        not_sent:
+          - 'PUT /orgs/{org}/settings/immutable-releases/repositories'
+          - 'PATCH /orgs/{org}'
+    state:
+      - {kind: org_immutable_releases, match: {enforced_repositories: selected}}
+      - {kind: org_immutable_releases_repos, equals: ["{{ p }}-imm-a"]}
+
+  - name: select-two
+    fragments:
+      settings:
+        - "immutable_releases_enforced_repositories: 'selected'"
+        - "immutable_releases_selected_repositories: ['{{ p }}-imm-a', '{{ p }}-imm-b']"
+      repositories: *repos
+    plan:
+      expect: changes
+      contains:
+        - "~ settings {"
+        - immutable_releases_selected_repositories
+        - "{{ p }}-imm-b"
+      not_contains:
+        - immutable_releases_enforced_repositories
+    apply:
+      api:
+        sent:
+          - 'PUT /orgs/{org}/settings/immutable-releases/repositories'
+        not_sent:
+          - 'PUT /orgs/{org}/settings/immutable-releases'
+          - 'PATCH /orgs/{org}'
+    state:
+      - {kind: org_immutable_releases, match: {enforced_repositories: selected}}
+      - kind: org_immutable_releases_repos
+        match: {$unordered: ["{{ p }}-imm-a", "{{ p }}-imm-b"]}
+
+  - name: policy-none
+    fragments:
+      repositories: *repos
+    plan:
+      expect: changes
+      contains:
+        - "~ settings {"
+        - '~ immutable_releases_enforced_repositories = "selected" -> "none"'
+    apply:
+      api:
+        sent:
+          - 'PUT /orgs/{org}/settings/immutable-releases'
+        not_sent:
+          - 'PUT /orgs/{org}/settings/immutable-releases/repositories'
+          - 'PATCH /orgs/{org}'
+    state:
+      - {kind: org_immutable_releases, match: {enforced_repositories: none}}
+
+  - name: remove
+    fragments: {}
+    plan:
+      expect: changes
+      contains:
+        - '- remove repository[name="{{ p }}-imm-a"]'
+        - '- remove repository[name="{{ p }}-imm-b"]'
+      not_contains: [immutable_releases_enforced_repositories]
+    apply:
+      delete: true
+      api:
+        sent:
+          - 'DELETE /repos/{owner}/{repo}'
+        not_sent:
+          - 'PUT /orgs/{org}/settings/immutable-releases'
+    state:
+      - {kind: repo, name: "{{ p }}-imm-a", absent: true}
+      - {kind: repo, name: "{{ p }}-imm-b", absent: true}

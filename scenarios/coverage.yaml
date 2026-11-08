@@ -3089,7 +3089,7 @@ features:
     ui_only: false
     priority: P0
     status: covered
-    covered_by: [tests/cli/test_repo_default_branch.py::test_default_branch_rename_and_switch]
+    covered_by: [cli.repo.default-branch]
     notes: "Covers the rename at creation (main->master), a rename of an existing repo (master->trunk), and a switch to the existing branch e2e/<run>/develop (created by a probe with Mutator.create_branch; trunk stays). The empty-repository skip is exercised by the auto_init false repository of tests/cli/test_repo_template.py."
 
   - id: repositories.archive
@@ -3135,7 +3135,7 @@ features:
     ui_only: false
     priority: P1
     status: covered
-    covered_by: [regression.code-scanning-new-repo, regression.private-repo-template-defaults, tests/cli/test_repo_code_scanning.py::test_code_scanning_default_setup]
+    covered_by: [regression.code-scanning-new-repo, regression.private-repo-template-defaults, cli.repo.code-scanning]
     notes: "An existing repository; a probe commits a Python file and a dispatch-only workflow and waits until Python is detected. The setup is then configured with the extended suite for languages [actions, python] (state check timeout 600 s before converge) and disabled."
 
   - id: repositories.pages
@@ -5248,7 +5248,7 @@ features:
     ui_only: false
     priority: P2
     status: covered
-    covered_by: [tests/cli/test_repo_code_scanning.py::test_code_scanning_default_setup]
+    covered_by: [cli.repo.code-scanning]
     notes: "languages ['actions','python'] validate (no 'not detected' message), apply, and converge."
 
   - id: regression.import-multiple-custom-properties
@@ -5466,7 +5466,7 @@ features:
         - "org_level: policy 'selected' with a run repository, then 'none' (the baseline)"
       assertions:
         - "GET /orgs/{org}/settings/immutable-releases (+ /repositories) as written; converge"
-      needs: [target, org_level, "harness: oracle kind org_immutable_releases (GET /orgs/{org}/settings/immutable-releases)", "a plan offering immutable releases (402/403 leave it unset)"]
+      needs: [target, org_level, "available: check kinds org_immutable_releases, org_immutable_releases_repos (scenario cli.org.immutable-releases, not run live yet)", "a plan offering immutable releases (402/403 leave it unset)"]
 
   - id: repositories.immutable-releases
     area: repositories

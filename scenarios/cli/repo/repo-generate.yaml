@@ -1,0 +1,151 @@
+# Repositories generated from a template repository: the requests (coverage: repositories.template-repositories).
+id: cli.repo.generate
+title: Repositories generated from a template repository (public and private, changed, removed)
+tier: cli
+description: |
+  template_repository '<owner>/<repo>' makes otterdog create the repository with POST /repos/{owner}/{repo}/generate
+  {owner, name, include_all_branches: false, private} instead of POST /orgs/{org}/repos, then read the new
+  repository back and patch only the settings GitHub did not take from the template
+  (otterdog/providers/github/rest/repo_client.py:236-292). tests/cli/test_repo_template.py covers the contents
+  (post_process_template_content needs probes that commit files); this journey pins the requests and walks the
+  states the generate path treats differently: a public template, a public repository and a private one generated
+  from it in one apply (the generate request carries 'private'; the patch that follows leaves out the security
+  settings a private repository does not support, otterdog/models/repository.py:1132-1137, and the code scanning
+  default setup it never configured, repo_client.py:546-567), then a change of the generated public repository, an
+  ordinary PATCH: template_repository is read-only afterwards, so nothing is generated again. The SUT removes the three
+  repositories in the last step (apply -d). The private repository is created private directly, which needs the
+  #791 fix (fixed_in 1.7.0), with allow_forking and has_wiki false (the template forbids forks of private
+  repositories, private wikis need GitHub Team).
+priority: P2
+min_plan: free
+fixed_in: 1.7.0
+tags: [repo]
+references:
+  - pr: 791
+    note: >-
+      "disable code scanning of new repos only when configured" (b5f7bb1, otterdog 1.7.0.dev14): the generate path
+      reads the new repository back and drops the default setup it never configured, refused on a private repository
+      without Code Security; before it, the private repository generated here could not be created directly.
+steps:
+  - name: template
+    fragments:
+      repositories:
+        - &template |
+          orgs.newRepo('{{ p }}-tpl') {
+            description: "otterdog e2e: template repository",
+            is_template: true,
+          }
+    plan:
+      expect: changes
+      contains: ['+ add repository[name="{{ p }}-tpl"]']
+      counts: {add: 1, change: 0, delete: 0}
+    apply:
+      api:
+        sent:
+          - 'POST /orgs/{org}/repos'
+        not_sent:
+          - 'POST /repos/{owner}/{repo}/generate'
+    state:
+      - {kind: repo, name: "{{ p }}-tpl", match: {is_template: true, private: false}}
+
+  - name: generate
+    fragments:
+      repositories:
+        - *template
+        - &generated |
+          orgs.newRepo('{{ p }}-gen') {
+            description: "otterdog e2e: generated from a template",
+            template_repository: "{{ org }}/{{ p }}-tpl",
+          }
+        - &private |
+          orgs.newRepo('{{ p }}-gen-private') {
+            description: "otterdog e2e: generated private from a template",
+            template_repository: "{{ org }}/{{ p }}-tpl",
+            private: true,
+            allow_forking: false,
+            has_wiki: false,
+          }
+    plan:
+      expect: changes
+      contains:
+        - '+ add repository[name="{{ p }}-gen"]'
+        - '+ add repository[name="{{ p }}-gen-private"]'
+      not_contains: ['~ repository[name="{{ p }}-tpl"]']
+      counts: {add: 2, change: 0, delete: 0}
+    apply:
+      api:
+        sent:
+          - 'POST /repos/{owner}/{repo}/generate'
+        not_sent:
+          - 'POST /orgs/{org}/repos'
+          - 'PATCH /repos/{owner}/{repo}/code-scanning/default-setup'
+    state:
+      - kind: repo
+        name: "{{ p }}-gen"
+        match:
+          private: false
+          is_template: false
+          template_repository: {full_name: "{{ org }}/{{ p }}-tpl"}
+          description: "otterdog e2e: generated from a template"
+      - kind: repo
+        name: "{{ p }}-gen-private"
+        match:
+          private: true
+          template_repository: {full_name: "{{ org }}/{{ p }}-tpl"}
+          description: "otterdog e2e: generated private from a template"
+
+  - name: change
+    fragments:
+      repositories:
+        - *template
+        - |
+          orgs.newRepo('{{ p }}-gen') {
+            description: "otterdog e2e: generated, then changed",
+            template_repository: "{{ org }}/{{ p }}-tpl",
+            has_wiki: false,
+          }
+        - *private
+    plan:
+      expect: changes
+      contains:
+        - '~ repository[name="{{ p }}-gen"]'
+      not_contains:
+        - '~ repository[name="{{ p }}-tpl"]'
+        - '~ repository[name="{{ p }}-gen-private"]'
+        - template_repository
+      counts: {add: 0, delete: 0}
+    apply:
+      api:
+        sent:
+          - 'PATCH /repos/{owner}/{repo}'
+        not_sent:
+          - 'POST /repos/{owner}/{repo}/generate'
+          - 'POST /orgs/{org}/repos'
+    state:
+      - kind: repo
+        name: "{{ p }}-gen"
+        match:
+          description: "otterdog e2e: generated, then changed"
+          has_wiki: false
+          template_repository: {full_name: "{{ org }}/{{ p }}-tpl"}
+
+  - name: remove
+    fragments: {}
+    plan:
+      expect: changes
+      contains:
+        - '- remove repository[name="{{ p }}-tpl"]'
+        - '- remove repository[name="{{ p }}-gen"]'
+        - '- remove repository[name="{{ p }}-gen-private"]'
+      counts: {add: 0, change: 0, delete: 3}
+    apply:
+      delete: true
+      api:
+        sent:
+          - 'DELETE /repos/{owner}/{repo}'
+        not_sent:
+          - 'POST /repos/{owner}/{repo}/generate'
+    state:
+      - {kind: repo, name: "{{ p }}-tpl", absent: true}
+      - {kind: repo, name: "{{ p }}-gen", absent: true}
+      - {kind: repo, name: "{{ p }}-gen-private", absent: true}

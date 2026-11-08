@@ -1003,3 +1003,16 @@
   upstream: null
   fixed_in: null
   scenarios: []
+
+- id: KB-083
+  title: a default_branch change of a repository that stays archived is still planned and sent (a branch rename or PATCH /repos/{o}/{r} on a read-only repository)
+  status: suspected
+  evidence:
+    - otterdog/models/repository.py:156-182
+    - otterdog/models/repository.py:956-964
+    - otterdog/providers/github/rest/repo_client.py:160
+    - otterdog/providers/github/rest/repo_client.py:727-746
+    - "e2e: scenarios/cli/repo/archive-side-requests.yaml (step archived-default-branch declares the bug)"
+  upstream: null
+  fixed_in: null
+  scenarios: []

@@ -1,0 +1,119 @@
+# repositories.code-scanning (P1) and regression.458-411-435-code-scanning-live: the code scanning default setup of an
+# existing repository, enabled with a query suite and languages, then disabled.
+id: cli.repo.code-scanning
+title: Code scanning default setup of an existing repository
+tier: cli
+description: |
+  code_scanning_default_setup_enabled, code_scanning_default_query_suite and code_scanning_default_languages map to
+  PATCH /repos/{owner}/{repo}/code-scanning/default-setup {state, query_suite, languages}
+  (otterdog/models/repository.py:1202-1218, otterdog/providers/github/rest/repo_client.py:712-725), a request of its
+  own: a change of these settings alone sends no PATCH /repos/{owner}/{repo}. The query suite and the languages are
+  compared only while the setup is enabled. Validation checks the configured languages against the languages GitHub
+  detects in the repository (GET .../languages), 'actions' always counting as detected (#411), and the read-back
+  filters the 'javascript-typescript' value GitHub may report (#435). A repository that does not exist yet cannot be
+  validated (#767: validation error, regression.code-scanning-new-repo), so the repository is created first, without
+  any default setup request (a new repository only disables a setup that got configured, #791); the probe of
+  tests/cli/conftest.py (PROBES) then commits a Python file and a workflow (only workflow_dispatch: it never runs) and
+  waits until GitHub's language detection lists Python (YAML cannot commit files); the enable step configures the
+  'extended' suite for ['actions', 'python'], the disable step turns the setup off, the SUT removes the repository
+  (apply -d). GitHub configures the default setup asynchronously: the state checks wait for it (timeouts below)
+  before the converge plans run. Code scanning is free on public repositories of every plan; GitHub Actions stays
+  enabled (template default), which the default setup needs. Left out: a private repository (the default setup
+  needs Code Security there, a 403 otherwise) and an archived one (otterdog ignores these settings while the
+  repository stays archived, cli.repo.archive-side-requests).
+priority: P1
+min_plan: free
+# tier timeout 600 s + the probe (300 s for the language detection) + up to 900 s for the asynchronous default setup
+timeout: 1800
+tags: [repo, workflows]
+steps:
+  - name: create
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-code-scan') {
+            description: "otterdog e2e: code scanning default setup",
+          }
+    plan:
+      expect: changes
+      contains: ['+ add repository[name="{{ p }}-code-scan"]']
+      counts: {add: 1, change: 0, delete: 0}
+    apply:
+      api:
+        sent:
+          - 'POST /orgs/{org}/repos'
+        not_sent:
+          - 'PATCH /repos/{owner}/{repo}/code-scanning/default-setup'
+    state:
+      - {kind: repo_code_scanning_default_setup, repo: "{{ p }}-code-scan", match: {state: not-configured}}
+
+  - name: enable
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-code-scan') {
+            description: "otterdog e2e: code scanning default setup",
+            code_scanning_default_setup_enabled: true,
+            code_scanning_default_query_suite: "extended",
+            code_scanning_default_languages: ["actions", "python"],
+          }
+    validate:
+      ok: true
+      not_contains: ["is not detected in the repository", "could not validate 'code_scanning_default_languages'"]
+    plan:
+      expect: changes
+      contains: ['~ repository[name="{{ p }}-code-scan"]']
+      counts: {add: 0, delete: 0}
+    apply:
+      expect: ok
+      not_contains: ["failed to update code scanning config"]
+      api:
+        sent:
+          - 'PATCH /repos/{owner}/{repo}/code-scanning/default-setup'
+        not_sent:
+          - 'PATCH /repos/{owner}/{repo}'
+    state:
+      - kind: repo_code_scanning_default_setup
+        repo: "{{ p }}-code-scan"
+        match: {state: configured, query_suite: extended, languages: {$unordered: [actions, python]}}
+        timeout: 600
+
+  - name: disable
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-code-scan') {
+            description: "otterdog e2e: code scanning default setup",
+            code_scanning_default_setup_enabled: false,
+          }
+    plan:
+      expect: changes
+      contains: ['~ repository[name="{{ p }}-code-scan"]']
+      counts: {add: 0, change: 1, delete: 0}
+    apply:
+      api:
+        sent:
+          - 'PATCH /repos/{owner}/{repo}/code-scanning/default-setup'
+        not_sent:
+          - 'PATCH /repos/{owner}/{repo}'
+    state:
+      - kind: repo_code_scanning_default_setup
+        repo: "{{ p }}-code-scan"
+        match: {state: not-configured}
+        timeout: 300
+
+  - name: remove
+    fragments: {}
+    plan:
+      expect: changes
+      contains: ['- remove repository[name="{{ p }}-code-scan"]']
+      counts: {add: 0, change: 0, delete: 1}
+    apply:
+      delete: true
+      api:
+        sent:
+          - 'DELETE /repos/{owner}/{repo}'
+        not_sent:
+          - 'PATCH /repos/{owner}/{repo}/code-scanning/default-setup'
+    state:
+      - {kind: repo, name: "{{ p }}-code-scan", absent: true}

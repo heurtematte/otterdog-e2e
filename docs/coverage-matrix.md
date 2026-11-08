@@ -1149,7 +1149,7 @@ Details:
     - Needs:
         - target
         - org_level
-        - harness: oracle kind org_immutable_releases (GET /orgs/{org}/settings/immutable-releases)
+        - available: check kinds org_immutable_releases, org_immutable_releases_repos (scenario cli.org.immutable-releases, not run live yet)
         - a plan offering immutable releases (402/403 leave it unset)
 
 <a id="org-workflows"></a>
@@ -1579,10 +1579,10 @@ Details:
 | `repositories.merge-commit-messages` | squash_merge_commit_title/message and merge_commit_title/message (squash pair always sent together) | cli | free | P1 | covered | **unverified** | `cli.repo.merge-messages` |
 | `repositories.signoff` | repository web_commit_signoff_required (2022 Eclipse repos, 2019 false; unmanaged while the org requires signoff) | cli | free | P0 | covered | **unverified** | `cli.repo.org-coerced`, `cli.org.signoff` |
 | `repositories.visibility-forking` | private (create private repositories, change visibility) and allow_forking (private repositories need allow_forking false with the template) | cli | free | P1 | covered | **unverified** | `regression.private-repo-template-defaults`, `enterprise.private-bpr`, `cli.neg.private-bpr`, `cli.repo.visibility` |
-| `repositories.default-branch` | default_branch: switch to an existing branch, otherwise rename the current default branch; skipped for empty repositories (1007 Eclipse overrides, 817 'master') | cli | free | P0 | covered | **unverified** | `tests/cli/test_repo_default_branch.py::test_default_branch_rename_and_switch` |
+| `repositories.default-branch` | default_branch: switch to an existing branch, otherwise rename the current default branch; skipped for empty repositories (1007 Eclipse overrides, 817 'master') | cli | free | P0 | covered | **unverified** | `cli.repo.default-branch` |
 | `repositories.archive` | archived: archive (last, after the other changes), changes to archived repositories are ignored, unarchive (304 archived Eclipse repositories) | cli | free | P0 | covered | **unverified** | `cli.repo.archive` |
 | `repositories.security` | security analysis: secret_scanning, secret_scanning_push_protection, dependabot_alerts_enabled (vulnerability alerts), dependabot_security_updates_enabled, private_vulnerability_reporting_enabled (ignored on private repositories) | cli | free | P1 | covered | **unverified** | `cli.repo.security` |
-| `repositories.code-scanning` | code scanning default setup: code_scanning_default_setup_enabled, query suite, languages (only disabled on new repositories when configured, #791) | cli | free | P1 | covered | **unverified** | `regression.code-scanning-new-repo`, `regression.private-repo-template-defaults`, `tests/cli/test_repo_code_scanning.py::test_code_scanning_default_setup` |
+| `repositories.code-scanning` | code scanning default setup: code_scanning_default_setup_enabled, query suite, languages (only disabled on new repositories when configured, #791) | cli | free | P1 | covered | **unverified** | `regression.code-scanning-new-repo`, `regression.private-repo-template-defaults`, `cli.repo.code-scanning` |
 | `repositories.pages` | GitHub Pages: gh_pages_build_type disabled \| legacy (source branch/path) \| workflow, gh_pages_visibility (enterprise) | cli | free | P1 | **partial** | **unverified** | `cli.repo.pages` |
 | `repositories.template-repositories` | is_template, template_repository (create from a template, read-only afterwards), post_process_template_content (mustache-rendered files), auto_init | cli | free | P2 | covered | **unverified** | `tests/cli/test_repo_template.py::test_repository_from_template` |
 | `repositories.fork` | forked_repository '&lt;owner&gt;/&lt;repo&gt;' and fork_default_branch_only: create the repository as a fork (13 repos in 7 orgs) | cli | free | P2 | covered | **unverified** | `cli.repo.fork` |
@@ -2531,7 +2531,7 @@ Details:
 | `regression.472-rename-and-modify` | #472 (v1.1.1): renaming a repository and modifying it in one apply | cli | free | P1 | covered | **unverified** | `regression.rename-and-modify` |
 | `regression.450-pages-required-fields` | #450 (v1.1.0): GitHub Pages updates send the required fields together | cli | free | P2 | covered | **unverified** | `cli.repo.pages` |
 | `regression.440-rich-escaping` | #440 (v1.1.0): values containing rich markup ('[bold]', '[/]') are printed literally | offline | free | P2 | covered | offline | `O-LPLAN-ESCAPING`, `tests/offline/test_cli_markup.py::test_validation_messages_quote_values_literally` |
-| `regression.458-411-435-code-scanning-live` | #411, #435, #458: 'actions' is a valid code scanning language, invalid CodeQL languages from the API are filtered, live code scanning settings compare with the expected default setup | cli | free | P2 | covered | **unverified** | `tests/cli/test_repo_code_scanning.py::test_code_scanning_default_setup` |
+| `regression.458-411-435-code-scanning-live` | #411, #435, #458: 'actions' is a valid code scanning language, invalid CodeQL languages from the API are filtered, live code scanning settings compare with the expected default setup | cli | free | P2 | covered | **unverified** | `cli.repo.code-scanning` |
 | `regression.import-multiple-custom-properties` | v1.0.1: importing an organization with several custom properties | cli | free | P2 | covered | **unverified** | `tests/cli/test_repo_import.py::test_imported_custom_properties_plan_no_change` |
 | `regression.local-apply-teams-webhooks` | v1.0.1 / #325 / #330: local-apply (the webapp's apply) updates teams, handles wildcard webhooks and skips web-UI settings | webapp | free | P2 | covered | **unverified** | `tests/webapp/test_web_ui_flags.py::test_web_ui_setting_needs_a_manual_apply`, `tests/webapp/test_merge_apply.py::test_team_and_wildcard_webhook_are_applied` |
 | `regression.842-team-permission-removal` | #842 (c1cdc54): removing an entry of a dict setting (team_permissions, repository custom_properties) is planned and applied (KB-005) | cli | free | P1 | covered | offline | `O-LPLAN-DICT-ONE-WAY`, `cli.kb.team-permissions-removal` |

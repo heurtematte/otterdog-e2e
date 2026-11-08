@@ -4,14 +4,14 @@
 
 Every write request otterdog sends to GitHub (REST `POST`, `PUT`, `PATCH`, `DELETE` and GraphQL mutations), listed in [scenarios/api_endpoints.yaml](../scenarios/api_endpoints.yaml) at otterdog `a196494`, and the live scenario steps whose `apply.api` asserts it. A step asserts the requests of its apply from otterdog's request statistics (otterdog 1.7.0 and later, [writing scenarios](writing-scenarios.md#http-requests-of-an-apply)): `sent` means the apply sent at least one such request, `not sent` that it sent none (for instance no `PATCH /repos/{owner}/{repo}` when only `team_permissions` change, otterdog#924).
 
-**84 of 97** endpoints the CLI sends are asserted as sent by at least one step.
+**94 of 97** endpoints the CLI sends are asserted as sent by at least one step.
 
 | Method | Asserted sent | Endpoints |
 |---|---:|---:|
-| POST | 14 | 17 |
-| PUT | 30 | 34 |
-| PATCH | 10 | 14 |
-| DELETE | 27 | 29 |
+| POST | 17 | 17 |
+| PUT | 34 | 34 |
+| PATCH | 12 | 14 |
+| DELETE | 28 | 29 |
 | mutation | 3 | 3 |
 
 Endpoints nobody asserts yet are the gaps of this page: a scenario that adds, changes or removes the object should name them in the `apply.api.sent` of the step (the `fill-coverage-gap` skill).
@@ -20,9 +20,9 @@ Endpoints nobody asserts yet are the gaps of this page: a scenario that adds, ch
 
 | Endpoint | Trigger | Asserted sent by | Asserted not sent by |
 |---|---|---|---|
-| `PATCH /orgs/{org}` | an organization setting changes (update_settings) | `cli.org.member-privileges/fork`, `cli.org.member-privileges/privileges` |  |
-| `PUT /orgs/{org}/settings/immutable-releases` | settings.immutable_releases_enforced_repositories changes | **none** |  |
-| `PUT /orgs/{org}/settings/immutable-releases/repositories` | settings.immutable_releases_selected_repositories changes (enforced_repositories 'selected') | **none** |  |
+| `PATCH /orgs/{org}` | an organization setting changes (update_settings) | `cli.org.member-privileges/fork`, `cli.org.member-privileges/privileges` | `cli.code-security.configuration/default-for-public`, `cli.code-security.configuration/defaults-disabled`, `cli.org.immutable-releases/policy-none`, `cli.org.immutable-releases/select-one`, `cli.org.immutable-releases/select-two`, `cli.org.webhook/create` |
+| `PUT /orgs/{org}/settings/immutable-releases` | settings.immutable_releases_enforced_repositories changes | `cli.org.immutable-releases/policy-none`, `cli.org.immutable-releases/select-one` | `cli.org.immutable-releases/remove`, `cli.org.immutable-releases/repositories`, `cli.org.immutable-releases/select-two` |
+| `PUT /orgs/{org}/settings/immutable-releases/repositories` | settings.immutable_releases_selected_repositories changes (enforced_repositories 'selected') | `cli.org.immutable-releases/select-two` | `cli.org.immutable-releases/policy-none`, `cli.org.immutable-releases/repositories`, `cli.org.immutable-releases/select-one` |
 | `PUT /orgs/{org}/organization-roles/teams/{name}/{id}` | a team is added to settings.security_managers (security manager role) | `cli.org.security-managers/assign` |  |
 | `DELETE /orgs/{org}/organization-roles/teams/{name}/{id}` | a team is removed from settings.security_managers | `cli.org.security-managers/unassign` |  |
 | `PUT /orgs/{org}/actions/permissions` | workflows.enabled_repositories or workflows.allowed_actions changes | `cli.org.actions-allowed/all`, `cli.org.actions-allowed/selected`, `cli.org.actions-enabled-repositories/all`, `cli.org.actions-enabled-repositories/selected` |  |
@@ -35,8 +35,8 @@ Endpoints nobody asserts yet are the gaps of this page: a scenario that adds, ch
 | `PATCH /orgs/{org}/organization-roles/{id}` | a custom organization role changes (enterprise) | `enterprise.org-role/update` |  |
 | `DELETE /orgs/{org}/organization-roles/{id}` | a custom organization role is removed (apply -d, enterprise) | `enterprise.org-role/remove` |  |
 | `POST /orgs/{org}/code-security/configurations` | a code security configuration is added | `cli.code-security.configuration/create` |  |
-| `PATCH /orgs/{org}/code-security/configurations/{id}` | a setting of a code security configuration changes | `cli.code-security.configuration/change` |  |
-| `PUT /orgs/{org}/code-security/configurations/{id}/defaults` | default_for_new_repos of a configuration changes; also settings.default_code_security_configurations_disabled (org_client.py:926) | **none** |  |
+| `PATCH /orgs/{org}/code-security/configurations/{id}` | a setting of a code security configuration changes | `cli.code-security.configuration/change` | `cli.code-security.configuration/default-for-public`, `cli.code-security.configuration/defaults-disabled` |
+| `PUT /orgs/{org}/code-security/configurations/{id}/defaults` | default_for_new_repos of a configuration changes; also settings.default_code_security_configurations_disabled (org_client.py:926) | `cli.code-security.configuration/default-for-public`, `cli.code-security.configuration/defaults-disabled` | `cli.code-security.configuration/change`, `cli.code-security.configuration/delete` |
 | `DELETE /orgs/{org}/code-security/configurations/{id}` | a code security configuration is removed (apply -d) | `cli.code-security.configuration/delete` |  |
 | `POST /orgs/{org}/code-security/configurations/{id}/attach` | a repository's code_security_configuration changes, or a repository is created with one | `cli.code-security.configuration/attach-new-repository` |  |
 | `PUT /orgs/{org}/properties/schema/{name}` | a custom property definition is added or changes (add_custom_property, update_custom_property:538) | `cli.custom-property/create`, `cli.custom-property/update` |  |
@@ -52,9 +52,9 @@ Endpoints nobody asserts yet are the gaps of this page: a scenario that adds, ch
 | `DELETE /orgs/{org}/teams/{name}/external-groups` | a team's external group is removed (enterprise managed users, | **none** |  |
 | `PUT /orgs/{org}/teams/{name}/repos/{owner}/{repo}` | a team is added to a repository's team_permissions or its permission changes | `cli.team/create`, `cli.team/update`, `regression.archived-repo-team-permissions/archived-change`, `regression.archived-repo-team-permissions/create`, `regression.archived-repo-team-permissions/permission-only` | `regression.archived-repo-team-permissions/archive`, `regression.archived-repo-team-permissions/archived-remove` |
 | `DELETE /orgs/{org}/teams/{name}/repos/{owner}/{repo}` | a team is removed from a repository's team_permissions (KB-005 fixed in 1.7.0, | `cli.kb.team-permissions-removal/remove-permission`, `regression.archived-repo-team-permissions/archived-remove` | `regression.archived-repo-team-permissions/archive` |
-| `POST /orgs/{org}/hooks` | an organization webhook is added | **none** |  |
-| `PATCH /orgs/{org}/hooks/{id}` | an organization webhook changes, or --update-webhooks forces it | **none** |  |
-| `DELETE /orgs/{org}/hooks/{id}` | an organization webhook is removed (apply -d) | **none** |  |
+| `POST /orgs/{org}/hooks` | an organization webhook is added | `cli.org.webhook/create` | `cli.org.webhook/update` |
+| `PATCH /orgs/{org}/hooks/{id}` | an organization webhook changes, or --update-webhooks forces it | `cli.org.webhook/update` | `cli.org.webhook/create`, `cli.org.webhook/remove` |
+| `DELETE /orgs/{org}/hooks/{id}` | an organization webhook is removed (apply -d) | `cli.org.webhook/remove` | `cli.org.webhook/update` |
 | `PUT /orgs/{org}/actions/secrets/{name}` | an organization secret is added or changes (visibility, selected repositories), or --update-secrets | `cli.org.secret/create`, `cli.org.secret/selected` |  |
 | `DELETE /orgs/{org}/actions/secrets/{name}` | an organization secret is removed (apply -d) | `cli.org.secret/remove` |  |
 | `PUT /orgs/{org}/dependabot/secrets/{name}` | an organization Dependabot secret is added or changes (#890) | `cli.secrets.dependabot-codespaces/create`, `cli.secrets.dependabot-codespaces/selected` |  |
@@ -68,19 +68,19 @@ Endpoints nobody asserts yet are the gaps of this page: a scenario that adds, ch
 | `POST /orgs/{org}/rulesets` | an organization ruleset is added | `enterprise.org-ruleset/create` |  |
 | `PUT /orgs/{org}/rulesets/{id}` | an organization ruleset changes | `enterprise.org-ruleset/evaluate`, `enterprise.org-ruleset/repo-conditions` |  |
 | `DELETE /orgs/{org}/rulesets/{id}` | an organization ruleset is removed (apply -d) | `enterprise.org-ruleset/remove-ruleset` |  |
-| `POST /orgs/{org}/repos` | a repository is added (neither a fork nor from a template) | `cli.bpr.public/create`, `cli.code-security.configuration/attach-new-repository`, `cli.repo.archive-side-requests/create`, `cli.repo.lifecycle/create`, `cli.team/create`, `regression.archived-repo-team-permissions/create` | `cli.repo.fork/fork` |
-| `POST /repos/{owner}/{repo}/generate` | a repository is added with template_repository | **none** |  |
+| `POST /orgs/{org}/repos` | a repository is added (neither a fork nor from a template) | `cli.bpr.public/create`, `cli.code-security.configuration/attach-new-repository`, `cli.org.immutable-releases/repositories`, `cli.repo.archive-side-requests/create`, `cli.repo.code-scanning/create`, `cli.repo.default-branch/create`, `cli.repo.generate/template`, `cli.repo.lifecycle/create`, `cli.repo.security/create`, `cli.repo.security/create-with-updates`, `cli.team/create`, `regression.archived-repo-team-permissions/create` | `cli.repo.fork/fork`, `cli.repo.generate/change`, `cli.repo.generate/generate` |
+| `POST /repos/{owner}/{repo}/generate` | a repository is added with template_repository | `cli.repo.generate/generate` | `cli.repo.generate/change`, `cli.repo.generate/remove`, `cli.repo.generate/template` |
 | `POST /repos/{owner}/{repo}/forks` | a repository is added with forked_repository | `cli.repo.fork/fork` |  |
-| `PATCH /repos/{owner}/{repo}` | a repository setting changes (update_repo), archived included; also the settings of a new repository after its creation, and default_branch when the branch exists (repo_client.py:739) | `cli.org.member-privileges/privileges`, `cli.repo.archive-side-requests/archive-with-topics`, `cli.repo.lifecycle/update`, `cli.repo.security/disable`, `cli.repo.security/enable`, `regression.archived-repo-team-permissions/archive` | `regression.archived-repo-team-permissions/archived-change`, `regression.archived-repo-team-permissions/archived-remove`, `regression.archived-repo-team-permissions/permission-only` |
-| `DELETE /repos/{owner}/{repo}` | a repository is removed (apply -d) | `cli.repo.lifecycle/delete`, `cli.team/remove` |  |
-| `POST /repos/{owner}/{repo}/branches/{name}/rename` | default_branch names a branch that does not exist (the current default branch is renamed) | **none** |  |
+| `PATCH /repos/{owner}/{repo}` | a repository setting changes (update_repo), archived included; also the settings of a new repository after its creation, and default_branch when the branch exists (repo_client.py:739) | `cli.org.member-privileges/privileges`, `cli.repo.archive-side-requests/archive-with-topics`, `cli.repo.default-branch/switch`, `cli.repo.generate/change`, `cli.repo.lifecycle/update`, `cli.repo.security/create-with-updates`, `cli.repo.security/disable`, `cli.repo.security/enable`, `regression.archived-repo-team-permissions/archive` | `cli.repo.code-scanning/disable`, `cli.repo.code-scanning/enable`, `cli.repo.default-branch/rename`, `cli.repo.security/re-enable-alerts`, `regression.archived-repo-team-permissions/archived-change`, `regression.archived-repo-team-permissions/archived-remove`, `regression.archived-repo-team-permissions/permission-only` |
+| `DELETE /repos/{owner}/{repo}` | a repository is removed (apply -d) | `cli.org.immutable-releases/remove`, `cli.repo.code-scanning/remove`, `cli.repo.default-branch/remove`, `cli.repo.generate/remove`, `cli.repo.lifecycle/delete`, `cli.repo.security/remove`, `cli.team/remove` |  |
+| `POST /repos/{owner}/{repo}/branches/{name}/rename` | default_branch names a branch that does not exist (the current default branch is renamed) | `cli.repo.default-branch/create`, `cli.repo.default-branch/rename` | `cli.repo.default-branch/remove`, `cli.repo.default-branch/switch` |
 | `PUT /repos/{owner}/{repo}/topics` | a repository's topics change | `cli.repo.archive-side-requests/archive-with-topics`, `cli.repo.archive-side-requests/create`, `cli.repo.lifecycle/create`, `cli.repo.lifecycle/update` |  |
 | `POST /repos/{owner}/{repo}/pages` | gh_pages_build_type is enabled on a repository without a pages site | `cli.repo.pages/legacy` |  |
 | `PUT /repos/{owner}/{repo}/pages` | a pages setting changes (source, build type; cname and https_enforced at repo_client.py:660-670) | `cli.repo.pages/source-path` |  |
 | `DELETE /repos/{owner}/{repo}/pages` | gh_pages_build_type becomes 'disabled' | `cli.repo.pages/disabled` |  |
-| `PATCH /repos/{owner}/{repo}/code-scanning/default-setup` | code_scanning_default_setup_enabled, _query_suite or _languages change | **none** |  |
-| `PUT /repos/{owner}/{repo}/vulnerability-alerts` | dependabot_alerts_enabled becomes true | **none** |  |
-| `DELETE /repos/{owner}/{repo}/vulnerability-alerts` | dependabot_alerts_enabled becomes false | `cli.repo.security/disable` |  |
+| `PATCH /repos/{owner}/{repo}/code-scanning/default-setup` | code_scanning_default_setup_enabled, _query_suite or _languages change | `cli.repo.code-scanning/disable`, `cli.repo.code-scanning/enable` | `cli.repo.code-scanning/create`, `cli.repo.code-scanning/remove`, `cli.repo.generate/generate` |
+| `PUT /repos/{owner}/{repo}/vulnerability-alerts` | dependabot_alerts_enabled becomes true | `cli.repo.security/create`, `cli.repo.security/create-with-updates`, `cli.repo.security/re-enable-alerts` |  |
+| `DELETE /repos/{owner}/{repo}/vulnerability-alerts` | dependabot_alerts_enabled becomes false | `cli.repo.security/disable` | `cli.repo.security/create`, `cli.repo.security/re-enable-alerts`, `cli.repo.security/remove` |
 | `PUT /repos/{owner}/{repo}/private-vulnerability-reporting` | private_vulnerability_reporting_enabled becomes true | `cli.repo.security/enable` |  |
 | `DELETE /repos/{owner}/{repo}/private-vulnerability-reporting` | private_vulnerability_reporting_enabled becomes false | `cli.repo.security/disable` |  |
 | `PUT /repos/{owner}/{repo}/immutable-releases` | immutable_releases_enabled becomes true | `cli.repo.immutable-releases/create-enabled` |  |

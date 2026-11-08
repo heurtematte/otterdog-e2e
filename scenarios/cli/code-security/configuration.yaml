@@ -1,7 +1,7 @@
 # code-security.configuration.lifecycle, .settings and .repository-attachment (P1), org_level: an organization code
 # security configuration and its repository end to end (eclipse-csi/otterdog#892).
 id: cli.code-security.configuration
-title: Code security configuration (create, attach to a new repository, change, delete)
+title: Code security configuration (create, attach to a new repository, change, default for new repositories, delete)
 tier: cli
 description: |
   Since #892 (main after v1.7.1) otterdog manages the code security configurations of the organization
@@ -11,8 +11,16 @@ description: |
   it is valid on every plan (a free organization only accepts both products of the same status), and enables
   Dependabot alerts. A new repository naming it is created and attached; the security settings the configuration
   controls are not planned on that repository, so the plan converges. A change of the description and of
-  dependabot_security_updates is one PATCH; the last step deletes the configuration (apply -d, GitHub detaches the
-  repository) while the repository keeps a null reference (null never detaches). Every plan of such a SUT lists the
+  dependabot_security_updates is one PATCH. default_for_new_repos is not part of that PATCH: a change of it alone is
+  one PUT .../configurations/{id}/defaults (models/organization_code_security_configuration.py:727-741). The
+  configuration becomes the default for new public repositories (with
+  settings.default_code_security_configurations_disabled false, which only allows defaults: true -> false is dropped
+  from the plan), then the baseline's true and default_for_new_repos 'none' come back in one apply, which sends the
+  same PUT twice over (the configuration's change, and the setting, which sets every default configuration to
+  'none', org_client.py:915-930); the oracle
+  reads the defaults (GET .../configurations/defaults). The last step deletes the configuration, no longer a default,
+  so without the PUT that precedes the deletion of a default one (apply -d, GitHub detaches the repository), while
+  the repository keeps a null reference (null never detaches). Every plan of such a SUT lists the
   organization configurations that are not in the configuration as deletions: with -d the guard refuses to delete a
   configuration without the run prefix, so the test organization must hold no foreign organization configuration
   (GitHub's global configurations are not managed). Older SUTs skip it (fixed_in). org_level: unfiltered plans, full
@@ -95,11 +103,75 @@ steps:
       api:
         sent:
           - 'PATCH /orgs/{org}/code-security/configurations/{id}'
+        not_sent:
+          - 'PUT /orgs/{org}/code-security/configurations/{id}/defaults'
     state:
       - kind: code_security_configuration
         name: "{{ p }}-csc"
         match: {description: "otterdog e2e: changed configuration", dependabot_security_updates: enabled}
         timeout: 120
+
+  - name: default-for-public
+    fragments:
+      settings: ["default_code_security_configurations_disabled: false"]
+      extra:
+        - |-
+          code_security_configurations: [
+            orgs.newOrgCodeSecurityConfiguration('{{ p }}-csc') {
+              description: 'otterdog e2e: changed configuration',
+              dependabot_alerts: 'enabled',
+              dependabot_security_updates: 'enabled',
+              default_for_new_repos: 'public',
+            },
+          ]
+      repositories: *attached
+    plan:
+      expect: changes
+      contains:
+        - '~ org_code_security_configuration[name="{{ p }}-csc"]'
+        - '~ default_for_new_repos = "none" -> "public"'
+      not_contains: [default_code_security_configurations_disabled]
+    apply:
+      api:
+        sent:
+          - 'PUT /orgs/{org}/code-security/configurations/{id}/defaults'
+        not_sent:
+          - 'PATCH /orgs/{org}/code-security/configurations/{id}'
+          - 'PATCH /orgs/{org}'
+    state:
+      - kind: code_security_defaults
+        contains: [{default_for_new_repos: public, configuration: {name: "{{ p }}-csc"}}]
+        timeout: 120
+
+  - name: defaults-disabled
+    fragments:
+      extra:
+        - |-
+          code_security_configurations: [
+            orgs.newOrgCodeSecurityConfiguration('{{ p }}-csc') {
+              description: 'otterdog e2e: changed configuration',
+              dependabot_alerts: 'enabled',
+              dependabot_security_updates: 'enabled',
+              default_for_new_repos: 'none',
+            },
+          ]
+      repositories: *attached
+    plan:
+      expect: changes
+      contains:
+        - "~ settings {"
+        - "~ default_code_security_configurations_disabled = false -> true"
+        - '~ org_code_security_configuration[name="{{ p }}-csc"]'
+        - '~ default_for_new_repos = "public" -> "none"'
+    apply:
+      api:
+        sent:
+          - 'PUT /orgs/{org}/code-security/configurations/{id}/defaults'
+        not_sent:
+          - 'PATCH /orgs/{org}/code-security/configurations/{id}'
+          - 'PATCH /orgs/{org}'
+    state:
+      - {kind: code_security_defaults, equals: [], timeout: 120}
 
   - name: delete
     fragments:
@@ -113,5 +185,7 @@ steps:
       api:
         sent:
           - 'DELETE /orgs/{org}/code-security/configurations/{id}'
+        not_sent:
+          - 'PUT /orgs/{org}/code-security/configurations/{id}/defaults'
     state:
       - {kind: code_security_configuration, name: "{{ p }}-csc", absent: true}

@@ -157,6 +157,7 @@ shortened to the relevant lines.
 | KB-080 | reads refused for lack of a permission taken as absent configuration | suspected | provider | - |
 | KB-081 | org ruleset requiring deployments: AttributeError 'environments' | confirmed | model | step of `O-VAL-ORG-RULESETS` |
 | KB-082 | archiving with a topics change: requests sent after the archiving PATCH | suspected | provider | step of `cli.repo.archive-side-requests` |
+| KB-083 | default branch of an archived repository planned and sent | suspected | model | step of `cli.repo.archive-side-requests` |
 
 ## Issues
 
@@ -2630,3 +2631,21 @@ setup and the default branch. While a repository gets archived in this operation
 "Repository was archived so is read-only."): the apply fails after the repository was archived and the topics are
 never changed. Same family as otterdog#924 (team permissions sent with the settings of an archived repository).
 A live run of `cli.repo.archive-side-requests` must confirm GitHub's answer before the status becomes confirmed.
+
+### KB-083 — the default branch of an archived repository is planned and sent
+
+Status: **suspected** · Upstream: none · Scenarios: step `archived-default-branch` of `cli.repo.archive-side-requests`
+
+Evidence: `otterdog/models/repository.py:156-182`, `otterdog/models/repository.py:956-964`,
+`otterdog/providers/github/rest/repo_client.py:160`, `otterdog/providers/github/rest/repo_client.py:727-746`
+(otterdog `a196494`).
+
+While a repository stays archived, the diff ignores the fields of `_unavailable_fields_in_archived_repos`
+(description, merge settings, security settings, code scanning default setup, has_wiki, ...). `default_branch` is not
+in that set: a default branch change of an archived repository is planned, and the apply sends either
+`PATCH /repos/{owner}/{repo}` with `default_branch` (the branch exists) or
+`POST /repos/{owner}/{repo}/branches/{branch}/rename` (it does not), both writes GitHub presumably refuses on a
+read-only repository (403 "Repository was archived so is read-only."). The correct behaviour the step asserts: a
+default branch change of a repository that stays archived plans nothing, like the other read-only fields. Same
+family as KB-058 (topics) and otterdog#924 (team permissions). A live run must confirm GitHub's answer before the
+status becomes confirmed.
