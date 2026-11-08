@@ -77,8 +77,9 @@ def poll(
 ) -> T:
     """Call ``fn`` until ``until(value)`` holds and return that value; at least one of timeout/max_attempts is required.
 
-    When the budget is exhausted, raise WaitTimeoutError (``last`` = last value) or, with ``raise_on_timeout=False``, return
-    the last value. The function is always called once more after the final sleep, which never overshoots the deadline.
+    When the budget is exhausted, raise WaitTimeoutError (``last`` = last value) or, with ``raise_on_timeout=False``,
+    return the last value. The function is always called once more after the final sleep, which never overshoots the
+    deadline.
     """
     if timeout is None and max_attempts is None:
         raise ValueError("poll() needs a timeout or max_attempts")
@@ -107,7 +108,8 @@ def wait_until(
     sleep: Callable[[float], None] = time.sleep,
     clock: Callable[[], float] = time.monotonic,
 ) -> T:
-    """Call ``condition`` until it returns a truthy value and return it; raise WaitTimeoutError after ``timeout`` seconds."""
+    """Call ``condition`` until it returns a truthy value and return it; raise WaitTimeoutError after ``timeout``
+    seconds."""
     return poll(condition, until=bool, timeout=timeout, interval=interval, what=what, sleep=sleep, clock=clock)
 
 

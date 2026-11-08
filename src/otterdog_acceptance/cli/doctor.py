@@ -1,4 +1,5 @@
-"""``otterdog-acceptance doctor`` (SPEC 16): the read-only checks of a target, never mutating and never taking the org lease.
+"""``otterdog-acceptance doctor`` (SPEC 16): the read-only checks of a target, never mutating and never taking the org
+lease.
 
 Doctor checks, in dependency order: the target and its environment, every identity (declared login, token kind and
 expiration, isolation, the scopes or fine-grained permissions of the owner tokens), every machine account (exists,
@@ -303,7 +304,8 @@ class Doctor:
             self.add("scopes:admin", OK, ", ".join(sorted(scopes)))
 
     def _owner_permissions(self, target: Target, name: str, http: GitHubHttp) -> None:
-        """Read probes of the permissions otterdog (admin) / the oracle need; missing ones named with what GitHub asks."""
+        """Read probes of the permissions otterdog (admin) / the oracle need; missing ones named with what GitHub
+        asks."""
         from otterdog_acceptance.safety import PermissionProbe, run_probe
 
         missing = []
@@ -691,7 +693,8 @@ class Doctor:
                 "web:browser",
                 WARN,
                 f"no Playwright Firefox in {playwright_browsers_path(self.ctx.settings)}",
-                "installed by the first web-UI session (trusted SUTs); system libraries: playwright install-deps firefox",
+                "installed by the first web-UI session (trusted SUTs); system libraries: playwright "
+                "install-deps firefox",
             )
         self._web_gate_state()
         return True

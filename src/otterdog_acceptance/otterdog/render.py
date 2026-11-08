@@ -132,7 +132,8 @@ class ConfigFragments:
 
     @classmethod
     def from_mapping(cls, data: Mapping[str, Any] | None) -> ConfigFragments:
-        """Build from a YAML mapping (a string value counts as one snippet); ValueError for unknown keys or non-strings."""
+        """Build from a YAML mapping (a string value counts as one snippet); ValueError for unknown keys or
+        non-strings."""
         if not data:
             return cls()
         unknown = sorted(set(data) - set(FRAGMENT_KEYS))
@@ -274,7 +275,8 @@ class OrgConfigRenderer:
         hide_cache_limit: bool,
         project: str | None = None,
     ) -> None:
-        """Bind the live org profile (ORG_PROFILE_FIELDS of VerifiedOrg.org_json); RenderError if it lacks the marker."""
+        """Bind the live org profile (ORG_PROFILE_FIELDS of VerifiedOrg.org_json); RenderError if it lacks the
+        marker."""
         description = org_profile.get("description") or ""
         if marker not in description:
             raise RenderError(f"org description {description!r} does not contain the safety marker {marker!r}")

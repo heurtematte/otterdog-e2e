@@ -236,7 +236,8 @@ class E2EContext(WebUiFacet, WebappFacet, RunDataFacet):
 
     # --- live session ---------------------------------------------------------------------------------------------
     def ensure_live(self) -> None:
-        """Load target + identities, verify_target, probe capabilities, docker/app checks, acquire the lease (+heartbeat).
+        """Load target + identities, verify_target, probe capabilities, docker/app checks, acquire the lease
+        (+heartbeat).
 
         Failures are stored in live_error (live items then skip/fail with that reason) instead of raising repeatedly.
         """

@@ -594,7 +594,8 @@ def test_trust_code_goes_through_grant_host_trust(
     tmp_path: Path, suts: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """--e2e-trust-code <exact sha>: cli_install.grant_host_trust installs the untrusted SUT on the host from an
-    interactive terminal only; CI and non-interactive sessions are refused; a code naming another sha changes nothing."""
+    interactive terminal only; CI and non-interactive sessions are refused; a code naming another sha changes
+    nothing."""
     spec = "pr:792@" + fake_sha("pr")
     monkeypatch.setattr(context_sut, "interactive_terminal", lambda: True)
     context = new_context(tmp_path, sut=spec, trust_code=fake_sha("pr").upper())
@@ -935,7 +936,7 @@ def test_installation_id_preflight(tmp_path: Path, live: LiveFakes) -> None:
         context.installation_id()
 
 
-# --- webapp case --------------------------------------------------------------------------------------------------------
+# --- webapp case ------------------------------------------------------------------------------------------------------
 class RecordingWorkspace:
     """ConfigWorkspace stand-in recording written texts."""
 
@@ -1142,7 +1143,7 @@ def test_sut_trust_decisions(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
     assert calls.count("sha:" + fake_sha("gone")) == 1
 
 
-# --- variables, reporting ------------------------------------------------------------------------------------------------
+# --- variables, reporting ---------------------------------------------------------------------------------------------
 def test_scenario_variables(tmp_path: Path, live: LiveFakes) -> None:
     """Live variables use the declared logins (F8), teams and the plan; offline ones the offline org."""
     context = new_context(tmp_path, target="free")

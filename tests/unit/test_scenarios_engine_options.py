@@ -237,7 +237,10 @@ def test_apply_filter_override_and_its_converge(tmp_path: Path) -> None:
 def test_a_foreign_filter_never_reaches_otterdog(tmp_path: Path) -> None:
     """The engine re-checks rendered filters with the real run prefix (a variable could change the prefix)."""
     r = rig()
-    text = "id: s\ntitle: s\nvariables: {target: x}\nsteps: [{fragments: {}, plan: {repo_filter: '{{ p }}-{{ target }}'}}]\n"
+    text = (
+        "id: s\ntitle: s\nvariables: {target: x}\nsteps: "
+        "[{fragments: {}, plan: {repo_filter: '{{ p }}-{{ target }}'}}]\n"
+    )
     loaded = scenario(tmp_path, text)
     loaded.steps[0].plan.repo_filter = "other-*"  # what a bad render could produce
     with pytest.raises(ScenarioFailedError, match="plan: SafetyError: repo_filter 'other-\\*' does not start"):
@@ -412,7 +415,10 @@ def test_info_minimum_and_plan_exit_code(tmp_path: Path) -> None:
     r = rig()
     r.cli.queue("validate", canned("validate", validated(infos=3)))
     r.cli.queue("plan", canned("plan", NOOP, exit_code=0))
-    text = "id: m\ntitle: m\nsteps: [{fragments: {}, validate: {verbose: true, infos_min: 2}, plan: {expect: noop, exit_code: 2}}]\n"
+    text = (
+        "id: m\ntitle: m\nsteps: "
+        "[{fragments: {}, validate: {verbose: true, infos_min: 2}, plan: {expect: noop, exit_code: 2}}]\n"
+    )
     with pytest.raises(ScenarioFailedError, match="plan: expected exit code 2, got 0"):
         r.engine.run(scenario(tmp_path, text))
 

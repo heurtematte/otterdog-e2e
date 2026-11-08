@@ -1,16 +1,16 @@
 ---
 name: triage-e2e-run
 description: >-
-  Triages the failures of an Otterdog Acceptance run: builds a scrubbed triage bundle with otterdog-acceptance assist triage,
-  checks the deterministic pre-classification of every failed or errored item (known-bug, infrastructure, harness,
-  sut, unknown) against the evidence files, reproduces otterdog failures offline when possible and drafts the
+  Triages the failures of an Otterdog Acceptance run: builds a scrubbed triage bundle with otterdog-acceptance assist
+  triage, checks the deterministic pre-classification of every failed or errored item (known-bug, infrastructure,
+  harness, sut, unknown) against the evidence files, reproduces otterdog failures offline when possible and drafts the
   follow-up: a scenarios/known_bugs.yaml entry with its docs/known-issues.md section, a scenario or harness fix, or
   an upstream issue text. Use when asked to triage, explain, classify or investigate failed or errored e2e tests, a
   red run or CI job, an artifacts directory, or the latest run.
 license: EPL-2.0
 compatibility: >-
-  Requires the Otterdog Acceptance checkout with .venv (make init) and a run artifacts directory (local, or downloaded from
-  CI); unshare and docker to reproduce offline. Live reruns need a test organization and are only suggested.
+  Requires the Otterdog Acceptance checkout with .venv (make init) and a run artifacts directory (local, or downloaded
+  from CI); unshare and docker to reproduce offline. Live reruns need a test organization and are only suggested.
 ---
 
 # Triage an e2e run
@@ -49,8 +49,9 @@ and several runs exist (`ls -1t artifacts/`).
      the signature, or a bug with `status: fixed` (a regression);
    - `infrastructure`: GitHub 5xx, secondary rate limit, abuse detection, network errors, delivery wait timeouts,
      docker or compose failures, a busy lease. Nothing to change in the tests: propose a rerun;
-   - `harness`: an error of `otterdog_acceptance` itself (`ContextError`, `SafetyError`, `TargetError`, a traceback ending
-     in `src/otterdog_acceptance`). A `SafetyError` can be a guard doing its job on a wrong scenario: then fix the scenario;
+   - `harness`: an error of `otterdog_acceptance` itself (`ContextError`, `SafetyError`, `TargetError`, a traceback
+     ending in `src/otterdog_acceptance`). A `SafetyError` can be a guard doing its job on a wrong scenario: then fix
+     the scenario;
    - `sut`: a check of a scenario step failed on otterdog output or GitHub state. Decide whether the expectation is
      wrong (scenario bug) or otterdog is (defect): read the step, the command output, the otterdog source at the
      SUT's commit (`run.json`), and compare with another SUT when you can;

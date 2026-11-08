@@ -196,7 +196,8 @@ def deliveries_since(
 ) -> list[dict[str, Any]]:
     """The deliveries (of ``event``) delivered at or after ``since`` - ``skew``: ``since`` is GitHub's time of the
     request that triggered them (Mutator.ping_* return it), so deliveries logged late but triggered earlier (a hook's
-    creation ping, a previous ping) never count as the new one (BAT-10). Deliveries without delivered_at are left out."""
+    creation ping, a previous ping) never count as the new one (BAT-10). Deliveries without delivered_at are left
+    out."""
     found = []
     for delivery in deliveries:
         if event is not None and delivery.get("event") != event:

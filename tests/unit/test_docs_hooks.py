@@ -73,7 +73,7 @@ def test_hooks_import_only_the_standard_library() -> None:
             assert name.split(".")[0] in sys.stdlib_module_names, f"top-level import of {name}"
 
 
-# --- scanning ----------------------------------------------------------------------------------------------------------
+# --- scanning ---------------------------------------------------------------------------------------------------------
 def test_fenced_lines() -> None:
     """Backtick and tilde fences, in lists and blockquotes, closed by a fence of the same character at least as long;
     a backtick line whose info string holds a backtick is not a fence; an unclosed fence runs to the end."""
@@ -187,7 +187,7 @@ def test_code_spans_stay_in_their_table_row_or_list_item() -> None:
     assert destinations(markdown) == ["../b", "../d"]
 
 
-# --- links leaving docs/ -----------------------------------------------------------------------------------------------
+# --- links leaving docs/ ----------------------------------------------------------------------------------------------
 @pytest.fixture
 def repo(tmp_path: Path) -> Path:
     """A repository with docs/, a file and a directory outside it."""
@@ -272,7 +272,7 @@ def test_no_placeholder_is_read_as_html(page: str) -> None:
     assert found == []
 
 
-# --- callouts and tables -----------------------------------------------------------------------------------------------
+# --- callouts and tables ----------------------------------------------------------------------------------------------
 def test_convert_callouts() -> None:
     """GitHub callouts become admonitions (any case); other blockquotes and code are kept."""
     markdown = text(
@@ -363,7 +363,7 @@ def test_unescape_table_code_pipes() -> None:
     ]
 
 
-# --- home page ---------------------------------------------------------------------------------------------------------
+# --- home page --------------------------------------------------------------------------------------------------------
 def test_readme_to_home() -> None:
     """The github-only blocks are dropped; links are rebased from the repository root to docs/; external links,
     anchors and code are kept."""

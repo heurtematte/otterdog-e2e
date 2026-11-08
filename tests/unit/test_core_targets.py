@@ -29,7 +29,10 @@ PROJECT = Path(__file__).resolve().parents[2]
 REPO_TARGETS = PROJECT / "targets"
 ORG, ORG_ID, ADMIN = "e2e-test-org", 424242, "e2e-admin-bot"
 ENV = {"E2E_ORG": ORG, "E2E_ORG_ID": str(ORG_ID), "E2E_ADMIN_LOGIN": ADMIN}
-PEM = "-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEAwpaFakeKeyLine0123456789\nabcdefghijklmnopqrstuvwxyz012345\n-----END RSA PRIVATE KEY-----"
+PEM = (
+    "-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEAwpaFakeKeyLine0123456789\nabcdefghijklmnopqrstuvwxyz012345\n"
+    "-----END RSA PRIVATE KEY-----"
+)
 
 
 @pytest.fixture

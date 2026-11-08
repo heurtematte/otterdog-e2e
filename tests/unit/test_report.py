@@ -50,7 +50,8 @@ Check everything that was actually exercised and fill in the details. -->
   - GitHub plan: <!-- Free / Team / Enterprise Cloud -->
   - [ ] **CLI** — commands run: <!-- e.g. `otterdog plan`, `otterdog apply`, `otterdog validate`, ... -->
   - [ ] **Web app** — pages / flows exercised:
-  - [ ] **Webhook interactions** — otterdog bot behavior on PRs (validation / sync checks, bot comments on the config repo PRs); org plan used: <!-- Free / Team / Enterprise Cloud -->
+  - [ ] **Webhook interactions** — otterdog bot behavior on PRs \
+(validation / sync checks, bot comments on the config repo PRs); org plan used: <!-- Free / Team / Enterprise Cloud -->
 
 ### How to reproduce / test scenario:**
 """

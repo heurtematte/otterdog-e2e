@@ -50,7 +50,9 @@ FAKE_VERSION = "1.6.1"
 _LEGEND = "\nActions are indicated with the following symbols:\n  + create\n  ~ modify\n  ! forced update\n  - delete\n"
 DEFAULT_OUTPUTS: Mapping[str, str] = {
     "--version": f"otterdog.sh, version {FAKE_VERSION}\n",
-    "validate": "Validating organization configurations:\n\nProject {org}[github_id={org}] (1/1)\n  Validation succeeded\n",
+    "validate": (
+        "Validating organization configurations:\n\nProject {org}[github_id={org}] (1/1)\n  Validation succeeded\n"
+    ),
     "plan": "Planning execution:\n" + _LEGEND + "\nProject {org}[github_id={org}] (1/1)\n  \n"
     "  Plan: 0 to add, 0 to change, 0 to delete.\n",
     "local-plan": "Printing local diff:\n" + _LEGEND + "\nProject {org}[github_id={org}] (1/1)\n  \n"

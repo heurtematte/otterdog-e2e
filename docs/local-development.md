@@ -7,10 +7,10 @@ make init          # poetry install --with dev: .venv with the harness, pytest, 
 make check         # ruff check, ruff format --check, mypy, unit tier
 ```
 
-`poetry.toml` keeps the virtualenv in `.venv/`; every Makefile target and workflow calls `.venv/bin/otterdog-acceptance`.
-`make init` also links it as `~/.local/bin/otterdog-acceptance` (`E2E_LINK=<path>` elsewhere), like otterdog's own
-`make init`, so `otterdog-acceptance` runs from any directory of a shell whose `PATH` holds `~/.local/bin` (it finds the
-project from its own location; a file that is not a symlink is left alone).
+`poetry.toml` keeps the virtualenv in `.venv/`; every Makefile target and workflow calls
+`.venv/bin/otterdog-acceptance`. `make init` also links it as `~/.local/bin/otterdog-acceptance` (`E2E_LINK=<path>`
+elsewhere), like otterdog's own `make init`, so `otterdog-acceptance` runs from any directory of a shell whose `PATH`
+holds `~/.local/bin` (it finds the project from its own location; a file that is not a symlink is left alone).
 
 `oda` is the short alias of `otterdog-acceptance`, the same command (`oda run --suite offline`, `oda assist check`),
 linked as `~/.local/bin/oda` (`ODA_LINK=<path>` elsewhere). The documentation, the Makefile and the workflows write
@@ -97,24 +97,24 @@ make janitor TARGET=free RUN_ID=<run id> APPLY=1
 make lint-scenarios        # = .venv/bin/otterdog-acceptance run --suite offline --sut release:latest -k lint
 ```
 
-`otterdog-acceptance run` without `--suite` runs `offline`, `cli`, `webhooks`, `webapp` and `enterprise`, plus `differential`
-with `--base-sut` and `web_ui` with `--allow-web-ui`.
+`otterdog-acceptance run` without `--suite` runs `offline`, `cli`, `webhooks`, `webapp` and `enterprise`, plus
+`differential` with `--base-sut` and `web_ui` with `--allow-web-ui`.
 
-`otterdog-acceptance -v ...` / `-vv ...` log at INFO/DEBUG (redacted). `otterdog-acceptance sut resolve SPEC` shows what a spec
-resolves to (label, sha, version, trust, base sha, changed files). `python -m otterdog_acceptance` is the same command line
-as `.venv/bin/otterdog-acceptance` (`.venv/bin/python -m otterdog_acceptance doctor --target free`): batch runs start their
-children as `python -P -m otterdog_acceptance`, with the interpreter of the parent (`-P`: an `otterdog_acceptance` package in the
-current directory is never imported).
+`otterdog-acceptance -v ...` / `-vv ...` log at INFO/DEBUG (redacted). `otterdog-acceptance sut resolve SPEC` shows what
+a spec resolves to (label, sha, version, trust, base sha, changed files). `python -m otterdog_acceptance` is the same
+command line as `.venv/bin/otterdog-acceptance` (`.venv/bin/python -m otterdog_acceptance doctor --target free`): batch
+runs start their children as `python -P -m otterdog_acceptance`, with the interpreter of the parent (`-P`: an
+`otterdog_acceptance` package in the current directory is never imported).
 
 ## Several targets
 
-`otterdog-acceptance targets` (`make targets`) lists the instances: every `~/.config/otterdog-acceptance/<instance>.env` and every
-profile of `targets/`, with its profile, organization and env file, and a `problem:` line for an instance that cannot
-be loaded (read-only, no network; `--json` for scripts).
+`otterdog-acceptance targets` (`make targets`) lists the instances: every `~/.config/otterdog-acceptance/<instance>.env`
+and every profile of `targets/`, with its profile, organization and env file, and a `problem:` line for an instance that
+cannot be loaded (read-only, no network; `--json` for scripts).
 
 `run`, `pr`, `doctor` and `janitor` accept several targets: a comma list or a repeated `--target`, `@all` (every
-instance with an env file) or `@<list>` (the file `~/.config/otterdog-acceptance/lists/<list>`, one instance per line, `#`
-comments). Details and rules: [onboarding.md](onboarding.md#running-on-one-organization-or-a-list).
+instance with an env file) or `@<list>` (the file `~/.config/otterdog-acceptance/lists/<list>`, one instance per line,
+`#` comments). Details and rules: [onboarding.md](onboarding.md#running-on-one-organization-or-a-list).
 
 ```bash
 .venv/bin/otterdog-acceptance targets
@@ -125,10 +125,10 @@ make cli TARGET=free,acme-a PARALLEL=2
 make report RUN=artifacts/<run id>                                                   # one target's own report
 ```
 
-- Each target runs in a child process (`python -P -m otterdog_acceptance run --target=<instance> --run-id=<id> ...`, after
-  the `-v`/`-vv` of the batch command) with its own run id and artifacts directory; every line it prints is prefixed
-  with `[<instance>] `. `--run-id` is refused with several targets; janitor children get none (they sweep under a
-  run id of their own) and their lines show none.
+- Each target runs in a child process (`python -P -m otterdog_acceptance run --target=<instance> --run-id=<id> ...`,
+  after the `-v`/`-vv` of the batch command) with its own run id and artifacts directory; every line it prints is
+  prefixed with `[<instance>] `. `--run-id` is refused with several targets; janitor children get none (they sweep under
+  a run id of their own) and their lines show none.
 - With several targets an exported `E2E_ORG`, `E2E_ORG_ID` or `E2E_PROFILE` is refused, and so is an exported login
   (`*_LOGIN`) or secret variable that an instance's env file sets to another value (the message names the variables
   only): the exported value would serve every target. Unset them, or give one target.
@@ -146,10 +146,10 @@ make report RUN=artifacts/<run id>                                              
   selected.
 
 Before the first test, the session prepares every SUT and image the selected tests need. It prints
-`otterdog-acceptance: preparing the head SUT (<spec>) ...` and records the durations in `run.json` (`sut_prepare_seconds`).
-Measured on a warm cache: 1-6 s per SUT install check and 25 s for a new webapp image whose dependency layers were
-cached. The first install of a SUT (cold mirror and poetry cache) took 17 s in wave 2. Cold image builds take
-minutes, but no item timeout is spent on them.
+`otterdog-acceptance: preparing the head SUT (<spec>) ...` and records the durations in `run.json`
+(`sut_prepare_seconds`). Measured on a warm cache: 1-6 s per SUT install check and 25 s for a new webapp image whose
+dependency layers were cached. The first install of a SUT (cold mirror and poetry cache) took 17 s in wave 2. Cold image
+builds take minutes, but no item timeout is spent on them.
 
 `pytest --collect-only` sessions leave no artifacts directory, and `-p no:timeout` keeps working (the plugin
 registers the `timeout` marker when pytest-timeout is disabled).
@@ -186,8 +186,8 @@ E2E_WEB_LOGIN=1 .venv/bin/otterdog-acceptance run --target free --suite web_ui -
 
 ## Ad-hoc injection
 
-`otterdog-acceptance inject` runs jsonnet files through otterdog without writing a scenario. It builds a one-step scenario
-from the files ([writing-scenarios.md](writing-scenarios.md#injecting-jsonnet-from-files)) in the run's scratch
+`otterdog-acceptance inject` runs jsonnet files through otterdog without writing a scenario. It builds a one-step
+scenario from the files ([writing-scenarios.md](writing-scenarios.md#injecting-jsonnet-from-files)) in the run's scratch
 directory (`$E2E_CACHE_DIR/run/<run>/adhoc/scenario.yaml`), checks it with every scenario rule (no import statements,
 dummy secrets, offline restrictions, Jinja: errors name `<file>:<line>` and stop before any session starts), then
 runs `tests/adhoc/` with pytest (the module only runs when `E2E_ADHOC_SCENARIO` names that file) with the regular
@@ -376,9 +376,10 @@ Docker images are tagged `otterdog-e2e/otterdog:<label>` (trusted) and `otterdog
 ## Unit tests
 
 `tests/unit` must stay fast and network-free (a fixture fails any non-loopback connection). Use `responses` for
-`GitHubHttp`, and the fakes of `otterdog_acceptance.testing.fakes` (`FakeGitHubHttp`, `FakeOracle`, `FakeCli`, `RecordingMutator`,
-`FakeAppAuth`, `FakeLease`, `FakeBaselineManager`) for higher layers; real otterdog output samples live in `tests/unit/data/`. Test modules cannot import each
-other (`--import-mode=importlib`): shared helpers belong in a `conftest.py` or `otterdog_acceptance.testing`.
+`GitHubHttp`, and the fakes of `otterdog_acceptance.testing.fakes` (`FakeGitHubHttp`, `FakeOracle`, `FakeCli`,
+`RecordingMutator`, `FakeAppAuth`, `FakeLease`, `FakeBaselineManager`) for higher layers; real otterdog output samples
+live in `tests/unit/data/`. Test modules cannot import each other (`--import-mode=importlib`): shared helpers belong in
+a `conftest.py` or `otterdog_acceptance.testing`.
 
 `tests/unit/test_workflows_static.py` checks the CI workflows, the Makefile, `.gitignore` and `.env.example`; run it
 after editing any of them.

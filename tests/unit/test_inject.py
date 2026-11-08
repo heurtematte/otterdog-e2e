@@ -1,5 +1,5 @@
-"""otterdog_acceptance.inject: file references (paths, containment, reading), SourceText, rendering with the file's rules,
-the ad-hoc scenarios of ``otterdog-acceptance inject`` and the result they report."""
+"""otterdog_acceptance.inject: file references (paths, containment, reading), SourceText, rendering with the file's
+rules, the ad-hoc scenarios of ``otterdog-acceptance inject`` and the result they report."""
 
 from __future__ import annotations
 

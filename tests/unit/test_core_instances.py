@@ -167,7 +167,8 @@ def test_instance_name_problem() -> None:
     for valid in ("free", "acme", "a", "acme-2", "x" * 39, "webui", "untrusted-acme", "lists-2", "my-lists"):
         assert instance_name_problem(valid) is None, valid
     assert "e2e-acme-webui is the CI environment of the instance 'acme'" in str(instance_name_problem("acme-webui"))
-    # ~/.config/otterdog-acceptance/lists/ holds the target lists: an instance "lists" would write its App credentials there
+    # ~/.config/otterdog-acceptance/lists/ holds the target lists: an instance "lists" would write its App credentials
+    # there
     assert RESERVED_INSTANCE_NAMES == ("lists",)
     assert "~/.config/otterdog-acceptance/lists/ holds the target lists" in str(instance_name_problem("lists"))
     for invalid in ("", "x" * 40, "Acme", "a.b", "a_b", "-a"):
@@ -209,8 +210,8 @@ def test_target_env_name_refuses_lists() -> None:
 def test_context_loads_the_instance_env_file_then_its_profile(
     harness: HarnessSettings, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """E2EContext.load_target: ~/.config/otterdog-acceptance/<instance>.env (E2E_PROFILE included) is loaded first, so an
-    instance needs nothing but its env file."""
+    """E2EContext.load_target: ~/.config/otterdog-acceptance/<instance>.env (E2E_PROFILE included) is loaded first, so
+    an instance needs nothing but its env file."""
     home = tmp_path / "home"
     env_file = home / ".config" / "otterdog-acceptance" / "acme.env"
     env_file.parent.mkdir(parents=True)
@@ -225,7 +226,7 @@ def test_context_loads_the_instance_env_file_then_its_profile(
     assert environ[PROFILE_ENV] == "enterprise"  # the session's own environment
 
 
-# --- the profiles ------------------------------------------------------------------------------------------------------
+# --- the profiles -----------------------------------------------------------------------------------------------------
 def _profile_tree(profile: str) -> dict[str, Any]:
     """Parsed targets/<profile>.yaml without the keys that legitimately differ between profiles."""
     data = yaml.safe_load((REPO_TARGETS / f"{profile}.yaml").read_text(encoding="utf-8"))

@@ -1411,7 +1411,7 @@ def test_collect_only_sessions_leave_no_artifacts(inner: Inner) -> None:
     assert (inner.artifacts / "run.json").is_file() and inner.summaries
 
 
-# --- webapp tier extras: identity mutators, compose-only fixtures, dtrack mock, blueprints ------------------------------
+# --- webapp tier extras: identity mutators, compose-only fixtures, dtrack mock, blueprints ----------------------------
 def live_session(
     inner: Inner,
     *,

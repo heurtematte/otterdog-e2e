@@ -63,7 +63,7 @@ ORGANIZATIONS_PAGE = """<!DOCTYPE html>
                   </tbody>
                 </table>
 </div></div></section></div></div></body></html>
-"""
+"""  # noqa: E501
 
 POLICIES_PAGE = """<!DOCTYPE html><html lang="en"><body><div class="content-wrapper"><section class="content">
       <div class="container-fluid">
@@ -153,7 +153,7 @@ def blueprint_pane(blueprint_id: str, rows: str) -> str:
                                 </div>
                               </div>
                             </div>
-                          </div>"""
+                          </div>"""  # noqa: E501
 
 
 PROJECT_PAGE = f"""<!DOCTYPE html><html lang="en"><body>
@@ -165,7 +165,7 @@ PROJECT_PAGE = f"""<!DOCTYPE html><html lang="en"><body>
 <table class="table"><thead><tr><th>Repository</th><th>Updated At</th><th>Status</th></tr></thead>
 <tbody><tr><td>outside</td><td>x</td><td>FAILURE</td><td>N/A</td></tr></tbody></table>
 </body></html>
-"""
+"""  # noqa: E501
 
 
 @pytest.fixture

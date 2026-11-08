@@ -1,9 +1,10 @@
-"""Coverage of otterdog's HTTP write requests by the live scenarios (scenarios/api_endpoints.yaml, docs/api-coverage.md).
+"""Coverage of otterdog's HTTP write requests by the live scenarios (scenarios/api_endpoints.yaml,
+docs/api-coverage.md).
 
 scenarios/api_endpoints.yaml lists every write request otterdog sends to GitHub, named as otterdog's request
 statistics name them; live scenario steps assert the requests of their apply with ``apply.api`` (sent / not_sent).
-These tests keep both honest (the checks live in otterdog_acceptance.api_coverage, shared with ``otterdog-acceptance assist check
-scenarios/api_endpoints.yaml``):
+These tests keep both honest (the checks live in otterdog_acceptance.api_coverage, shared with ``otterdog-acceptance
+assist check scenarios/api_endpoints.yaml``):
 
 * the inventory loads (unique write endpoints, sources, triggers, scopes) and its features exist in the coverage matrix;
 * every write endpoint a live scenario names is in the inventory (``not_sent`` of a misspelt endpoint always passes);

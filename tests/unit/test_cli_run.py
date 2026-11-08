@@ -104,8 +104,8 @@ def test_run_builds_pytest_arguments(project: dict[str, Any]) -> None:
     ]
     assert "artifacts:" in result.output and "t3c7z8a5" in result.output
     assert project["command"] == (
-        "otterdog-acceptance run --suite cli,webapp --target free --sut branch:main --tags smoke,repo --scenario 'cli.repo.*'"
-        " -k 'not slow' -x"
+        "otterdog-acceptance run --suite cli,webapp --target free --sut branch:main --tags smoke,repo --scenario"
+        " 'cli.repo.*' -k 'not slow' -x"
     )
 
 
@@ -272,7 +272,8 @@ def test_pr_pins_the_current_head_without_sha(project: dict[str, Any], monkeypat
 
 
 def test_current_pr_head_is_the_fetched_pull_ref(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    """The head is refs/pull/N/head fetched into the upstream mirror (what the SUT resolution checks the pin against)."""
+    """The head is refs/pull/N/head fetched into the upstream mirror (what the SUT resolution checks the pin
+    against)."""
 
     class Mirror:
         def __init__(self, head: str | Exception) -> None:

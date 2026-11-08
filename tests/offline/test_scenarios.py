@@ -9,8 +9,9 @@ exempt from --e2e-tags: the offline regression tier always runs in full (selecti
 
 Some behaviour legitimately depends on the SUT's history (a fix that is in some SUTs and not in others). Such steps
 leave the varying expectation out of the YAML and SUT_EXPECTATIONS (keyed by scenario id and step) asserts the outcome
-that matches the SUT under test, decided by the ancestry of the fix commit in the upstream mirror (conftest.SutHistory). A known upstream defect
-detected that way is reported as an expected failure (pytest.xfail) and the item passes again once it is fixed.
+that matches the SUT under test, decided by the ancestry of the fix commit in the upstream mirror (conftest.SutHistory).
+A known upstream defect detected that way is reported as an expected failure (pytest.xfail) and the item passes again
+once it is fixed.
 """
 
 from __future__ import annotations
@@ -143,8 +144,8 @@ ENUM_SCHEMA_STEPS: dict[str, dict[str, EnumSchemaStep]] = {
             "'number' is not one of ['string', 'single_select', 'multi_select', 'true_false']",
             (
                 (
-                    "custom_property[name=\"{{ p }}-num\"] has 'value_type' set to 'number', while only values ('string' | "
-                    "'single_select' | 'multi_select' | 'true_false') are allowed."
+                    "custom_property[name=\"{{ p }}-num\"] has 'value_type' set to 'number', while only values "
+                    "('string' | 'single_select' | 'multi_select' | 'true_false') are allowed."
                 ),
             ),
         ),
@@ -155,8 +156,9 @@ ENUM_SCHEMA_STEPS: dict[str, dict[str, EnumSchemaStep]] = {
             "'protected_branches' is not one of ['all', 'protected', 'selected']",
             (
                 (
-                    "Error: environment[name=\"{{ p }}-policy\", repository={{ p }}-env] has 'deployment_branch_policy' of "
-                    "value 'protected_branches', while only values ('all' | 'protected' | 'selected') are allowed."
+                    'Error: environment[name="{{ p }}-policy", repository={{ p }}-env] has '
+                    "'deployment_branch_policy' of value 'protected_branches', while only values ('all' | 'protected' "
+                    "| 'selected') are allowed."
                 ),
             ),
         ),
@@ -167,8 +169,8 @@ ENUM_SCHEMA_STEPS: dict[str, dict[str, EnumSchemaStep]] = {
             "'super' is not one of ['none', 'read', 'triage', 'write', 'maintain', 'admin']",
             (
                 (
-                    "org_role[name=\"{{ p }}-r1\"] has 'base_role' of value 'super', while only values ('none' | 'read' | "
-                    "'triage' | 'write' | 'maintain' | 'admin') are allowed."
+                    "org_role[name=\"{{ p }}-r1\"] has 'base_role' of value 'super', while only values ('none' | "
+                    "'read' | 'triage' | 'write' | 'maintain' | 'admin') are allowed."
                 ),
             ),
         ),
@@ -179,8 +181,8 @@ ENUM_SCHEMA_STEPS: dict[str, dict[str, EnumSchemaStep]] = {
             "'maintain' is not one of ['none', 'read', 'write', 'admin']",
             (
                 (
-                    "'default_repository_permission' has value 'maintain', while only values ('none' | 'read' | 'write' | "
-                    "'admin') are allowed."
+                    "'default_repository_permission' has value 'maintain', while only values ('none' | 'read' | "
+                    "'write' | 'admin') are allowed."
                 ),
             ),
         ),
@@ -191,8 +193,8 @@ ENUM_SCHEMA_STEPS: dict[str, dict[str, EnumSchemaStep]] = {
             "'X' is not one of ['PR_TITLE', 'COMMIT_OR_PR_TITLE']",
             (
                 (
-                    "Error: repository[name=\"{{ p }}-merge\"] has 'squash_merge_commit_title' of value 'X', while only "
-                    "values ('PR_TITLE' | 'COMMIT_OR_PR_TITLE') are allowed."
+                    "Error: repository[name=\"{{ p }}-merge\"] has 'squash_merge_commit_title' of value 'X', while "
+                    "only values ('PR_TITLE' | 'COMMIT_OR_PR_TITLE') are allowed."
                 ),
                 "of value ('X', 'COMMIT_MESSAGES'), while only combinations",
             ),
@@ -203,8 +205,8 @@ ENUM_SCHEMA_STEPS: dict[str, dict[str, EnumSchemaStep]] = {
             "'X' is not one of ['PR_BODY', 'COMMIT_MESSAGES', 'BLANK']",
             (
                 (
-                    "Error: repository[name=\"{{ p }}-merge\"] has 'squash_merge_commit_message' of value 'X', while only "
-                    "values ('PR_BODY' | 'COMMIT_MESSAGES' | 'BLANK') are allowed."
+                    "Error: repository[name=\"{{ p }}-merge\"] has 'squash_merge_commit_message' of value 'X', while "
+                    "only values ('PR_BODY' | 'COMMIT_MESSAGES' | 'BLANK') are allowed."
                 ),
                 "of value ('COMMIT_OR_PR_TITLE', 'X'), while only combinations",
             ),
@@ -215,8 +217,8 @@ ENUM_SCHEMA_STEPS: dict[str, dict[str, EnumSchemaStep]] = {
             "'X' is not one of ['PR_TITLE', 'MERGE_MESSAGE']",
             (
                 (
-                    "Error: repository[name=\"{{ p }}-merge\"] has 'merge_commit_title' of value 'X', while only values "
-                    "('PR_TITLE' | 'MERGE_MESSAGE') are allowed."
+                    "Error: repository[name=\"{{ p }}-merge\"] has 'merge_commit_title' of value 'X', while only "
+                    "values ('PR_TITLE' | 'MERGE_MESSAGE') are allowed."
                 ),
                 "of value ('X', 'PR_TITLE'), while only combinations",
             ),
@@ -227,8 +229,8 @@ ENUM_SCHEMA_STEPS: dict[str, dict[str, EnumSchemaStep]] = {
             "'X' is not one of ['PR_TITLE', 'PR_BODY', 'BLANK']",
             (
                 (
-                    "Error: repository[name=\"{{ p }}-merge\"] has 'merge_commit_message' of value 'X', while only values "
-                    "('PR_TITLE' | 'PR_BODY' | 'BLANK') are allowed."
+                    "Error: repository[name=\"{{ p }}-merge\"] has 'merge_commit_message' of value 'X', while only "
+                    "values ('PR_TITLE' | 'PR_BODY' | 'BLANK') are allowed."
                 ),
                 "of value ('PR_TITLE', 'X'), while only combinations",
             ),
@@ -241,8 +243,8 @@ ENUM_SCHEMA_STEPS: dict[str, dict[str, EnumSchemaStep]] = {
             "'hidden' is not one of ['public', 'private']",
             (
                 (
-                    "Error: repository[name=\"{{ p }}-pages\"] has 'gh_pages_visibility' set to value 'hidden', while only "
-                    "values ['public' | 'private'] are allowed."
+                    "Error: repository[name=\"{{ p }}-pages\"] has 'gh_pages_visibility' set to value 'hidden', while "
+                    "only values ['public' | 'private'] are allowed."
                 ),
             ),
         ),
@@ -253,8 +255,8 @@ ENUM_SCHEMA_STEPS: dict[str, dict[str, EnumSchemaStep]] = {
             "'hidden' is not one of ['public', 'private']",
             (
                 (
-                    "Error: repository[name=\"{{ p }}-pages\"] has 'gh_pages_visibility' set to value 'hidden', while only "
-                    "values ['public' | 'private'] are allowed."
+                    "Error: repository[name=\"{{ p }}-pages\"] has 'gh_pages_visibility' set to value 'hidden', while "
+                    "only values ['public' | 'private'] are allowed."
                 ),
             ),
             known_bug="KB-033",
@@ -266,8 +268,8 @@ ENUM_SCHEMA_STEPS: dict[str, dict[str, EnumSchemaStep]] = {
             "'foo' is not one of ['disabled', 'legacy', 'workflow']",
             (
                 (
-                    "Error: repository[name=\"{{ p }}-pages\"] has 'gh_pages_build_type' set to value 'foo', while only "
-                    "values ['disabled' | 'legacy' | 'workflow'] are allowed."
+                    "Error: repository[name=\"{{ p }}-pages\"] has 'gh_pages_build_type' set to value 'foo', while "
+                    "only values ['disabled' | 'legacy' | 'workflow'] are allowed."
                 ),
             ),
         ),
@@ -278,8 +280,8 @@ ENUM_SCHEMA_STEPS: dict[str, dict[str, EnumSchemaStep]] = {
             "'full' is not one of ['default', 'extended']",
             (
                 (
-                    "Error: repository[name=\"{{ p }}-cs\"] has 'code_scanning_default_query_suite' set to value 'full', "
-                    "while only values ['default' | 'extended'] are allowed."
+                    "Error: repository[name=\"{{ p }}-cs\"] has 'code_scanning_default_query_suite' set to value "
+                    "'full', while only values ['default' | 'extended'] are allowed."
                 ),
             ),
         ),
@@ -289,8 +291,8 @@ ENUM_SCHEMA_STEPS: dict[str, dict[str, EnumSchemaStep]] = {
             "'cobol' is not one of ['actions', 'c-cpp', ",
             (
                 (
-                    "Error: repository[name=\"{{ p }}-lang\"] has defined an invalid code scanning language 'cobol', only "
-                    "values ("
+                    "Error: repository[name=\"{{ p }}-lang\"] has defined an invalid code scanning language 'cobol', "
+                    "only values ("
                 ),
             ),
         ),
@@ -301,8 +303,8 @@ ENUM_SCHEMA_STEPS: dict[str, dict[str, EnumSchemaStep]] = {
             "'tags' is not one of ['branch', 'tag', 'push']",
             (
                 (
-                    "org_ruleset[name=\"{{ p }}-ors\"] has 'target' of value 'tags', while only values ('branch' | 'tag' | "
-                    "'push') are allowed."
+                    "org_ruleset[name=\"{{ p }}-ors\"] has 'target' of value 'tags', while only values ('branch' | "
+                    "'tag' | 'push') are allowed."
                 ),
                 (
                     "org_ruleset[name=\"{{ p }}-ors\"] has 'enforcement' of value 'on', while only values ('active' | "
@@ -318,16 +320,16 @@ ENUM_SCHEMA_STEPS: dict[str, dict[str, EnumSchemaStep]] = {
             "'FAST' is not one of ['MERGE', 'SQUASH', 'REBASE']",
             (
                 (
-                    "has 'required_merge_queue.merge_method' of value 'FAST', only values ('MERGE' | 'SQUASH' | 'REBASE') "
-                    "are allowed."
+                    "has 'required_merge_queue.merge_method' of value 'FAST', only values ('MERGE' | 'SQUASH' | "
+                    "'REBASE') are allowed."
                 ),
                 (
                     "has 'required_merge_queue.build_concurrency' of value '-1' while only non-negative integers are "
                     "allowed."
                 ),
                 (
-                    "has 'required_merge_queue.status_check_timeout' of value '-5' while only non-negative integers are "
-                    "allowed."
+                    "has 'required_merge_queue.status_check_timeout' of value '-5' while only non-negative integers "
+                    "are allowed."
                 ),
             ),
             errors=3,
@@ -343,8 +345,8 @@ ENUM_SCHEMA_STEPS: dict[str, dict[str, EnumSchemaStep]] = {
                     "while only values ('branch' | 'tag' | 'push') are allowed."
                 ),
                 (
-                    "Error: repo_ruleset[name=\"{{ p }}-enforcement\", repository={{ p }}-rs] has 'enforcement' of value "
-                    "'on', while only values ('active' | 'disabled' | 'evaluate') are allowed."
+                    "Error: repo_ruleset[name=\"{{ p }}-enforcement\", repository={{ p }}-rs] has 'enforcement' of "
+                    "value 'on', while only values ('active' | 'disabled' | 'evaluate') are allowed."
                 ),
             ),
             errors=2,
@@ -368,8 +370,8 @@ ENUM_SCHEMA_STEPS: dict[str, dict[str, EnumSchemaStep]] = {
             "'nonsense' is not one of ['public', 'private', 'selected']",
             (
                 (
-                    "org_variable[name=\"{{ P }}_VIS\"] has 'visibility' of value 'nonsense', while only values ('public' | "
-                    "'private' | 'selected') are allowed."
+                    "org_variable[name=\"{{ P }}_VIS\"] has 'visibility' of value 'nonsense', while only values "
+                    "('public' | 'private' | 'selected') are allowed."
                 ),
             ),
             known_bug="KB-028",
@@ -410,8 +412,8 @@ ENUM_SCHEMA_STEPS: dict[str, dict[str, EnumSchemaStep]] = {
             "'admin' is not one of ['read', 'write']",
             (
                 (
-                    "settings has 'workflows.default_workflow_permissions' of value 'admin', while only values ('read' | "
-                    "'write') are allowed."
+                    "settings has 'workflows.default_workflow_permissions' of value 'admin', while only values ('read' "
+                    "| 'write') are allowed."
                 ),
             ),
         ),
@@ -432,8 +434,8 @@ ENUM_SCHEMA_STEPS: dict[str, dict[str, EnumSchemaStep]] = {
             "'some' is not one of ['all', 'none', 'selected']",
             (
                 (
-                    "settings has 'enabled_repositories' of value 'some', while only values ('all' | 'none' | 'selected') "
-                    "are allowed."
+                    "settings has 'enabled_repositories' of value 'some', while only values ('all' | 'none' | "
+                    "'selected') are allowed."
                 ),
             ),
         ),
@@ -444,8 +446,8 @@ ENUM_SCHEMA_STEPS: dict[str, dict[str, EnumSchemaStep]] = {
             "'admin' is not one of ['read', 'write']",
             (
                 (
-                    "Error: repository[name=\"{{ p }}-wf\"] has 'workflows.default_workflow_permissions' of value 'admin', "
-                    "while only values ('read' | 'write') are allowed."
+                    "Error: repository[name=\"{{ p }}-wf\"] has 'workflows.default_workflow_permissions' of value "
+                    "'admin', while only values ('read' | 'write') are allowed."
                 ),
                 (
                     "Error: repository[name=\"{{ p }}-wf\"] has 'workflows.fork_pr_approval_policy' of value 'nobody', "
@@ -459,8 +461,8 @@ ENUM_SCHEMA_STEPS: dict[str, dict[str, EnumSchemaStep]] = {
             "'some' is not one of ['all', 'local_only', 'selected']",
             (
                 (
-                    "Error: repository[name=\"{{ p }}-wf\"] has 'workflows.allowed_actions' of value 'some', while only "
-                    f"values {WORKFLOW_VALUES}"
+                    "Error: repository[name=\"{{ p }}-wf\"] has 'workflows.allowed_actions' of value 'some', while "
+                    f"only values {WORKFLOW_VALUES}"
                 ),
             ),
             known_bug="KB-029",
@@ -479,7 +481,8 @@ class History(Protocol):
 
 
 def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
-    """One ``test_offline_scenario`` item per step of scenarios/offline/**/*.yaml (marks from collect.scenario_marks)."""
+    """One ``test_offline_scenario`` item per step of scenarios/offline/**/*.yaml (marks from
+    collect.scenario_marks)."""
     scenarios_dir = get_context(metafunc.config).settings.scenarios_dir
     generate_scenario_tests(metafunc, [scenarios_dir / "offline"], tier="offline", per_step=True)
 

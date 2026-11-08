@@ -113,7 +113,10 @@ def test_layer_one_pins_the_live_profile() -> None:
         "    email: null,",
         '    blog: "",',
         # the target's workflows settings merged over the pinned BASELINE_WORKFLOW_DEFAULTS (BAT-14)
-        '    workflows+: {"default_workflow_permissions": "read", "fork_pr_approval_policy": "first_time_contributors"},',
+        (
+            "    workflows+:"
+            ' {"default_workflow_permissions": "read", "fork_pr_approval_policy": "first_time_contributors"},'
+        ),
         "    web_commit_signoff_required: false,",
     ):
         assert line in first, line

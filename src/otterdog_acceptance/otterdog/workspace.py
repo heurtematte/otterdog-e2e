@@ -90,7 +90,7 @@ _SPECIAL_MODES = (stat.S_ISLNK, stat.S_ISFIFO, stat.S_ISSOCK, stat.S_ISCHR, stat
 log = logging.getLogger(__name__)
 
 
-# --- files written by untrusted containers (ISO-01) --------------------------------------------------------------------
+# --- files written by untrusted containers (ISO-01) -------------------------------------------------------------------
 def is_within(path: Path | str, root: Path | str) -> bool:
     """True when the real path of ``path`` is the real path of ``root`` or below it (symlinks resolved)."""
     real, base = os.path.realpath(path), os.path.realpath(root)

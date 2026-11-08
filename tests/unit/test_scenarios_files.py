@@ -464,7 +464,10 @@ def test_offline_problems_lists_github_constructs() -> None:
     ("snippet", "github"),
     [
         (
-            "orgs.newRepo('a') { code_scanning_default_setup_enabled: false, code_scanning_default_languages: ['cobol'] }",
+            (
+                "orgs.newRepo('a') "
+                "{ code_scanning_default_setup_enabled: false, code_scanning_default_languages: ['cobol'] }"
+            ),
             False,
         ),
         (
@@ -472,7 +475,10 @@ def test_offline_problems_lists_github_constructs() -> None:
             False,
         ),
         (
-            "orgs.newRepo('a') { code_scanning_default_setup_enabled:: false, code_scanning_default_languages: ['go'] }",
+            (
+                "orgs.newRepo('a') "
+                "{ code_scanning_default_setup_enabled:: false, code_scanning_default_languages: ['go'] }"
+            ),
             False,
         ),
         (
@@ -481,11 +487,17 @@ def test_offline_problems_lists_github_constructs() -> None:
         ),
         ("orgs.newRepo('a') { code_scanning_default_languages: ['go'] }", True),  # the template may enable the setup
         (
-            "orgs.newRepo('a') { workflows+: { code_scanning_default_setup_enabled: false }, code_scanning_default_languages: [] }",
+            (
+                "orgs.newRepo('a') "
+                "{ workflows+: { code_scanning_default_setup_enabled: false }, code_scanning_default_languages: [] }"
+            ),
             True,
         ),
         (
-            "orgs.newRepo('a') { code_scanning_default_setup_enabled: std.isString('x'), code_scanning_default_languages: [] }",
+            (
+                "orgs.newRepo('a') "
+                "{ code_scanning_default_setup_enabled: std.isString('x'), code_scanning_default_languages: [] }"
+            ),
             True,
         ),
     ],

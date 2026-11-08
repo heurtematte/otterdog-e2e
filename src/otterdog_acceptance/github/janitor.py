@@ -236,7 +236,8 @@ class Janitor:
         return items
 
     def _scan_protected_repo(self, repo: str) -> list[JanitorItem]:
-        """Run-named hooks, rulesets, BPRs, environments, secrets, variables, open PRs and branches of a protected repo."""
+        """Run-named hooks, rulesets, BPRs, environments, secrets, variables, open PRs and branches of a protected
+        repo."""
         if not self._exists(repo):
             return []
         sections: list[tuple[str, Callable[[], list[JanitorItem]]]] = [

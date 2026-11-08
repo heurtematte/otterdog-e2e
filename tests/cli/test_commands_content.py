@@ -90,7 +90,7 @@ def wait_head_change(oracle: Oracle, repo: str, old_sha: str, branch: str = "mai
     )
 
 
-# --- dispatch-workflow -------------------------------------------------------------------------------------------------
+# --- dispatch-workflow ------------------------------------------------------------------------------------------------
 def dispatch(cli: OtterdogCli, repo: str, workflow: str) -> CliResult:
     """``dispatch-workflow -r <repo> --workflow <workflow>`` (no org config needed: only the token)."""
     return cli.run("dispatch-workflow", "-r", repo, "--workflow", workflow)
@@ -188,7 +188,7 @@ def test_failed_dispatch_exits_non_zero(
     assert result.exit_code != 0, f"a refused dispatch exited {result.exit_code}"
 
 
-# --- delete-file -------------------------------------------------------------------------------------------------------
+# --- delete-file ------------------------------------------------------------------------------------------------------
 def delete_file(cli: OtterdogCli, repo: str, path: str, *message: str) -> CliResult:
     """``delete-file -r <repo> --path <path> [-m <message>]``."""
     return cli.run("delete-file", "-r", repo, "--path", path, *(["-m", message[0]] if message else []))
@@ -321,7 +321,7 @@ def test_delete_file_reports_a_refused_deletion(
     assert result.exit_code == 1, f"exit {result.exit_code}"
 
 
-# --- sync-template -----------------------------------------------------------------------------------------------------
+# --- sync-template ----------------------------------------------------------------------------------------------------
 @pytest.mark.scenario("cli.sync-template", priority="P2")
 @pytest.mark.tags("template")
 @pytest.mark.timeout(1800)

@@ -1,5 +1,6 @@
 // An organization variable visible to every repository (an org-level object: its name carries the run prefix).
-// Inject it as a 'variables' fragment: otterdog-acceptance inject --fragment variables=scenarios/fragments/org-variable.jsonnet
+// Inject it as a 'variables' fragment:
+// otterdog-acceptance inject --fragment variables=scenarios/fragments/org-variable.jsonnet
 orgs.newOrgVariable('{{ P }}_INJECTED') {
   value: 'injected by otterdog-acceptance',
   visibility: 'public',

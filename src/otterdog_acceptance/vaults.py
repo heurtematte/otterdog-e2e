@@ -18,9 +18,9 @@ vaults of the secrets it uses. The syntax is the one of otterdog's own secret re
 
 Each reference is resolved once per process (RESOLVER caches values, Vault logins and Bitwarden items) and its value
 registered with REDACTOR, as is every token of a Vault login; errors (VaultError) name the reference, never a value.
-``store`` writes a secret at a reference for ``otterdog-acceptance setup --store`` (onboard/store.py): Vault KV v2 merges the
-field into the other fields of the secret (check-and-set on the version read), pass and gopass ``insert --multiline
---force``; the value is read back. Bitwarden references are read-only here.
+``store`` writes a secret at a reference for ``otterdog-acceptance setup --store`` (onboard/store.py): Vault KV v2
+merges the field into the other fields of the secret (check-and-set on the version read), pass and gopass ``insert
+--multiline --force``; the value is read back. Bitwarden references are read-only here.
 The provider CLIs run through procs.run with the operator's HOME and the provider's own variables (password store,
 GnuPG, Bitwarden session), which procs strips from every other child.
 """

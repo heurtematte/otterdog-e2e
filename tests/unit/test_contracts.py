@@ -1979,7 +1979,10 @@ def test_e2e_name_guards() -> None:
 # ------------------------------------------------------------------------------------------------------------------
 SECRET = "s3cr$t-value-123"
 TOKEN = "ghp_" + "A1b2C3d4" * 5  # 40 chars after the prefix
-PEM = "-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEAx1y2z3abcdefghij\nqrstuvwxyz0123456789ABCDEFGH\n-----END RSA PRIVATE KEY-----"
+PEM = (
+    "-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEAx1y2z3abcdefghij\nqrstuvwxyz0123456789ABCDEFGH\n"
+    "-----END RSA PRIVATE KEY-----"
+)
 
 
 def test_redactor_literal_and_ignored_values() -> None:

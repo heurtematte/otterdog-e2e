@@ -8,8 +8,9 @@ and an OtterdogCli built with ``offline=True``: dummy token, ``unshare -rn`` net
 
 The SUT is the session's ``--e2e-sut`` (plugin fixture ``sut``: host venv for trusted SUTs, the CLI of the SUT image
 for untrusted ones); the base template is the SUT's own standard template (``otterdog/resources/defaults``, or
-``examples/template`` before eclipse-csi/otterdog#889), vendored with ``--local`` so nothing is cloned. Offline renders use the deterministic offline run context (run id ``spduo000``): identical names on every
-run and on both sides of a differential run.
+``examples/template`` before eclipse-csi/otterdog#889), vendored with ``--local`` so nothing is cloned. Offline renders
+use the deterministic offline run context (run id ``spduo000``): identical names on every run and on both sides of a
+differential run.
 """
 
 from __future__ import annotations

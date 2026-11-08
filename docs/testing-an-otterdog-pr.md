@@ -39,8 +39,8 @@ without `--sha` is refused when `CI` is set. Get the current head with
    `--strict-diff` fails the run on unexpected deltas.
 
 Before the first test runs, the plugin resolves and installs every SUT the selected tests need, and builds the
-images they need (`otterdog-acceptance: preparing the head SUT (...)` lines), then builds the live session (verification and
-the org lease). A cold install, an image build or a lease wait therefore never counts against the timeout of the
+images they need (`otterdog-acceptance: preparing the head SUT (...)` lines), then builds the live session (verification
+and the org lease). A cold install, an image build or a lease wait therefore never counts against the timeout of the
 first test of a tier; live tests are timed on their test call only. The artifacts directory is printed at the end
 (`pytest exit code N; artifacts: ...`), with the delta counts.
 
@@ -127,8 +127,8 @@ behaviour it changes (or add a generic one named after that behaviour), and the 
 when the behaviour evolved several times, in its `references`. A YAML scenario has a top-level `references` list; a
 Python test passes the same list as the `references` keyword of its `pytest.mark.scenario(...)` marker (a literal or a
 module constant). With an AI agent, the `otterdog-pr-tests` skill finds the scenarios of the PR from
-`otterdog-acceptance assist pr-context`, extends them, runs the offline and differential tiers on the pinned PR in docker
-and explains every delta for your review ([ai-assistance.md](ai-assistance.md)).
+`otterdog-acceptance assist pr-context`, extends them, runs the offline and differential tiers on the pinned PR in
+docker and explains every delta for your review ([ai-assistance.md](ai-assistance.md)).
 
 | Key | Default | Meaning |
 |---|---|---|

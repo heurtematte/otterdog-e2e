@@ -101,7 +101,7 @@ def test_api_problems_name_the_requests_sent() -> None:
     ]
 
 
-# --- the scenario model ------------------------------------------------------------------------------------------------
+# --- the scenario model -----------------------------------------------------------------------------------------------
 LIVE = """
 id: cli.repo.api
 title: api
@@ -144,7 +144,7 @@ def test_model_refuses_invalid_apply_api(tmp_path: Path, api: str, message: str)
         live(tmp_path, api)
 
 
-# --- the engine --------------------------------------------------------------------------------------------------------
+# --- the engine -------------------------------------------------------------------------------------------------------
 def engine_problems(spec: ApiSpec | None, usage: ApiUsage | None, version: str | None) -> tuple[list[str], list[str]]:
     """ScenarioEngine._api_problems over a stand-in engine whose SUT has ``version``; (problems, notes)."""
     from otterdog_acceptance.scenarios.engine import ScenarioEngine, StepOutcome
@@ -177,11 +177,12 @@ def test_engine_skips_the_check_on_suts_without_statistics() -> None:
     ]
 
 
-# --- the inventory -----------------------------------------------------------------------------------------------------
+# --- the inventory ----------------------------------------------------------------------------------------------------
 INVENTORY = """
 otterdog: {ref: %s}
 endpoints:
-  - {endpoint: 'PATCH /repos/{owner}/{repo}', source: rc.py:1, trigger: a setting changes, feature: repositories.lifecycle}
+  - {endpoint: 'PATCH /repos/{owner}/{repo}', source: rc.py:1, trigger: a setting changes, \
+feature: repositories.lifecycle}
   - {endpoint: 'mutation minimizeComment', source: gq.py:2, trigger: outdated comments, scope: webapp}
 """
 

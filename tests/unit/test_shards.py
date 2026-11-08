@@ -86,7 +86,7 @@ def test_an_unknown_shard_names_the_known_ones() -> None:
         parse_shards(MAP).get("nope")
 
 
-# --- the map of the repository -----------------------------------------------------------------------------------------
+# --- the map of the repository ----------------------------------------------------------------------------------------
 def repository_map() -> Any:
     """scenarios/shards.yaml."""
     shards = load_shards(ROOT)
@@ -132,7 +132,7 @@ def test_the_enterprise_shard_takes_every_capability_a_free_organization_lacks()
     assert above_free <= taken, sorted(above_free - taken)
 
 
-# --- otterdog-acceptance shards --------------------------------------------------------------------------------------------------
+# --- otterdog-acceptance shards ---------------------------------------------------------------------------------------
 def test_shards_command_shows_what_each_shard_runs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Sizes per shard, the instances whose env file selects one, and the domains and modules of each."""
     from otterdog_acceptance import cli

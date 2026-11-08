@@ -109,7 +109,7 @@ class CheckResult:
         }
 
 
-# --- the files to check --------------------------------------------------------------------------------------------------
+# --- the files to check -----------------------------------------------------------------------------------------------
 def changed_files(project_root: Path) -> tuple[list[Path], list[str]]:
     """(existing files, deleted paths) changed in the work tree under scenarios/ and tests/ (``git status
     --porcelain``, untracked files included; renamed files count by their new name)."""
@@ -189,7 +189,7 @@ def split_location(message: str) -> tuple[str, str]:
     return match.group("where"), match.group("message")
 
 
-# --- the checker -------------------------------------------------------------------------------------------------------
+# --- the checker ------------------------------------------------------------------------------------------------------
 class Checker:
     """Checks files of the checkout at ``root`` (the scenario index and the known bugs are read once)."""
 
@@ -406,7 +406,8 @@ class Checker:
                 self.problem(
                     path,
                     where,
-                    f"{assertion.endpoint} is not in {INVENTORY_FILE}: add it there (with its otterdog source) or fix it",
+                    f"{assertion.endpoint} is not in {INVENTORY_FILE}: add it there (with its "
+                    f"otterdog source) or fix it",
                 )
             elif assertion.expectation == "sent" and assertion.endpoint in untestable:
                 self.problem(
@@ -625,7 +626,7 @@ def lint_skipped(result: CheckResult, *, no_lint: bool) -> str | None:
     return None
 
 
-# --- offline lint -------------------------------------------------------------------------------------------------------
+# --- offline lint -----------------------------------------------------------------------------------------------------
 def lint_keyword(scenario_ids: Iterable[str]) -> str:
     """The pytest -k expression selecting the lint items of these scenarios (``test_live_scenario_lint[<id>/<step>]``;
     ``[<id>/`` matches the id exactly)."""
@@ -679,7 +680,7 @@ def lint_result(
     return data, problems
 
 
-# --- rendering -----------------------------------------------------------------------------------------------------------
+# --- rendering --------------------------------------------------------------------------------------------------------
 def render_text(result: CheckResult) -> str:
     """The human summary of ``assist check``: checked files, problems (file, location, message), lint, notes."""
     data = result.to_json()

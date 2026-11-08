@@ -134,8 +134,8 @@ class OptionSpec:
 OPTIONS: tuple[OptionSpec, ...] = (
     OptionSpec(
         "--e2e-target",
-        "one target: an instance (~/.config/otterdog-acceptance/<instance>.env with E2E_PROFILE), a profile of targets/ or a"
-        " target file [E2E_TARGET]",
+        "one target: an instance (~/.config/otterdog-acceptance/<instance>.env with E2E_PROFILE), a profile of targets/"
+        " or a target file [E2E_TARGET]",
     ),
     OptionSpec("--e2e-sut", f"SUT spec under test [E2E_SUT, default {DEFAULT_SUT}]", DEFAULT_SUT),
     OptionSpec("--e2e-base-sut", "base SUT for differential runs; 'auto' = merge base of the SUT [E2E_BASE_SUT]"),
@@ -648,8 +648,8 @@ def _reject_target_list(context: E2EContext, items: list[pytest.Item]) -> None:
     if ("," in target or target.startswith("@")) and any(is_live(item) for item in items):
         raise pytest.UsageError(
             f"--e2e-target names one target (an instance, a profile or a target file), got {target!r}: a session"
-            " loads the env files of one org; run several targets with `otterdog-acceptance run --target a,b` (one session"
-            " per target)"
+            " loads the env files of one org; run several targets with `otterdog-acceptance run --target a,b` (one"
+            " session per target)"
         )
 
 

@@ -260,7 +260,8 @@ def sleep_calls(tree: ast.Module) -> list[str]:
 
 
 def own_polls(tree: ast.Module) -> list[str]:
-    """Direct uses of otterdog_acceptance.waiting polling in a test module (only the classified conftest helpers poll)."""
+    """Direct uses of otterdog_acceptance.waiting polling in a test module (only the classified conftest helpers
+    poll)."""
     found = []
     for node in ast.walk(tree):
         if isinstance(node, ast.Attribute) and node.attr in POLLING_NAMES and isinstance(node.value, ast.Name):

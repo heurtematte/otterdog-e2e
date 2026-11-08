@@ -221,7 +221,8 @@ class Mutator:
         self._empty_repo_retry(lambda: self.create_ref(repo, f"refs/heads/{branch}", from_sha))
 
     def delete_ref(self, repo: str, ref: str) -> None:
-        """DELETE git/refs/{ref} for ``heads/<b>`` or ``tags/<t>`` (guarded by naming.is_deletable_ref; 404/422 ignored)."""
+        """DELETE git/refs/{ref} for ``heads/<b>`` or ``tags/<t>`` (guarded by naming.is_deletable_ref; 404/422
+        ignored)."""
         short = _short_ref(ref)
         if not naming.is_deletable_ref(short):
             raise SafetyError(f"refusing to delete ref {ref!r} in {repo!r}: not an e2e ref")

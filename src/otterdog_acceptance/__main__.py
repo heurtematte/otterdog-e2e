@@ -1,4 +1,5 @@
-"""``python -m otterdog_acceptance``: the otterdog-acceptance command line (batch runs start one such child process per target)."""
+"""``python -m otterdog_acceptance``: the otterdog-acceptance command line (batch runs start one such child process per
+target)."""
 
 from __future__ import annotations
 

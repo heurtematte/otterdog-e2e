@@ -8,7 +8,8 @@ otterdog/utils.py (``parse_template_url``), identical in v1.6.1 and main 9bdeb75
 * without ``-c`` otterdog looks for otterdog.jsonnet, then otterdog.json, in ``$OTTERDOG_CONFIG_ROOT`` (else the cwd),
   and exits 2 when neither exists; ``-c`` of a missing file is a click usage error;
 * otterdog.jsonnet is evaluated as jsonnet (#542), otterdog.json must hold one JSON object;
-* ``.otterdog-defaults.json`` next to the configuration file is deep-merged over its ``defaults``, its values win (#725);
+* ``.otterdog-defaults.json`` next to the configuration file is deep-merged over its ``defaults``, its values win
+  (#725);
 * ``defaults.jsonnet.base_template`` is always required, even when every organization has its own;
 * organization entries need ``name`` and ``github_id``, ``credentials`` may not be null and ``approval_teams`` /
   ``admin_teams`` are a string or a list of strings; entries with ``archived: true`` are ignored entirely (#463);

@@ -23,8 +23,8 @@ github:
   # true and the web-UI tier is skipped (docs/web-ui-testing.md); the token tiers work with SSO-authorized PATs.
   saml_sso: ${E2E_SAML_SSO:-false}
   # Capability overrides, applied last (after the plan matrix and the probes; comma lists of
-  # otterdog_acceptance.capabilities.Cap values). A GHEC TRIAL org has no larger runners but includes Code Security / Secret
-  # Protection, so its instance sets E2E_CAPABILITIES_ADD=ghas_private and E2E_CAPABILITIES_REMOVE=larger_runners
+  # otterdog_acceptance.capabilities.Cap values). A GHEC TRIAL org has no larger runners but includes Code Security /
+  # Secret Protection, so its instance sets E2E_CAPABILITIES_ADD=ghas_private and E2E_CAPABILITIES_REMOVE=larger_runners
   # (the literal form of a custom profile: capabilities: {add: [ghas_private], remove: [larger_runners]}).
   # GHAS_PRIVATE is never probed: add it only when GitHub Advanced Security / Code Security covers private repos.
   capabilities: {add: "${E2E_CAPABILITIES_ADD:-}", remove: "${E2E_CAPABILITIES_REMOVE:-}"}

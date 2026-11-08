@@ -1,5 +1,6 @@
-"""otterdog_acceptance.assist.pr_context and ``otterdog-acceptance assist pr-context``: anonymous reads (FakeGitHubHttp), the bundle
-(context.json, context.md, diff.patch), touched coverage features, related scenarios, limits and untrusted text."""
+"""otterdog_acceptance.assist.pr_context and ``otterdog-acceptance assist pr-context``: anonymous reads
+(FakeGitHubHttp), the bundle (context.json, context.md, diff.patch), touched coverage features, related scenarios,
+limits and untrusted text."""
 
 from __future__ import annotations
 
@@ -297,9 +298,9 @@ def test_bundle_files_untrusted_text_and_limits(project: Path, tmp_path: Path) -
     assert "diff --git a/docs/old.md b/docs/odd`name.md" in diff
     assert "--- /dev/null\n+++ b/otterdog/models/new_model.py" in diff
     assert (
-        "poetry.lock\n# otterdog-acceptance: modified, +900 -800\n--- a/poetry.lock\n+++ b/poetry.lock\n# otterdog-acceptance: no patch"
-        in diff
-    )
+        "poetry.lock\n# otterdog-acceptance: modified, +900 -800\n--- a/poetry.lock\n+++ b/poetry.lock\n"
+        "# otterdog-acceptance: no patch"
+    ) in diff
     assert "+line 398\n# otterdog-acceptance: patch truncated: 601 more line(s) of 1001 not shown" in diff
     assert "+line 399" not in diff
     data = json.loads((path / "context.json").read_text())
@@ -343,7 +344,7 @@ def test_unreadable_coverage_matrix_is_a_warning(project: Path) -> None:
     assert data["touched_features"] == [] and data["warnings"][0].startswith("coverage matrix not read")
 
 
-# --- the command -------------------------------------------------------------------------------------------------------
+# --- the command ------------------------------------------------------------------------------------------------------
 @pytest.fixture
 def command(project: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     """Settings of the fake checkout; GitHubHttp replaced by the fake (its constructor arguments recorded)."""

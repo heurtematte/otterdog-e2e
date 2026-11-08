@@ -169,7 +169,8 @@ def test_end_of_input_at_the_prompt_exits_2(local_apply_cli: OtterdogCli) -> Non
 def test_validation_errors_fail_the_local_apply(local_apply_cli: OtterdogCli) -> None:
     """A configuration with one validation error (a secret named with the reserved GITHUB_ prefix) and something to
     add: validation aborts the planning, nothing is planned nor asked, and local-apply exits with the error (1), never
-    with 'No changes required.' and 0 (KB-001, fixed by #923 in 1.8.0: the same ApplyOperation.handle_finish as apply)."""
+    with 'No changes required.' and 0 (KB-001, fixed by #923 in 1.8.0: the same ApplyOperation.handle_finish as
+    apply)."""
     invalid = ConfigFragments(
         repositories=[f"orgs.newRepo('{NEW}')"],
         secrets=[f"orgs.newOrgSecret('GITHUB_{RUN.const_prefix}LOCAL') {{ value: 'pass:e2e/local' }}"],

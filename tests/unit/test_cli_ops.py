@@ -1017,7 +1017,8 @@ def test_scrub_registers_the_secrets_of_the_environment(tmp_path: Path, monkeypa
 
 
 def test_register_environment_secrets_counts_registered_values() -> None:
-    """Only names ending in _TOKEN, _SECRET, _PASSWORD, _TOTP_SEED or _PRIVATE_KEY with a value long enough to redact."""
+    """Only names ending in _TOKEN, _SECRET, _PASSWORD, _TOTP_SEED or _PRIVATE_KEY with a value long enough to
+    redact."""
     fresh = Redactor()
     environ = {
         "E2E_ADMIN_TOKEN": "e2e-admin-token-value-1",
@@ -1034,7 +1035,8 @@ def test_register_environment_secrets_counts_registered_values() -> None:
 
 
 def test_cache_prune_keeps_the_newest_entries(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Older run/build/src/http-cache entries go (with their sidecar markers); docker images are skipped without docker."""
+    """Older run/build/src/http-cache entries go (with their sidecar markers); docker images are skipped without
+    docker."""
     cache = tmp_path / "cache"
     for sub, names in (("run", ["r1", "r2", "r3"]), ("src", ["v1.6.0", "v1.6.1"]), ("build", ["v1.6.1-cli"])):
         for age, name in enumerate(reversed(names)):

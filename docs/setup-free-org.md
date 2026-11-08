@@ -1,8 +1,8 @@
 # Setting up a GitHub Free test organization
 
-The fast path is [onboarding.md](onboarding.md): `otterdog-acceptance setup --target <instance>` asks for everything below
-interactively (prefilled token URLs, checks, env file, App, bootstrap), and `otterdog-acceptance ci-sync` creates the CI
-environments. This page is the reference of the same steps done by hand.
+The fast path is [onboarding.md](onboarding.md): `otterdog-acceptance setup --target <instance>` asks for everything
+below interactively (prefilled token URLs, checks, env file, App, bootstrap), and `otterdog-acceptance ci-sync` creates
+the CI environments. This page is the reference of the same steps done by hand.
 
 This guide prepares an instance of the profile `free` (`targets/free.yaml`): a dedicated GitHub Free organization,
 its machine accounts and tokens, the harness repositories and teams, and the GitHub App of the webapp tiers. The
@@ -286,7 +286,8 @@ them from the deliveries API and relays them to the webapp under test; nothing e
 
 1. Open the printed `http://127.0.0.1:8765/` URL in a browser signed in as the admin account and confirm the App.
 2. The command exchanges the code and writes the private key, the webhook secret and an env snippet to
-   `~/.config/otterdog-acceptance/<instance>/` (here `~/.config/otterdog-acceptance/free/`, mode 0600). Append the snippet:
+   `~/.config/otterdog-acceptance/<instance>/` (here `~/.config/otterdog-acceptance/free/`, mode 0600). Append the
+   snippet:
 
     ```bash
     cat ~/.config/otterdog-acceptance/free/app-<id>.env >> ~/.config/otterdog-acceptance/free.env

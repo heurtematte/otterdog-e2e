@@ -127,8 +127,8 @@ def build_webapp_image(sut: ResolvedSut, *, force: bool = False, extra_args: Seq
     """docker build -f docker/Dockerfile --build-arg version=<image_version> with revision/trust labels.
 
     Tag otterdog-e2e/otterdog:<label> (trusted) or otterdog-e2e/untrusted:<label>; a trusted tag is reused only if
-    its revision label matches and otterdog-acceptance.trusted=true; E2E_DOCKER_BUILD_ARGS are appended. The reuse check and
-    the build hold the tag's file lock (build_lock_path): a concurrent session waits, then reuses the image.
+    its revision label matches and otterdog-acceptance.trusted=true; E2E_DOCKER_BUILD_ARGS are appended. The reuse check
+    and the build hold the tag's file lock (build_lock_path): a concurrent session waits, then reuses the image.
     """
     lock_path = build_lock_path(sut)
     lock_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)

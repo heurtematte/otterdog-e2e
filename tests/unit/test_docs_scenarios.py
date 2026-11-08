@@ -61,7 +61,7 @@ def scenario(data: dict[str, Any], tier: str = "cli", text: str = "") -> Any:
     return module.Scenario(f"scenarios/{tier}/repo/x.yaml", tier, "repo", data, text, lines)
 
 
-# --- sources ------------------------------------------------------------------------------------------------------------
+# --- sources ----------------------------------------------------------------------------------------------------------
 def test_step_lines_stop_before_blank_lines_comments_and_the_next_step() -> None:
     text = """id: x
 steps:
@@ -150,7 +150,7 @@ def test_mentions_find_quoted_ids_and_cases() -> None:
     }
 
 
-# --- Markdown -------------------------------------------------------------------------------------------------------------
+# --- Markdown ---------------------------------------------------------------------------------------------------------
 @pytest.mark.parametrize(
     ("text", "expected"),
     [("a", "`a`"), ("a`b", "``a`b``"), ("`a", "`` `a ``"), ("", '`""`'), ("a\nb", "`a\\nb`")],
@@ -220,7 +220,7 @@ def test_first_sentence_and_versions() -> None:
     assert not module.is_newer("garbage", "v1.7.1")
 
 
-# --- step rendering -------------------------------------------------------------------------------------------------------
+# --- step rendering ---------------------------------------------------------------------------------------------------
 def test_live_step_runs_plan_apply_state_converge() -> None:
     module = explorer()
     current = scenario({"id": "cli.x"})
@@ -299,7 +299,7 @@ def test_fragments_block_inlines_files(tmp_path: Path) -> None:
     assert files == ["scenarios/fragments/f.jsonnet"]
 
 
-# --- the repository -------------------------------------------------------------------------------------------------------
+# --- the repository ---------------------------------------------------------------------------------------------------
 def test_every_scenario_and_module_gets_a_page() -> None:
     module = explorer()
     current = site()
@@ -359,7 +359,7 @@ def test_nav_labels_drop_a_trailing_parenthesis_unless_taken() -> None:
     assert labels == ["Rename", "Rename (drop)", "Plain"]
 
 
-# --- plan, scope, version and tags ----------------------------------------------------------------------------------------
+# --- plan, scope, version and tags ------------------------------------------------------------------------------------
 @pytest.mark.parametrize(
     ("data", "tier", "plan"),
     [

@@ -132,7 +132,8 @@ def test_rest_values() -> None:
 
 
 def test_jsonnet_fields_pin_writable_settings_in_table_order() -> None:
-    """``key::: <json>`` (visible even when hidden by the baseline), read-only keys never rendered, unknown keys fail."""
+    """``key::: <json>`` (visible even when hidden by the baseline), read-only keys never rendered, unknown keys
+    fail."""
     fields = jsonnet_fields(
         {
             "has_discussions": True,

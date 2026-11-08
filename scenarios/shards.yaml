@@ -1,11 +1,11 @@
-# otterdog-acceptance: the shards of the live tiers (src/otterdog_acceptance/shards.py, docs/architecture.md "Organizations and
-# shards").
+# otterdog-acceptance: the shards of the live tiers (src/otterdog_acceptance/shards.py, docs/architecture.md
+# "Organizations and shards").
 #
 # One test organization serves one live session at a time (its org lease): a run over several organizations only saves
 # time when each runs its share of the live items. A shard names that share; the instance of an organization selects
-# it with E2E_SHARD in its env file (`otterdog-acceptance setup` writes it), and `run --target @all --parallel 5` then runs the
-# shards at once. Offline and unit items are never filtered, an explicit scenario selection (SCENARIO=, --scenario)
-# runs on any instance, and an instance without E2E_SHARD runs every live item.
+# it with E2E_SHARD in its env file (`otterdog-acceptance setup` writes it), and `run --target @all --parallel 5` then
+# runs the shards at once. Offline and unit items are never filtered, an explicit scenario selection (SCENARIO=,
+# --scenario) runs on any instance, and an instance without E2E_SHARD runs every live item.
 #
 # A live item belongs to the FIRST shard (in this order) one of whose `match` entries it satisfies, else to the default
 # shard. An entry is satisfied when each of its keys is:

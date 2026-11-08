@@ -190,8 +190,9 @@ def test_canonical_diff_checks_content_and_an_empty_diff() -> None:
 
 
 def test_sut_dependent_steps_leave_the_varying_expectation_out() -> None:
-    """O-VAL-RULESET-STRICT/no-strict and O-VAL-ORG-RULESET-STRICT only record validation (their outcome depends on the SUT and is asserted
-    by tests/offline/test_scenarios.py); the strict variant of O-VAL-RULESET-STRICT must pass on every SUT."""
+    """O-VAL-RULESET-STRICT/no-strict and O-VAL-ORG-RULESET-STRICT only record validation (their outcome depends on the
+    SUT and is asserted by tests/offline/test_scenarios.py); the strict variant of O-VAL-RULESET-STRICT must pass on
+    every SUT."""
     no_strict, with_strict = offline_scenarios()["O-VAL-RULESET-STRICT"].steps
     assert (no_strict.name, with_strict.name) == ("no-strict", "with-strict")
     assert no_strict.validate is None and no_strict.plan is not None and no_strict.plan.expect == "any"

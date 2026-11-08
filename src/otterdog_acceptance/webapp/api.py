@@ -183,7 +183,8 @@ def snake_key(header: str) -> str:
 
 
 def parse_installations(page: str) -> dict[str, dict[str, Any]]:
-    """/admin/organizations: github_id -> {installation_id, status (installed|not_installed|suspended), project_name}."""
+    """/admin/organizations: github_id -> {installation_id, status (installed|not_installed|suspended),
+    project_name}."""
     table = parse_html(page).find_id("organizations")
     if table is None:
         raise WebappApiError("GET", "/admin/organizations", 200, "no table#organizations in the page")
@@ -367,7 +368,8 @@ class WebappApi:
         return response.status_code == 200
 
     def init(self, *, timeout: float = INIT_TIMEOUT) -> None:
-        """GET /internal/init (reload otterdog.json, policies, blueprints and installations); WebappApiError unless 200."""
+        """GET /internal/init (reload otterdog.json, policies, blueprints and installations); WebappApiError unless
+        200."""
         self.get("/internal/init", timeout=timeout)
 
     def check(self, limit: int | None = None, *, timeout: float = INIT_TIMEOUT) -> None:

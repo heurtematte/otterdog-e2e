@@ -1,7 +1,7 @@
 """Ad-hoc injection (``otterdog-acceptance inject``): one generated scenario, run with the regular fixtures and safety.
 
-The module is skipped unless E2E_ADHOC_SCENARIO names the scenario YAML that ``otterdog-acceptance inject`` wrote into the
-run's scratch directory. Its files may lie anywhere (scenarios.model.load_adhoc_scenario); every content rule of the
+The module is skipped unless E2E_ADHOC_SCENARIO names the scenario YAML that ``otterdog-acceptance inject`` wrote into
+the run's scratch directory. Its files may lie anywhere (scenarios.model.load_adhoc_scenario); every content rule of the
 scenario model still applies. Offline scenarios run with the OfflineEngine of the SUT (validate --local, local-plan
 --local against the -BASE config, show --local; no network); live ones with the session's ScenarioEngine exactly like
 tests/cli: org lease, baseline reset, plan, and for ``--apply`` the guarded apply, converge and the cleanup by the

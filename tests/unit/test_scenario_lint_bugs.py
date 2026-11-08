@@ -51,7 +51,8 @@ def context() -> SimpleNamespace:
 
 
 def test_lint_plan_and_validation_error_expectations(tmp_path: Path) -> None:
-    """The lint validates with variables.plan, else min_plan; validate.ok false or plan validation_error expect errors."""
+    """The lint validates with variables.plan, else min_plan; validate.ok false or plan validation_error expect
+    errors."""
     case = scenario(
         tmp_path,
         """

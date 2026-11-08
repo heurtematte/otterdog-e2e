@@ -55,7 +55,7 @@ class ChangeError(ValueError):
     """Invalid reference, change identifier or conflicting references of one change."""
 
 
-# --- change identifiers -------------------------------------------------------------------------------------------------
+# --- change identifiers -----------------------------------------------------------------------------------------------
 @dataclass(frozen=True)
 class ChangeId:
     """One change: an upstream pull request (``pr``) or a named change without one (``slug``)."""
@@ -105,7 +105,7 @@ def default_change(option: str | None, sut: str | None) -> ChangeId | None:
     return ChangeId(pr=int(number)) if number.isdigit() and int(number) > 0 else None
 
 
-# --- references ---------------------------------------------------------------------------------------------------------
+# --- references -------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True)
 class DeltaPattern:
     """An expected delta of a reference (the scenario is the referencing one; None fields match anything)."""
@@ -256,7 +256,7 @@ def _deltas(value: Any, where: str, steps: Sequence[str] | None) -> tuple[DeltaP
     return tuple(deltas)
 
 
-# --- referencing scenarios ----------------------------------------------------------------------------------------------
+# --- referencing scenarios --------------------------------------------------------------------------------------------
 @dataclass(frozen=True)
 class ReferencingScenario:
     """A reference and the scenario declaring it: a YAML file (``kind`` yaml) or a Python test (``test``)."""
@@ -326,7 +326,7 @@ def change_spec(change: ChangeId, entries: Iterable[ReferencingScenario]) -> Cha
     return spec
 
 
-# --- reading the repository ---------------------------------------------------------------------------------------------
+# --- reading the repository -------------------------------------------------------------------------------------------
 def yaml_references(path: Path) -> list[ReferencingScenario]:
     """References of one scenario file read leniently (the model validates the rest; ChangeError for invalid
     references, files without an id or references give [])."""

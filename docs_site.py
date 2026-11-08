@@ -13,9 +13,10 @@ Zensical runs no MkDocs hooks, so what they did happens before it builds, in the
   every path of a project below the directory of its configuration (its cache .docs-site/.cache/ too).
 
 ``build`` stages, runs ``zensical build`` into .docs-site/site/ and copies it to site/ (what the docs workflow
-uploads); ``--strict`` fails on any problem of the staging and on Zensical's warnings (broken links and anchors). ``serve`` stages, runs ``zensical serve`` and stages again whenever
-docs/, README.md, zensical.toml, docs-theme/, scenarios/ or tests/ change (only the files that differ are written, so
-the preview reloads what changed). ``make docs`` and ``make docs-serve`` run them; the docs workflow runs ``build --strict``.
+uploads); ``--strict`` fails on any problem of the staging and on Zensical's warnings (broken links and anchors).
+``serve`` stages, runs ``zensical serve`` and stages again whenever docs/, README.md, zensical.toml, docs-theme/,
+scenarios/ or tests/ change (only the files that differ are written, so the preview reloads what changed). ``make docs``
+and ``make docs-serve`` run them; the docs workflow runs ``build --strict``.
 
 Only the standard library and PyYAML (docs_scenarios) are needed at import time (pymdownx, a dependency of Zensical, is
 imported by stage): tests/unit/test_docs_site.py imports this file without the docs group.

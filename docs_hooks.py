@@ -152,7 +152,7 @@ def _rewrite_paragraph(text: str, rewrite: Callable[[str], str | None]) -> str:
     return text
 
 
-# --- transformations ---------------------------------------------------------------------------------------------------
+# --- transformations --------------------------------------------------------------------------------------------------
 def convert_callouts(markdown: str) -> str:
     """GitHub callouts (a blockquote opened by ``[!NOTE]``, ``[!TIP]``, ``[!IMPORTANT]``, ``[!WARNING]`` or
     ``[!CAUTION]``) as Material admonitions; other blockquotes and code blocks are kept."""

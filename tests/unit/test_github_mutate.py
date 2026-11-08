@@ -205,7 +205,8 @@ def register_commit_flow(api: responses.RequestsMock, *, tree: list[dict], trunc
 
 
 def test_commit_files_flow(api: responses.RequestsMock, mutator: Mutator) -> None:
-    """ref -> commit -> recursive tree -> tree(base_tree, inline content, sha null for present paths) -> commit -> PATCH."""
+    """ref -> commit -> recursive tree -> tree(base_tree, inline content, sha null for present paths) -> commit ->
+    PATCH."""
     register_commit_flow(
         api, tree=[{"path": "otterdog/old.jsonnet", "type": "blob"}, {"path": "otterdog", "type": "tree"}]
     )

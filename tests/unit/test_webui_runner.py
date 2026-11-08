@@ -51,7 +51,8 @@ if (outputs / f"{command}.dumps").exists():
     Path("web_2026_https___github.com_login.html").write_text("<html>page</html>")
     Path("web_2026_https___github.com_login.png").write_bytes(b"png")
 if (outputs / f"{command}.leak").exists():
-    print("password=" + os.environ.get("E2E_OTTERDOG_PASSWORD", "") + " seed=" + os.environ.get("E2E_OTTERDOG_TOTP_SEED", ""))
+    print("password=" + os.environ.get("E2E_OTTERDOG_PASSWORD", "") + " seed=" + \
+os.environ.get("E2E_OTTERDOG_TOTP_SEED", ""))
 if (outputs / f"{command}.txt").exists():
     sys.stdout.write((outputs / f"{command}.txt").read_text())
 sys.exit(int((outputs / f"{command}.exit").read_text()) if (outputs / f"{command}.exit").exists() else 0)

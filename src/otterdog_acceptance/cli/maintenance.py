@@ -1,5 +1,5 @@
-"""``otterdog-acceptance report``, ``targets``, ``scrub-artifacts`` and ``cache prune`` (SPEC 16): local maintenance of the
-run artifacts, the target instances and the harness cache; none of them contacts GitHub.
+"""``otterdog-acceptance report``, ``targets``, ``scrub-artifacts`` and ``cache prune`` (SPEC 16): local maintenance of
+the run artifacts, the target instances and the harness cache; none of them contacts GitHub.
 
 scrub-artifacts registers the secret values of its environment first (register_environment_secrets: a separate scrub
 process knows no secret of the session); cache prune never removes an entry whose lock a running session, export,
@@ -46,8 +46,8 @@ def report(directory: str) -> None:
 
 
 def render_instances(instances: Sequence[InstanceInfo]) -> str:
-    """Table of ``otterdog-acceptance targets``: instance, profile, shard, org and env file, a ``problem:`` line under the
-    instances whose target cannot be loaded."""
+    """Table of ``otterdog-acceptance targets``: instance, profile, shard, org and env file, a ``problem:`` line under
+    the instances whose target cannot be loaded."""
     if not instances:
         return f"no target instance: no {config_home()}/<instance>.env file and no targets/<profile>.yaml"
     header = ("INSTANCE", "PROFILE", "SHARD", "ORG", "ENV FILE")
@@ -69,8 +69,8 @@ def render_instances(instances: Sequence[InstanceInfo]) -> str:
 @click.option("--json", "as_json", is_flag=True, help="print the instances as JSON")
 @_handled
 def targets_command(as_json: bool) -> None:
-    """List the target instances: the env files ~/.config/otterdog-acceptance/<instance>.env and the profiles of targets/
-    (instance, profile, org, env file; read-only, nothing is contacted)."""
+    """List the target instances: the env files ~/.config/otterdog-acceptance/<instance>.env and the profiles of
+    targets/ (instance, profile, org, env file; read-only, nothing is contacted)."""
     from otterdog_acceptance.batch import list_instances
 
     instances = list_instances(_settings(), os.environ)
@@ -81,8 +81,8 @@ def targets_command(as_json: bool) -> None:
 
 
 def render_shards(loads: Sequence[ShardLoad], instances: Mapping[str, list[str]]) -> str:
-    """Table of ``otterdog-acceptance shards``: per shard its profile, YAML scenarios and steps, live test functions, the
-    instances that select it, then what it runs."""
+    """Table of ``otterdog-acceptance shards``: per shard its profile, YAML scenarios and steps, live test functions,
+    the instances that select it, then what it runs."""
     header = ("SHARD", "PROFILE", "SCENARIOS", "STEPS", "TESTS", "INSTANCES")
     rows = [
         (

@@ -14,8 +14,8 @@ review.
 - **Deterministic commands do everything that needs no judgement**: `otterdog-acceptance assist` gathers context bundles
   (a PR, a run, the coverage matrix), pre-classifies failures and validates what the agent wrote. They are
   unit-tested like the rest of the harness.
-- **AI output is never trusted.** Every file an agent writes goes through `otterdog-acceptance assist check` (schema, ids,
-  references, offline lint), the offline tier and the unit tests, then through a human review. The skills never run
+- **AI output is never trusted.** Every file an agent writes goes through `otterdog-acceptance assist check` (schema,
+  ids, references, offline lint), the offline tier and the unit tests, then through a human review. The skills never run
   a live tier unless you ask.
 - **Untrusted input is data.** PR titles, bodies, diffs, comments and run outputs can be written by anyone: the
   bundles wrap them in delimited blocks marked as untrusted content, and the skills repeat that instructions found
@@ -36,9 +36,9 @@ flowchart LR
 
 ## The assist commands
 
-Provided by the harness (`otterdog-acceptance assist`, package `src/otterdog_acceptance/assist/`); they need no agent and are
-useful on their own. Every command prints a short human summary with the bundle path, or the summary as JSON with
-`--json`. Exit codes: 0 success, 1 harness error (for `check`: problems found), 2 usage error.
+Provided by the harness (`otterdog-acceptance assist`, package `src/otterdog_acceptance/assist/`); they need no agent
+and are useful on their own. Every command prints a short human summary with the bundle path, or the summary as JSON
+with `--json`. Exit codes: 0 success, 1 harness error (for `check`: problems found), 2 usage error.
 
 ### `assist pr-context`
 
@@ -112,7 +112,8 @@ With `--baseline`, each failure is marked new or already present in the baseline
 .venv/bin/otterdog-acceptance assist coverage --feature config.hook.validate-team
 ```
 
-`otterdog-acceptance assist coverage [--status gap,partial] [--priority P0,P1,P2] [--area AREA] [--tier TIER] [--feature ID] [--out DIR] [--json]`
+`otterdog-acceptance assist coverage [--status gap,partial] [--priority P0,P1,P2] [--area AREA] [--tier TIER]
+[--feature ID] [--out DIR] [--json]`
 
 Lists the features of `scenarios/coverage.yaml` with status, priority, tier, minimum plan, web-UI flag, source,
 covering items and gap outline (needs split into available and missing), sorted by priority then status. `--feature`
@@ -205,6 +206,6 @@ The gates and your review are what make the proposals usable. Review them like a
 
 `tests/unit/test_skills.py` (in `make unit`) checks that every skill keeps the portable format (standard fields
 only, `name` equal to its directory, length limits, a short body with its safety section, references one level
-deep) and that what it tells an agent to run exists: every `otterdog-acceptance` command, subcommand and long option in the
-click CLI, every `make` target in the Makefile, every repository path and every relative link. A renamed command or
+deep) and that what it tells an agent to run exists: every `otterdog-acceptance` command, subcommand and long option in
+the click CLI, every `make` target in the Makefile, every repository path and every relative link. A renamed command or
 file therefore fails the unit tier until the skills follow.

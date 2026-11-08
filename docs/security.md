@@ -1,8 +1,8 @@
 # Security
 
-Otterdog Acceptance gives a program that can create, change and delete GitHub resources (otterdog, possibly an unreviewed
-pull request of it) organization-owner credentials. This document describes what can go wrong, which controls the
-harness enforces, what you must set up yourself, and what to do when something went wrong.
+Otterdog Acceptance gives a program that can create, change and delete GitHub resources (otterdog, possibly an
+unreviewed pull request of it) organization-owner credentials. This document describes what can go wrong, which controls
+the harness enforces, what you must set up yourself, and what to do when something went wrong.
 
 ## Threat model
 
@@ -219,8 +219,8 @@ Baseline resets, scenario cleanups and PR guards run with a trusted SUT (`--e2e-
 Pull requests (`pr:N@sha`) and shas not reachable from upstream main or a `v*` tag are untrusted:
 
 - they must be pinned to a full 40-hex sha that is reachable from `refs/pull/N/head`, and exactly that commit is
-  built (a push after the review does not change what runs); `otterdog-acceptance pr N` without `--sha` pins the head of the
-  PR when it starts and prints it, which is refused in CI (the reviewed commit is passed there);
+  built (a push after the review does not change what runs); `otterdog-acceptance pr N` without `--sha` pins the head of
+  the PR when it starts and prints it, which is refused in CI (the reviewed commit is passed there);
 - they are exported to a private directory and only built as a docker image (`otterdog-e2e/untrusted:<label>`,
   never reused as trusted); host installs are refused unless an operator passes `--e2e-trust-code <sha>` from an
   interactive terminal (refused when `CI` is set);
@@ -333,8 +333,8 @@ ROLE
 
 #### Reference layout
 
-`otterdog-acceptance setup --store vault:<prefix>` (or `pass:<prefix>`) keeps every secret of an instance at a fixed place
-in the store and writes only references into the instance env file (`onboard/store.py`):
+`otterdog-acceptance setup --store vault:<prefix>` (or `pass:<prefix>`) keeps every secret of an instance at a fixed
+place in the store and writes only references into the instance env file (`onboard/store.py`):
 
 ```text
 <prefix>/                     e.g. otterdog-acceptance, in the KV v2 mount E2E_VAULT_MOUNT (default secret)
@@ -400,8 +400,8 @@ Credentials reach otterdog only through the variables named in the generated `ot
 
 ### Onboarding tools and multi-target runs (T1, T3, T4)
 
-`otterdog-acceptance setup` and `otterdog-acceptance ci-sync` ([onboarding.md](onboarding.md)) handle every credential of an
-instance; batch runs (`run`, `pr`, `doctor`, `janitor` with several targets) handle several organizations in one
+`otterdog-acceptance setup` and `otterdog-acceptance ci-sync` ([onboarding.md](onboarding.md)) handle every credential
+of an instance; batch runs (`run`, `pr`, `doctor`, `janitor` with several targets) handle several organizations in one
 command.
 
 - **Env files** are written only by `onboard.envfile.update_env_file`: a fresh temporary file (mode 0600, `O_EXCL`,
@@ -425,16 +425,16 @@ command.
   invitation of the same run that is still pending when the role ends without a token after a token of another
   account was refused (admin token, write-scoped to the organization verified first: pin and plan). A new or stored
   App passes `safety.verify_app` before setup prints its installation link.
-- **Machine accounts in the browser** (`otterdog-acceptance accounts`, `setup` with an accounts store, [onboarding.md](onboarding.md#machine-accounts-in-the-browser)):
-  the only place the harness drives a browser itself, at onboarding on your machine (refused in CI), in a visible
-  Firefox with one fresh context per account, signed out and dropped when the account is done. Each account's
-  password, 2FA key, recovery codes and token live in the accounts store of `~/.config/otterdog-acceptance/setup.yaml`
-  (pass or Vault, ci-admin's names), outside the instance's store items that CI environments read; the env file
-  refers to a pass entry, but gets the value (or a copy in the instance store) of a Vault field, since a Vault policy
-  grants the whole secret, every bot's password and 2FA key included. They are written through `vaults.store`
-  (`pass insert` on standard input, or the Vault API with check-and-set, read back), never a shell or an argument,
-  registered with the redactor at once (the login and the e-mail are not secrets) and never
-  printed, screenshotted or saved: the token is read from the page, not the clipboard, and the recovery codes
+- **Machine accounts in the browser** (`otterdog-acceptance accounts`, `setup` with an accounts store,
+  [onboarding.md](onboarding.md#machine-accounts-in-the-browser)): the only place the harness drives a browser itself,
+  at onboarding on your machine (refused in CI), in a visible Firefox with one fresh context per account, signed out and
+  dropped when the account is done. Each account's password, 2FA key, recovery codes and token live in the accounts
+  store of `~/.config/otterdog-acceptance/setup.yaml` (pass or Vault, ci-admin's names), outside the instance's store
+  items that CI environments read; the env file refers to a pass entry, but gets the value (or a copy in the instance
+  store) of a Vault field, since a Vault policy grants the whole secret, every bot's password and 2FA key included. They
+  are written through `vaults.store` (`pass insert` on standard input, or the Vault API with check-and-set, read back),
+  never a shell or an argument, registered with the redactor at once (the login and the e-mail are not secrets) and
+  never printed, screenshotted or saved: the token is read from the page, not the clipboard, and the recovery codes
   download that GitHub requires stays in Playwright's temporary directory, deleted with the context. The writes come
   before the browser step they protect (key before its code, codes before their acknowledgement, token as soon as it
   is shown), so an interruption never locks an account out. The classic tokens get no expiration, as ci-admin's do
@@ -600,10 +600,10 @@ What the workflows enforce (and `tests/unit/test_workflows_static.py` checks):
 - no `${{ }}` expression inside `run:` scripts: inputs and outputs reach scripts through `env:`, always quoted, and
   are validated in bash (instance names, reserved suffixes and the `E2E_INSTANCES` allowlist, suites allowlist,
   tag/glob/`-k` character sets, `pr` and `sha` regular expressions);
-- `e2e.yml` first runs a `classify` job without secrets: it validates the instances, then `otterdog-acceptance sut classify`
-  decides the trust (an untrusted base SUT makes the run untrusted too) and writes, for untrusted SUTs, the PR title
-  (as a code span), author, head repository, pinned sha versus head and the changed build/template files into the step
-  summary, which is what the environment reviewer reads before approving;
+- `e2e.yml` first runs a `classify` job without secrets: it validates the instances, then
+  `otterdog-acceptance sut classify` decides the trust (an untrusted base SUT makes the run untrusted too) and writes,
+  for untrusted SUTs, the PR title (as a code span), author, head repository, pinned sha versus head and the changed
+  build/template files into the step summary, which is what the environment reviewer reads before approving;
 - the `e2e` job runs once per instance; each job selects the environment from that classification, joins the
   concurrency group `e2e-<instance>` (no cancellation, queued runs wait), runs the instance check before any SUT code,
   maps secrets on the harness steps only (the final janitor step gets the admin token only; the `scrub-artifacts` step

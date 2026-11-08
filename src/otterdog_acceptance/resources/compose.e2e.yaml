@@ -1,5 +1,6 @@
 # otterdog-acceptance webapp stack (SPEC 13.1), started by otterdog_acceptance.webapp.stack.WebappStack with
-#   docker compose -p otterdog-e2e-<run_id> -f compose.e2e.yaml up -d --wait   (always followed by `down -v --remove-orphans`)
+#   docker compose -p otterdog-e2e-<run_id> -f compose.e2e.yaml up -d --wait
+#   (always followed by `down -v --remove-orphans`)
 #
 # Every value comes from the environment of the `docker compose` process (never from an env_file). WebappStack passes
 # exactly the variables of webapp.stack.COMPOSE_VARIABLES:
@@ -7,7 +8,8 @@
 #             E2E_GITHUB_APP_ID E2E_WEBHOOK_SECRET E2E_SECRET_KEY
 #   optional  E2E_WEBAPP_PORT (5000) E2E_WEBAPP_PULL_POLICY (never) E2E_CONFIGS_REPO (otterdog-e2e-configs)
 #             E2E_VALIDATION_CONTEXT E2E_SYNC_CONTEXT E2E_ADMIN_TEAMS E2E_APPROVAL_TEAMS
-#             E2E_DEPENDENCY_TRACK_URL (http://127.0.0.1:9: nothing listens) E2E_DTRACK_MOCK_IMAGE E2E_DTRACK_MOCK_STATUS
+#             E2E_DEPENDENCY_TRACK_URL (http://127.0.0.1:9: nothing listens)
+#             E2E_DTRACK_MOCK_IMAGE E2E_DTRACK_MOCK_STATUS
 #             E2E_HYPERCORN_WORKERS (1: since otterdog#843 start-webapp passes --workers "${HYPERCORN_WORKERS}", which
 #             overrides hypercorn-cfg.toml; older images ignore the variable)
 #
@@ -80,8 +82,9 @@ services:
     stop_grace_period: 5s
 
   mongodb:
-    # not the 8.3.4 of otterdog's docker-compose.base.yml: 8.3.0-8.3.8 exit at startup on Linux >= 6.19 (the ubuntu-24.04
-    # runners boot 7.0.0-*-azure since 2026-11), the 7.0 line runs on every kernel (SERVER-125742; 8.3.14+ is fixed)
+    # not the 8.3.4 of otterdog's docker-compose.base.yml: 8.3.0-8.3.8 exit at startup on Linux >= 6.19 (the
+    # ubuntu-24.04 runners boot 7.0.0-*-azure since 2026-11), the 7.0 line runs on every kernel (SERVER-125742; 8.3.14+
+    # is fixed)
     image: mongo:7.0.45
     command: ["mongod", "--quiet", "--bind_ip_all"]
     tmpfs:
@@ -128,7 +131,8 @@ services:
     security_opt:
       - "no-new-privileges:true"
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=2)"]
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=2)"]
       interval: 2s
       timeout: 3s
       retries: 30

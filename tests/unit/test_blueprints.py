@@ -328,7 +328,8 @@ def test_check_and_wait_evaluation() -> None:
 
 
 PROJECT_PAGE = """<html><body><div id="blueprint-{id}" role="tabpanel"><table><thead><tr><th>Repository</th>
-<th>Updated At</th><th>Status</th><th>Remediation PR</th></tr></thead><tbody>{rows}</tbody></table></div></body></html>"""
+<th>Updated At</th><th>Status</th><th>Remediation PR</th></tr></thead><tbody>{rows}</tbody></table></div>\
+</body></html>"""
 ROW = "<tr><td><a>{repo}</a></td><td>2026-10-03 08:00:00</td><td>{status}</td><td>{pr}</td></tr>"
 
 
@@ -364,9 +365,9 @@ def test_remediations_dismissed_and_policy_counters() -> None:
     assert responses.calls[0].request.params["id[org_id]"] == "^" + re.escape(FAKE_ORG) + "$"
     assert w.helper.dismissed(repo=REPO) == []
     page = (
-        "<div class='card'><h3 class='card-title'>macos_large_runners</h3><table><thead><tr><th>Total Workflow Jobs</th>"
-        "<th>Cancelled On Restricted Runners</th></tr></thead><tbody><tr><td>{total}</td><td>{cancelled}</td></tr>"
-        "</tbody></table></div>"
+        "<div class='card'><h3 class='card-title'>macos_large_runners</h3><table><thead><tr><th>Total Workflow Jobs"
+        "</th><th>Cancelled On Restricted Runners</th></tr></thead><tbody><tr><td>{total}</td><td>{cancelled}</td>"
+        "</tr></tbody></table></div>"
     )
     responses.get(f"{BASE}/admin/policies", body="<html></html>")
     responses.get(f"{BASE}/admin/policies", body=page.format(total=1, cancelled=0))

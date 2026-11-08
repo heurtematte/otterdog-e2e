@@ -65,8 +65,8 @@ def check_instance_name(name: str) -> str:
         )
     if name in RESERVED_INSTANCE_NAMES:
         raise InstanceNameError(
-            f"invalid instance name {name!r}: the name is reserved (~/.config/otterdog-acceptance/{name}/ holds the target "
-            "lists @<list>)"
+            f"invalid instance name {name!r}: the name is reserved (~/.config/otterdog-acceptance/{name}/ holds the "
+            "target lists @<list>)"
         )
     for suffix in RESERVED_INSTANCE_SUFFIXES:
         if name.endswith(suffix):
@@ -88,7 +88,8 @@ def instance_app_dir(instance: str, environ: Mapping[str, str]) -> Path:
 
 
 def known_instances(environ: Mapping[str, str]) -> dict[str, Path]:
-    """Instance name -> env file of every ``~/.config/otterdog-acceptance/<instance>.env`` with a valid instance name."""
+    """Instance name -> env file of every ``~/.config/otterdog-acceptance/<instance>.env`` with a valid instance
+    name."""
     directory = user_config_dir(environ)
     if not directory.is_dir():
         return {}

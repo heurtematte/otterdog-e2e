@@ -85,8 +85,8 @@ def test_invalid_instance_names(name: str) -> None:
 
 
 def test_the_lists_directory_is_no_instance(tmp_path: Path) -> None:
-    """~/.config/otterdog-acceptance/lists/ holds the target lists (@<list>): ``lists`` is refused as an instance, so the
-    App credentials of the manifest exchange (instance_app_dir) never land among the lists."""
+    """~/.config/otterdog-acceptance/lists/ holds the target lists (@<list>): ``lists`` is refused as an instance, so
+    the App credentials of the manifest exchange (instance_app_dir) never land among the lists."""
     with pytest.raises(InstanceNameError, match=r"invalid instance name 'lists': the name is reserved"):
         instance_app_dir("lists", {"HOME": str(tmp_path)})
     with pytest.raises(InstanceNameError, match="reserved"):

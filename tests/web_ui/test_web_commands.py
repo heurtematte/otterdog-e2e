@@ -165,7 +165,7 @@ def test_web_login_opens_a_session(web_tier: WebUiTier) -> None:
     )
 
 
-# --- install-deps (no login) -------------------------------------------------------------------------------------------
+# --- install-deps (no login) ------------------------------------------------------------------------------------------
 def _offline_cli(web_tier: WebUiTier, name: str) -> OtterdogCli:
     """The SUT's host CLI in the offline sandbox (``unshare -rn``: no network at all, dummy token, no web login)."""
     e2e = web_tier.e2e

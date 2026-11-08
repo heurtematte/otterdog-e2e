@@ -2,9 +2,9 @@
 
 `otterdog-acceptance setup` onboards one test organization interactively: it checks the organization, asks the token of
 every role through prefilled creation URLs, stores the web-UI login, creates the GitHub App, then offers `bootstrap`
-and `doctor`. `otterdog-acceptance ci-sync` then creates the CI environments of the organization with your own `gh` login.
-What GitHub does not let a program do stays manual, but guided: the harness prints the exact URL, then polls until the
-step is done ([What cannot be automated](#what-cannot-be-automated)).
+and `doctor`. `otterdog-acceptance ci-sync` then creates the CI environments of the organization with your own `gh`
+login. What GitHub does not let a program do stays manual, but guided: the harness prints the exact URL, then polls
+until the step is done ([What cannot be automated](#what-cannot-be-automated)).
 
 Vocabulary used below (details in [Instances and profiles](#instances-and-profiles)):
 
@@ -60,9 +60,9 @@ settings is faster: `setup --target acme-b --from acme-a` ([A second organizatio
 
 ## What setup asks and writes
 
-`setup` writes every validated answer to `~/.config/otterdog-acceptance/<instance>.env` at once: an interrupted run (Ctrl-C,
-a closed terminal) keeps its progress, and the next run continues where it stopped. It reads and writes only that
-file (not `.env.e2e.<instance>` nor `.env.e2e`), and is refused when `CI` or `GITHUB_ACTIONS` is set.
+`setup` writes every validated answer to `~/.config/otterdog-acceptance/<instance>.env` at once: an interrupted run
+(Ctrl-C, a closed terminal) keeps its progress, and the next run continues where it stopped. It reads and writes only
+that file (not `.env.e2e.<instance>` nor `.env.e2e`), and is refused when `CI` or `GITHUB_ACTIONS` is set.
 
 | Step | What setup does | Keys written |
 |---|---|---|
@@ -106,8 +106,8 @@ vault access, checks the value like a typed token and writes the reference, neve
 
 ### Machine accounts in the browser
 
-Instead of clicking each token yourself, `otterdog-acceptance accounts` signs in to github.com as each machine account in a
-visible Firefox window, enrolls two-factor authentication (authenticator app) when the account has none and creates
+Instead of clicking each token yourself, `otterdog-acceptance accounts` signs in to github.com as each machine account
+in a visible Firefox window, enrolls two-factor authentication (authenticator app) when the account has none and creates
 the role's **classic** token (its scopes, the note of the prefilled URL, no expiration; `accounts --expires-in` 7,
 30, 60 or 90 days for one), in the way of the scripts of [eclipse-cbi/ci-admin](https://github.com/eclipse-cbi/ci-admin/tree/master/github/playwright).
 
@@ -215,8 +215,9 @@ does not start, the error names its last line of output.
 
 ### Signing in as an account
 
-`otterdog-acceptance web-login` opens the same visible Firefox signed in as one account, like `otterdog web-login`, to look
-at what a run did or to finish something by hand; Enter in the terminal signs the account out and closes the window:
+`otterdog-acceptance web-login` opens the same visible Firefox signed in as one account, like `otterdog web-login`, to
+look at what a run did or to finish something by hand; Enter in the terminal signs the account out and closes the
+window:
 
 ```bash
 otterdog-acceptance web-login otterdog-e2e-free-admin                # an account of the accounts store, by its entries' name
@@ -351,8 +352,8 @@ at once, each its share ([architecture](architecture.md#organizations-and-shards
 | `repos` | `otterdog-e2e-repos` | free | repository settings, branch protection, teams, import |
 | `automation` | `otterdog-e2e-automation` | free | environments, secrets, variables, workflows, webhooks, custom properties, otterdog's other commands (the default shard) |
 
-They share one set of machine accounts: `set:` in the accounts section of `~/.config/otterdog-acceptance/setup.yaml` gives
-every instance the accounts of that set (classic tokens, which work in every organization they are members of):
+They share one set of machine accounts: `set:` in the accounts section of `~/.config/otterdog-acceptance/setup.yaml`
+gives every instance the accounts of that set (classic tokens, which work in every organization they are members of):
 
 ```yaml
 accounts:
@@ -446,8 +447,8 @@ a run passes `--allow-web-ui`.
 
 ## CI: ci-sync
 
-`otterdog-acceptance ci-sync --target <instance>` creates the GitHub environments of an instance and sets their variables and
-secrets from its env file.
+`otterdog-acceptance ci-sync --target <instance>` creates the GitHub environments of an instance and sets their
+variables and secrets from its env file.
 
 | Environment | Managed | Protection set by ci-sync | Values |
 |---|---|---|---|
@@ -458,8 +459,8 @@ secrets from its env file.
 - **Names**: the `${{ vars.X }}` and `${{ secrets.X }}` that the steps of the workflow jobs running in each kind of
   environment read (`.github/workflows/*.yml`), always plus `E2E_PROFILE`. Repository variables (`E2E_INSTANCES`,
   `E2E_TARGETS`, `E2E_WEB_UI_ENABLED`, `E2E_WEB_UI_TARGETS`) and `GITHUB_TOKEN` are never copied into an environment.
-- **Values**: from `~/.config/otterdog-acceptance/<instance>.env` only; the secret `E2E_APP_PRIVATE_KEY` is the content of
-  `E2E_APP_PRIVATE_KEY_FILE`; `E2E_PROFILE` of an instance named after a profile is that name. A name without a value
+- **Values**: from `~/.config/otterdog-acceptance/<instance>.env` only; the secret `E2E_APP_PRIVATE_KEY` is the content
+  of `E2E_APP_PRIVATE_KEY_FILE`; `E2E_PROFILE` of an instance named after a profile is that name. A name without a value
   is skipped and listed. A variable whose name looks like a secret, or whose value holds a secret or a line break, is
   refused.
 - **Vault references**: a `vault:` reference is stored as it is when the env file sets `E2E_VAULT_ROLE` (overridden
@@ -529,9 +530,9 @@ not `lists` (the directory `~/.config/otterdog-acceptance/lists/` holds the targ
 env files of an instance, first value wins and the process environment wins over all of them:
 `~/.config/otterdog-acceptance/<instance>.env`, `.env.e2e.<instance>`, `.env.e2e`.
 
-`otterdog-acceptance targets` (`make targets`) lists the instances: every `~/.config/otterdog-acceptance/<instance>.env` and every
-profile (an instance of its own name), with the profile, the organization and the env file, and a `problem:` line
-under an instance whose target cannot be loaded. It is read-only and contacts nothing; `--json` prints the same as
+`otterdog-acceptance targets` (`make targets`) lists the instances: every `~/.config/otterdog-acceptance/<instance>.env`
+and every profile (an instance of its own name), with the profile, the organization and the env file, and a `problem:`
+line under an instance whose target cannot be loaded. It is read-only and contacts nothing; `--json` prints the same as
 JSON.
 
 ```text
@@ -574,10 +575,10 @@ make doctor TARGET=@all
 
 How several targets run:
 
-- **One child process per target** for `run`, `pr` and `janitor` (`python -P -m otterdog_acceptance run --target=<instance>
-  --run-id=<id> ...`, with the same interpreter, after the `-v`/`-vv` of the batch command; `-P` keeps the working
-  directory off `sys.path`, so an `otterdog_acceptance` package in the current directory, such as the `src/` of another
-  checkout, is never imported). An env file fills the environment without overriding it, so two
+- **One child process per target** for `run`, `pr` and `janitor` (`python -P -m otterdog_acceptance run
+  --target=<instance> --run-id=<id> ...`, with the same interpreter, after the `-v`/`-vv` of the batch command; `-P`
+  keeps the working directory off `sys.path`, so an `otterdog_acceptance` package in the current directory, such as the
+  `src/` of another checkout, is never imported). An env file fills the environment without overriding it, so two
   organizations in one process would mix their values: the parent never loads an env file into its own environment,
   every child gets the parent's environment unchanged (plus its webapp port, below) and loads the env files of its
   own target.

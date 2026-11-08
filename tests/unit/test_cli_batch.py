@@ -1,6 +1,6 @@
 """Harness CLI with several targets: run/pr/janitor start one child process per target (batch.py), doctor checks
-each target with its own environment copy, the other commands refuse lists; ``otterdog-acceptance targets``; ``cache prune``
-keeps the scratch of running sessions; RunRequest.harness_args round trip."""
+each target with its own environment copy, the other commands refuse lists; ``otterdog-acceptance targets``;
+``cache prune`` keeps the scratch of running sessions; RunRequest.harness_args round trip."""
 
 from __future__ import annotations
 
@@ -132,7 +132,7 @@ def invoke(*args: str) -> Any:
     return CliRunner().invoke(cli.main, list(args))
 
 
-# --- run -----------------------------------------------------------------------------------------------------------------
+# --- run --------------------------------------------------------------------------------------------------------------
 def test_run_starts_one_child_per_target(world: Batch) -> None:
     """run --target acme,beta: python -m otterdog_acceptance run per target with its own run id and the shared artifacts
     root; the parent's environment (never an env-file value); prefixed output; the most severe exit code; the batch
@@ -263,7 +263,7 @@ def test_harness_args_round_trip(world: Batch, tmp_path: Path) -> None:
     assert world.pytest_calls == [request.pytest_args(world.settings.project_root)]
 
 
-# --- pr ------------------------------------------------------------------------------------------------------------------
+# --- pr ---------------------------------------------------------------------------------------------------------------
 def test_pr_starts_one_child_per_target(world: Batch) -> None:
     """pr N --sha S --target acme,beta: one child pr per target with its own run id; the batch summary."""
     world.codes = {"acme": 2}
@@ -318,7 +318,7 @@ def test_pr_run_id(world: Batch, monkeypatch: pytest.MonkeyPatch) -> None:
     assert world.children == []
 
 
-# --- janitor -------------------------------------------------------------------------------------------------------------
+# --- janitor ----------------------------------------------------------------------------------------------------------
 def test_janitor_sweeps_several_targets_in_turn(world: Batch) -> None:
     """One child janitor per target (no batch summary); --run-id and --force-takeover name one run of one target."""
     result = invoke("janitor", "--target", "acme,beta", "--older-than", "2h", "--apply")
@@ -350,7 +350,7 @@ def test_children_get_the_verbosity_of_the_batch(world: Batch) -> None:
     assert [child["verbose"] for child in world.children] == [1, 1] and world.children[0]["args"][0] == "run"
 
 
-# --- signals -------------------------------------------------------------------------------------------------------------
+# --- signals ----------------------------------------------------------------------------------------------------------
 SLOW_COMMAND = """
     import os, time
     from otterdog_acceptance import cli
@@ -436,7 +436,7 @@ def test_the_guard_ignores_a_sigterm_after_a_first_interruption(monkeypatch: pyt
     assert third.interrupted
 
 
-# --- doctor --------------------------------------------------------------------------------------------------------------
+# --- doctor -----------------------------------------------------------------------------------------------------------
 def test_doctor_checks_every_target_with_its_own_environment(world: Batch, monkeypatch: pytest.MonkeyPatch) -> None:
     """One report per target: each context loads its own env files into a copy of the environment (the org of one
     target never leaks into another), --json is a list, exit 1 when one target fails."""
@@ -475,7 +475,7 @@ def test_doctor_and_janitor_need_a_target(world: Batch, command: list[str]) -> N
         assert result.exit_code == 2 and "no target given" in result.output
 
 
-# --- commands of one target ----------------------------------------------------------------------------------------------
+# --- commands of one target -------------------------------------------------------------------------------------------
 @pytest.mark.parametrize(
     "args",
     [
@@ -495,7 +495,7 @@ def test_single_target_commands_refuse_lists(world: Batch, args: list[str]) -> N
     assert not (world.settings.cache_dir / "run").exists() and world.pytest_calls == []
 
 
-# --- targets -------------------------------------------------------------------------------------------------------------
+# --- targets ----------------------------------------------------------------------------------------------------------
 def test_targets_lists_instances_and_profiles(world: Batch) -> None:
     """Instance, profile, shard, org and env file of every instance env file and profile; problems below; --json."""
     with (world.config / "acme.env").open("a") as env:
@@ -530,7 +530,7 @@ def test_targets_without_anything(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     assert result.exit_code == 0 and "no target instance" in result.output
 
 
-# --- cache prune ---------------------------------------------------------------------------------------------------------
+# --- cache prune ------------------------------------------------------------------------------------------------------
 def test_cache_prune_keeps_the_scratch_of_running_sessions(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """A run scratch whose lock (run/<id>.lock) a session holds is never pruned, however old; free ones go with
     their lock file."""

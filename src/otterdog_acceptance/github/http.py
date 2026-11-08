@@ -307,7 +307,8 @@ class GitHubHttp:
             self.write_guard()
 
     def _in_write_scope(self, api_path: str) -> bool:
-        """True when ``api_path`` is one of WRITE_PATH_PREFIXES for the verified org (logins compare case-insensitively)."""
+        """True when ``api_path`` is one of WRITE_PATH_PREFIXES for the verified org (logins compare
+        case-insensitively)."""
         if self.write_scope is None:
             return False
         login = re.escape(self.write_scope.login.lower())
@@ -577,7 +578,8 @@ class GitHubHttp:
         max_pages: int = 50,
         allow_unavailable: bool = False,
     ) -> list[Any]:
-        """Follow Link rel=next; item_key selects the list in wrapped responses; 403/404 -> [] when allow_unavailable."""
+        """Follow Link rel=next; item_key selects the list in wrapped responses; 403/404 -> [] when
+        allow_unavailable."""
         allow = (403, 404) if allow_unavailable else ()
         url: str = path
         query: Mapping[str, Any] | None = {**(params or {}), "per_page": per_page}
@@ -628,7 +630,8 @@ class GitHubHttp:
         self.request("DELETE", path, allow=allow, **kw)
 
     def graphql(self, query: str, variables: Mapping[str, Any] | None = None, *, allow_errors: bool = False) -> dict:
-        """POST /graphql and return ``data``; GitHubError on ``errors`` unless allow_errors (RATE_LIMITED is retried)."""
+        """POST /graphql and return ``data``; GitHubError on ``errors`` unless allow_errors (RATE_LIMITED is
+        retried)."""
         payload = {"query": query, "variables": dict(variables or {})}
         attempt = 0
         while True:

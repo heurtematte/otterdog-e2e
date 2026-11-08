@@ -142,7 +142,8 @@ def check_forwarded(delivery: RelayedDelivery, what: str) -> None:
         )
     if delivery.relay_status >= 500:
         raise ReactionTimeoutError(
-            f"webapp failed on {delivery.event} delivery {delivery.guid} for {what} (HTTP {delivery.relay_status}) (SUT)"
+            f"webapp failed on {delivery.event} delivery {delivery.guid} for {what} (HTTP "
+            f"{delivery.relay_status}) (SUT)"
         )
     if delivery.relay_status >= 300:
         raise DeliveryTimeoutError(
@@ -194,7 +195,8 @@ class ConfigRepoFlow:
         delivery_timeout: float = 300,
         default_branch: str = "main",
     ) -> None:
-        """Bind the flow to the org config repo; ``mutators`` maps identity names (admin, author, approver) to Mutators."""
+        """Bind the flow to the org config repo; ``mutators`` maps identity names (admin, author, approver) to
+        Mutators."""
         self.org = org
         self.repo = repo
         self.oracle = oracle

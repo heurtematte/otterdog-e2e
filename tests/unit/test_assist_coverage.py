@@ -1,5 +1,5 @@
-"""otterdog_acceptance.assist.coverage and ``otterdog-acceptance assist coverage``: filters, ordering, gap outline needs, one
-feature with what to imitate, the bundle and the usage errors."""
+"""otterdog_acceptance.assist.coverage and ``otterdog-acceptance assist coverage``: filters, ordering, gap outline
+needs, one feature with what to imitate, the bundle and the usage errors."""
 
 from __future__ import annotations
 
@@ -182,7 +182,7 @@ def test_bundle_and_markdown(project: Path, tmp_path: Path) -> None:
     assert json.loads((path / "coverage.json").read_text())["features"][0]["id"] == "rulesets.b"
 
 
-# --- the command -------------------------------------------------------------------------------------------------------
+# --- the command ------------------------------------------------------------------------------------------------------
 @pytest.fixture
 def settings(project: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Settings of the checkout."""

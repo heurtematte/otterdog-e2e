@@ -105,8 +105,8 @@ class RunRequest:
         return [*args, *self.extra]
 
     def command_line(self, project_root: Path) -> str:
-        """The equivalent ``otterdog-acceptance run`` command (run.json ``command``: summary.md "How to reproduce"); the run
-        id, artifacts root and keep flag are left out (a new run gets its own)."""
+        """The equivalent ``otterdog-acceptance run`` command (run.json ``command``: summary.md "How to reproduce"); the
+        run id, artifacts root and keep flag are left out (a new run gets its own)."""
         argv = ["otterdog-acceptance", "run", "--suite", ",".join(self.suites)]
         options = {
             "--target": self.target,
@@ -129,8 +129,8 @@ class RunRequest:
         return shlex.join([*argv, *self.extra])
 
     def harness_args(self) -> list[str]:
-        """``run`` arguments starting this very run in a child process (``python -m otterdog_acceptance run ...``: one per
-        target of a batch): ``--option=value`` forms (a value never reads as an option), the run id, artifacts root
+        """``run`` arguments starting this very run in a child process (``python -m otterdog_acceptance run ...``: one
+        per target of a batch): ``--option=value`` forms (a value never reads as an option), the run id, artifacts root
         and keep flag included, the pass-through arguments after ``--``."""
         options = {
             "--suite": ",".join(self.suites),

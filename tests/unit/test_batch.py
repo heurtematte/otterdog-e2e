@@ -91,8 +91,8 @@ def test_parse_targets_splits_repeats_and_deduplicates(world: World) -> None:
 
 
 def test_all_names_every_instance_env_file(world: World) -> None:
-    """@all: the stems of ~/.config/otterdog-acceptance/*.env with a valid name, sorted; lists, directories, App credential
-    dirs and other files are not instances."""
+    """@all: the stems of ~/.config/otterdog-acceptance/*.env with a valid name, sorted; lists, directories, App
+    credential dirs and other files are not instances."""
     (world.config / "lists").mkdir()
     (world.config / "acme").mkdir()  # App credentials of acme
     (world.config / "notes.txt").write_text("x", encoding="utf-8")
@@ -126,7 +126,8 @@ def test_all_without_env_files_is_an_error(tmp_path: Path) -> None:
 
 
 def test_target_list_files(world: World) -> None:
-    """@<list>: ~/.config/otterdog-acceptance/lists/<list>, one instance per line, # comments (inline too), blank lines."""
+    """@<list>: ~/.config/otterdog-acceptance/lists/<list>, one instance per line, # comments (inline too), blank
+    lines."""
     lists = world.config / "lists"
     lists.mkdir()
     (lists / "nightly").write_text("# the nightly orgs\nbeta\n\n  acme   # GHEC trial\n", encoding="utf-8")
@@ -166,7 +167,7 @@ def test_instance_environ_is_a_copy(world: World) -> None:
     assert world.redactor(TOKEN) == "***"  # secrets of the env files are known to the parent's redactor
 
 
-# --- plans -------------------------------------------------------------------------------------------------------------
+# --- plans ------------------------------------------------------------------------------------------------------------
 def test_plan_batch_resolves_every_target_without_touching_the_environment(world: World) -> None:
     """Instance, profile, org and transport of every target; distinct run ids; the parent's environment unchanged."""
     before = dict(world.environ)
@@ -329,7 +330,7 @@ def test_child_env_is_the_parent_environment(world: World) -> None:
     assert "E2E_WEBAPP_PORT" not in BatchEntry("a", "a", "free", "o", 1, "t3c7z8a5").child_env({})
 
 
-# --- execution -----------------------------------------------------------------------------------------------------------
+# --- execution --------------------------------------------------------------------------------------------------------
 @dataclass
 class FakeRunner:
     """procs.run_harness stand-in: records each call, prints two lines, returns the exit code of the instance."""
@@ -357,8 +358,8 @@ def child_args(entry: BatchEntry) -> list[str]:
 
 
 def test_run_batch_runs_one_child_per_target_in_turn(world: World, tmp_path: Path) -> None:
-    """Sequential children with python -m otterdog_acceptance, the parent's environment (no env-file value), prefixed lines,
-    one log per target and an exit line."""
+    """Sequential children with python -m otterdog_acceptance, the parent's environment (no env-file value), prefixed
+    lines, one log per target and an exit line."""
     plan = batch.plan_batch(["acme", "beta"], world.settings, environ=world.environ)
     runner, echoed = FakeRunner(codes={"beta": 1}), []
     results = batch.run_batch(
@@ -495,8 +496,9 @@ def test_python_m_otterdog_acceptance_is_the_command_line() -> None:
 def test_children_never_import_a_package_of_the_working_directory(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A batch started from a directory holding an ``otterdog_acceptance`` package (src/ of a PR checkout) still runs this
-    harness installation: -P keeps the working directory off sys.path of the child, which holds every credential."""
+    """A batch started from a directory holding an ``otterdog_acceptance`` package (src/ of a PR checkout) still runs
+    this harness installation: -P keeps the working directory off sys.path of the child, which holds every
+    credential."""
     shadow = tmp_path / "otterdog_acceptance"
     shadow.mkdir()
     (shadow / "__init__.py").write_text("print('shadow package imported', flush=True)\nraise SystemExit(42)\n")
@@ -531,7 +533,7 @@ def test_batch_exit_code(codes: list[int | None], expected: int) -> None:
     assert batch.batch_exit_code(codes) == expected
 
 
-# --- summary -------------------------------------------------------------------------------------------------------------
+# --- summary ----------------------------------------------------------------------------------------------------------
 @pytest.fixture
 def finished(world: World, tmp_path: Path) -> tuple[BatchPlan, list[BatchResult], Path]:
     """A finished batch of acme (run.json + results), beta (failed, no artifacts) and free (not started)."""
@@ -633,7 +635,7 @@ def test_a_batch_without_run_ids_never_shows_one(world: World) -> None:
     )
 
 
-# --- otterdog-acceptance targets ------------------------------------------------------------------------------------------------
+# --- otterdog-acceptance targets --------------------------------------------------------------------------------------
 def test_list_instances(world: World) -> None:
     """Env-file instances and the profiles of targets/ with profile, org and env file; unusable ones say why."""
     world.instance("gamma", None, 44)
@@ -658,8 +660,8 @@ def test_list_instances_without_anything(tmp_path: Path) -> None:
 
 
 def test_add_to_list_appends_an_instance_once(tmp_path: Path) -> None:
-    """setup lists the instance of a shard in ~/.config/otterdog-acceptance/lists/<name> (0600 in a 0700 directory): created
-    with a comment, appended to, never twice; @<name> then reads it."""
+    """setup lists the instance of a shard in ~/.config/otterdog-acceptance/lists/<name> (0600 in a 0700 directory):
+    created with a comment, appended to, never twice; @<name> then reads it."""
     environ = {"HOME": str(tmp_path)}
     path = batch.add_to_list("shards", "repos", environ)
     assert path == tmp_path / ".config" / "otterdog-acceptance" / "lists" / "shards"

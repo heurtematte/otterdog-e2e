@@ -64,7 +64,8 @@ class SutSpec:
 
     @property
     def trusted(self) -> bool:
-        """Spec-level trust (SPEC 5.5): release, tag, branch:main, path, dirty; pr and sha are untrusted until resolved."""
+        """Spec-level trust (SPEC 5.5): release, tag, branch:main, path, dirty; pr and sha are untrusted until
+        resolved."""
         return self.kind in TRUSTED_KINDS or (self.kind == "branch" and self.value == "main")
 
     @property

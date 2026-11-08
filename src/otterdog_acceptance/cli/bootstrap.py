@@ -55,8 +55,9 @@ def _refuse_flagged(exc: GitHubError, name: str, login: str) -> None:
     """GitHub's refusal of an invitation to a flagged account (422) as what to do, instead of the API error."""
     if exc.status == 422 and "flagged" in str(exc).lower():
         raise click.ClickException(
-            f"{name} {login}: GitHub flagged the account, which cannot accept the invitation: only GitHub Support lifts "
-            "the flag (https://support.github.com/contact); `otterdog-acceptance setup` asks whether to go on without it"
+            f"{name} {login}: GitHub flagged the account, which cannot accept the invitation: only GitHub Support "
+            "lifts the flag (https://support.github.com/contact); `otterdog-acceptance setup` asks "
+            "whether to go on without it"
         )
 
 

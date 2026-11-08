@@ -61,15 +61,18 @@ REAL_VALIDATION_COMMENT = "\n".join(
         "",
         '+  add repository[name="e2e-t3c7z8a5-w-apply-with-a-really-long-repository-name-for-wrapping"] {',
         (
-            '+    description                                = "e2e apply- a description that is long enough to be wrapped'
-            " by the rich console at one hundred and ten "
+            '+    description                                = "e2e apply- a description that is long enough to be'
+            " wrapped by the rich console at one hundred and ten "
         ),
         'columns"',
         "+  }",
         "  ",
         "  Plan: 1 to add, 1 to change, 1 to delete.",
         "!" + " " * 109,
-        "! Warning:   some of the requested changes require secrets, need to apply these changes manually and a long   ",
+        (
+            "! Warning:   some of the requested changes require secrets, need to apply these changes "
+            "manually and a long   "
+        ),
         "!            tail to wrap the box line" + " " * 72,
         "!" + " " * 109,
         "```",
@@ -600,7 +603,10 @@ def test_markers_and_applied_texts() -> None:
         'description = "fixture" -> "fixture changed"',
         '~ repository[name="otterdog-e2e-fixture-a"]',
         "e2e - old repo to remove",  # escape_for_github turned ' - ' into '- '
-        "e2e apply - a description that is long enough to be wrapped by the rich console at one hundred and ten columns",
+        (
+            "e2e apply - a description that is long enough to be wrapped by the rich console at one "
+            "hundred and ten columns"
+        ),
         "need to apply these changes manually and a long tail to wrap the box line",  # box wrapped at 110 columns
         "Plan: 1 to add, 1 to change, 1 to delete.",
         "<!-- Otterdog Comment: validate -->",

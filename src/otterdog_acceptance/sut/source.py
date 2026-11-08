@@ -198,7 +198,8 @@ class UpstreamMirror:
         return run_git(args, file_protocol=protocol, git_dir=self.path, timeout=timeout, check=check)
 
     def git(self, *args: str, timeout: float = 600) -> str:
-        """Run git on the mirror (hardened -c options, --git-dir <path>) and return stdout (CalledProcessError on failure)."""
+        """Run git on the mirror (hardened -c options, --git-dir <path>) and return stdout (CalledProcessError on
+        failure)."""
         return self._run(*args, timeout=timeout).stdout
 
     def _lock(self) -> FileLock:

@@ -1,5 +1,6 @@
-"""otterdog_acceptance.vaults: vault references (HashiCorp Vault KV v2 with token, ~/.vault-token and GitHub OIDC logins; pass
-and gopass; Bitwarden) resolved once and redacted, and their use by settings, the scrubber and ci-sync's callers.
+"""otterdog_acceptance.vaults: vault references (HashiCorp Vault KV v2 with token, ~/.vault-token and GitHub OIDC
+logins; pass and gopass; Bitwarden) resolved once and redacted, and their use by settings, the scrubber and ci-sync's
+callers.
 
 Vault runs as a loopback HTTP server (KV v2 reads, the JWT login, GitHub's OIDC token endpoint); pass and bw are stub
 scripts selected with E2E_PASS_BIN / E2E_BITWARDEN_BIN, so the real procs.run path (sanitized environment plus the

@@ -2,11 +2,11 @@
 name: fill-coverage-gap
 description: >-
   Closes a gap of the otterdog coverage matrix (scenarios/coverage.yaml): lists the gap and partial features with
-  otterdog-acceptance assist coverage, picks one, follows its gap_outline to write the missing scenario or test by imitating
-  the related ones, validates it, then updates the feature (status, covered_by, notes, gap_outline) and regenerates
-  docs/coverage-matrix.md, never claiming coverage without an assertion that exercises the feature. Use when asked to
-  fill, close or work on a coverage gap or partial feature, a feature id of the coverage matrix, or to improve the
-  coverage of an area, a tier or a priority.
+  otterdog-acceptance assist coverage, picks one, follows its gap_outline to write the missing scenario or test by
+  imitating the related ones, validates it, then updates the feature (status, covered_by, notes, gap_outline) and
+  regenerates docs/coverage-matrix.md, never claiming coverage without an assertion that exercises the feature. Use when
+  asked to fill, close or work on a coverage gap or partial feature, a feature id of the coverage matrix, or to improve
+  the coverage of an area, a tier or a priority.
 license: EPL-2.0
 compatibility: >-
   Requires the Otterdog Acceptance checkout with .venv (make init), unshare and docker for the offline tier, network to

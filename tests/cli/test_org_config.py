@@ -96,7 +96,8 @@ def test_excluded_teams_are_neither_loaded_nor_configurable(
         )
         control.assert_ok("plan without exclusion")
         assert team_objects(control.plan(), excluded) == [f'- remove team[name="{excluded}"] {{'], (
-            f"the control plan (no exclude_teams) does not remove the unknown team {excluded}:\n{control.output[-TAIL:]}"
+            f"the control plan (no exclude_teams) does not remove the unknown team {excluded}:\n"
+            f"{control.output[-TAIL:]}"
         )
 
         fresh_workspace.write_org_config(baseline.text())

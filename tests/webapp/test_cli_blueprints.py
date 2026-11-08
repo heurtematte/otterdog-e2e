@@ -105,7 +105,8 @@ def test_list_and_approve_blueprints(
     pr_url = f"https://github.com/{s.org}/{repo}/pull/{number}"
     rows = [row[1:] for row in table_rows(listed.output)]
     assert rows == [[definition.id, s.org, repo, pr_url]], (
-        f"list-blueprints must list exactly the remediation PR of {definition.id} (SUT): {rows}\n{listed.output[-2000:]}"
+        f"list-blueprints must list exactly the remediation PR of {definition.id} (SUT): {rows}\n"
+        f"{listed.output[-2000:]}"
     )
 
     workspace.use_layout(WorkspaceLayout(document=without_base_url(workspace.otterdog_json())))

@@ -9,8 +9,8 @@ description: >-
   change of an otterdog pull request, given its number and optionally a 40-hex commit sha.
 license: EPL-2.0
 compatibility: >-
-  Requires the Otterdog Acceptance checkout with .venv (make init), docker (a PR is untrusted code and only runs in its own
-  image), unshare, network for public GitHub reads and to fetch the PR. No test organization: live tiers are only
+  Requires the Otterdog Acceptance checkout with .venv (make init), docker (a PR is untrusted code and only runs in its
+  own image), unshare, network for public GitHub reads and to fetch the PR. No test organization: live tiers are only
   suggested to the user.
 ---
 
@@ -116,7 +116,8 @@ that commit only (a later push changes nothing).
    ```
 
    The second form lints live scenarios with the PR's own CLI (in docker). Then confirm the new offline scenarios
-   pass on the release CI runs: `.venv/bin/otterdog-acceptance run --suite offline --sut release:latest --scenario <id>`.
+   pass on the release CI runs:
+   `.venv/bin/otterdog-acceptance run --suite offline --sut release:latest --scenario <id>`.
 8. **Run the offline and differential tiers on the pinned PR** (docker, no target, no GitHub writes; about 30 minutes:
    each session builds the PR's image again). Never run two sessions on the same `pr:` SUT at once (an `assist check
    --sut pr:<n>` during a `run`): the image of the running one vanishes ("No such image", exit 125, reported as product
@@ -131,10 +132,10 @@ that commit only (a later push changes nothing).
    `--sut sha:9bdeb75`). Leave out `--base-sut auto` when a reference declares `base` (it is then the default);
    without any base SUT the differential items are skipped. `run` records every observed offline scenario; add
    `--tags <suggested tags>` to restrict the differential tier like the PR lane does (the referencing scenarios are
-   always kept). `otterdog-acceptance pr <n> --sha <sha>` without `--target` is the same offline run with that tag selection.
-   The run ends with `pytest exit code N; artifacts: <dir>` and the delta counts. To check declared deltas again, rerun
-   only the referencing scenarios: `--scenario <id>,<id>,...` takes ONE comma-separated list (a repeated option keeps
-   the last one only).
+   always kept). `otterdog-acceptance pr <n> --sha <sha>` without `--target` is the same offline run with that tag
+   selection. The run ends with `pytest exit code N; artifacts: <dir>` and the delta counts. To check declared deltas
+   again, rerun only the referencing scenarios: `--scenario <id>,<id>,...` takes ONE comma-separated list (a repeated
+   option keeps the last one only).
 9. **Read the results** in that directory: `differential.md` first (verdict, unexpected deltas with unified diffs,
    expected deltas, expected deltas not observed, not comparable scenarios), then `summary.md`; for failures of the
    head's offline tier use the `triage-e2e-run` skill (`.venv/bin/otterdog-acceptance assist triage <dir>`). A recording

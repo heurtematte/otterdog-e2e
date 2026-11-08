@@ -3,9 +3,10 @@
 Every validated answer is written to the instance env file at once (``envfile.update_env_file``), so an interrupted
 run keeps its progress and the next run continues where it stopped:
 
-1. org: the login (--org, E2E_ORG, otterdog-e2e-<instance> for the instance of a shard, else asked) ->``GET /orgs/{org}`` (exact-case login, id pinned in E2E_ORG_ID); a
-   missing org gets its creation URL (the profile's plan; both the Free URL and the Enterprise Cloud note while the
-   profile is not known) and is checked again on demand (no API creates Free/Team orgs);
+1. org: the login (--org, E2E_ORG, otterdog-e2e-<instance> for the instance of a shard, else asked)
+   ->``GET /orgs/{org}`` (exact-case login, id pinned in E2E_ORG_ID); a missing org gets its creation URL (the profile's
+   plan; both the Free URL and the Enterprise Cloud note while the profile is not known) and is checked again on demand
+   (no API creates Free/Team orgs);
 2. tokens, one role after the other (admin required, the others skippable): the PREFILLED creation URL (classic or
    fine-grained: --token-type, else the stored E2E_<ROLE>_TOKEN_TYPE, else classic), a hidden prompt, then the checks
    of the harness (GET /user login, token kind, the role's classic scopes, the owner membership of the admin,
@@ -20,9 +21,9 @@ run keeps its progress and the next run continues where it stopped:
    ANOTHER account was refused, the invitation this run created is cancelled while still pending (``DELETE
    /orgs/{org}/memberships/{login}``, admin token) and an accepted one is reported (never removed). Classic tokens are
    checked before any membership (bootstrap invites and publicizes later). A role whose token is in the accounts
-   store (the accounts section of ~/.config/otterdog-acceptance/setup.yaml, written by ``otterdog-acceptance accounts``) takes it
-   without a prompt, through the same checks (the env file gets its pass reference, or for a Vault store its value:
-   keeps_account_references); with the accounts store (or --browser; --no-browser: the prefilled URL and its
+   store (the accounts section of ~/.config/otterdog-acceptance/setup.yaml, written by ``otterdog-acceptance accounts``)
+   takes it without a prompt, through the same checks (the env file gets its pass reference, or for a Vault store its
+   value: keeps_account_references); with the accounts store (or --browser; --no-browser: the prefilled URL and its
    steps instead), a role without a valid token is set up in the browser first, its classic token created there
    (onboard/accounts.py, ``run_account``), the prompt following when that fails;
 3. web-UI login of the admin account (optional): password and TOTP setup key (hidden, settings.normalize_totp_seed),
@@ -177,7 +178,8 @@ RULE_WIDTH = 100  # the title line of an instance's setup (banner)
 # the marks of the status lines (the CLI colours them): done, needs attention, skipped
 DONE, WARN, SKIPPED = "\u2713", "!", "\u2013"
 ENV_FILE_HEADER = (
-    "otterdog-acceptance instance {instance}: written by `otterdog-acceptance setup` (re-run it to change or rotate a value).\n"
+    "otterdog-acceptance instance {instance}: written by `otterdog-acceptance setup` (re-run it to change "
+    "or rotate a value).\n"
     "Holds tokens and passwords: keep it private (mode 0600), never commit or share it."
 )
 
@@ -482,7 +484,8 @@ class SetupWizard:
         """Every step in order (see the module docstring)."""
         if in_ci(self.environ):
             raise SetupError(
-                "setup is interactive and refused when CI is set: run it on your machine, then `otterdog-acceptance ci-sync`"
+                "setup is interactive and refused when CI is set: run it on your machine, then "
+                "`otterdog-acceptance ci-sync`"
             )
         self.values = read_env_file(self.env_path)
         REDACTOR.add(
@@ -518,7 +521,8 @@ class SetupWizard:
         self.section(f"{role} token: {ROLE_TOKENS[role].purpose}")
 
     def list_shard_instance(self) -> None:
-        """An instance of a shard joins ~/.config/otterdog-acceptance/lists/shards, the target of ``run --target @shards``."""
+        """An instance of a shard joins ~/.config/otterdog-acceptance/lists/shards, the target of
+        ``run --target @shards``."""
         if self.shard is None:
             return
         path = add_to_list(SHARDS_LIST, self.instance, self.environ)
@@ -1172,9 +1176,14 @@ class SetupWizard:
         if login.lower() not in self.flag_answers:
             self.warn(FLAGGED_HELP.format(login=login, loss=FLAGGED_LOSS.get(role, FLAGGED_JOIN_LOSS)))
             question = (
-                f"Continue the setup without the {role} {login}? (no: setup stops; run it again once the flag is lifted)"
+                (
+                    f"Continue the setup without the {role} {login}? (no: setup stops; run it again "
+                    f"once the flag is lifted)"
+                )
                 if joins
-                else f"Continue the setup with {login} as it is? (no: setup stops; run it again once the flag is lifted)"
+                else (
+                    f"Continue the setup with {login} as it is? (no: setup stops; run it again once the flag is lifted)"
+                )
             )
             self.flag_answers[login.lower()] = self.io.confirm(question, True)
         if not self.flag_answers[login.lower()]:
@@ -1184,9 +1193,9 @@ class SetupWizard:
             raise TokenRejectedError(f"GitHub flagged {login}")
 
     def check_token(self, role: str, token: str, org: OrgInfo) -> CheckedToken:
-        """Every check of a role's token (TokenRejectedError with the reason): shape, not another role's token, GET /user,
-        kind, classic scopes, isolation (safety.check_identity_isolation, with the shared org ids accepted for this
-        token in memory only: shared_org_offer), owner membership. Nothing is written here (record does)."""
+        """Every check of a role's token (TokenRejectedError with the reason): shape, not another role's token, GET
+        /user, kind, classic scopes, isolation (safety.check_identity_isolation, with the shared org ids accepted for
+        this token in memory only: shared_org_offer), owner membership. Nothing is written here (record does)."""
         from otterdog_acceptance import safety
 
         spec = ROLE_TOKENS[role]
@@ -1295,9 +1304,9 @@ class SetupWizard:
         return found
 
     def validation_problem(self, http: GitHubHttp, name: str, org_id: int) -> str | None:
-        """Why ``org_id``, pinned by instance ``name``, is NOT a validated test org (None: it is): the module docstring's
-        rule (env file with the admin login and token setup writes only after the owner check, the instance's target,
-        and live through ``http``: the org's id and the safety marker in its description)."""
+        """Why ``org_id``, pinned by instance ``name``, is NOT a validated test org (None: it is): the module
+        docstring's rule (env file with the admin login and token setup writes only after the owner check, the
+        instance's target, and live through ``http``: the org's id and the safety marker in its description)."""
         from otterdog_acceptance.settings import load_target
 
         path = instance_env_path(name, self.environ)

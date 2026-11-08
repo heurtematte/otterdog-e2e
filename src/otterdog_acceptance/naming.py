@@ -93,7 +93,8 @@ class RunContext:
         return f"{self.const_prefix}{slug.upper().replace('-', '_')}"
 
     def prop(self, slug: str) -> str:
-        """Custom property name, same as name(); '_' become '-' since '_' names cannot hold multi_select values (OC-05)."""
+        """Custom property name, same as name(); '_' become '-' since '_' names cannot hold multi_select values
+        (OC-05)."""
         return self.name(slug.replace("_", "-"))
 
     def hook_url(self, slug: str) -> str:

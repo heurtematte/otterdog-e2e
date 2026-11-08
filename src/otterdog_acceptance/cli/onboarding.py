@@ -1,8 +1,8 @@
-"""``otterdog-acceptance setup`` and ``otterdog-acceptance ci-sync`` (SPEC 16, docs/onboarding.md): the onboarding of a test org
-instance.
+"""``otterdog-acceptance setup`` and ``otterdog-acceptance ci-sync`` (SPEC 16, docs/onboarding.md): the onboarding of a
+test org instance.
 
-setup runs the interactive wizard of otterdog_acceptance.onboard (org, tokens of every role, web login, the GitHub App through
-the manifest flow of app-manifest), then ``bootstrap --apply --wait`` and doctor, each on a fresh copy of the
+setup runs the interactive wizard of otterdog_acceptance.onboard (org, tokens of every role, web login, the GitHub App
+through the manifest flow of app-manifest), then ``bootstrap --apply --wait`` and doctor, each on a fresh copy of the
 environment setup started with; ci-sync creates the CI environments of the instance and sets their variables and
 secrets with the operator's gh login. Both are refused in CI.
 """
@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from otterdog_acceptance.onboard.wizard import SetupOptions
     from otterdog_acceptance.settings import Target
 
-# --- setup and ci-sync: onboarding of a test org instance (otterdog_acceptance.onboard, docs/onboarding.md) ---------------
+# --- setup and ci-sync: onboarding of a test org instance (otterdog_acceptance.onboard, docs/onboarding.md) -----------
 ACCOUNT_ROLES = ("admin", "oracle", "author", "approver", "outsider", "config_reader")  # onboard.tokens.ROLES
 SETUP_ROTATABLE = (*ACCOUNT_ROLES, "web", "app")
 
@@ -57,9 +57,10 @@ def _setup_bootstrap(
     automatic: bool = False,
 ) -> None:
     """``bootstrap --target <instance> --apply --wait`` started by the setup wizard (asks for the typed org login,
-    typed by setup itself when ``automatic`` and the org has no foreign member, then waits for the invitations to be accepted, the memberships made public and the App installed). Each run gets
-    a FRESH copy of ``pristine`` (the environment before setup read any env file): load_env_files never overrides,
-    so values a former run loaded (an App replaced by setup meanwhile) would win over the env file otherwise."""
+    typed by setup itself when ``automatic`` and the org has no foreign member, then waits for the invitations to be
+    accepted, the memberships made public and the App installed). Each run gets a FRESH copy of ``pristine`` (the
+    environment before setup read any env file): load_env_files never overrides, so values a former run loaded (an App
+    replaced by setup meanwhile) would win over the env file otherwise."""
     context = E2EContext.create(E2EOptions(target=instance), environ=dict(pristine))
     context.start_session(argv=[REDACTOR(arg) for arg in sys.argv])
     try:
@@ -225,8 +226,8 @@ def _setup_manifest(
     "--browser/--no-browser",
     default=None,
     help="create the classic tokens (and enroll 2FA) of the machine accounts in a Firefox window, their secrets in "
-    "the accounts store of ~/.config/otterdog-acceptance/setup.yaml, like `otterdog-acceptance accounts` (default: when that "
-    "store is configured); --no-browser prints the prefilled token URLs and their steps instead",
+    "the accounts store of ~/.config/otterdog-acceptance/setup.yaml, like `otterdog-acceptance accounts` (default: "
+    "when that store is configured); --no-browser prints the prefilled token URLs and their steps instead",
 )
 @click.option(
     "--shard",
@@ -239,7 +240,8 @@ def _setup_manifest(
     "all_shards",
     is_flag=True,
     help="set up the instance of every shard in turn (named after it, or the instance whose E2E_SHARD selects it), "
-    "asking before setting up again one that is set up already, then list them in ~/.config/otterdog-acceptance/lists/shards",
+    "asking before setting up again one that is set up already, then list them in "
+    "~/.config/otterdog-acceptance/lists/shards",
 )
 @_handled
 def setup_command(
@@ -321,13 +323,14 @@ def setup_command(
             )
         except click.ClickException as exc:
             raise click.ClickException(
-                f"setup of {instance} stopped: {exc.message}; `otterdog-acceptance setup --shards` resumes (it asks before "
-                "setting up again the instances done)"
+                f"setup of {instance} stopped: {exc.message}; `otterdog-acceptance setup --shards` resumes (it asks "
+                "before setting up again the instances done)"
             ) from None
     _setup_echo("")
     _setup_echo(banner("every shard has its instance"))
     _setup_echo(
-        f"{DONE} {len(instances)} organizations: otterdog-acceptance run --target @{SHARDS_LIST} --parallel {len(instances)}"
+        f"{DONE} {len(instances)} organizations: otterdog-acceptance run --target @{SHARDS_LIST} "
+        f"--parallel {len(instances)}"
     )
 
 

@@ -322,7 +322,8 @@ def _details(item: Mapping[str, Any]) -> list[str]:
         for found in imitate_data["tagged"]:
             test = f" `{found['test']}`" if found.get("test") else ""
             lines.append(
-                f"- tagged {', '.join(imitate_data['tags'])}: `{found['id']}` ({found['tier']}) in `{found['file']}`{test}"
+                f"- tagged {', '.join(imitate_data['tags'])}: `{found['id']}` ({found['tier']}) in "
+                f"`{found['file']}`{test}"
             )
         for key, label in (("outline_file", "Outline file"), ("outline_scenario", "Outline scenario id")):
             value = imitate_data.get(key)

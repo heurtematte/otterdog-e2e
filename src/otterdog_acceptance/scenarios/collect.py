@@ -16,11 +16,12 @@ e.g. ``tests/offline/test_scenarios.py::test_offline_scenario[O-VAL-REPO/too-man
 
 Selection (item_selected, used by the plugin and by scenario_selected): ``--e2e-scenario`` and ``--e2e-tags`` are two
 filters; inside one filter the comma separated values are ORed (any glob matches the scenario id or, for a case, its
-``<scenario id>/<step>``, case-sensitive fnmatch; the item carries any of the tags), between the two filters it is AND; an empty filter keeps everything.
-Items of tests/unit and tests/offline (TAGS_EXEMPT_TIERS) are exempt from ``--e2e-tags`` (the offline regression tier
-always runs in full) but not from ``--e2e-scenario``: once globs are given, items without a matching scenario id
-(unit tests included) are deselected. The scenarios referencing the change under test (``--e2e-change``, changes.py)
-are extra scenarios of the tags filter: an item whose scenario id matches one of them passes it like a tagged item.
+``<scenario id>/<step>``, case-sensitive fnmatch; the item carries any of the tags), between the two filters it is AND;
+an empty filter keeps everything. Items of tests/unit and tests/offline (TAGS_EXEMPT_TIERS) are exempt from
+``--e2e-tags`` (the offline regression tier always runs in full) but not from ``--e2e-scenario``: once globs are given,
+items without a matching scenario id (unit tests included) are deselected. The scenarios referencing the change under
+test (``--e2e-change``, changes.py) are extra scenarios of the tags filter: an item whose scenario id matches one of
+them passes it like a tagged item.
 """
 
 from __future__ import annotations

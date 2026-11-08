@@ -30,7 +30,10 @@ from otterdog_acceptance.testing.fakes import (
 )
 
 NOOP = "Plan: 0 to add, 0 to change, 0 to delete.\n"
-CHANGE = "  ~ settings {\n    ~ members_can_create_teams = false -> true\n  ~ }\n  Plan: 0 to add, 1 to change, 0 to delete.\n"
+CHANGE = (
+    "  ~ settings {\n    ~ members_can_create_teams = false -> true\n  ~ }\n"
+    "  Plan: 0 to add, 1 to change, 0 to delete.\n"
+)
 EXECUTED = "Executed plan: 0 added, 1 changed, 0 live resources ignored.\n"
 # otterdog's error box (print_error) of a failed patch, as in tests/unit/data/apply-failed-patch.txt
 FAILED_PATCH = (

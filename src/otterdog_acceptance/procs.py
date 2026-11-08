@@ -9,9 +9,9 @@ SIGKILL after TERMINATE_GRACE seconds, so no grandchild (git, pip, a docker CLI)
 Remote docker daemons over ``ssh://`` are not supported (SSH_AUTH_SOCK is removed for every child).
 
 run_harness() is the exception to the sanitized environment: it starts the harness itself (``python -P -m
-otterdog_acceptance``, one child per target of a batch) with the parent's pristine environment, streams its redacted output
-line by line and forwards SIGINT/SIGTERM to it (forward_signals; a signal forwarded before the child was registered
-is sent to it right after, each signal exactly once).
+otterdog_acceptance``, one child per target of a batch) with the parent's pristine environment, streams its redacted
+output line by line and forwards SIGINT/SIGTERM to it (forward_signals; a signal forwarded before the child was
+registered is sent to it right after, each signal exactly once).
 """
 
 from __future__ import annotations
@@ -157,7 +157,8 @@ def sanitized_env(
     keep_home: bool = False,
     base: Mapping[str, str] | None = None,
 ) -> dict[str, str]:
-    """Child environment: ``base`` (os.environ) minus credentials and hooks, plus SET_ENV, scratch HOME/XDG, ``extra``."""
+    """Child environment: ``base`` (os.environ) minus credentials and hooks, plus SET_ENV, scratch HOME/XDG,
+    ``extra``."""
     source = os.environ if base is None else base
     env = {key: value for key, value in source.items() if not _removed(key)}
     env.update(SET_ENV)
@@ -218,7 +219,8 @@ def _stop(process: subprocess.Popen[str]) -> tuple[str, str]:
 def _communicate(
     args: list[str], *, cwd: Path | None, env: Mapping[str, str], input: str | None, timeout: float
 ) -> tuple[int, str, str]:
-    """Run ``args`` in a new session and return (exit code, stdout, stderr); the group is stopped on timeout/interrupt."""
+    """Run ``args`` in a new session and return (exit code, stdout, stderr); the group is stopped on
+    timeout/interrupt."""
     with subprocess.Popen(
         args,
         cwd=cwd,

@@ -1,5 +1,6 @@
-"""otterdog_acceptance.assist.triage and ``otterdog-acceptance assist triage``: scrub first (refusal on leaks), pre-classification
-rules with their evidence, commands and artifacts of each failure, baseline comparison, untrusted output fenced."""
+"""otterdog_acceptance.assist.triage and ``otterdog-acceptance assist triage``: scrub first (refusal on leaks),
+pre-classification rules with their evidence, commands and artifacts of each failure, baseline comparison, untrusted
+output fenced."""
 
 from __future__ import annotations
 
@@ -304,8 +305,8 @@ def test_xpass_run_info_and_pointers(project: Path) -> None:
         ("AssertionError: cleanup left objects behind", "teardown", "error", False, "harness", "teardown phase"),
         (
             (
-                "AssertionError: scenario cli.x failed (1 failure(s)):\n  - step 's' state: repo e2e-x-r: visibility is "
-                "'public', expected 'private'"
+                "AssertionError: scenario cli.x failed (1 failure(s)):\n  - step 's' state: repo e2e-x-r: visibility "
+                "is 'public', expected 'private'"
             ),
             "call",
             "failed",
@@ -329,7 +330,8 @@ def test_classification_rules(text: str, phase: str, outcome: str, infra: bool, 
 def test_precedence_and_other_signals() -> None:
     """Infrastructure beats an assertion, known-bug evidence beats sut; the losing signals are kept as evidence."""
     category, evidence = triage.classify(
-        "AssertionError: scenario x failed (1 failure(s)):\n  - step 'a' apply: GitHubError -> 503: Service Unavailable",
+        "AssertionError: scenario x failed (1 failure(s)):\n"
+        "  - step 'a' apply: GitHubError -> 503: Service Unavailable",
         phase="call",
         outcome="failed",
         infra=False,
@@ -429,9 +431,9 @@ def test_bundle_fences_untrusted_text(project: Path, tmp_path: Path) -> None:
         in markdown
     )
     assert (
-        "| 3 | `tests/offline/test_scenarios.py::test_offline_scenario[O-VAL-ORG-RULESET-STRICT]` | offline | call | **known-bug** | KB-008 |"
-        in markdown
-    )
+        "| 3 | `tests/offline/test_scenarios.py::test_offline_scenario[O-VAL-ORG-RULESET-STRICT]` | offline | call | "
+        "**known-bug** | KB-008 |"
+    ) in markdown
     assert "the next free id is `KB-021`" in markdown
     data = json.loads((path / "triage.json").read_text())
     assert data["counts"]["sut"] == 1 and data["notice"].startswith("Untrusted content")
@@ -444,7 +446,7 @@ def test_triage_without_failures(project: Path, tmp_path: Path) -> None:
     assert summary["failures"] == 0 and "No failed or errored item in this run." in (path / "triage.md").read_text()
 
 
-# --- the command -------------------------------------------------------------------------------------------------------
+# --- the command ------------------------------------------------------------------------------------------------------
 @pytest.fixture
 def settings(project: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Settings of the checkout (artifacts below it); returns the artifacts root."""

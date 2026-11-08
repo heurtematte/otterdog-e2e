@@ -108,8 +108,9 @@ organization owner (the admin machine account).
    the deliveries.
 
 If the browser step cannot reach the local listener (remote machine), copy the `code` parameter of the redirect URL
-and run `otterdog-acceptance app-manifest --target free --webhook-url <same URL> --exchange <code>` within the hour (setup has
-no such fallback: use this command, add its lines to the env file, then run setup again, which keeps the App).
+and run `otterdog-acceptance app-manifest --target free --webhook-url <same URL> --exchange <code>` within the hour
+(setup has no such fallback: use this command, add its lines to the env file, then run setup again, which keeps the
+App).
 
 Installing the App stays a click of an organization owner, and registering it a confirmation on github.com
 ([What cannot be automated](onboarding.md#what-cannot-be-automated)): both commands print the URL, setup and
@@ -157,8 +158,8 @@ sequenceDiagram
   signature is never exercised (the relay re-signs with the local secret); at most about 300 deliveries are paged
   back on the first poll; the JWT rate budget is guarded.
 - During a test session the relay runs inside the session (compose and external transports). For manual work,
-  `otterdog-acceptance relay --target free --forward-to http://127.0.0.1:5000/github-webhook/receive` runs it standalone;
-  it takes the org lease, so do not start a test session at the same time.
+  `otterdog-acceptance relay --target free --forward-to http://127.0.0.1:5000/github-webhook/receive` runs it
+  standalone; it takes the org lease, so do not start a test session at the same time.
 
 ## Rotating credentials
 

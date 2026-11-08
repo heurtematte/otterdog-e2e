@@ -6,7 +6,8 @@ harness renders the configuration, runs otterdog, checks the output and the real
 Python tests (webapp, webhooks, special cases) use the same fixtures and markers.
 
 An AI agent can draft scenarios with the `write-e2e-scenario` skill, which follows this page and validates every file
-with `otterdog-acceptance assist check` and the offline tier before you review it ([ai-assistance.md](ai-assistance.md)).
+with `otterdog-acceptance assist check` and the offline tier before you review it
+([ai-assistance.md](ai-assistance.md)).
 
 ## Where scenarios live
 
@@ -33,9 +34,9 @@ scenarios of webhooks both live in `offline/webhooks/`) and whatever its kind: a
 next to the other scenarios of their feature. A scenario touching several areas goes into the domain whose behaviour
 it asserts, the other areas are extra tags. There is no deeper subdirectory: the jsonnet files of a domain's scenarios
 go into its `files/` directory, shared ones into `scenarios/fragments/` and `scenarios/lib/`.
-`tests/unit/test_yaml_cli.py`, `tests/unit/test_yaml_offline.py` and `otterdog-acceptance assist check` enforce the layout
-(`otterdog_acceptance.scenarios.model.domain_problem`). `scenarios/known_bugs.yaml` and `scenarios/coverage.yaml` are not
-scenarios.
+`tests/unit/test_yaml_cli.py`, `tests/unit/test_yaml_offline.py` and `otterdog-acceptance assist check` enforce the
+layout (`otterdog_acceptance.scenarios.model.domain_problem`). `scenarios/known_bugs.yaml` and `scenarios/coverage.yaml`
+are not scenarios.
 
 Directories and files group scenarios by functionality, never by pull request: the otterdog PRs behind a behaviour go
 into the scenario's `references` (see [References](#references)). Keep scenario ids unique everywhere (the loader
@@ -129,12 +130,13 @@ make one TARGET=free SCENARIO=cli.example.repo-lifecycle
 | `steps` | list, required | | at least one step |
 | `cleanup` | `auto` \| `none` | `auto` | `none` keeps the objects (debugging only) |
 
-Capabilities are the values of `otterdog_acceptance.capabilities.Cap` (see [capability-matrix.md](capability-matrix.md)):
-`public_repos`, `private_repo_branch_protection`, `private_repo_rulesets`, `private_repo_environments`,
-`private_repo_env_protection_rules`, `private_pages`, `org_rulesets`, `otterdog_org_rulesets`, `push_rulesets`,
-`ruleset_evaluate`, `custom_org_roles`, `custom_properties`, `internal_repos`, `org_secrets_private_repos`,
-`secret_scanning_public`, `ghas_private`, `larger_runners`, `merge_queue_private`, `actions_cache_limit`, `app`,
-`docker`, `identity_author`, `identity_approver`, `identity_outsider`, `identity_config_reader`, `separate_oracle`.
+Capabilities are the values of `otterdog_acceptance.capabilities.Cap` (see
+[capability-matrix.md](capability-matrix.md)): `public_repos`, `private_repo_branch_protection`,
+`private_repo_rulesets`, `private_repo_environments`, `private_repo_env_protection_rules`, `private_pages`,
+`org_rulesets`, `otterdog_org_rulesets`, `push_rulesets`, `ruleset_evaluate`, `custom_org_roles`, `custom_properties`,
+`internal_repos`, `org_secrets_private_repos`, `secret_scanning_public`, `ghas_private`, `larger_runners`,
+`merge_queue_private`, `actions_cache_limit`, `app`, `docker`, `identity_author`, `identity_approver`,
+`identity_outsider`, `identity_config_reader`, `separate_oracle`.
 
 Tag vocabulary (also used by the PR tag selection, `otterdog_acceptance.selection`): `repo`, `bpr`, `rulesets`,
 `environments`, `secrets`, `variables`, `webhooks`, `teams`, `custom-properties`, `org-settings`, `workflows`,
@@ -544,8 +546,8 @@ repository and refuses (403) on an archived one. `apply.api` pins the requests o
 
 `state` entries are evaluated against the independent read-only oracle (GitHub REST/GraphQL, never otterdog), retried
 every 5 s for up to 60 s (a check's own `timeout:` in seconds extends the budget, e.g. for webhook deliveries).
-`otterdog_acceptance.scenarios.checks.CHECK_KINDS` is the reference: each kind names an `Oracle` method and its parameters
-(a unit test checks that they match). Kinds marked *list* return a list and refuse `absent`.
+`otterdog_acceptance.scenarios.checks.CHECK_KINDS` is the reference: each kind names an `Oracle` method and its
+parameters (a unit test checks that they match). Kinds marked *list* return a list and refuse `absent`.
 
 **Organization: profile, Actions, members and security**
 
@@ -926,8 +928,9 @@ steps:
     validate: {ok: false, exit_code: 2, contains: ["need to define a base template"]}
 ```
 
-Python tests use the same layouts (`otterdog_acceptance.otterdog.workspace.WorkspaceLayout`, [Python tests](#python-tests)),
-plus `document` (a complete configuration of their own) and the raw `invoke` API for commands without `-c`.
+Python tests use the same layouts (`otterdog_acceptance.otterdog.workspace.WorkspaceLayout`,
+[Python tests](#python-tests)), plus `document` (a complete configuration of their own) and the raw `invoke` API for
+commands without `-c`.
 
 ## Linting live scenarios offline
 
@@ -971,8 +974,9 @@ a `step` pattern must match a step of the scenario; a change appears once per sc
 branch or sha spec; two references of one change with different `base` or `template` values are a collection error.
 Python tests pass the same list as `pytest.mark.scenario("<id>", references=[...])` (a literal or a module constant,
 no `step`). Add a reference when a PR implements, fixes or changes the behaviour (a regression references its fix):
-`otterdog-acceptance run --change <n>` (or a `pr:<n>@<sha>` SUT) then selects the referencing scenarios, uses their expected
-deltas in `differential.md` and their base and template ([testing-an-otterdog-pr.md](testing-an-otterdog-pr.md)).
+`otterdog-acceptance run --change <n>` (or a `pr:<n>@<sha>` SUT) then selects the referencing scenarios, uses their
+expected deltas in `differential.md` and their base and template
+([testing-an-otterdog-pr.md](testing-an-otterdog-pr.md)).
 
 ## Known bugs
 

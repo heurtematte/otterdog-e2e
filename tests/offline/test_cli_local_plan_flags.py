@@ -38,7 +38,10 @@ CURRENT_ERROR = "Error: failed to load current configuration"
 DUMMY_SECRETS = ConfigFragments(
     secrets=[f"orgs.newOrgSecret('{RUN.const('ORG_DUMMY')}') {{ value: '********' }}"],
     repositories=[
-        f"orgs.newRepo('{REPO}') {{ secrets: [orgs.newRepoSecret('{RUN.const('REPO_DUMMY')}') {{ value: '********' }}] }}"
+        (
+            f"orgs.newRepo('{REPO}') "
+            f"{{ secrets: [orgs.newRepoSecret('{RUN.const('REPO_DUMMY')}') {{ value: '********' }}] }}"
+        )
     ],
 )
 

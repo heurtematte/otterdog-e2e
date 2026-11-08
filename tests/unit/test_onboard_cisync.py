@@ -1,5 +1,6 @@
-"""``otterdog-acceptance ci-sync`` (onboard.cisync.CiSync): the names the workflows read per environment, the dry run (names
-only), the gh command sequence of --apply with secrets on stdin only, the repository variables, and the refusals."""
+"""``otterdog-acceptance ci-sync`` (onboard.cisync.CiSync): the names the workflows read per environment, the dry run
+(names only), the gh command sequence of --apply with secrets on stdin only, the repository variables, and the
+refusals."""
 
 from __future__ import annotations
 
@@ -723,7 +724,7 @@ def test_cli_ci_sync_errors(home: Path, project: Path, monkeypatch: pytest.Monke
     assert result.exit_code == 1 and "Error: ci-sync uses your own gh login" in result.output
 
 
-# --- vault references --------------------------------------------------------------------------------------------------
+# --- vault references -------------------------------------------------------------------------------------------------
 REFERENCES = {
     "vault:e2e/org2/admin/token": SECRETS["E2E_ADMIN_TOKEN"],
     "pass:e2e/org2/author": SECRETS["E2E_AUTHOR_TOKEN"],

@@ -1,4 +1,5 @@
-"""Coverage of otterdog's HTTP write requests by the live scenarios (scenarios/api_endpoints.yaml -> docs/api-coverage.md).
+"""Coverage of otterdog's HTTP write requests by the live scenarios (scenarios/api_endpoints.yaml ->
+docs/api-coverage.md).
 
 The inventory (otterdog.api_usage.load_inventory) lists every write request otterdog sends to GitHub, named as its
 request statistics name them. A live scenario step asserts the requests of its apply with ``apply.api`` (``sent``,
@@ -13,8 +14,8 @@ request statistics name them. A live scenario step asserts the requests of its a
   the steps that assert it is not, and the testable endpoints of the CLI no step asserts yet (the gaps), with the
   shares per HTTP method; the untestable endpoints are counted and listed apart with their reason.
 
-tests/unit/test_api_endpoints.py runs these checks (``--write`` regenerates the documentation); ``otterdog-acceptance assist
-check scenarios/api_endpoints.yaml`` reports the same problems.
+tests/unit/test_api_endpoints.py runs these checks (``--write`` regenerates the documentation); ``otterdog-acceptance
+assist check scenarios/api_endpoints.yaml`` reports the same problems.
 """
 
 from __future__ import annotations

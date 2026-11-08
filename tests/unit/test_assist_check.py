@@ -1,6 +1,6 @@
-"""otterdog_acceptance.assist.check and ``otterdog-acceptance assist check``: every validation kind (scenarios and their references,
-coverage matrix, known bugs, jsonnet, Python tests and their references), the changed files of git status, the offline
-lint through the run_pytest seam and the exit codes."""
+"""otterdog_acceptance.assist.check and ``otterdog-acceptance assist check``: every validation kind (scenarios and their
+references, coverage matrix, known bugs, jsonnet, Python tests and their references), the changed files of git status,
+the offline lint through the run_pytest seam and the exit codes."""
 
 from __future__ import annotations
 
@@ -158,7 +158,7 @@ def test_the_repository_files_are_clean() -> None:
     assert check_files(REPO, paths).problems == []
 
 
-# --- references --------------------------------------------------------------------------------------------------------
+# --- references -------------------------------------------------------------------------------------------------------
 @pytest.mark.parametrize(
     ("text", "expected"),
     [
@@ -222,7 +222,7 @@ def test_python_reference_problems(project: Path, text: str, expected: tuple[str
     assert len(found) == 1 and found[0][0] == expected[0] and expected[1] in found[0][1], found
 
 
-# --- scenarios ---------------------------------------------------------------------------------------------------------
+# --- scenarios --------------------------------------------------------------------------------------------------------
 @pytest.mark.parametrize(
     ("relative", "text", "expected"),
     [
@@ -328,7 +328,8 @@ def test_live_api_endpoints_are_listed_and_testable(project: Path) -> None:
         "scenarios/api_endpoints.yaml",
         "otterdog: {ref: " + "a" * 40 + "}\nendpoints:\n"
         "  - {endpoint: 'PATCH /repos/{owner}/{repo}', source: s, trigger: t}\n"
-        "  - {endpoint: 'PATCH /orgs/{org}/teams/{name}/external-groups', source: s, trigger: t, untestable: needs EMU}\n",
+        "  - {endpoint: 'PATCH /orgs/{org}/teams/{name}/external-groups', source: s, trigger: t,"
+        " untestable: needs EMU}\n",
     )
     idp = "PATCH /orgs/{org}/teams/{name}/external-groups"
     api = (
@@ -406,7 +407,7 @@ def test_regression_conventions(project: Path) -> None:
     ]
 
 
-# --- coverage matrix ----------------------------------------------------------------------------------------------------
+# --- coverage matrix --------------------------------------------------------------------------------------------------
 def test_coverage_schema_problems_name_the_feature(project: Path) -> None:
     """Schema problems of coverage.yaml; feature problems carry the feature id as location."""
     tiers = dict.fromkeys(coverage_matrix.TIERS, "x")
@@ -459,7 +460,7 @@ def test_coverage_of_the_repository_and_a_stale_doc(tmp_path: Path, monkeypatch:
     )
 
 
-# --- known bugs, jsonnet, Python, other files ---------------------------------------------------------------------------
+# --- known bugs, jsonnet, Python, other files -------------------------------------------------------------------------
 @pytest.mark.parametrize(
     ("text", "doc", "expected"),
     [
@@ -590,7 +591,7 @@ def test_split_location() -> None:
     )
 
 
-# --- git status --------------------------------------------------------------------------------------------------------
+# --- git status -------------------------------------------------------------------------------------------------------
 def git(root: Path, *args: str) -> None:
     """Run git in the checkout (test setup only)."""
     subprocess.run(
@@ -640,7 +641,7 @@ def test_changed_files_outside_a_repository(tmp_path: Path) -> None:
         check.changed_files(tmp_path)
 
 
-# --- lint ---------------------------------------------------------------------------------------------------------------
+# --- lint -------------------------------------------------------------------------------------------------------------
 def test_lint_keyword_matches_exact_ids() -> None:
     """``[<id>/`` selects the lint items of exactly that scenario."""
     assert check.lint_keyword(["cli.b", "cli.a", "cli.a"]) == "test_live_scenario_lint and ([cli.a/ or [cli.b/)"
@@ -685,7 +686,7 @@ def test_lint_result_without_results(tmp_path: Path) -> None:
     assert problems == [Problem("(lint)", "", f"the lint run exited with pytest code 4, see {tmp_path / 'summary.md'}")]
 
 
-# --- the command -------------------------------------------------------------------------------------------------------
+# --- the command ------------------------------------------------------------------------------------------------------
 @pytest.fixture
 def command(project: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     """Settings of the checkout; run_pytest replaced: it records its arguments, prints to stdout (the command must
@@ -724,9 +725,8 @@ def test_command_lints_live_scenarios(command: dict[str, Any], monkeypatch: pyte
     root = command["settings"].project_root
     assert call["args"][0] == str(root / "tests" / "offline")
     assert "--e2e-sut=release:latest" in call["args"] and "-ktest_live_scenario_lint and ([cli.repo.x/)" in call["args"]
-    assert (
-        call["command"]
-        == "otterdog-acceptance run --suite offline --sut release:latest -k 'test_live_scenario_lint and ([cli.repo.x/)'"
+    assert call["command"] == (
+        "otterdog-acceptance run --suite offline --sut release:latest -k 'test_live_scenario_lint and ([cli.repo.x/)'"
     )
     data = json.loads(result.stdout)
     assert data["ok"] is True and data["lint"]["ran"] and data["lint"]["outcomes"] == {"passed": 2}

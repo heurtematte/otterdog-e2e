@@ -297,7 +297,8 @@ def read_dtrack_mock() -> str:
 
 
 def _readiness(api: WebappApi, org: str, after: datetime | None) -> str | None:
-    """Why the webapp is not ready for ``org`` yet (None when ready); WebappNotReadyError when it cannot become ready."""
+    """Why the webapp is not ready for ``org`` yet (None when ready); WebappNotReadyError when it cannot become
+    ready."""
     listed = [row.get("github_id") for row in api.organizations()]
     if org not in listed:
         return f"/api/organizations does not list {org!r} (listed: {listed}); is otterdog.json loaded (/internal/init)?"
@@ -432,7 +433,8 @@ class DtrackMock:
 
 
 class WebappStack:
-    """docker compose project ``otterdog-e2e-<run_id>``: webapp + mongodb + redis (+ dtrack-mock) on a private network."""
+    """docker compose project ``otterdog-e2e-<run_id>``: webapp + mongodb + redis (+ dtrack-mock) on a private
+    network."""
 
     def __init__(
         self,

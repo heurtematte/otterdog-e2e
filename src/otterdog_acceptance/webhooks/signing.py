@@ -1,8 +1,9 @@
 """Webhook payload serialization, HMAC signatures and delivery headers (SPEC 13.3).
 
 otterdog's receiver (otterdog/webapp/webhook/github_webhook.py) only checks ``X-Hub-Signature: sha1=<hmac-sha1(secret,
-raw body)>`` and requires ``Content-Type`` to be exactly ``application/json`` (or ``application/x-www-form-urlencoded``);
-``X-Hub-Signature-256`` is never read. The headers built here mirror a real GitHub delivery so that both are present.
+raw body)>`` and requires ``Content-Type`` to be exactly ``application/json`` (or
+``application/x-www-form-urlencoded``); ``X-Hub-Signature-256`` is never read. The headers built here mirror a real
+GitHub delivery so that both are present.
 """
 
 from __future__ import annotations
@@ -18,7 +19,8 @@ JSON_CONTENT_TYPE = "application/json"
 FORM_CONTENT_TYPE = "application/x-www-form-urlencoded"
 USER_AGENT = "GitHub-Hookshot/otterdog-acceptance"
 TARGET_TYPES = ("integration", "repository", "organization")
-# valid: sha1 + sha256 (as GitHub sends) | sha1-only | sha256-only (rejected by otterdog) | invalid (wrong key) | missing
+# valid: sha1 + sha256 (as GitHub sends) | sha1-only | sha256-only (rejected by otterdog) | invalid (wrong key) |
+# missing
 SIGNATURE_MODES = ("valid", "sha1-only", "sha256-only", "invalid", "missing")
 
 

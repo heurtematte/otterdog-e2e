@@ -51,25 +51,26 @@ REFERENCES = [
         "pr": 792,
         "note": (
             "fix/stale-pr-status-overwrite (open when referenced): head d0d3b0832d8e21a9da86e0ef967859d2634af894 = 4"
-            " commits on top of main 9bdeb75 touching only otterdog/webapp/db/service.py (update_or_create_pull_request)"
-            " and its test: 2c5f977 do not revert pull request status with an outdated snapshot, e3285b6 make the"
-            " status update atomic, f0bf0c6 make the creation race in the test, d0d3b08 do not go back in the lifecycle"
-            " within the same second. Bug on the base: a task scheduled with a webhook snapshot stores the snapshot's"
-            " lifecycle fields when it finishes, so a late snapshot (the backed-off sync check, any stale 'open' event)"
-            " turns a merged PR back to 'open' (incident osgi/.eclipsefdn#25). No base: the differential compares with"
-            " the merge base of the PR head (9bdeb75, `otterdog-acceptance pr 792 --sha d0d3b08...`, --base-sut auto); the"
-            " head is an untrusted pr: SUT (docker image) and the webapp tier needs a config_reader identity. The PR"
-            " changes the webapp's database layer only: the CLI is identical, so every offline scenario must be"
-            " unchanged between base and head (any offline delta is unexpected); no bot comment or commit status may"
-            " be created by the injected stale event on either side, only the stored pull request state differs."
+            " commits on top of main 9bdeb75 touching only otterdog/webapp/db/service.py"
+            " (update_or_create_pull_request) and its test: 2c5f977 do not revert pull request status with an outdated"
+            " snapshot, e3285b6 make the status update atomic, f0bf0c6 make the creation race in the test, d0d3b08 do"
+            " not go back in the lifecycle within the same second. Bug on the base: a task scheduled with a webhook"
+            " snapshot stores the snapshot's lifecycle fields when it finishes, so a late snapshot (the backed-off sync"
+            " check, any stale 'open' event) turns a merged PR back to 'open' (incident osgi/.eclipsefdn#25). No base:"
+            " the differential compares with the merge base of the PR head (9bdeb75,"
+            " `otterdog-acceptance pr 792 --sha d0d3b08...`, --base-sut auto); the head is an untrusted pr: SUT (docker"
+            " image) and the webapp tier needs a config_reader identity. The PR changes the webapp's database layer"
+            " only: the CLI is identical, so every offline scenario must be unchanged between base and head (any"
+            " offline delta is unexpected); no bot comment or commit status may be created by the injected stale event"
+            " on either side, only the stored pull request state differs."
         ),
         "template": "own",
         "expected_deltas": [
             {
                 "note": (
-                    "after a merge, a stale converted_to_draft snapshot injected with a valid signature (204) leaves the"
-                    " PR merged on head (it stays in /api/pullrequests/merged, merged_at/closed_at kept); on base it"
-                    " reappears in /api/pullrequests/open with status open and merged_at null"
+                    "after a merge, a stale converted_to_draft snapshot injected with a valid signature (204) leaves"
+                    " the PR merged on head (it stays in /api/pullrequests/merged, merged_at/closed_at kept); on base"
+                    " it reappears in /api/pullrequests/open with status open and merged_at null"
                 )
             }
         ],

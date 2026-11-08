@@ -1,5 +1,5 @@
-"""Base of the ``otterdog-acceptance`` command line (SPEC 16): the click group ``main`` every command module registers on and
-the helpers the commands share.
+"""Base of the ``otterdog-acceptance`` command line (SPEC 16): the click group ``main`` every command module registers
+on and the helpers the commands share.
 
 Every command builds an E2EContext (_context; _session adds the process setup and always closes it: lease release,
 scrub); output is redacted (_echo, _echo_json) and harness errors become redacted one-line messages (_handled, exit 1).
@@ -232,7 +232,8 @@ class TerminationGuard:
         self._previous: dict[int, Any] = {}
 
     def install(self) -> bool:
-        """Install the handlers (main thread only; a SIGINT that Python does not handle, e.g. ignored, is left as is)."""
+        """Install the handlers (main thread only; a SIGINT that Python does not handle, e.g. ignored, is left as
+        is)."""
         if threading.current_thread() is not threading.main_thread():
             return False
         self._previous[signal.SIGTERM] = signal.signal(signal.SIGTERM, self.on_sigterm)

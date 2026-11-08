@@ -1,14 +1,14 @@
-"""Machine accounts in the browser (``otterdog-acceptance accounts``, ``setup --browser``; docs/onboarding.md, "Machine accounts
-in the browser").
+"""Machine accounts in the browser (``otterdog-acceptance accounts``, ``setup --browser``; docs/onboarding.md, "Machine
+accounts in the browser").
 
 For each role it logs in to github.com as the role's machine account, enrolls two-factor authentication (TOTP) when
 the account has none and creates the role's classic token (the scopes of onboard.tokens, the note of the prefilled
 URLs, no expiration unless asked), driving Firefox through Playwright (onboard.browser).
 
 Where the secrets of the accounts live is the ``accounts`` section of the setup configuration file
-(``~/.config/otterdog-acceptance/setup.yaml``, or E2E_SETUP_CONFIG; AccountsConfig): a ``store`` (``pass:<directory>`` or
-``vault:<secret path>``), the name of an entry (``entry``, default ``otterdog-e2e-{instance}-{role}-{item}``, the role
-spelled with dashes: ``config-reader``) and the names of the items (``items``, default the names of
+(``~/.config/otterdog-acceptance/setup.yaml``, or E2E_SETUP_CONFIG; AccountsConfig): a ``store`` (``pass:<directory>``
+or ``vault:<secret path>``), the name of an entry (``entry``, default ``otterdog-e2e-{instance}-{role}-{item}``, the
+role spelled with dashes: ``config-reader``) and the names of the items (``items``, default the names of
 eclipse-cbi/ci-admin: ``username``, ``email``, ``password``, ``2FA-seed``, ``2FA-recovery-codes``, ``api-token``). The
 reference of an item is ``<store>/<entry>``, one convention for both: a pass entry under the directory, or the field
 ``<entry>`` of the Vault KV v2 secret ``<secret path>`` (vaults.parse splits at the last ``/``), e.g.

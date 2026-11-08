@@ -1,5 +1,5 @@
-"""Unit tests of otterdog_acceptance.differential: expected deltas, compare() and the markdown/JSON reports (the references
-that declare the expected deltas of a change: tests/unit/test_changes.py)."""
+"""Unit tests of otterdog_acceptance.differential: expected deltas, compare() and the markdown/JSON reports (the
+references that declare the expected deltas of a change: tests/unit/test_changes.py)."""
 
 from __future__ import annotations
 

@@ -6,10 +6,11 @@ has the profile of its organization and ``match`` entries over the facts of an i
 test module, plan, required capabilities, org_level). A live item belongs to the first shard one of whose entries it
 satisfies, else to the default shard, so every live item has exactly one shard.
 
-The instance of an organization selects its shard with E2E_SHARD (its env file, written by ``otterdog-acceptance setup``); the
-pytest plugin then deselects the live items of the other shards. Offline and unit items are never filtered, an explicit
-scenario selection (--e2e-scenario) is never filtered, and without E2E_SHARD an instance runs every live item.
-``otterdog-acceptance shards`` shows what each shard runs (static_items: the YAML scenarios and the live test modules).
+The instance of an organization selects its shard with E2E_SHARD (its env file, written by
+``otterdog-acceptance setup``); the pytest plugin then deselects the live items of the other shards. Offline and unit
+items are never filtered, an explicit scenario selection (--e2e-scenario) is never filtered, and without E2E_SHARD an
+instance runs every live item. ``otterdog-acceptance shards`` shows what each shard runs (static_items: the YAML
+scenarios and the live test modules).
 """
 
 from __future__ import annotations

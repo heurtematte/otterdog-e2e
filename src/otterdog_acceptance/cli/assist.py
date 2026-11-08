@@ -1,5 +1,5 @@
-"""``otterdog-acceptance assist`` (docs/ai-assistance.md): context bundles and checks of AI-assisted test writing; no AI is
-called, agents read the bundles.
+"""``otterdog-acceptance assist`` (docs/ai-assistance.md): context bundles and checks of AI-assisted test writing; no AI
+is called, agents read the bundles.
 
 pr-context gathers an upstream otterdog PR from anonymous public reads; check validates the files an agent wrote and
 lints its live scenarios offline (the offline suite through run_pytest, like ``run``); triage pre-classifies the
@@ -28,7 +28,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# --- assist: context bundles and checks of AI-assisted test writing (otterdog_acceptance.assist, docs/ai-assistance.md) ----
+# --- assist: context bundles and checks of AI-assisted test writing ---------------------------------------------------
+# (otterdog_acceptance.assist, docs/ai-assistance.md)
 ASSIST_OUT_HELP = "directory receiving the bundle directory (default: <artifacts root>/assist)"
 ASSIST_JSON_HELP = "print the bundle summary as JSON"
 
@@ -105,8 +106,9 @@ def assist_pr_context(number: int, sha: str | None, upstream: str | None, out: P
             f"tags {','.join(summary['suggested_tags'])}"
         ),
         (
-            f"touched coverage features: {summary['touched_features']}; related scenarios: {summary['related_scenarios']}; "
-            f"scenarios referencing #{number}: {', '.join(summary['referencing_scenarios']) or 'none yet'}"
+            f"touched coverage features: {summary['touched_features']}; related scenarios: "
+            f"{summary['related_scenarios']}; scenarios referencing #{number}: "
+            f"{', '.join(summary['referencing_scenarios']) or 'none yet'}"
         ),
         *(f"warning: {warning}" for warning in summary["warnings"]),
     ]

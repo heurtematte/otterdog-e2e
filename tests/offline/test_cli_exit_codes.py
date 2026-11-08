@@ -47,7 +47,8 @@ DESCRIPTION_ERROR = "setting 'description' exceeds maximum allowed length of 160
 SQUASH_ERROR = f"repository[name=\"{REPO}\"] has 'squash_merge_commit_title' of value 'NOPE'"
 SCHEMA_ERROR = "123 is not of type 'boolean'"
 TRACEBACK = "Traceback (most recent call last)"
-# eclipse-csi/otterdog#777 (squash commit on main): schema errors become load errors (exit 1) instead of crashes (exit 2)
+# eclipse-csi/otterdog#777 (squash commit on main): schema errors become load errors (exit 1) instead of crashes
+# (exit 2)
 FIX_777 = "7ffc5e5d8bf8a7db7d2757a3fa40af89dc98e6e3"
 SCHEMA_LOAD_ERROR = "failed to load configuration: invalid value at 'repositories[name="
 FAILED_SUMMARY = "Validation failed: "

@@ -23,9 +23,10 @@ build_summary reads a run directory ``<artifacts_root>/<run_id>/`` (every input 
   requests" section counts the write endpoints the scenario commands sent (reset and base commands excluded) and the
   endpoints of scenarios/api_endpoints.yaml that none sent.
 
-Outside the run directory, the coverage matrix ``scenarios/coverage.yaml`` of the otterdog-acceptance project (E2E_PROJECT_ROOT
-or the nearest project root, see default_coverage_file) gives the "Coverage matrix" section: covered, partial and gap
-shares of otterdog's features, and the features whose covering items (scenario ids, pytest node ids) ran.
+Outside the run directory, the coverage matrix ``scenarios/coverage.yaml`` of the otterdog-acceptance project
+(E2E_PROJECT_ROOT or the nearest project root, see default_coverage_file) gives the "Coverage matrix" section: covered,
+partial and gap shares of otterdog's features, and the features whose covering items (scenario ids, pytest node ids)
+ran.
 """
 
 from __future__ import annotations
@@ -524,8 +525,8 @@ class CoverageMatrix:
 
 
 def default_coverage_file(environ: Mapping[str, str] | None = None) -> Path | None:
-    """scenarios/coverage.yaml of the otterdog-acceptance project: below E2E_PROJECT_ROOT, else below the nearest project
-    root of the working directory or of the installed package; None when there is none."""
+    """scenarios/coverage.yaml of the otterdog-acceptance project: below E2E_PROJECT_ROOT, else below the nearest
+    project root of the working directory or of the installed package; None when there is none."""
     env = os.environ if environ is None else environ
     if env.get("E2E_PROJECT_ROOT"):
         root = Path(env["E2E_PROJECT_ROOT"]).expanduser()
@@ -879,8 +880,8 @@ def _time_rows(run: Mapping[str, Any]) -> list[tuple[str, str]]:
 
 
 def command_line(run: Mapping[str, Any]) -> str | None:
-    """The command of the run: run.json command (the ``otterdog-acceptance run|pr`` command that started pytest), else argv
-    (pytest invocation args get a ``pytest`` prefix)."""
+    """The command of the run: run.json command (the ``otterdog-acceptance run|pr`` command that started pytest), else
+    argv (pytest invocation args get a ``pytest`` prefix)."""
     if isinstance(run.get("command"), str) and run["command"]:
         return str(run["command"])
     argv = run.get("argv")
@@ -1064,9 +1065,9 @@ def section_coverage(data: RunData) -> str:
         statuses = Counter(feature.status for feature, _ in exercised)
         outcomes = Counter(worst_outcome(records) for _, records in exercised)
         summary = (
-            f"This run exercised **{len(exercised)}** of them ({100.0 * len(exercised) / total:.0f}%): the covering items "
-            f"of {statuses['covered']} covered and {statuses['partial']} partial feature(s) ran; worst outcome per "
-            f"feature: {', '.join(f'{outcomes[name]} {name}' for name in OUTCOMES if outcomes[name])}."
+            f"This run exercised **{len(exercised)}** of them ({100.0 * len(exercised) / total:.0f}%): the covering "
+            f"items of {statuses['covered']} covered and {statuses['partial']} partial feature(s) ran; worst outcome "
+            f"per feature: {', '.join(f'{outcomes[name]} {name}' for name in OUTCOMES if outcomes[name])}."
         )
     elif data.records:
         summary = "No covering item of the matrix ran in this run."
@@ -1349,8 +1350,8 @@ def _reproduce_lines(data: RunData) -> list[str]:
     )
     if not data.live:
         prepare = (
-            "Check out otterdog-acceptance (offline tiers only: no GitHub organization or token is needed; docker for the "
-            "webapp contract tests)."
+            "Check out otterdog-acceptance (offline tiers only: no GitHub organization or token is needed; docker for "
+            "the webapp contract tests)."
         )
     steps = [
         prepare,

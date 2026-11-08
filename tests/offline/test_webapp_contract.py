@@ -640,6 +640,7 @@ def test_playground_validation_refuses_malformed_requests(offline_stack: WebappS
     wait_logged(
         offline_stack,
         "rejecting a validation for the global playground by an anonymous user: no evaluated configuration",
-        f"rejecting a validation for the global playground by an anonymous user: larger than {PLAYGROUND_MAX_SIZE} bytes",
+        f"rejecting a validation for the global playground by an anonymous user: larger than "
+        f"{PLAYGROUND_MAX_SIZE} bytes",
         "rejecting a validation for the playground of an unknown project by an anonymous user",
     )

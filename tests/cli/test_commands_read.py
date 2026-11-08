@@ -1,7 +1,8 @@
 """Read-only otterdog commands against the live test org, checked against the independent REST oracle.
 
 cli.show-live: ``show-live -n`` prints the live configuration: the org settings (REST values, no web-only key with
-    ``-n``), every repository and team the oracle lists, the incomplete-config warning (otterdog/operations/show_live.py).
+    ``-n``), every repository and team the oracle lists, the incomplete-config warning
+    (otterdog/operations/show_live.py).
 cli.list-members: ``list-members`` counts the org members, ``--two-factor-disabled`` the members without 2FA and
     reports the 2FA requirement of the LOCAL configuration (two_factor_requirement), not the live one
     (otterdog/operations/list_members.py).
@@ -135,7 +136,7 @@ def baseline_cli(
     return make_cli(workspace)
 
 
-# --- show-live ---------------------------------------------------------------------------------------------------------
+# --- show-live --------------------------------------------------------------------------------------------------------
 @pytest.mark.scenario("cli.show-live", priority="P2")
 @pytest.mark.tags("repo", "teams", "org-settings")
 def test_show_live_prints_the_live_org(
@@ -177,7 +178,7 @@ def test_show_live_prints_the_live_org(
     assert expected_teams <= teams, f"teams missing from show-live: {sorted(expected_teams - teams)}"
 
 
-# --- list-members ------------------------------------------------------------------------------------------------------
+# --- list-members -----------------------------------------------------------------------------------------------------
 @pytest.mark.scenario("cli.list-members", priority="P2")
 @pytest.mark.tags("org-settings")
 def test_list_members_counts_the_members(
@@ -211,7 +212,7 @@ def test_list_members_counts_the_members(
         assert line.group("status") == status, f"two_factor_requirement {requirement}: {line.group(0)!r}"
 
 
-# --- list-apps ---------------------------------------------------------------------------------------------------------
+# --- list-apps --------------------------------------------------------------------------------------------------------
 def installations(e2e: E2EContext, org: str) -> list[dict[str, Any]]:
     """GET /orgs/{org}/installations with the admin token (read-only client)."""
     return list(e2e.http("admin").paginate(f"/orgs/{org}/installations", item_key="installations", per_page=100))
@@ -259,7 +260,7 @@ def test_list_apps_matches_the_installations(
         assert shown(blocks[str(app["app_slug"])].fields.get("app_id")) == app["app_id"], app["app_slug"]
 
 
-# --- list-advisories ---------------------------------------------------------------------------------------------------
+# --- list-advisories --------------------------------------------------------------------------------------------------
 def csv_rows(stdout: str) -> tuple[str, list[dict[str, str]]]:
     """(first non-empty line, rows after it as field -> value) of a list-advisories output; AssertionError for a row
     without the 14 fields."""
@@ -369,7 +370,7 @@ def test_list_advisories_keeps_brackets_of_summaries(live_config: LiveConfig, mu
         mutator.close_security_advisory(repo, ghsa)
 
 
-# --- check-token-permissions -------------------------------------------------------------------------------------------
+# --- check-token-permissions ------------------------------------------------------------------------------------------
 @pytest.mark.scenario("cli.token-scopes", priority="P1")
 def test_check_token_permissions_lists_the_granted_scopes(
     e2e: E2EContext,

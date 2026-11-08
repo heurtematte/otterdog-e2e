@@ -130,7 +130,8 @@ class Capabilities:
 
 
 def from_plan(plan: str, extra: Iterable[Cap | str] = (), remove: Iterable[Cap | str] = ()) -> Capabilities:
-    """Capabilities of ``plan`` per PLAN_MATRIX, plus ``extra``, minus ``remove`` (ValueError for unknown plan/names)."""
+    """Capabilities of ``plan`` per PLAN_MATRIX, plus ``extra``, minus ``remove`` (ValueError for unknown
+    plan/names)."""
     if plan not in PLAN_MATRIX:
         raise ValueError(f"unknown plan {plan!r}, expected one of {PLANS}")
     caps = (PLAN_MATRIX[plan] | {Cap(c) for c in extra}) - {Cap(c) for c in remove}
@@ -154,7 +155,8 @@ def probe_status(http: GitHubHttp, path: str) -> int | str:
 
 
 def environment_caps(identities: Mapping[str, Identity], *, app_ok: bool, docker_ok: bool) -> set[Cap]:
-    """APP, DOCKER, IDENTITY_* for configured identities and SEPARATE_ORACLE when the oracle token is not the admin's."""
+    """APP, DOCKER, IDENTITY_* for configured identities and SEPARATE_ORACLE when the oracle token is not the
+    admin's."""
     caps = {cap for name, cap in IDENTITY_CAPS.items() if name in identities}
     if app_ok:
         caps.add(Cap.APP)

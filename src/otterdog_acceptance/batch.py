@@ -2,8 +2,9 @@
 process per target and the batch summary.
 
 Target lists: ``--target a,b``, a repeated ``--target``, ``@all`` (every instance with an env file
-``~/.config/otterdog-acceptance/<instance>.env``) and ``@<list>`` (the file ``~/.config/otterdog-acceptance/lists/<list>``: one
-instance per line, ``#`` comments). A single target keeps the in-process path of the commands.
+``~/.config/otterdog-acceptance/<instance>.env``) and ``@<list>`` (the file
+``~/.config/otterdog-acceptance/lists/<list>``: one instance per line, ``#`` comments). A single target keeps the
+in-process path of the commands.
 
 Why child processes: the env files of a target fill os.environ without overriding it (settings.load_env_files), so a
 second target in the same process would inherit the org, ids and tokens of the first. The parent therefore never
@@ -110,7 +111,8 @@ def env_file_instances(environ: Mapping[str, str] | None = None, settings: Harne
 
 
 def list_file(name: str, environ: Mapping[str, str] | None = None) -> Path:
-    """``~/.config/otterdog-acceptance/lists/<name>`` of ``@<name>`` (BatchError when the name is not a plain file name)."""
+    """``~/.config/otterdog-acceptance/lists/<name>`` of ``@<name>`` (BatchError when the name is not a plain file
+    name)."""
     from otterdog_acceptance.settings import TARGET_NAME_RE
 
     if not TARGET_NAME_RE.fullmatch(name):
@@ -228,10 +230,11 @@ def env_file_values(target: str, settings: HarnessSettings, environ: Mapping[str
     return values
 
 
-# --- instances (otterdog-acceptance targets) --------------------------------------------------------------------------------
+# --- instances (otterdog-acceptance targets) --------------------------------------------------------------------------
 @dataclass(frozen=True)
 class InstanceInfo:
-    """One target instance as ``otterdog-acceptance targets`` lists it (``problem``: why its target cannot be loaded)."""
+    """One target instance as ``otterdog-acceptance targets`` lists it (``problem``: why its target cannot be
+    loaded)."""
 
     name: str
     profile: str | None
@@ -242,9 +245,9 @@ class InstanceInfo:
 
 
 def list_instances(settings: HarnessSettings, environ: Mapping[str, str] | None = None) -> list[InstanceInfo]:
-    """Instances with an env file (``~/.config/otterdog-acceptance/<instance>.env``) and the profiles of targets/ (each an
-    instance of its own name), sorted: profile, org (of the loaded target, else E2E_ORG) and the first env file found.
-    Read-only: the env files are read into copies of ``environ``."""
+    """Instances with an env file (``~/.config/otterdog-acceptance/<instance>.env``) and the profiles of targets/ (each
+    an instance of its own name), sorted: profile, org (of the loaded target, else E2E_ORG) and the first env file
+    found. Read-only: the env files are read into copies of ``environ``."""
     from otterdog_acceptance.safety import SafetyError
     from otterdog_acceptance.settings import env_file_candidates, load_target, profile_names, resolve_target_ref
 
@@ -532,9 +535,10 @@ class BatchResult:
 
 
 def harness_argv(args: Sequence[str]) -> list[str]:
-    """``python -P -m otterdog_acceptance <args>`` with this interpreter (the child runs this very harness installation):
-    ``-P`` keeps the working directory off sys.path, so an ``otterdog_acceptance`` package in the directory the batch was
-    started from (``src/`` of another checkout) is never imported by a child holding the whole environment."""
+    """``python -P -m otterdog_acceptance <args>`` with this interpreter (the child runs this very harness
+    installation): ``-P`` keeps the working directory off sys.path, so an ``otterdog_acceptance`` package in the
+    directory the batch was started from (``src/`` of another checkout) is never imported by a child holding the whole
+    environment."""
     return [sys.executable, "-P", "-m", "otterdog_acceptance", *args]
 
 

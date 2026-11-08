@@ -152,7 +152,9 @@ def build_manifest(target: Target, *, webhook_url: str, redirect_url: str) -> di
     return {
         "name": app_name(target.org),
         "url": f"{GITHUB_WEB}/{target.org}/{target.configs_repo}",
-        "description": f"otterdog end-to-end tests on the dedicated test organization {target.org} (otterdog-acceptance)",
+        "description": (
+            f"otterdog end-to-end tests on the dedicated test organization {target.org} (otterdog-acceptance)"
+        ),
         "hook_attributes": {"url": check_webhook_url(webhook_url), "active": True},
         "redirect_url": check_redirect_url(redirect_url),
         "public": False,
@@ -269,7 +271,8 @@ def installation_url(slug: str, org_id: int) -> str:
 
 
 def env_snippet(app_id: int, slug: str, pem_path: Path, webhook_secret: str) -> str:
-    """Lines for the target env file (~/.config/otterdog-acceptance/<target>.env), default env names of targets/*.yaml."""
+    """Lines for the target env file (~/.config/otterdog-acceptance/<target>.env), default env names of
+    targets/*.yaml."""
     created = datetime.now(UTC).isoformat(timespec="seconds")
     lines = [
         f"# otterdog-acceptance GitHub App {slug} (id {app_id}), created {created}",

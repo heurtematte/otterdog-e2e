@@ -1,4 +1,5 @@
-"""Host CLI installs (SPEC 10.4) and the image CLI, with procs.run replaced by a recording fake (no poetry, no docker)."""
+"""Host CLI installs (SPEC 10.4) and the image CLI, with procs.run replaced by a recording fake (no poetry, no
+docker)."""
 
 from __future__ import annotations
 

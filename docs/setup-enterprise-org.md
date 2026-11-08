@@ -4,9 +4,9 @@ The profile `enterprise` (`targets/enterprise.yaml`, `expected_plan: enterprise`
 (`tests/enterprise`, `scenarios/enterprise`, scenarios with `min_plan: enterprise`) and every other tier with the
 enterprise capabilities. Every Enterprise Cloud test organization is an **instance** of it: the instance
 `enterprise` (bound to the profile of the same name), or any other name whose env file sets `E2E_PROFILE=enterprise`
-([onboarding.md](onboarding.md#instances-and-profiles)). `otterdog-acceptance setup --target <instance> --profile enterprise`
-onboards it ([onboarding.md](onboarding.md)); [setup-free-org.md](setup-free-org.md) describes the steps by hand:
-accounts, tokens, env file, doctor, bootstrap and the GitHub App work the same way. This page lists what differs.
+([onboarding.md](onboarding.md#instances-and-profiles)). `otterdog-acceptance setup --target <instance> --profile
+enterprise` onboards it ([onboarding.md](onboarding.md)); [setup-free-org.md](setup-free-org.md) describes the steps by
+hand: accounts, tokens, env file, doctor, bootstrap and the GitHub App work the same way. This page lists what differs.
 
 ## Supported
 
@@ -55,8 +55,8 @@ $EDITOR ~/.config/otterdog-acceptance/enterprise.env      # E2E_ORG, E2E_ORG_ID,
 .venv/bin/otterdog-acceptance bootstrap --target enterprise --apply --wait
 ```
 
-Another instance name needs `E2E_PROFILE=enterprise` in its file (`~/.config/otterdog-acceptance/acme-ghec.env`). Several
-Enterprise Cloud organizations are several instances of the same profile; their per-instance differences live in
+Another instance name needs `E2E_PROFILE=enterprise` in its file (`~/.config/otterdog-acceptance/acme-ghec.env`).
+Several Enterprise Cloud organizations are several instances of the same profile; their per-instance differences live in
 their env files (below), never in `targets/enterprise.yaml`.
 
 - The accounts of both instances, their email aliases and names:
@@ -87,8 +87,8 @@ their env files (below), never in `targets/enterprise.yaml`.
     See [capability-matrix.md](capability-matrix.md).
 
 - One GitHub App per test organization: `setup` creates it for each instance, or
-  `app-manifest --target <instance> --webhook-url ...` (the credentials go to `~/.config/otterdog-acceptance/<instance>/`,
-  here `~/.config/otterdog-acceptance/enterprise/`).
+  `app-manifest --target <instance> --webhook-url ...` (the credentials go to
+  `~/.config/otterdog-acceptance/<instance>/`, here `~/.config/otterdog-acceptance/enterprise/`).
 
 ## SAML single sign-on
 

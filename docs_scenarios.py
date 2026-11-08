@@ -239,7 +239,7 @@ QUOTED_ID_RE = re.compile(r"""["'](?P<id>[A-Za-z0-9][A-Za-z0-9_.-]*)(?:/[A-Za-z0
 SHORT_TITLE_RE = re.compile(r"\s*\([^()]*\)\s*$")
 
 
-# --- sources -----------------------------------------------------------------------------------------------------------
+# --- sources ----------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True)
 class Scenario:
     """One YAML scenario file."""
@@ -707,7 +707,7 @@ def load_site(root: Path, repo_url: str, slugify: Slugify) -> Site:
     return site
 
 
-# --- Markdown ------------------------------------------------------------------------------------------------------------
+# --- Markdown ---------------------------------------------------------------------------------------------------------
 def code(text: str) -> str:
     """An inline code span showing ``text`` verbatim (line breaks as ``\\n``)."""
     text = text.replace("\n", "\\n")
@@ -930,7 +930,7 @@ def scenario_notes(scenario: Scenario, release: str) -> list[str]:
     return notes
 
 
-# --- scenario pages -----------------------------------------------------------------------------------------------------
+# --- scenario pages ---------------------------------------------------------------------------------------------------
 def scenario_page(site: Site, scenario: Scenario) -> str:
     """The page of one YAML scenario."""
     w = Writer(site, scenario.uri)
@@ -1014,8 +1014,9 @@ def _known_bug_admonition(w: Writer, kb_id: str, scope: str, phases: Sequence[st
         f'!!! bug "Known bug {kb_id}"',
         "",
         (
-            f"    {w.kb_link(kb_id)}: {w.inline(title)} ({escape(status)}{escape(fixed)}). The failures of {scope}{where} "
-            "are expected while the bug affects the SUT; a SUT without the bug reports an unexpected pass."
+            f"    {w.kb_link(kb_id)}: {w.inline(title)} ({escape(status)}{escape(fixed)}). The failures of "
+            f"{scope}{where} are expected while the bug affects the SUT; a SUT without the bug reports an "
+            "unexpected pass."
         ),
         "",
     ]
@@ -1101,8 +1102,8 @@ def _known_bugs_section(w: Writer, scenario: Scenario) -> list[str]:
         fixed = str(bug.get("fixed_in") or "")
         upstream = f" ({w.inline(str(bug['upstream']))})" if bug.get("upstream") else ""
         out.append(
-            f"| {w.kb_link(kb)} | {cell(w.inline(str(bug.get('title') or '')))} | {escape(str(bug.get('status') or ''))} "
-            f"| {cell(escape(fixed) + upstream)} | {cell(where)} |"
+            f"| {w.kb_link(kb)} | {cell(w.inline(str(bug.get('title') or '')))} | "
+            f"{escape(str(bug.get('status') or ''))} | {cell(escape(fixed) + upstream)} | {cell(where)} |"
         )
     return [*out, ""]
 
@@ -1212,14 +1213,16 @@ def _steps(w: Writer, scenario: Scenario) -> list[str]:
         )
     else:
         out.append(
-            "Steps run in order on the target organization; the configuration of a step is the baseline plus **its own** "
-            "fragments only, so an object a step does not repeat is removed (and deleted by a step applying with `-d`)."
+            "Steps run in order on the target organization; the configuration of a step is the baseline plus **its "
+            "own** fragments only, so an object a step does not repeat is removed (and deleted by a step "
+            "applying with `-d`)."
         )
     out += [
         "",
         (
-            f"In strings, `{{{{ p }}}}` is the run prefix (`e2e-<run>`, offline `e2e-spduo000`), `{{{{ P }}}}` its upper-case "
-            f"form, `{{{{ hook_base }}}}` the run's webhook URL base ([Template variables]({w.rel(WRITING)}#template-variables))."
+            f"In strings, `{{{{ p }}}}` is the run prefix (`e2e-<run>`, offline `e2e-spduo000`), `{{{{ P }}}}` its "
+            f"upper-case form, `{{{{ hook_base }}}}` the run's webhook URL base "
+            f"([Template variables]({w.rel(WRITING)}#template-variables))."
         ),
         "",
     ]
@@ -1302,7 +1305,10 @@ def _configuration(w: Writer, scenario: Scenario, step: Mapping[str, Any]) -> li
             out += [*_fragments_block(w, scenario, step["base_fragments"], files), ""]
         else:
             out += [
-                "**BASE configuration** (`-BASE`, the current state `local-plan` compares with): the bare organization.",
+                (
+                    "**BASE configuration** (`-BASE`, the current state `local-plan` compares with): "
+                    "the bare organization."
+                ),
                 "",
             ]
     if files:
@@ -1504,7 +1510,7 @@ def _code_section(w: Writer, scenario: Scenario) -> list[str]:
     return [*out, ""]
 
 
-# --- overview pages ------------------------------------------------------------------------------------------------------
+# --- overview pages ---------------------------------------------------------------------------------------------------
 FILTER_MARKER = '<div class="e2e-filter" data-columns="{columns}"></div>'
 # front matter of the overview pages: their tables get the width of the table of contents
 WIDE = ["---", "hide:", "  - toc", "---", ""]
@@ -1593,17 +1599,17 @@ def explorer_index(site: Site) -> str:
         "A scenario page shows:",
         "",
         (
-            "- **what it tests** and its **context**: tier and what it needs, otterdog releases (`fixed_in`), GitHub plan, "
-            "capabilities, the otterdog pull requests behind the behaviour, known otterdog bugs and the features of the "
-            f"[coverage matrix]({w.rel(COVERAGE_MATRIX)}) it covers, with links to their otterdog sources;"
+            "- **what it tests** and its **context**: tier and what it needs, otterdog releases (`fixed_in`), GitHub "
+            "plan, capabilities, the otterdog pull requests behind the behaviour, known otterdog bugs and the features "
+            f"of the [coverage matrix]({w.rel(COVERAGE_MATRIX)}) it covers, with links to their otterdog sources;"
         ),
         (
-            "- **every step**: the jsonnet it adds to the configuration, the otterdog commands it runs, what it expects of "
-            "their outputs and of the GitHub state;"
+            "- **every step**: the jsonnet it adds to the configuration, the otterdog commands it runs, what it "
+            "expects of their outputs and of the GitHub state;"
         ),
         (
-            "- **the code**: the Python code that adjusts it, its runner and engine, and its YAML source (the pencil button "
-            "edits it on GitHub);"
+            "- **the code**: the Python code that adjusts it, its runner and engine, and its YAML source (the pencil "
+            "button edits it on GitHub);"
         ),
         "- **how to run it** with `make one`.",
         "",
@@ -1639,8 +1645,8 @@ def explorer_index(site: Site) -> str:
         "## All scenarios",
         "",
         (
-            "Type to filter (every word must match: id, title, tag, bug, version...), pick values in the lists, click a "
-            "column header to sort."
+            "Type to filter (every word must match: id, title, tag, bug, version...), pick values in the lists, click "
+            "a column header to sort."
         ),
         "",
     ]
@@ -1678,7 +1684,7 @@ def tier_index(site: Site, tier: Tier) -> str:
     return "\n".join(out)
 
 
-# --- Python test pages ----------------------------------------------------------------------------------------------------
+# --- Python test pages ------------------------------------------------------------------------------------------------
 def module_page(site: Site, module: PythonModule) -> str:
     """The page of one Python test module."""
     w = Writer(site, module.uri)
@@ -1762,8 +1768,8 @@ def python_index(site: Site) -> str:
         "# Python tests",
         "",
         (
-            "The tests written in Python (the tiers YAML cannot express: CLI behaviour, the webapp, webhooks, the web UI, "
-            "differential runs), one page per module with the docstring, marks and source of every test. "
+            "The tests written in Python (the tiers YAML cannot express: CLI behaviour, the webapp, webhooks, the web "
+            "UI, differential runs), one page per module with the docstring, marks and source of every test. "
             f"See [Python tests]({w.rel(WRITING)}#python-tests) for how they are written."
         ),
         "",
@@ -1795,8 +1801,8 @@ def python_index(site: Site) -> str:
     return "\n".join([*out, ""])
 
 
-# --- site --------------------------------------------------------------------------------------------------------------
-# --- tag pages -------------------------------------------------------------------------------------------------------------
+# --- site -------------------------------------------------------------------------------------------------------------
+# --- tag pages --------------------------------------------------------------------------------------------------------
 def tags_of(site: Site) -> dict[str, tuple[list[Scenario], list[tuple[PythonModule, PythonTest]]]]:
     """Every tag of the YAML scenarios and of the Python tests, sorted, with what carries it."""
     tags: dict[str, tuple[list[Scenario], list[tuple[PythonModule, PythonTest]]]] = {}

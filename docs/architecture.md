@@ -1,13 +1,14 @@
 # Architecture
 
-Otterdog Acceptance is a Python package (`src/otterdog_acceptance`) with two entry points that share one composition root:
+Otterdog Acceptance is a Python package (`src/otterdog_acceptance`) with two entry points that share one composition
+root:
 
-- the `otterdog-acceptance` command line (the `cli/` package, click; also `python -m otterdog_acceptance`), for operations
-  (doctor, bootstrap, janitor, relay, reports, the onboarding commands `setup` and `ci-sync`) and for starting test
-  sessions (`run`, `pr`, which call `pytest.main` in-process for one target, and start one child process per target
-  for several); `cli/common.py` holds the click group and the helpers every command shares, and each command family
-  has its module (`doctor`, `bootstrap`, `sut`, `run`, `ops`, `maintenance`, `app_manifest`, `inject`, `onboarding`,
-  `assist`, `completion`);
+- the `otterdog-acceptance` command line (the `cli/` package, click; also `python -m otterdog_acceptance`), for
+  operations (doctor, bootstrap, janitor, relay, reports, the onboarding commands `setup` and `ci-sync`) and for
+  starting test sessions (`run`, `pr`, which call `pytest.main` in-process for one target, and start one child process
+  per target for several); `cli/common.py` holds the click group and the helpers every command shares, and each command
+  family has its module (`doctor`, `bootstrap`, `sut`, `run`, `ops`, `maintenance`, `app_manifest`, `inject`,
+  `onboarding`, `assist`, `completion`);
 - a pytest plugin (`pytest_plugin.py`, registered through the `pytest11` entry point), which turns tiers, scenario
   YAML files and markers into test items, gates them and reports them.
 
@@ -172,9 +173,9 @@ A live item belongs to the first shard one of whose `match` entries it satisfies
 plan, required capabilities, `org_level`), else to the default shard, so it has exactly one; `tests/unit/test_shards.py`
 checks that no item lands on a shard whose plan lacks what it requires. Offline and unit items are never filtered, an
 explicit scenario selection (`--e2e-scenario`) runs on any instance, and an instance without `E2E_SHARD` runs every
-live item. `otterdog-acceptance shards` shows the share of each (scenarios, steps, test functions) and the instances that
-select it; `run --target <the five instances> --parallel 5` runs them at once, and CI does the same with its matrix of
-instances (`E2E_INSTANCES`). The organizations share one set of machine accounts, an organization keeping its own
+live item. `otterdog-acceptance shards` shows the share of each (scenarios, steps, test functions) and the instances
+that select it; `run --target <the five instances> --parallel 5` runs them at once, and CI does the same with its matrix
+of instances (`E2E_INSTANCES`). The organizations share one set of machine accounts, an organization keeping its own
 when `set:` of the accounts store says so ([onboarding](onboarding.md#the-organizations-of-the-shards)).
 
 ## A live session

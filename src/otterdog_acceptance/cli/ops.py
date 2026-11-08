@@ -1,4 +1,5 @@
-"""``otterdog-acceptance relay`` and ``otterdog-acceptance janitor`` (SPEC 16): operations on a live test org, under its lease.
+"""``otterdog-acceptance relay`` and ``otterdog-acceptance janitor`` (SPEC 16): operations on a live test org, under its
+lease.
 
 relay forwards the App's webhook deliveries to a local webapp until Ctrl-C (poll errors are logged and retried);
 janitor lists, and with --apply deletes, the leftovers of finished or crashed runs (ledger runs without an active

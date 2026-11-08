@@ -1,8 +1,8 @@
 # YAML scenario essentials
 
 A condensed view of `docs/writing-scenarios.md`, which stays the reference (every key, every loading rule). The
-loader (`src/otterdog_acceptance/scenarios/model.py`) refuses unknown keys, wrong types and every rule broken below, with
-the file and the place in the message: `otterdog-acceptance assist check` shows those messages.
+loader (`src/otterdog_acceptance/scenarios/model.py`) refuses unknown keys, wrong types and every rule broken below,
+with the file and the place in the message: `otterdog-acceptance assist check` shows those messages.
 
 ## Offline skeleton
 
@@ -115,10 +115,11 @@ fragment must not end with a `//` or `#` comment (the renderer appends a comma).
 
 ## State checks (live)
 
-`{kind: <kind>, <parameters>, <one form>}`, kinds in `otterdog_acceptance.scenarios.checks.CHECK_KINDS` and in the tables of
-`docs/writing-scenarios.md` ("State checks"). Forms: `match: {...}` (subset), `absent: true|false`, `equals: <value>`,
-`contains: [...]`, `unavailable: true`; operators `{$regex}`, `{$exists}`, `{$unordered}`, `{$len}` inside values. An
-`absent: true` answered by an unavailable listing fails (add `unavailable_ok: true` when that is acceptable).
+`{kind: <kind>, <parameters>, <one form>}`, kinds in `otterdog_acceptance.scenarios.checks.CHECK_KINDS` and in the
+tables of `docs/writing-scenarios.md` ("State checks"). Forms: `match: {...}` (subset), `absent: true|false`,
+`equals: <value>`, `contains: [...]`, `unavailable: true`; operators `{$regex}`, `{$exists}`, `{$unordered}`, `{$len}`
+inside values. An `absent: true` answered by an unavailable listing fails (add `unavailable_ok: true` when that is
+acceptable).
 
 ## Template variables
 

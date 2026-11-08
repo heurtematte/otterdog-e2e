@@ -52,9 +52,9 @@ with `--base-sut auto` and report that no delta was expected.
 
 ## Selecting a change
 
-`otterdog-acceptance run --change <n|#n|slug>` (pytest `--e2e-change`, `E2E_CHANGE`); default: N of a `pr:N@<sha>` SUT, and
-`otterdog-acceptance pr N` uses N. The scenarios referencing the change pass the `--tags` filter, their expected deltas feed
-`differential.md`, their `base` is the default `--base-sut` and their `template` picks the templates.
+`otterdog-acceptance run --change <n|#n|slug>` (pytest `--e2e-change`, `E2E_CHANGE`); default: N of a `pr:N@<sha>` SUT,
+and `otterdog-acceptance pr N` uses N. The scenarios referencing the change pass the `--tags` filter, their expected
+deltas feed `differential.md`, their `base` is the default `--base-sut` and their `template` picks the templates.
 
 ## Expected deltas
 
@@ -88,8 +88,8 @@ under the run directory (`base/`, `head/`).
 
 ## Reproducing a delta by hand
 
-The scenario and its rendered configuration are in the artifacts (`.../workspace/`); `otterdog-acceptance inject` re-runs
-jsonnet against a SUT offline, for example with the base:
+The scenario and its rendered configuration are in the artifacts (`.../workspace/`); `otterdog-acceptance inject`
+re-runs jsonnet against a SUT offline, for example with the base:
 
 ```bash
 .venv/bin/otterdog-acceptance inject --sut sha:b5f7bb1c79ad29cdcde8506f5fa7ec4c070ffda8 \

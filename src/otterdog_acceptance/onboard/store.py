@@ -1,7 +1,7 @@
 """The reference layout of the secrets of an instance in a secret store (docs/security.md, "Reference layout").
 
-``otterdog-acceptance setup --store <provider>:<prefix>`` (provider ``vault`` or ``pass``, stored as E2E_SECRET_STORE in the
-instance env file) keeps every secret of instance ``<i>`` at ``<prefix>/<i>/<item>/<field>`` (LAYOUT):
+``otterdog-acceptance setup --store <provider>:<prefix>`` (provider ``vault`` or ``pass``, stored as E2E_SECRET_STORE in
+the instance env file) keeps every secret of instance ``<i>`` at ``<prefix>/<i>/<item>/<field>`` (LAYOUT):
 
 * one item per role, field ``token``: ``admin``, ``oracle``, ``author``, ``approver``, ``outsider``, ``config_reader``;
 * ``web``: the admin's web login, fields ``password`` and ``totp_seed``;

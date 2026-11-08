@@ -30,11 +30,12 @@ environment read in their steps and env (.github/workflows/*.yml), always plus E
 skipped and listed. A secret kept as a vault reference (vaults.py) is stored as the reference when the jobs of the
 environment can read Vault themselves (a ``vault:`` reference, E2E_VAULT_ROLE for that environment: E2E_VAULT_ROLE,
 overridden by E2E_VAULT_ROLE_UNTRUSTED / E2E_VAULT_ROLE_WEBUI, and E2E_VAULT_ADDR), else resolved here with the
-operator's own vault access and stored as the value (``pass:`` and ``bitwarden:`` always: CI has no such vault). Repository variables last: E2E_INSTANCES (JSON list of the dispatchable instances) gains the
-instance, and with --nightly E2E_TARGETS too (created from the nightly/janitor default ``["free"]`` plus the instance
-when absent). The workflows' allowlist is E2E_INSTANCES, else E2E_TARGETS, else the default instances: while
-E2E_INSTANCES is absent it is created from that OLD allowlist plus the instance whenever the instance is not in it or
-E2E_TARGETS changes (and before E2E_TARGETS), so the allowlist never loses an instance.
+operator's own vault access and stored as the value (``pass:`` and ``bitwarden:`` always: CI has no such vault).
+Repository variables last: E2E_INSTANCES (JSON list of the dispatchable instances) gains the instance, and with
+--nightly E2E_TARGETS too (created from the nightly/janitor default ``["free"]`` plus the instance when absent). The
+workflows' allowlist is E2E_INSTANCES, else E2E_TARGETS, else the default instances: while E2E_INSTANCES is absent it is
+created from that OLD allowlist plus the instance whenever the instance is not in it or E2E_TARGETS changes (and before
+E2E_TARGETS), so the allowlist never loses an instance.
 
 Dry run by default: the operations are printed with names, never values (the reads still run: repository, gh user,
 reviewers, current repository variables, deployment branch policies); --apply runs them in order and stops at the
@@ -337,7 +338,8 @@ class CiSync:
         }
         if login.lower() in machine:
             raise CiSyncError(
-                f"gh is logged in as {login}, a machine account of {self.instance}: use your own account (gh auth login)"
+                f"gh is logged in as {login}, a machine account of {self.instance}: use your own "
+                f"account (gh auth login)"
             )
         return dict(user or {})
 

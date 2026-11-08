@@ -1,5 +1,5 @@
-"""Unit tests of otterdog_acceptance.changes: scenario references to otterdog PRs and named changes, change identifiers, the
-references of YAML scenarios and Python tests, conflicts and the ChangeSpec of a differential run."""
+"""Unit tests of otterdog_acceptance.changes: scenario references to otterdog PRs and named changes, change identifiers,
+the references of YAML scenarios and Python tests, conflicts and the ChangeSpec of a differential run."""
 
 from __future__ import annotations
 

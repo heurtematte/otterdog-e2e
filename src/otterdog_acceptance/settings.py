@@ -80,7 +80,8 @@ TARGET_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
 INSTANCE_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,38}$")
 # the CI environments of an instance are e2e-<instance>, e2e-<instance>-untrusted and e2e-<instance>-webui
 RESERVED_INSTANCE_SUFFIXES = ("-untrusted", "-webui")
-# ~/.config/otterdog-acceptance/<instance>/ holds the App credentials of an instance: lists/ holds the target lists (@<list>)
+# ~/.config/otterdog-acceptance/<instance>/ holds the App credentials of an instance: lists/ holds the target lists
+# (@<list>)
 RESERVED_INSTANCE_NAMES = ("lists",)
 PROFILE_ENV = "E2E_PROFILE"  # profile (targets/<profile>.yaml) of an instance: its env file or CI environment
 TARGET_FILE_SUFFIXES = (".yaml", ".yml")
@@ -212,7 +213,8 @@ def _search_upwards(start: Path) -> Path | None:
 
 
 def find_project_root(start: Path | None = None) -> Path:
-    """Nearest directory (from ``start`` or cwd upwards) whose pyproject.toml has [project].name == "otterdog-acceptance".
+    """Nearest directory (from ``start`` or cwd upwards) whose pyproject.toml has [project].name ==
+    "otterdog-acceptance".
 
     Without ``start``, the package location is searched too (editable installs run from another cwd).
     """
@@ -279,7 +281,10 @@ def _invalid_target_name(name: str) -> TargetError:
     """TargetError for a malformed target name (a list of targets gets a hint: one session per target)."""
     hint = ""
     if "," in name or name.startswith("@"):
-        hint = "; a list of targets (a,b / @all / @<list>) is only accepted by otterdog-acceptance run, pr, doctor and janitor"
+        hint = (
+            "; a list of targets (a,b / @all / @<list>) is only accepted by otterdog-acceptance run, "
+            "pr, doctor and janitor"
+        )
     return TargetError(f"invalid target name {name!r} (expected {TARGET_NAME_RE.pattern}){hint}")
 
 
@@ -293,7 +298,8 @@ def target_env_name(target: str) -> str:
 
 
 def env_file_candidates(target: str | None, project_root: Path, environ: Mapping[str, str]) -> list[Path]:
-    """Env files in precedence order: ~/.config/otterdog-acceptance/<target>.env, <root>/.env.e2e.<target>, <root>/.env.e2e."""
+    """Env files in precedence order: ~/.config/otterdog-acceptance/<target>.env, <root>/.env.e2e.<target>,
+    <root>/.env.e2e."""
     candidates = []
     if target:
         name = target_env_name(target)
@@ -425,7 +431,8 @@ class IdentitySpec:
     """Declared identity of a target: public login and the NAME of the env var holding its token.
 
     The admin identity may also name the variables of its web-UI login (``username_env``, ``password_env``,
-    ``totp_seed_env``; None = the DEFAULT_WEB_ENV names). ``token_type`` is the declared kind of its token (TOKEN_TYPES).
+    ``totp_seed_env``; None = the DEFAULT_WEB_ENV names). ``token_type`` is the declared kind of its token
+    (TOKEN_TYPES).
     """
 
     name: str

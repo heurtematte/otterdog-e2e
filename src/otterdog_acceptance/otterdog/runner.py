@@ -3,9 +3,10 @@
 Each command runs in a fresh private dir ``scratch/cli/<seq>-<command>`` whose ``.cache/async_http`` is a symlink to
 the per-SUT/identity HTTP cache (5.7; live caches stay in the run's scratch: they hold the token, see
 http_cache_dir); redacted cmd/stdout/stderr/exit_code copies go to ``artifacts_dir/cli/``.
-Live commands always use ``-n`` (no web UI) and never more than ``-v``. They also get ``OTTERDOG_STATS_FILE=api-usage.json``
-(relative to their cwd): otterdog >= 1.7.0 writes there the requests it sent per endpoint, kept as
-``CliResult.api_usage`` and, parsed, as ``api-usage.json`` next to the command's artifacts (api_usage.py).
+Live commands always use ``-n`` (no web UI) and never more than ``-v``. They also get
+``OTTERDOG_STATS_FILE=api-usage.json`` (relative to their cwd): otterdog >= 1.7.0 writes there the requests it sent per
+endpoint, kept as ``CliResult.api_usage`` and, parsed, as ``api-usage.json`` next to the command's artifacts
+(api_usage.py).
 
 Flags (verified against otterdog/cli.py): ``-c`` is a per-command option (``--version`` is a group option and rejects
 it), ``list-projects`` takes no organization, ``plan``/``apply``/``import``/``check-status`` use ``-n`` = --no-web-ui
@@ -200,7 +201,8 @@ class CliResult:
         return parse_validation(self.output)
 
     def assert_ok(self, what: str = "") -> CliResult:
-        """Return self when the command exited 0 in time without infra error, else AssertionError with a redacted tail."""
+        """Return self when the command exited 0 in time without infra error, else AssertionError with a redacted
+        tail."""
         if self.exit_code == 0 and not self.timed_out and self.infra_error is None:
             return self
         tail = "\n".join(self.output.splitlines()[-TAIL_LINES:])
@@ -668,7 +670,8 @@ class OtterdogCli:
         return credentials_env(self.identity)
 
     def _web_env(self, web: bool) -> dict[str, str]:
-        """PLAYWRIGHT_BROWSERS_PATH for web commands (the browsers installed by cli_install.ensure_playwright_firefox)."""
+        """PLAYWRIGHT_BROWSERS_PATH for web commands (the browsers installed by
+        cli_install.ensure_playwright_firefox)."""
         if not web or self._web is None:
             return {}
         return {PLAYWRIGHT_BROWSERS_ENV: str(self._web.browsers_path)}

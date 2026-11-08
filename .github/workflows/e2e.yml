@@ -5,14 +5,15 @@
 #   variable E2E_PROFILE names its profile targets/<profile>.yaml (default: the instance name, so `free`, `team` and
 #   `enterprise` keep working without it). Dispatchable instances: the repository variable E2E_INSTANCES (JSON list),
 #   else E2E_TARGETS, else ["free", "team", "enterprise"].
-# classify (no secrets): validates the inputs (instance names, the allowlist) and runs `otterdog-acceptance sut classify`
-#   (trust + normalized specs; for an untrusted SUT the PR title, author, head repo, sha and risky changed files go to
-#   the step summary for the reviewer); outputs the instances as a JSON list.
+# classify (no secrets): validates the inputs (instance names, the allowlist) and runs
+#   `otterdog-acceptance sut classify` (trust + normalized specs; for an untrusted SUT the PR title, author, head repo,
+#   sha and risky changed files go to the step summary for the reviewer); outputs the instances as a JSON list.
 # e2e: one job per instance (matrix, fail-fast off) in the environment `e2e-<instance>` (trusted SUTs: no reviewers,
 #   main only) or `e2e-<instance>-untrusted` (required reviewers, prevent self-review, main only). GitHub creates a
 #   missing environment on the fly, unprotected: the instance check fails the job before any SUT code runs when the
 #   environment does not hold the instance's configuration. Secrets are mapped on the harness steps only; the final
-#   janitor step sweeps exactly this run; artifacts are uploaded only after `otterdog-acceptance scrub-artifacts` succeeded.
+#   janitor step sweeps exactly this run; artifacts are uploaded only after `otterdog-acceptance scrub-artifacts`
+#   succeeded.
 #
 # Values never reach `run:` scripts as `${{ }}` expressions: they are passed through `env:` and always quoted.
 name: e2e

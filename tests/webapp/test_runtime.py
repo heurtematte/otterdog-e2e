@@ -1,5 +1,5 @@
-"""Webapp runtime (coverage area ``webapp-runtime``, live items): team configuration, /internal/init imports, /api/projects
-and the pages of a project.
+"""Webapp runtime (coverage area ``webapp-runtime``, live items): team configuration, /internal/init imports,
+/api/projects and the pages of a project.
 
 Facts verified in otterdog main 9bdeb75 (identical in v1.6.1):
 

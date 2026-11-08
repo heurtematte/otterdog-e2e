@@ -292,7 +292,8 @@ jobs:
         run: |
           set -euo pipefail
           # tests/web_ui only: the cli suite is collected for its scenario ids, none of which matches webui.*
-          .venv/bin/otterdog-acceptance run --target "$TARGET" --sut "$SUT" --suite cli --scenario 'webui.*' tests/web_ui
+          .venv/bin/otterdog-acceptance run --target "$TARGET" --sut "$SUT" --suite cli --scenario 'webui.*' \
+            tests/web_ui
       - name: Locate the run artifacts
         if: always()
         env:

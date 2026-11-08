@@ -103,7 +103,8 @@ def _write_sentinel(path: Path) -> None:
 
 
 def ensure_poetry_tool(settings: HarnessSettings) -> Path:
-    """Private poetry venv cache_dir/tools/poetry-<POETRY_VERSION> with poetry-dynamic-versioning; returns its poetry."""
+    """Private poetry venv cache_dir/tools/poetry-<POETRY_VERSION> with poetry-dynamic-versioning; returns its
+    poetry."""
     tools = settings.cache_dir / "tools"
     tools.mkdir(mode=0o700, parents=True, exist_ok=True)
     venv = tools / f"poetry-{POETRY_VERSION}"

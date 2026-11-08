@@ -3,12 +3,13 @@
 REAL output of otterdog **1.7.0.dev19** (the offline CLI of the research notes,
 `notes/deploy-runtime/venv-local/bin/otterdog`), captured OFFLINE: every command ran inside
 `unshare -rn` (new user + network namespace, no network at all) with the dummy token of the offline tier.
-They are the ground truth of `otterdog_acceptance/otterdog/output.py` and its tests (`tests/unit/test_otterdog_output.py`).
+They are the ground truth of `otterdog_acceptance/otterdog/output.py` and its tests
+(`tests/unit/test_otterdog_output.py`).
 
 ## How they were captured
 
-* One workspace per case, written with `ConfigWorkspace` (`otterdog_acceptance/otterdog/workspace.py`): `otterdog.json` with
-  `defaults.base_url = https://otterdog.invalid`, `defaults.jsonnet.base_template =
+* One workspace per case, written with `ConfigWorkspace` (`otterdog_acceptance/otterdog/workspace.py`): `otterdog.json`
+  with `defaults.base_url = https://otterdog.invalid`, `defaults.jsonnet.base_template =
   https://github.com/e2e-offline/template#otterdog-defaults.libsonnet@offline` (`sut.template.offline_template()`),
   `config_dir = orgs`, `github.config_repo = .otterdog`, and one organization `e2e-test-org` with the `env` credential
   provider (`E2E_OTTERDOG_API_TOKEN`, `E2E_OTTERDOG_USERNAME`, `E2E_OTTERDOG_PASSWORD`, `E2E_OTTERDOG_TOTP_SEED`).

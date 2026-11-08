@@ -37,8 +37,8 @@ outlines as the YAML.
 6. **Update the coverage matrix** (section 7) and run `make check` and `make offline`.
 7. **Submit** with the checklist of section 9.
 
-`otterdog-acceptance assist coverage` lists the gap and partial features with their outlines, and the `fill-coverage-gap`
-skill follows these steps with an AI agent, under the same gates and your review
+`otterdog-acceptance assist coverage` lists the gap and partial features with their outlines, and the
+`fill-coverage-gap` skill follows these steps with an AI agent, under the same gates and your review
 ([ai-assistance.md](ai-assistance.md)).
 
 ## 2. Conventions
@@ -327,8 +327,8 @@ again until the run's objects converge; the cleanup is a guarded `apply -d` (or 
   workflow permissions, allowed actions): set the org setting in the same step.
 - **Plan-gated features**: `requires: [<cap>]` skips without the capability, `min_plan: team|enterprise` skips below
   the plan, `expect_failure_without: [<cap>]` + `on_missing_capability` asserts how otterdog or GitHub refuses it.
-  Capabilities: `otterdog_acceptance.capabilities.Cap` ([capability-matrix.md](capability-matrix.md)); `actions_cache_limit`
-  means "otterdog can manage the cache limit here" (KB-006: never on the documented API alone).
+  Capabilities: `otterdog_acceptance.capabilities.Cap` ([capability-matrix.md](capability-matrix.md));
+  `actions_cache_limit` means "otterdog can manage the cache limit here" (KB-006: never on the documented API alone).
 - **Identities** (`identities: [author, approver, outsider, config_reader]`) for logins in fragments
   (`{{ logins.author }}`), e.g. team members; a missing identity skips.
 - **App-bound settings**: `{{ app_slug }}` (BPR status checks `'<slug>:<context>'`) and `{{ app_id }}` (ruleset
@@ -607,8 +607,8 @@ SUT predates; a mismatch in a step whose own `known_bug` the SUT has, or in a sc
 failure.
 
 **Rule: a live scenario is submitted only once it passes the lint** (`make lint-scenarios`, i.e.
-`otterdog-acceptance run --suite offline -k lint`, with `SUT=branch:main` too for scenarios of unreleased fixes). The lint
-runs in every `make offline` and in CI, so a broken scenario fails the offline tier of everybody, before any live
+`otterdog-acceptance run --suite offline -k lint`, with `SUT=branch:main` too for scenarios of unreleased fixes). The
+lint runs in every `make offline` and in CI, so a broken scenario fails the offline tier of everybody, before any live
 run. `make inject ARGS='--fragment repositories=<file> --print'` (`otterdog-acceptance inject`) tries jsonnet before it
 becomes a scenario.
 

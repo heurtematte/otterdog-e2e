@@ -245,7 +245,8 @@ class _StubPublisher:
 
 
 @pytest.mark.parametrize(("raw", "published"), [("release:latest", False), ("v1.6.1", False), ("main", False),
-                                                 (f"pr:1@{SHA}", True), ("sha:a07ce8a", True), ("dirty:/x", True)])  # fmt: skip
+                                                 (f"pr:1@{SHA}", True), ("sha:a07ce8a", True),
+                                                 ("dirty:/x", True)])  # fmt: skip
 def test_resolve_template_auto(tmp_path: Path, raw: str, published: bool) -> None:
     """auto: upstream for release/tag/branch, publish otherwise."""
     publisher = _StubPublisher()

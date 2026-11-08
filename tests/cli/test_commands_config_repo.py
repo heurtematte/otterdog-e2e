@@ -81,7 +81,7 @@ def invalid(baseline: BaselineManager, name: str) -> str:
     return baseline.renderer.render(ConfigFragments(repositories=[snippet]))
 
 
-# --- fetch-config ------------------------------------------------------------------------------------------------------
+# --- fetch-config -----------------------------------------------------------------------------------------------------
 @pytest.mark.scenario("cli.fetch-config.variants", priority="P0")
 def test_fetch_config_from_a_pull_request_and_a_ref(
     config_repo: ConfigRepo,
@@ -168,7 +168,7 @@ def test_fetch_config_names_the_ref(
     assert "fetched from default branch" not in text, f"fetch-config -r {branch} reported the default branch"
 
 
-# --- push-config -------------------------------------------------------------------------------------------------------
+# --- push-config ------------------------------------------------------------------------------------------------------
 @pytest.mark.scenario("cli.push-config.variants", priority="P0")
 def test_push_config_shows_the_diff_and_asks(
     config_repo: ConfigRepo,
@@ -303,7 +303,7 @@ def test_push_config_to_a_repository_without_definition(
     assert live_config.wait_file(repo, path, baseline.text()) == baseline.text(), "the definition was not created"
 
 
-# --- open-pr -----------------------------------------------------------------------------------------------------------
+# --- open-pr ----------------------------------------------------------------------------------------------------------
 def no_branch(config_repo: ConfigRepo, oracle: Oracle, branch: str) -> bool:
     """True when ``otterdog/<branch>`` does not exist and no open pull request comes from it."""
     head = f"otterdog/{branch}"
@@ -388,7 +388,7 @@ def test_open_pr_title_and_body(
     assert (pull.get("head") or {}).get("ref") == f"otterdog/{branch}", pull.get("head")
 
 
-# --- a config repository that does not exist ---------------------------------------------------------------------------
+# --- a config repository that does not exist --------------------------------------------------------------------------
 @pytest.mark.scenario("cli.config-repo.missing", priority="P1")
 def test_config_repo_commands_report_a_missing_repository(
     e2e: E2EContext,

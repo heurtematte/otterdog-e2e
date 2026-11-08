@@ -6,8 +6,8 @@ flags, every property of the configuration model grouped into features, validati
 CHANGELOG fixes. Each feature says which existing scenario ids (scenarios/{offline,cli,enterprise}) or
 pytest node ids (tests/<tier>/...::test_x) cover it, and gaps carry an outline precise enough to write the missing test.
 
-These tests keep the file honest (the checks live in otterdog_acceptance.coverage_matrix, shared with ``otterdog-acceptance assist
-check scenarios/coverage.yaml``):
+These tests keep the file honest (the checks live in otterdog_acceptance.coverage_matrix, shared with
+``otterdog-acceptance assist check scenarios/coverage.yaml``):
 
 * strict schema (keys, types, enums, unique dotted ids, status rules: covered/partial need covering items,
   partial/gap need a gap outline, gap has none);
@@ -62,7 +62,7 @@ def features() -> list[dict[str, Any]]:
     return PROJECT.features()
 
 
-# --- tests -------------------------------------------------------------------------------------------------------------
+# --- tests ------------------------------------------------------------------------------------------------------------
 def test_matrix_schema() -> None:
     """Keys, types, enums, unique ids and the status rules hold for every entry."""
     problems = PROJECT.schema_problems(matrix())

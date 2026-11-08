@@ -1,11 +1,12 @@
 """The live-tier scenario files, the known-bug registry and their links (SPEC 12.1, 12.5, 19).
 
 Checks the real files of the project (no network): every YAML of scenarios/cli (regressions included) and
-scenarios/enterprise loads with the strict model and lies in its domain directory; scenario ids are unique across every scenario directory; the
-SPEC 19 catalogue is implemented with its priorities; every object a fragment creates carries the run prefix and
-every webhook URL lies under naming.HOOK_BASE (cleanup and the janitor only ever remove such objects); tags use the
-selection vocabulary; known_bugs.yaml loads, its evidence is well formed, every bug referenced by a scenario or a
-Python test exists and links back, and docs/known-issues.md mirrors every entry (confirmed ones with a reproduction).
+scenarios/enterprise loads with the strict model and lies in its domain directory; scenario ids are unique across every
+scenario directory; the SPEC 19 catalogue is implemented with its priorities; every object a fragment creates carries
+the run prefix and every webhook URL lies under naming.HOOK_BASE (cleanup and the janitor only ever remove such
+objects); tags use the selection vocabulary; known_bugs.yaml loads, its evidence is well formed, every bug referenced by
+a scenario or a Python test exists and links back, and docs/known-issues.md mirrors every entry (confirmed ones with a
+reproduction).
 """
 
 from __future__ import annotations
@@ -501,7 +502,8 @@ def test_private_repositories_are_never_created_by_their_first_apply(tmp_path: P
     creating ANY repository, which GitHub refuses for a private repository without Code Security (Free, and Team or
     Enterprise without it): the apply fails. A live scenario that runs on release:latest therefore creates its
     repositories public and makes them private in a later step (cli.repo.visibility); only scenarios that skip such
-    SUTs (fixed_in >= 1.7.0, e.g. regression.private-repo-template-defaults) may create a private repository directly."""
+    SUTs (fixed_in >= 1.7.0, e.g. regression.private-repo-template-defaults) may create a private repository
+    directly."""
     from otterdog_acceptance.sut.version import predates
 
     target = make_target()

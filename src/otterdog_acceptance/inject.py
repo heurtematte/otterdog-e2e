@@ -1,12 +1,13 @@
-"""Jsonnet injected from files: the file references of scenarios and the ad-hoc scenarios of ``otterdog-acceptance inject``.
+"""Jsonnet injected from files: the file references of scenarios and the ad-hoc scenarios of
+``otterdog-acceptance inject``.
 
 Scenario files may take jsonnet from files instead of inline strings (scenarios.model parses the YAML forms): fragment
 entries and step overlays (``{file: <path>, raw: <bool>, vars: <mapping>}``), scenario ``libraries`` (inlined as
 ``local <name> = (...)`` after the template import, render.py) and the complete configurations of offline steps
 (``config``, ``base_config``). A file is read once, when the scenario loads; its path is relative to the scenario file
 and must stay inside the project (inside the scenario's directory for a scenario outside any project). Ad-hoc
-scenarios (``external`` FileContext) may name any file: they are written by ``otterdog-acceptance inject`` from the user's
-paths.
+scenarios (``external`` FileContext) may name any file: they are written by ``otterdog-acceptance inject`` from the
+user's paths.
 
 The content is kept as a SourceText: a str, so the model and the renderer treat it like an inline snippet, that
 remembers its JsonnetFile. ``scenarios.model.render_step`` renders it with the file's own rules (``raw``: never
@@ -231,7 +232,7 @@ def render_source(environment: jinja2.Environment, text: SourceText, variables: 
     return SourceText(rendered, origin, rendered=True)
 
 
-# --- ad-hoc injection (otterdog-acceptance inject) --------------------------------------------------------------------------
+# --- ad-hoc injection (otterdog-acceptance inject) --------------------------------------------------------------------
 @dataclass
 class InjectRequest:
     """What ``otterdog-acceptance inject`` injects: user files (any path, resolved) and the run mode."""

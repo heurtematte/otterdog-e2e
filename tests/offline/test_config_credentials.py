@@ -176,8 +176,11 @@ if [ "$1 $2" = "unlock --check" ]; then
 fi
 if [ "$1 $2" = "get item" ]; then
   case "$3" in
-    {item}) echo '{{"id": "{item}", "fields": [{{"name": "api_token_admin", "value": "{token}"}}, {{"name": "e2e_token", "value": "{token}"}}], "login": {{"username": "e2e-bot", "password": "e2e-dummy-password", "totp": "e2e-dummy-seed"}}}}'; exit 0 ;;
-    {no_totp}) echo '{{"id": "{no_totp}", "fields": [{{"name": "api_token_admin", "value": "{token}"}}], "login": {{"username": "e2e-bot", "password": "e2e-dummy-password", "totp": null}}}}'; exit 0 ;;
+    {item}) echo '{{"id": "{item}", "fields": [{{"name": "api_token_admin", "value": "{token}"}}, \
+{{"name": "e2e_token", "value": "{token}"}}], "login": {{"username": "e2e-bot", \
+"password": "e2e-dummy-password", "totp": "e2e-dummy-seed"}}}}'; exit 0 ;;
+    {no_totp}) echo '{{"id": "{no_totp}", "fields": [{{"name": "api_token_admin", "value": "{token}"}}], \
+"login": {{"username": "e2e-bot", "password": "e2e-dummy-password", "totp": null}}}}'; exit 0 ;;
     *) echo "Not found."; exit 1 ;;
   esac
 fi

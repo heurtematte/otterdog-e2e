@@ -10,7 +10,8 @@ E2EContext (core.py) is assembled from one class per facet over ContextState (st
 state): LiveFacet (live.py: target, verification, GitHub clients, App, org lease, janitor), SutFacet (sut.py: systems
 under test, otterdog drivers, differential sides), WebUiFacet (webui.py: web-UI tier), WebappFacet (webapp.py: webapp
 tier) and RunDataFacet (rundata.py: scenario variables, rate budget, known bugs, change under test); each facet extends
-the facets it builds on. helpers.py holds the small helpers. Import the names below from ``otterdog_acceptance.context``.
+the facets it builds on. helpers.py holds the small helpers. Import the names below from
+``otterdog_acceptance.context``.
 """
 
 from __future__ import annotations

@@ -38,8 +38,8 @@ logger = logging.getLogger(__name__)
 
 # failures of these phases are harness or infrastructure problems: the recorded observations cannot be compared
 HARNESS_PHASES = (" prepare: ", " render: ")
-# the differential tier is tag-filtered (otterdog-acceptance pr always passes --e2e-tags): the session-wide items carry every
-# tag so they are selected whenever a recording item can be
+# the differential tier is tag-filtered (otterdog-acceptance pr always passes --e2e-tags): the session-wide items carry
+# every tag so they are selected whenever a recording item can be
 EVERY_TAG = pytest.mark.tags(*SCENARIO_TAGS)
 
 

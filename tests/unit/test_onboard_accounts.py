@@ -470,7 +470,7 @@ def test_classic_expirations_only(world: World) -> None:
     assert "classic token created (30 days)" in world.output
 
 
-# --- otterdog-acceptance accounts ------------------------------------------------------------------------------------------
+# --- otterdog-acceptance accounts -------------------------------------------------------------------------------------
 @pytest.fixture
 def cli_env(world: World, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, str | None]:
     """A tmp HOME with the setup configuration file, no CI, and the fake browser instead of Firefox."""

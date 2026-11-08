@@ -9,8 +9,8 @@ Closed or merged PRs get a note instead. The task never merges.
 
 SUTs without the feature (every upstream release so far) skip: the source the webapp image was built from has no
 otterdog/webapp/tasks/check_merge.py, and such a webapp ignores the command (the expected delta of the reference:
-base posts nothing). External webapps and prebuilt images skip too, because the harness cannot tell whether they have the
-feature.
+base posts nothing). External webapps and prebuilt images skip too, because the harness cannot tell whether they have
+the feature.
 
 W-CMD-CHECK-MERGE-REFRESH (P2, pending.automerge-state-refresh): check-merge refreshes a stale author_can_auto_merge
 from the live team membership (tasks/automerge_state.py refresh_automerge_state: membership and approvals are
@@ -52,8 +52,8 @@ def _skip_without_feature(s: WebappScenario) -> None:
         pytest.skip(f"webapp under test {known} the /otterdog check-merge command ({FEATURE_FILE})")
 
 
-# the local change behind the command (no upstream PR): `otterdog-acceptance run --sut dirty:../otterdog --change check-merge
-# --suite offline,differential[,webapp --target free]`
+# the local change behind the command (no upstream PR): `otterdog-acceptance run --sut dirty:../otterdog --change
+# check-merge --suite offline,differential[,webapp --target free]`
 CHECK_MERGE_REFERENCES = [
     {
         "change": "check-merge",
@@ -87,7 +87,9 @@ CHECK_MERGE_REFERENCES = [
 REFRESH_REFERENCES = [
     {
         "change": "check-merge",
-        "note": "tasks/automerge_state.py of the check-merge change: check-merge refreshes a stale author_can_auto_merge",
+        "note": (
+            "tasks/automerge_state.py of the check-merge change: check-merge refreshes a stale author_can_auto_merge"
+        ),
     }
 ]
 

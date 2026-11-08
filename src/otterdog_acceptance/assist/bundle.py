@@ -120,7 +120,7 @@ def _write_private(directory: Path, relative: str, text: str) -> None:
         handle.write(text)
 
 
-# --- quoting -----------------------------------------------------------------------------------------------------------
+# --- quoting ----------------------------------------------------------------------------------------------------------
 def fence_for(text: str) -> str:
     """A backtick fence longer than the longest backtick run of ``text`` (at least three backticks)."""
     longest = max((len(run) for run in _BACKTICKS_RE.findall(text)), default=0)

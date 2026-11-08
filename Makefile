@@ -84,7 +84,8 @@ init: ## Create .venv with the harness, its dev tools and Playwright's Firefox, 
 		elif [ "$$(readlink "$$link")" != "$$target" ]; then \
 			mkdir -p "$$(dirname "$$link")" && ln -sfn "$$target" "$$link" && echo "Updated symlink: $$link -> $$target"; \
 		fi; \
-		case ":$$PATH:" in *":$$(dirname "$$link"):"*) ;; *) echo "$$(dirname "$$link") is not on the PATH: add it to run $$name";; esac; \
+		case ":$$PATH:" in *":$$(dirname "$$link"):"*) ;; \
+			*) echo "$$(dirname "$$link") is not on the PATH: add it to run $$name";; esac; \
 	done
 
 unit: ## Unit tier: harness self-tests (no network, no docker)

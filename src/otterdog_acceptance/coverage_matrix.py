@@ -6,8 +6,8 @@ and notable CHANGELOG fixes. Each feature says which existing scenario ids (scen
 pytest node ids (tests/<tier>/...::test_x) cover it, and gaps carry an outline precise enough to write the missing
 test.
 
-MatrixProject binds the checks to one otterdog-acceptance checkout (its scenarios, test modules, known bugs, the vendored
-example template and the generated documentation):
+MatrixProject binds the checks to one otterdog-acceptance checkout (its scenarios, test modules, known bugs, the
+vendored example template and the generated documentation):
 
 * strict schema (keys, types, enums, unique dotted ids, status rules: covered/partial need covering items,
   partial/gap need a gap outline, gap has none; covered needs an item that runs strictly on the default SUT);
@@ -17,8 +17,8 @@ example template and the generated documentation):
   tests/unit/data/template) belongs to a feature, and the inventory keys match EXPECTED_INVENTORY;
 * docs/coverage-matrix.md is exactly what render_markdown() produces.
 
-tests/unit/test_coverage_matrix.py runs these checks (and ``--write`` regenerates the documentation); ``otterdog-acceptance
-assist check scenarios/coverage.yaml`` reports the same problems (MatrixProject.all_problems).
+tests/unit/test_coverage_matrix.py runs these checks (and ``--write`` regenerates the documentation);
+``otterdog-acceptance assist check scenarios/coverage.yaml`` reports the same problems (MatrixProject.all_problems).
 """
 
 from __future__ import annotations
@@ -234,8 +234,8 @@ EXPECTED_INVENTORY: dict[str, tuple[str, ...]] = {
         "GET /internal/<template>",
         "POST /github-webhook/receive",
     ),
-    # otterdog/webapp/home/routes.py:50-532, otterdog/webapp/auth/routes.py:22-118; /playground and /admin/template-impact
-    # since #878 (main d9dac78 home/routes.py:489, 1045-1091)
+    # otterdog/webapp/home/routes.py:50-532, otterdog/webapp/auth/routes.py:22-118; /playground and
+    # /admin/template-impact since #878 (main d9dac78 home/routes.py:489, 1045-1091)
     "page": (
         "/",
         "/index",
@@ -350,8 +350,8 @@ def source_path(source: str) -> str:
 
 # --- the checkout: scenarios, test modules, known bugs ---------------------------------------------------------------
 class MatrixProject:
-    """The coverage matrix of one otterdog-acceptance checkout and what its checks look up there (scenario ids and tiers, the
-    test functions of test modules, known-bug gates); every lookup is read once."""
+    """The coverage matrix of one otterdog-acceptance checkout and what its checks look up there (scenario ids and
+    tiers, the test functions of test modules, known-bug gates); every lookup is read once."""
 
     def __init__(self, root: Path) -> None:
         """Bind the checks to the project root (nothing is read yet)."""
@@ -391,7 +391,8 @@ class MatrixProject:
         return {scenario.id: scenario.tier for scenario in self.scenarios}
 
     def defined_tests(self, relative: str) -> frozenset[str]:
-        """``name`` and ``Class::name`` of the test functions defined in a test module (empty when it does not exist)."""
+        """``name`` and ``Class::name`` of the test functions defined in a test module (empty when it does not
+        exist)."""
         if relative not in self._tests:
             found: set[str] = set()
             tree = self._module(relative)
@@ -811,7 +812,10 @@ class MatrixProject:
         out = [
             "# Coverage matrix",
             "",
-            "<!-- Generated from scenarios/coverage.yaml by tests/unit/test_coverage_matrix.py: do not edit by hand. -->",
+            (
+                "<!-- Generated from scenarios/coverage.yaml by tests/unit/test_coverage_matrix.py: do "
+                "not edit by hand. -->"
+            ),
             "",
             f"> Generated from [`scenarios/coverage.yaml`](../scenarios/coverage.yaml) (`{REGENERATE}`).",
             "> Edit the YAML, then regenerate: `tests/unit/test_coverage_matrix.py` fails when this file is stale.",
@@ -1003,7 +1007,7 @@ def model_keys(
     return own
 
 
-# --- helpers -----------------------------------------------------------------------------------------------------------
+# --- helpers ----------------------------------------------------------------------------------------------------------
 def _is_str_list(value: Any, *, allow_empty: bool = True) -> bool:
     """A list of non-empty strings (non-empty itself unless allow_empty)."""
     return (

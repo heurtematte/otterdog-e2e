@@ -43,7 +43,7 @@ SKILL_COMMANDS = {
     "write-e2e-scenario": ("assist", "check"),
 }
 
-# --- the Agent Skills format (agentskills.io specification) ------------------------------------------------------------
+# --- the Agent Skills format (agentskills.io specification) -----------------------------------------------------------
 ALLOWED_KEYS = frozenset({"name", "description", "license", "compatibility", "metadata", "allowed-tools"})
 NAME_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 RESERVED_NAME_WORDS = ("anthropic", "claude")
@@ -86,7 +86,7 @@ class Invocation:
         return f"{self.file}: otterdog-acceptance {' '.join(self.words)}"
 
 
-# --- files -------------------------------------------------------------------------------------------------------------
+# --- files ------------------------------------------------------------------------------------------------------------
 def skill_dirs() -> list[Path]:
     """The skill directories (every directory of .claude/skills)."""
     return sorted(path for path in SKILLS.iterdir() if path.is_dir()) if SKILLS.is_dir() else []
@@ -211,7 +211,7 @@ def links(path: Path) -> list[str]:
     return found
 
 
-# --- the CLI and the Makefile -------------------------------------------------------------------------------------------
+# --- the CLI and the Makefile -----------------------------------------------------------------------------------------
 def option_names(command: click.Command) -> set[str]:
     """Long option names of a click command (``--help`` included)."""
     names = {"--help"}
@@ -355,10 +355,11 @@ def test_repository_paths_exist(path: Path) -> None:
     assert sorted(found for found in repository_paths(path) if not (ROOT / found).exists()) == []
 
 
-# --- the parsers themselves --------------------------------------------------------------------------------------------
+# --- the parsers themselves -------------------------------------------------------------------------------------------
 SAMPLE = """\
 Run `.venv/bin/otterdog-acceptance run --suite offline --sut release:latest --scenario <id>` then `make one SCENARIO=x`.
-Read `docs/writing-scenarios.md#known-bugs`, `tests/unit/test_yaml_cli.py::test_x`, `scenarios/offline/<topic>/<n>.yaml`.
+Read `docs/writing-scenarios.md#known-bugs`, `tests/unit/test_yaml_cli.py::test_x`, \
+`scenarios/offline/<topic>/<n>.yaml`.
 
 ```bash
 .venv/bin/otterdog-acceptance sut resolve release:latest && make lint-scenarios   # comment --not-an-option

@@ -801,7 +801,7 @@ def test_an_interrupted_run_keeps_its_progress(world: World) -> None:
     assert world.env()["E2E_ADMIN_TOKEN"] == TOKENS["admin"] and world.env()["E2E_PROFILE"] == "free"
 
 
-# --- shard (scenarios/shards.yaml) ----------------------------------------------------------------------------------------
+# --- shard (scenarios/shards.yaml) ------------------------------------------------------------------------------------
 def with_shards(world: World) -> None:
     """The project gets the shard map of the repository."""
     assert world.settings is not None
@@ -1378,7 +1378,7 @@ def test_setup_bootstrap_and_doctor_run_on_fresh_copies_of_the_pristine_environm
     assert [context.closed for _, _, context in created] == [True, True, False]
 
 
-# --- vault references --------------------------------------------------------------------------------------------------
+# --- vault references -------------------------------------------------------------------------------------------------
 REFERENCES = {
     "pass:e2e/org2/admin-token": TOKENS["admin"],
     "vault:e2e/org2/web/password": PASSWORD,
@@ -1534,7 +1534,8 @@ def test_an_invalid_store_is_refused(world: World, secret_store: dict[str, str])
         run_wizard(world, Script(secrets=[]), store="bitwarden:x")
 
 
-# --- machine accounts (onboard/accounts.py: the accounts section of setup.yaml, `otterdog-acceptance accounts`, --browser) ---
+# --- machine accounts -------------------------------------------------------------------------------------------------
+# onboard/accounts.py: the accounts section of setup.yaml, `otterdog-acceptance accounts`, --browser
 ACCOUNTS_STORE = "pass:bots/technology.csi/github.com"
 ADMIN_ACCOUNT = f"{ACCOUNTS_STORE}/otterdog-e2e-org2-admin"
 ADMIN_ACCOUNT_TOKEN = f"{ADMIN_ACCOUNT}-api-token"
