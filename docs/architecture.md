@@ -239,10 +239,11 @@ Four registries keep the battery honest:
   endpoint missing from the inventory and a step asserting as sent one it marks `untestable` (no test organization
   can make otterdog send it), keeps [api-coverage.md](api-coverage.md) current, and every run's `summary.md` lists
   the write endpoints its scenario commands sent;
-- **the known bugs** `scenarios/known_bugs.yaml` ([known-issues.md](known-issues.md)): an item linked to a bug is a
-  non-strict xfail scoped to the exception that reports the bug (`KnownBugReproduced` for a YAML scenario,
-  `AssertionError` for a Python test; setup and teardown errors are never covered), so a fix shows up as XPASS and a
-  harness error stays a failure; matrix features name the bugs they hit;
+- **the known bugs** `scenarios/known_bugs.yaml` ([known-issues.md](known-issues.md)): an item linked to a bug is an
+  xfail scoped to the exception that reports the bug (`KnownBugReproduced` for a YAML scenario, `AssertionError` for a
+  Python test; setup and teardown errors are never covered), so a harness error stays a failure; a fix shows up as
+  XPASS, which fails the item for a `confirmed` bug outside the live and differential tiers (otterdog fixed it, or the
+  harness no longer detects it); matrix features name the bugs they hit;
 - **the scenario catalog** ([scenario-catalog.md](scenario-catalog.md)): the SPEC catalogue ids and their status.
 
 Closing a gap: pick a gap outline of the matrix (it names the scenario id, the file, the steps, the assertions and what
@@ -375,7 +376,7 @@ scenarios/offline/       offline scenarios          scenarios/cli/              
 scenarios/enterprise/    enterprise scenarios       (each tier: one directory per domain, regressions included;
                                                     no PR directory: PRs are scenario references)
 scenarios/fragments/     shared jsonnet fragments   scenarios/lib/                           jsonnet helper libraries
-scenarios/known_bugs.yaml                           known otterdog defects (non-strict xfail)
+scenarios/known_bugs.yaml                           known otterdog defects (xfail, strict when confirmed)
 scenarios/coverage.yaml                             the coverage matrix (docs/coverage-matrix.md is generated from it)
 tests/unit/              harness self-tests         tests/{offline,cli,webhooks,webapp,web_ui,enterprise,differential}/
 tests/adhoc/             otterdog-acceptance inject

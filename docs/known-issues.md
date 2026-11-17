@@ -6,14 +6,19 @@ the two stay in sync.
 
 How the registry is used:
 
-- A scenario that exercises a bug declares it (`known_bug: KB-nnn` in YAML, or `@pytest.mark.known_bug("KB-nnn")` on
-  a Python test), and the bug lists the scenario in `scenarios`. Each such test asserts the **correct** behaviour.
-  At collection the plugin marks it `xfail(strict=False)`, scoped to the exception that reports the bug
-  (`KnownBugReproduced` for a YAML scenario, `AssertionError` for a Python test, so harness errors stay failures): it
-  reports XFAIL while the bug exists and XPASS once it is fixed. On an XPASS, set `status: fixed` and `fixed_in: <X.Y.Z>` (the first release with the fix; while it is unreleased, the release main's dev builds lead to) and update this page. From then on the
-  plugin no longer adds the xfail: the test guards against a regression. Only [SUTs](glossary.md#systems-under-test) whose release predates
-  `fixed_in` keep it (1.6.1 for `fixed_in: 1.7.0`; a dev build counts as the release it leads to, so 1.7.0.dev21 does
-  not), with "SUT ... predates the fix" in the reason. `fixed_in` is a release `X.Y.Z`, never a dev version or `pr-N`.
+- A scenario that exercises a bug declares it (`known_bug: KB-nnn` in YAML, or `@pytest.mark.known_bug("KB-nnn")` on a
+  Python test), and the bug lists the scenario in `scenarios`. Each such test asserts the **correct** behaviour. At
+  collection the plugin marks it `xfail`, scoped to the exception that reports the bug (`KnownBugReproduced` for a YAML
+  scenario, `AssertionError` for a Python test, so harness errors stay failures): it reports XFAIL while the bug exists
+  and XPASS once it is fixed. For a `confirmed` bug the xfail is strict outside the live and differential tiers: the bug
+  was reproduced, so an XPASS (or a step-level bug's step that passes) fails the item, since either otterdog fixed it or
+  the harness no longer detects it; `make harness-check` (the same SUT with the previous harness) tells the two apart. A
+  `suspected` bug's XPASS is only reported. On an XPASS, set `status: fixed` and `fixed_in: <X.Y.Z>` (the first release
+  with the fix; while it is unreleased, the release main's dev builds lead to) and update this page. From then on the
+  plugin no longer adds the xfail: the test guards against a regression. Only [SUTs](glossary.md#systems-under-test)
+  whose release predates `fixed_in` keep it (1.6.1 for `fixed_in: 1.7.0`; a dev build counts as the release it leads to,
+  so 1.7.0.dev21 does not), with "SUT ... predates the fix" in the reason. `fixed_in` is a release `X.Y.Z`, never a dev
+  version or `pr-N`.
 - Evidence entries prefixed `e2e:` point at a file of this project that detects the bug. Offline scenarios that
   detect a bug themselves (pytest.xfail when detected) are cited there instead of in `scenarios`, which would xfail
   them on every SUT.

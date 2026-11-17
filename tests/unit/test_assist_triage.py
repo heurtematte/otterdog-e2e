@@ -317,6 +317,18 @@ def test_xpass_run_info_and_pointers(project: Path) -> None:
         ("AssertionError: assert 'merged' == 'open'", "call", "failed", False, "sut", "assertion failed"),
         ("ReactionTimeoutError: webapp did not react within 300 s", "call", "failed", False, "sut", "assertion failed"),
         ("KeyError: 'name'", "call", "failed", False, "unknown", ""),
+        ("[XPASS(strict)] KB-001: apply exits 0", "call", "failed", False, "known-bug", "confirmed known bug did not"),
+        (
+            (
+                "AssertionError: scenario o.kb failed (1 failure(s)):\n  - step 'crash': known bug KB-025 is confirmed "
+                "but did not show: otterdog fixed it"
+            ),
+            "call",
+            "failed",
+            False,
+            "known-bug",
+            "confirmed known bug did not show",
+        ),
         ("Timeout >600.0s", "call", "failed", True, "infrastructure", "results.jsonl marks"),
     ],
 )

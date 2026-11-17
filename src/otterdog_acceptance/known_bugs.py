@@ -2,9 +2,12 @@
 
 The file is a YAML list of ``{id: KB-001, title, status: suspected|confirmed|fixed, evidence: [path:line], upstream:
 url|null, fixed_in: null, scenarios: [ids]}``. A scenario is linked to a bug through its ``known_bug: KB-001`` field or
-through the bug's ``scenarios`` list; collection adds ``pytest.mark.xfail(reason="<id>: <title>", strict=False)`` so a
-fix shows up as XPASS instead of hiding the test. Once an entry has ``status: fixed`` its tests run without xfail (they
-guard against regressions), except on SUTs whose version predates the release ``fixed_in`` (KnownBug.affects).
+through the bug's ``scenarios`` list; collection adds ``pytest.mark.xfail(reason="<id>: <title>")`` so a fix shows up
+as XPASS instead of hiding the test. The xfail of a ``confirmed`` bug is strict outside live items: the bug was
+reproduced, so an XPASS means otterdog fixed it or the harness no longer detects it, and fails the item; a
+``suspected`` bug's XPASS is only reported (live results can depend on the plan and on GitHub, so live xfails are
+never strict). Once an entry has ``status: fixed`` its tests run without xfail (they guard against regressions),
+except on SUTs whose version predates the release ``fixed_in`` (KnownBug.affects).
 
 A STEP may declare ``known_bug`` too (scenarios.engine.step_bug): only that step's failures are expected, so such a bug
 must not list the scenario (check_references reports it), or the whole item would xfail at collection.
@@ -63,6 +66,12 @@ class KnownBug:
     def xfail_mark(self) -> pytest.MarkDecorator:
         """``pytest.mark.xfail(reason=<id>: <title>, strict=False)`` (an XPASS reveals a fix)."""
         return pytest.mark.xfail(reason=self.xfail_reason, strict=False)
+
+    @property
+    def confirmed(self) -> bool:
+        """True for status ``confirmed``: the bug was reproduced, so outside live items its xfail is strict (an
+        XPASS fails: otterdog fixed it, or the harness no longer detects it)."""
+        return self.status == "confirmed"
 
     @property
     def fixed(self) -> bool:

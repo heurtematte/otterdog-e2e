@@ -393,6 +393,68 @@ def test_known_bugs_become_non_strict_xfails(inner: Inner, monkeypatch: pytest.M
     assert outcomes["test_listed_by_the_bug"] == ("xfailed", "KB-001")
 
 
+def test_a_confirmed_bug_that_does_not_show_fails_the_item(inner: Inner, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A confirmed bug was reproduced, so it is in the SUT: its XPASS means otterdog fixed it or the harness no longer
+    detects it, and fails the item (strict xfail); a suspected bug's XPASS is only reported."""
+    scenarios_dir = inner.settings.scenarios_dir
+    scenarios_dir.mkdir(parents=True)
+    (scenarios_dir / "known_bugs.yaml").write_text("- {id: KB-001, title: t}\n- {id: KB-002, title: t}\n")
+    bugs = {
+        "KB-001": KnownBug("KB-001", "apply exits 0 on validation errors", status="confirmed"),
+        "KB-002": KnownBug("KB-002", "maybe a bug", status="suspected"),
+    }
+    monkeypatch.setattr("otterdog_acceptance.known_bugs.load", lambda path: bugs)
+    inner.pytester.makepyfile(
+        test_strict="""
+        import pytest
+
+        @pytest.mark.known_bug("KB-001")
+        def test_confirmed_reproduced():
+            assert False
+
+        @pytest.mark.known_bug("KB-001")
+        def test_confirmed_not_shown():
+            pass
+
+        @pytest.mark.known_bug("KB-002")
+        def test_suspected_not_shown():
+            pass
+        """
+    )
+    result = inner.run("-rxX")
+    result.assert_outcomes(xfailed=1, failed=1, xpassed=1)
+    result.stdout.fnmatch_lines(["*[[]XPASS(strict)[]] KB-001: apply exits 0 on validation errors*"])
+    outcomes = {line["nodeid"].split("::")[-1]: line["outcome"] for line in inner.results()}
+    assert outcomes == {
+        "test_confirmed_reproduced": "xfailed",
+        "test_confirmed_not_shown": "failed",
+        "test_suspected_not_shown": "xpassed",
+    }
+
+
+def test_strict_known_bugs_leave_live_and_differential_items_out() -> None:
+    """Live results can depend on the plan and on GitHub, a differential's sides are recorded, not asserted: there a
+    confirmed bug's XPASS is only reported. Suspected and fixed bugs are never strict."""
+    from otterdog_acceptance.pytest_plugin import strict_known_bug
+
+    class Item:
+        """An item carrying some markers."""
+
+        def __init__(self, *markers: str) -> None:
+            self.markers = markers
+
+        def get_closest_marker(self, name: str) -> object | None:
+            return object() if name in self.markers else None
+
+    confirmed = KnownBug("KB-001", "t", status="confirmed")
+    assert strict_known_bug(Item("offline"), confirmed)  # type: ignore[arg-type]
+    assert not strict_known_bug(Item("live"), confirmed)  # type: ignore[arg-type]
+    assert not strict_known_bug(Item("offline", "differential"), confirmed)  # type: ignore[arg-type]
+    for status in ("suspected", "fixed"):
+        assert not strict_known_bug(Item("offline"), KnownBug("KB-001", "t", status=status))  # type: ignore[arg-type]
+    assert not strict_known_bug(Item("offline"), None)  # type: ignore[arg-type]
+
+
 def test_known_bug_xfails_never_hide_fixture_errors(inner: Inner, monkeypatch: pytest.MonkeyPatch) -> None:
     """BAT-03: the xfail of a known bug covers the test body only: a failing fixture setup or teardown (a cleanup
     leaving objects behind) of a known-bug item is an error, and results.jsonl records the failed teardown."""

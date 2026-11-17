@@ -87,12 +87,12 @@ otterdog prints secret values.
   every entry has its section there). A new defect gets a new `KB-nnn` entry (`status: suspected` until reproduced,
   `confirmed` with a reproduction, `fixed` with `fixed_in`), its evidence (`otterdog/<path>:<line>`) and its doc
   section.
-- **Scenario-level** `known_bug: KB-nnn` (or the bug's `scenarios:` list naming the scenario id): every step without
-  a bug of its own inherits it, so the expectation failures of the steps are expected and the first one ends the run
-  (XFAIL after the cleanup); infra problems, harness errors (exceptions, oracle lookups that fail) and a failed
-  cleanup stay failures, and a run without the bug is an XPASS (the item's xfail accepts only
-  `KnownBugReproduced`, never a `ScenarioFailedError`). Both sides must agree: the bug lists the scenario and the
-  scenario declares the bug.
+- **Scenario-level** `known_bug: KB-nnn` (or the bug's `scenarios:` list naming the scenario id): every step without a
+  bug of its own inherits it, so the expectation failures of the steps are expected and the first one ends the run
+  (XFAIL after the cleanup); infra problems, harness errors (exceptions, oracle lookups that fail) and a failed cleanup
+  stay failures, and a run without the bug is an XPASS (the item's xfail accepts only `KnownBugReproduced`, never a
+  `ScenarioFailedError`); offline, a run without a `confirmed` bug is a failure. Both sides must agree: the bug lists
+  the scenario and the scenario declares the bug.
 - **Step-level** `known_bug: KB-nnn` on a step: only that step's failures are expected, the other steps stay strict.
   `known_bug: {id: KB-nnn, phases: [converge]}` limits it to some phases (a converge bug then never hides a plan,
   apply or state failure of its step). The bug must NOT list the scenario (that would xfail the whole item);

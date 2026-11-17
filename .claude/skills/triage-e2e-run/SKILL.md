@@ -69,10 +69,11 @@ and several runs exist (`ls -1t artifacts/`).
    A live failure (cli, webhooks, webapp, web_ui, enterprise) is never rerun by you: propose the command, e.g.
    `make one SCENARIO=<id> TARGET=<instance> SUT=<sut>`, and say what the rerun would decide.
 5. **Draft the action** for each confirmed verdict:
-   - otterdog defect: a `scenarios/known_bugs.yaml` entry and its `docs/known-issues.md` section (with a summary
-     row), in the format of [references/known-bug-entry.md](references/known-bug-entry.md); link it from the failing
-     step (`known_bug`) or scenario as the `write-e2e-scenario` skill says; status `suspected` until reproduced
-     offline, `confirmed` with the reproduction commands; an XPASS of a bug: propose `status: fixed` and `fixed_in`;
+   - otterdog defect: a `scenarios/known_bugs.yaml` entry and its `docs/known-issues.md` section (with a summary row),
+     in the format of [references/known-bug-entry.md](references/known-bug-entry.md); link it from the failing step
+     (`known_bug`) or scenario as the `write-e2e-scenario` skill says; status `suspected` until reproduced offline,
+     `confirmed` with the reproduction commands; an XPASS of a bug, or a confirmed bug that "did not show": propose
+     `status: fixed` and `fixed_in` once the otterdog history shows the fix, else it is a harness bug;
    - scenario bug: the corrected scenario (exact message, count, missing capability, wrong tier);
    - harness bug: the file, the function and the minimal change with its unit test; apply it only when the user
      asked for fixes;

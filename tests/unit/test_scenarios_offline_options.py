@@ -17,6 +17,7 @@ from otterdog_acceptance.otterdog.output import PlanObject, PlanResult, Validati
 from otterdog_acceptance.otterdog.render import BaselineSpec, ConfigFragments, RenderError
 from otterdog_acceptance.otterdog.runner import CliResult, DiffOptions
 from otterdog_acceptance.otterdog.workspace import WorkspaceLayout
+from otterdog_acceptance.scenarios.engine import ScenarioFailedError
 from otterdog_acceptance.scenarios.model import Scenario, load_scenario, render_step
 from otterdog_acceptance.scenarios.offline import (
     OFFLINE_MARKER,
@@ -371,6 +372,42 @@ def test_a_known_bug_step_that_passes_offline_is_recorded(tmp_path: Path) -> Non
     fake = cli(strict=False)
     outcome = engine(fake, bugs={"KB-025": KnownBug("KB-025", "t")}).run(write(tmp_path, KB))
     assert outcome.unexpected_passes == ["KB-025: t (step 'crash')"] and not outcome.expected_failures
+    assert outcome.ok  # a suspected bug that does not show is only reported
+
+
+def test_a_confirmed_bug_that_does_not_show_offline_is_a_failure(tmp_path: Path) -> None:
+    """A confirmed bug is certainly in the SUT: when its step passes offline, either otterdog fixed it or the harness
+    no longer detects it, and the scenario fails instead of passing silently. The differential (keep_going) records
+    its sides without asserting them: no failure there."""
+    bug = KnownBug("KB-025", "t", status="confirmed")
+    outcome = engine(cli(strict=False), bugs={"KB-025": bug}).run(write(tmp_path, KB))
+    assert outcome.unexpected_passes == ["KB-025: t (step 'crash')"]
+    assert outcome.failures == [
+        (
+            "step 'crash': known bug KB-025 is confirmed but did not show: otterdog fixed it (known_bugs.yaml: status "
+            "fixed and fixed_in) or the harness no longer detects it (make harness-check)"
+        )
+    ]
+    with pytest.raises(ScenarioFailedError, match="KB-025 is confirmed but did not show"):
+        outcome.raise_for_failures()
+    runner = engine(cli(strict=False), bugs={"KB-025": bug})
+    runner.keep_going = True
+    outcome = runner.run(write(tmp_path, KB))
+    assert outcome.ok and outcome.unexpected_passes == ["KB-025: t (step 'crash')"]
+
+
+def test_a_confirmed_scenario_level_bug_that_does_not_show_offline_is_one_failure(tmp_path: Path) -> None:
+    """A scenario-level confirmed bug is judged on the whole scenario: one failure, not one per step."""
+    text = KB.replace("    known_bug: KB-025\n", "").replace("title: kb\n", "title: kb\nknown_bug: KB-025\n")
+    outcome = engine(cli(strict=False), bugs={"KB-025": KnownBug("KB-025", "t", status="confirmed")}).run(
+        write(tmp_path, text)
+    )
+    assert outcome.failures == [
+        (
+            "the scenario: known bug KB-025 is confirmed but did not show: otterdog fixed it (known_bugs.yaml: status "
+            "fixed and fixed_in) or the harness no longer detects it (make harness-check)"
+        )
+    ]
 
 
 def test_render_step_keeps_the_offline_rules(tmp_path: Path) -> None:

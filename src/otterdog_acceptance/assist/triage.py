@@ -16,7 +16,8 @@ a deterministic pre-classification with its evidence. The first class whose rule
   src/otterdog_acceptance, any error of the setup or teardown phase (fixtures, cleanup);
 * ``known-bug``: the output carries the ``crash_signature`` of a known bug, or the item is linked to a known bug
   (results ``known_bug``, a bug listing the scenario) and failed anyway (a strict step, a phase the bug leaves out, a
-  regression of a fixed bug);
+  regression of a fixed bug), or a confirmed bug did not show (a strict XPASS: otterdog fixed it, or the harness no
+  longer detects it, which ``make harness-check`` tells apart);
 * ``sut``: an assertion or scenario expectation failed in the call phase (a step's validate/plan/apply/state/converge
   mismatch, a check on otterdog's output or GitHub's state, a webapp that did not react);
 * ``unknown``: none of the above.
@@ -153,6 +154,11 @@ RULES: tuple[Rule, ...] = (
         "harness",
         "harness error type",
         re.compile(rf"\b(?:otterdog_acceptance\.[\w.]+\.)?(?:{'|'.join(HARNESS_ERRORS)})\b"),
+    ),
+    Rule(
+        "known-bug",
+        "confirmed known bug did not show (fixed in this SUT, or lost by the harness: make harness-check)",
+        re.compile(r"\[XPASS\(strict\)\]|known bug KB-\d+ is confirmed but did not show"),
     ),
     Rule(
         "sut",

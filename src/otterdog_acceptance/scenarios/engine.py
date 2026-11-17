@@ -27,9 +27,12 @@ Known bugs per step (``known_bug`` of a step): while the bug affects the SUT (kn
 missing from known_bugs.yaml counts as affecting), the expectation failures of that step are recorded as
 ``ScenarioOutcome.expected_failures`` instead of failures and the next steps run; infra problems and harness errors
 (exceptions such as render errors or safety refusals) stay failures. A known-bug step that passes is recorded in
-``unexpected_passes``. ``raise_for_failures`` raises ScenarioFailedError for failures, else ``pytest.xfail`` with the
-bug when expected failures exist (KnownBugNotReproducedWarning for unexpected passes). The engines read the bugs from
-their ``known_bugs`` attribute, else from the known_bugs.yaml found above the scenario file (inside its project).
+``unexpected_passes``; with ``ScenarioOutcome.strict_known_bugs`` (the offline tier) the unexpected pass of a
+``confirmed`` bug is a failure too (not_reproduced_failure): the bug is certainly in the SUT, so either otterdog fixed
+it or the harness no longer detects it. ``raise_for_failures`` raises ScenarioFailedError for failures, else
+``pytest.xfail`` with the bug when expected failures exist (KnownBugNotReproducedWarning for unexpected passes). The
+engines read the bugs from their ``known_bugs`` attribute, else from the known_bugs.yaml found above the scenario file
+(inside its project).
 """
 
 from __future__ import annotations
@@ -122,7 +125,9 @@ class StepOutcome:
 class ScenarioOutcome:
     """Outcome of a scenario: its steps, every failure message, the skip reason (if skipped), the failures of steps
     whose known bug affects the SUT (``expected_failures``, with the bug of each such step in ``expected_bugs``) and
-    the known-bug steps that passed (``unexpected_passes``)."""
+    the known-bug steps that passed (``unexpected_passes``). ``strict_known_bugs``: the unexpected pass of a confirmed
+    bug is a failure (the offline tier; live results can depend on the plan and on GitHub, the differential's sides are
+    not asserted)."""
 
     scenario: str
     steps: list[StepOutcome] = field(default_factory=list)
@@ -131,6 +136,7 @@ class ScenarioOutcome:
     expected_failures: list[str] = field(default_factory=list)
     expected_bugs: dict[str, str] = field(default_factory=dict)  # step name -> "<bug id>: <title>"
     unexpected_passes: list[str] = field(default_factory=list)
+    strict_known_bugs: bool = False
     _warned: bool = field(default=False, init=False, repr=False, compare=False)
 
     @property
@@ -229,6 +235,7 @@ class StepBug:
     affects: bool
     phases: tuple[str, ...] | None = None
     scenario_level: bool = False  # the scenario's known_bug: every step inherits it, an expected failure ends the run
+    confirmed: bool = False  # status confirmed: where strict_known_bugs, not showing is a failure
 
     def covers(self, phase: str) -> bool:
         """True when the bug affects the SUT and explains failures of ``phase``."""
@@ -273,7 +280,9 @@ def scenario_bug(scenario: Scenario, bugs: Mapping[str, KnownBug], sut_version: 
     bug = bugs.get(bug_id)
     if bug is None:
         return StepBug(bug_id, f"{bug_id}: not listed in known_bugs.yaml", True, None, scenario_level=True)
-    return StepBug(bug.id, bug.xfail_reason, bug.affects(sut_version), None, scenario_level=True)
+    return StepBug(
+        bug.id, bug.xfail_reason, bug.affects(sut_version), None, scenario_level=True, confirmed=bug.confirmed
+    )
 
 
 def step_bug(
@@ -287,7 +296,7 @@ def step_bug(
     bug = bugs.get(step.known_bug)
     if bug is None:
         return StepBug(step.known_bug, f"{step.known_bug}: not listed in known_bugs.yaml", True, phases)
-    return StepBug(bug.id, bug.xfail_reason, bug.affects(sut_version), phases)
+    return StepBug(bug.id, bug.xfail_reason, bug.affects(sut_version), phases, confirmed=bug.confirmed)
 
 
 def start_step_bug(step: StepOutcome, bug: StepBug | None, sut_version: str | None) -> None:
@@ -333,13 +342,26 @@ def record_step_passed(outcome: ScenarioOutcome, step: StepOutcome, bug: StepBug
     if bug is not None and bug.affects and not step.expected_failure and step.failed_phase is None:
         outcome.unexpected_passes.append(f"{bug.reason} (step {step.name!r})")
         step.notes.append(f"known bug {bug.id} did not show: the step passed")
+        if outcome.strict_known_bugs and bug.confirmed:
+            outcome.failures.append(not_reproduced_failure(bug, f"step {step.name!r}"))
 
 
 def record_scenario_passed(outcome: ScenarioOutcome, bug: StepBug | None) -> None:
-    """A scenario whose scenario-level known bug affects the SUT ran without any failure: ``unexpected_passes``."""
+    """A scenario whose scenario-level known bug affects the SUT ran without any failure: ``unexpected_passes`` (and a
+    failure for a confirmed bug where ``strict_known_bugs``)."""
     if bug is None or not bug.affects or outcome.failures or outcome.expected_failures:
         return
     outcome.unexpected_passes.append(f"{bug.reason} (scenario)")
+    if outcome.strict_known_bugs and bug.confirmed:
+        outcome.failures.append(not_reproduced_failure(bug, "the scenario"))
+
+
+def not_reproduced_failure(bug: StepBug, where: str) -> str:
+    """The failure of a confirmed known bug that did not show where it affects the SUT."""
+    return (
+        f"{where}: known bug {bug.id} is confirmed but did not show: otterdog fixed it (known_bugs.yaml: status fixed "
+        "and fixed_in) or the harness no longer detects it (make harness-check)"
+    )
 
 
 def diff_options(spec: PlanSpec | ApplySpec | None, *, repo_filter: str | None) -> DiffOptions:

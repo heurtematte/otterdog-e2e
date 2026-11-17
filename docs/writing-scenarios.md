@@ -980,11 +980,13 @@ expected deltas in `differential.md` and their base and template
 
 ## Known bugs
 
-`known_bug: KB-<nnn>` (or the bug's own `scenarios:` list in `scenarios/known_bugs.yaml`) turns the item into a
-non-strict xfail with the reason `<id>: <title>`: the scenario still runs, a failure is reported as XFAIL and a fixed
-bug shows up as XPASS. Once the entry has `status: fixed`, the xfail is dropped and the item guards against the
-regression. The exception is a SUT whose release predates the `fixed_in` of the bug: the xfail stays there.
-See [known-issues.md](known-issues.md).
+`known_bug: KB-<nnn>` (or the bug's own `scenarios:` list in `scenarios/known_bugs.yaml`) turns the item into an xfail
+with the reason `<id>: <title>`: the scenario still runs, a failure is reported as XFAIL and a fixed bug shows up as
+XPASS. The bug of a `confirmed` entry is certainly in the SUT, so outside the live and differential tiers its XPASS (an
+item-level bug) or its step that passes (a step-level bug) is a failure: otterdog fixed it, or the harness no longer
+detects it (`make harness-check` tells them apart). Once the entry has `status: fixed`, the xfail is dropped and the
+item guards against the regression. The exception is a SUT whose release predates the `fixed_in` of the bug: the xfail
+stays there. See [known-issues.md](known-issues.md).
 
 A **step** can declare a known bug of its own, so that only its expectations are expected to fail while the other
 steps stay strict:

@@ -26,6 +26,11 @@ relevant paths: open those first.
 - **XPASS**: a known bug did not show: the bug may be fixed in this SUT. Propose `status: fixed` with `fixed_in` (the
   first release `X.Y.Z` with the fix, never a dev version) after checking the otterdog history; a `KnownBugNotReproducedWarning` says the same for
   a step-level bug.
+- **FAILED with `[XPASS(strict)]` or "is confirmed but did not show"** (pre-class `known-bug`): a `confirmed` bug did
+  not show outside the live and differential tiers. Either otterdog fixed it (check the otterdog history between the
+  SUT and the last version that reproduced it, then propose `status: fixed` and `fixed_in`) or the harness no longer
+  detects it (a harness bug: `make harness-check` with the harness that last reproduced it shows the change). Never
+  downgrade the bug to `suspected` to make the run green.
 - **SKIPPED**: never a failure; the reason says which capability, plan, identity, target or `fixed_in` gate applied.
 
 ## Pre-classes

@@ -200,7 +200,8 @@ class OfflineEngine:
         """validate --local, local-plan --local (with a BASE config), show --local per step; returns the outcome."""
         if scenario.tier != "offline":
             raise ValueError(f"scenario {scenario.id} is tier {scenario.tier}: use ScenarioEngine")
-        outcome = ScenarioOutcome(scenario.id)
+        # keep_going (the differential) records both sides without asserting them: no strict known bugs there
+        outcome = ScenarioOutcome(scenario.id, strict_known_bugs=not self.keep_going)
         if self.skip_older_suts:
             outcome.skipped = fixed_in_skip_reason(scenario, sut_version_of(self.cli))
             if outcome.skipped:

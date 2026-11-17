@@ -564,8 +564,11 @@ def _selected(item: pytest.Item, tags: Sequence[str], globs: Sequence[str], extr
     return item_selected(scenario_id, (), globs=globs, tags=tags, extra_scenarios=extra(), case_id=case_id)
 
 
-def known_bug_xfail(item: pytest.Item, reason: str, bug_id: str | None = None) -> pytest.MarkDecorator:
-    """The non-strict xfail of a known bug, scoped to the exception that reports the bug (``raises=``, BAT-03).
+def known_bug_xfail(
+    item: pytest.Item, reason: str, bug_id: str | None = None, *, strict: bool = False
+) -> pytest.MarkDecorator:
+    """The xfail of a known bug, scoped to the exception that reports the bug (``raises=``, BAT-03); ``strict`` (a
+    confirmed bug outside live and differential items, strict_known_bug) turns an XPASS into a failure.
 
     A YAML scenario item accepts only KnownBugReproduced: its engine reports the bug's expected failures with
     pytest.xfail itself, so a strict step, a harness error or a failed cleanup stays a failure, and a run without the
@@ -577,8 +580,15 @@ def known_bug_xfail(item: pytest.Item, reason: str, bug_id: str | None = None) -
     from otterdog_acceptance.known_bugs import KnownBugReproduced
 
     if scenario_param(item) is not None:
-        return pytest.mark.xfail(reason=reason, strict=False, raises=KnownBugReproduced)
-    return pytest.mark.xfail(reason=reason, strict=False, raises=_known_bug_raises(item, bug_id) or AssertionError)
+        return pytest.mark.xfail(reason=reason, strict=strict, raises=KnownBugReproduced)
+    return pytest.mark.xfail(reason=reason, strict=strict, raises=_known_bug_raises(item, bug_id) or AssertionError)
+
+
+def strict_known_bug(item: pytest.Item, bug: KnownBug | None) -> bool:
+    """Whether the xfail of a known bug is strict: a confirmed bug (it was reproduced, so an XPASS means otterdog fixed
+    it or the harness no longer detects it) on an item that is neither live (results there can depend on the plan and
+    on GitHub) nor differential (its sides are recorded, not asserted)."""
+    return bug is not None and bug.confirmed and not is_live(item) and item.get_closest_marker("differential") is None
 
 
 def _known_bug_raises(item: pytest.Item, bug_id: str | None) -> type[BaseException] | None:
@@ -591,7 +601,8 @@ def _known_bug_raises(item: pytest.Item, bug_id: str | None) -> type[BaseExcepti
 
 
 def _apply_known_bugs(item: pytest.Item, bugs: dict[str, KnownBug]) -> None:
-    """known_bug(id) markers and bugs listing the item's scenario become non-strict xfails (known_bug_xfail).
+    """known_bug(id) markers and bugs listing the item's scenario become xfails (known_bug_xfail), strict for a
+    confirmed bug outside live and differential items (strict_known_bug).
 
     Bugs with status ``fixed`` get no xfail at collection: their tests guard against regressions. pytest_runtest_setup
     adds the xfail back only when the SUT under test predates the bug's ``fixed_in`` (KnownBug.affects). The xfail of
@@ -608,7 +619,7 @@ def _apply_known_bugs(item: pytest.Item, bugs: dict[str, KnownBug]) -> None:
             item.stash.setdefault(_FIXED_BUGS_KEY, []).append(bug_id)
             continue
         reason = bug.xfail_reason if bug is not None else f"{bug_id}: not listed in known_bugs.yaml"
-        item.add_marker(known_bug_xfail(item, reason, bug_id))
+        item.add_marker(known_bug_xfail(item, reason, bug_id, strict=strict_known_bug(item, bug)))
         item.stash.setdefault(_KNOWN_BUG_KEY, bug_id)
 
 

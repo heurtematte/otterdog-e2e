@@ -391,7 +391,7 @@ build: about 2900 tests). The suite also writes nothing below `$HOME` when `E2E_
 
 ## Checking a harness change
 
-The harness must tell otterdog's defects from its own. Two mechanisms do it:
+The harness must tell otterdog's defects from its own. Three mechanisms do it:
 
 - **the differential** runs two otterdog versions with one harness: a delta can only come from otterdog;
 - **`make harness-check`** is the converse: one otterdog (`SUT`, default `release:latest`) run by two harness
@@ -401,7 +401,9 @@ The harness must tell otterdog's defects from its own. Two mechanisms do it:
   reason, a known bug the harness no longer reproduces, a broken fixture. Explain every change by a commit; new and
   removed items are listed apart. It takes two offline runs (about 25 minutes); run it for a change of `src/` or of
   the scenario semantics. Each run records its harness revision in `run.json` (`harness`: commit, local changes), and
-  `compare-runs` refuses (exit 2) runs of different SUTs or targets.
+  `compare-runs` refuses (exit 2) runs of different SUTs or targets;
+- **strict confirmed bugs**: outside the live and differential tiers, a `confirmed` known bug that does not show fails
+  its item ([known-issues.md](known-issues.md)), so a harness that loses a bug is noticed in a single run.
 
 ```bash
 make harness-check                                  # origin/main's harness vs the working tree, release:latest
