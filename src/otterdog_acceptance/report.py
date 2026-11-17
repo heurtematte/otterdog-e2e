@@ -7,7 +7,9 @@ artifacts only after a successful scrub (a leak fails the job).
 build_summary reads a run directory ``<artifacts_root>/<run_id>/`` (every input is optional):
 
 * ``run.json``: run_id, started_at, finished_at, lane, argv|command, target ({name, org, plan} or a name), org, plan,
-  sut / base / reset_sut (ResolvedSut.to_json() or a spec string), versions, capabilities (Capabilities.to_json()).
+  sut / base / reset_sut (ResolvedSut.to_json() or a spec string), versions, capabilities (Capabilities.to_json()),
+  harness_version and harness ({commit, dirty, dirty_count, dirty_files} of the harness checkout,
+  context.helpers.harness_revision).
 * ``results.jsonl``: one line per test (or per phase), keys nodeid, outcome (passed|failed|skipped|error|xfailed|
   xpassed; pytest's skipped/passed + wasxfail are understood), when, duration | phases {setup, call, teardown},
   tier, markers, scenario, priority, tags, sut, reason (skip/xfail reason), failure (short, redacted), infra (bool),
@@ -850,6 +852,9 @@ def _run_rows(data: RunData) -> list[tuple[str, str]]:
             text += " (configured, not used: no baseline reset in this run)"  # replaced by the SUT once installed
         if text:
             rows.append((label, text))
+    harness = harness_text(run)
+    if harness:
+        rows.append(("Harness", harness))
     if isinstance(run.get("lane"), str):
         rows.append(("Lane", md_code(run["lane"])))
     rows.extend(_time_rows(run))
@@ -865,6 +870,23 @@ def _run_rows(data: RunData) -> list[tuple[str, str]]:
     if command:
         rows.append(("Command", md_code(command)))
     return rows
+
+
+def harness_text(run: Mapping[str, Any]) -> str | None:
+    """The harness of a run in one line: run.json ``harness_version`` and ``harness`` (``0.1.0 @ abc123def456, 2 local
+    change(s)``); None when run.json names neither."""
+    version = run.get("harness_version") if isinstance(run.get("harness_version"), str) else None
+    info = run.get("harness")
+    commit = info.get("commit") if isinstance(info, Mapping) and isinstance(info.get("commit"), str) else None
+    if version is None and commit is None:
+        return None
+    text = version or "?"
+    if commit is not None:
+        text += f" @ {md_code(commit[:12])}"
+        count = _number(info.get("dirty_count")) if isinstance(info, Mapping) else None
+        if isinstance(info, Mapping) and info.get("dirty") is True:
+            text += f", {int(count)} local change(s)" if count else ", local changes"
+    return text
 
 
 def _time_rows(run: Mapping[str, Any]) -> list[tuple[str, str]]:

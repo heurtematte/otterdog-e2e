@@ -1,7 +1,7 @@
 """Small helpers of the session context (SPEC 15), also used by the harness commands: comma lists and option text,
 environment flags and CI detection, durations and timestamps, redacted error descriptions, file locks, the holder text
-of the org lease, the App installation preflight and the literals hiding a differential side's printed version and
-workspace root in its observations.
+of the org lease, the App installation preflight, the literals hiding a differential side's printed version and
+workspace root in its observations, and the git revision of the harness that produced a run.
 """
 
 from __future__ import annotations
@@ -154,6 +154,33 @@ def printed_version(version_output: str) -> str | None:
     """Version printed by ``otterdog --version`` (``otterdog.sh, version 1.6.1`` -> ``1.6.1``)."""
     match = _VERSION_RE.search(version_output)
     return match.group(1) if match else None
+
+
+# the paths whose local changes can change a run's results (untracked files included: a new scenario counts)
+HARNESS_PATHS = ("src", "tests", "scenarios", "targets", "pyproject.toml", "poetry.lock")
+MAX_DIRTY_FILES = 50
+
+
+def harness_revision(root: Path) -> dict[str, Any] | None:
+    """The git revision of the harness checkout at ``root`` for run.json ``harness``: ``commit`` (HEAD), ``dirty``
+    (local changes below HARNESS_PATHS, untracked files included), ``dirty_count`` and ``dirty_files`` (the first
+    MAX_DIRTY_FILES).
+    None outside a git checkout or without git: a run then names its harness by ``harness_version`` only.
+
+    Results of two runs on one pinned SUT are comparable only when their harness revisions are known
+    (compare-runs): a run of uncommitted harness code is not reproducible from its commit alone.
+    """
+    from otterdog_acceptance.sut.source import FULL_SHA_RE, local_git
+
+    try:
+        commit = local_git(root, "rev-parse", "--verify", "--quiet", "HEAD^{commit}", timeout=30).strip()
+        status = local_git(root, "status", "--porcelain=v1", "--untracked-files=all", "--", *HARNESS_PATHS, timeout=60)
+    except Exception:  # noqa: BLE001 - no git, not a checkout: the run has no revision, never an error
+        return None
+    if not FULL_SHA_RE.match(commit):
+        return None
+    files = [line[3:] for line in status.splitlines() if len(line) > 3]
+    return {"commit": commit, "dirty": bool(files), "dirty_count": len(files), "dirty_files": files[:MAX_DIRTY_FILES]}
 
 
 def workspace_literals(cli: OtterdogCli) -> list[tuple[str, str]]:

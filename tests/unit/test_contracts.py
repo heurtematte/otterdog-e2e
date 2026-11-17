@@ -350,7 +350,9 @@ PUBLIC_NAMES: dict[str, list[str]] = {
         "static_items",
         "shard_loads",
     ],
-    "otterdog_acceptance.report": ["build_summary", "scrub_artifacts", "run_overview", "tally_text"],
+    "otterdog_acceptance.report": ["build_summary", "scrub_artifacts", "run_overview", "tally_text", "harness_text"],
+    # the check of the harness itself: outcome changes of two runs on one SUT (compare-runs, make harness-check)
+    "otterdog_acceptance.compare_runs": ["RunComparison", "OutcomeChange", "compare_runs", "render"],
     # the coverage matrix (scenarios/coverage.yaml): checks and rendering of tests/unit/test_coverage_matrix.py
     "otterdog_acceptance.coverage_matrix": [
         "MatrixProject",
@@ -448,6 +450,7 @@ PUBLIC_NAMES: dict[str, list[str]] = {
         "installation_problems",
         "printed_version",
         "workspace_literals",
+        "harness_revision",
     ],
     "otterdog_acceptance.context.state": ["ContextError", "ContextState", "E2EOptions", "OPTION_ENV", "AUTO_BASE"],
     "otterdog_acceptance.context.live": ["LiveFacet"],
@@ -475,7 +478,13 @@ PUBLIC_NAMES: dict[str, list[str]] = {
     "otterdog_acceptance.cli.sut": ["RISKY_PATHS", "sut"],
     "otterdog_acceptance.cli.run": ["RunRequest", "run_pytest", "run_targets", "plan_pr", "run", "pr"],
     "otterdog_acceptance.cli.ops": ["relay_loop", "janitor_filter", "relay", "janitor"],
-    "otterdog_acceptance.cli.maintenance": ["register_environment_secrets", "prune_cache_dirs", "report", "cache"],
+    "otterdog_acceptance.cli.maintenance": [
+        "register_environment_secrets",
+        "prune_cache_dirs",
+        "report",
+        "compare_runs",
+        "cache",
+    ],
     "otterdog_acceptance.cli.app_manifest": ["ManifestFlow", "app_manifest"],
     "otterdog_acceptance.cli.inject": ["inject_request", "inject_command"],
     "otterdog_acceptance.cli.onboarding": ["setup_command", "ci_sync"],

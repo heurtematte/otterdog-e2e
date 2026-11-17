@@ -52,6 +52,7 @@ example), an otterdog command you replay by hand would act on real organizations
 | `cli`, `webhooks`, `webapp`, `enterprise` | one live tier on `TARGET` (several instances: `TARGET=a,b`, `@all` or `@<list>`, and `PARALLEL=<n>`) |
 | `web-ui` | the web-UI tier on `TARGET` (`--suite web_ui --allow-web-ui`: the admin bot logs in, see below) |
 | `differential` | offline (+ live with `TARGET`) differential of `SUT` against `BASE_SUT` |
+| `harness-check [HARNESS_BASE=origin/main]` | the offline tier of `SUT` with the harness of `HARNESS_BASE`, then of this tree, and `compare-runs` (see [Checking a harness change](#checking-a-harness-change)) |
 | `e2e` | every tier (live ones skip without `TARGET`) |
 | `one SCENARIO=<glob>` | only matching scenarios (comma separated globs) |
 | `pr PR=<n> SHA=<sha>` | `otterdog-acceptance pr` |
@@ -387,6 +388,26 @@ after editing any of them.
 To prove that the unit tier needs no network, run it in a network namespace with only the loopback interface:
 `unshare -rn sh -c 'ip link set lo up && exec .venv/bin/python -m pytest -q -p no:cacheprovider tests/unit'` (this
 build: about 2900 tests). The suite also writes nothing below `$HOME` when `E2E_CACHE_DIR` is unset.
+
+## Checking a harness change
+
+The harness must tell otterdog's defects from its own. Two mechanisms do it:
+
+- **the differential** runs two otterdog versions with one harness: a delta can only come from otterdog;
+- **`make harness-check`** is the converse: one otterdog (`SUT`, default `release:latest`) run by two harness
+  revisions, the offline tier of `HARNESS_BASE` (default `origin/main`, in a temporary worktree with its own venv)
+  then of the working tree, compared item by item by `otterdog-acceptance compare-runs`. An item whose outcome changed
+  (passed, failed, skipped, xfailed, xpassed) can only come from the harness: a test that now passes for a wrong
+  reason, a known bug the harness no longer reproduces, a broken fixture. Explain every change by a commit; new and
+  removed items are listed apart. It takes two offline runs (about 25 minutes); run it for a change of `src/` or of
+  the scenario semantics. Each run records its harness revision in `run.json` (`harness`: commit, local changes), and
+  `compare-runs` refuses (exit 2) runs of different SUTs or targets.
+
+```bash
+make harness-check                                  # origin/main's harness vs the working tree, release:latest
+make harness-check HARNESS_BASE=HEAD~3 SUT=release:1.7.1
+.venv/bin/otterdog-acceptance compare-runs artifacts/<baseline run> artifacts/<run>   # two runs you already have
+```
 
 ## Editor
 

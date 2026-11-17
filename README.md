@@ -175,6 +175,7 @@ All commands are subcommands of `.venv/bin/otterdog-acceptance` (`--help` on eac
 | `relay --target T --forward-to URL [--since 10m] [--allow-remote]` | forward the App's webhook deliveries to a local webapp (holds the org lease) |
 | `janitor --target T [--older-than 6h] [--run-id ID [--force-takeover]] [--apply]` | list (and delete) leftovers of finished or crashed runs (a lease of `--run-id` renewed within 20 minutes is not taken over unless `--force-takeover`); several targets one after the other |
 | `report DIR` | print the summary of a run artifacts directory |
+| `compare-runs BASELINE RUN [--json]` | the outcome of every item of two runs of the same SUT, typically by two harness revisions (`make harness-check`): exit 1 when an outcome changed, 2 when the runs are not comparable |
 | `scrub-artifacts DIR` | delete non-text files and files leaking a secret (the secret values of its environment included; exit 1 on leaks) |
 | `cache prune [--keep 3]` | drop old builds, sources, runs and images from the harness cache (never an entry whose lock a running session or build holds) |
 | `completion bash\|zsh\|fish` | print the shell completion script of `otterdog-acceptance` and `oda` (`eval "$(oda completion zsh)"` in `~/.zshrc`, [local-development.md](docs/local-development.md#shell-completion)) |

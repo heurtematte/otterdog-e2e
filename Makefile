@@ -57,12 +57,14 @@ FORWARD_TO ?= http://127.0.0.1:5000/github-webhook/receive
 SINCE ?= 10m
 KEEP ?= 3
 ARTIFACTS ?= $(or $(E2E_ARTIFACTS),artifacts)
+# harness-check: the harness revision whose offline results the working tree must reproduce on one SUT
+HARNESS_BASE ?= origin/main
 # newest run directory below the artifacts root, the assist bundles excepted (evaluated only by the targets that use it)
 RUN ?= $(shell ls -1td "$(ARTIFACTS)"/*/ 2>/dev/null | grep -v '/assist/$$' | head -n 1)
 PARALLEL_ARG = $(if $(PARALLEL),--parallel "$(PARALLEL)")
 
 .PHONY: help init unit lint format typecheck check offline lint-scenarios cli webhooks webapp web-ui enterprise \
-	differential e2e one inject pr doctor bootstrap setup ci-sync janitor relay report targets scrub cache-prune sut docs \
+	differential harness-check e2e one inject pr doctor bootstrap setup ci-sync janitor relay report targets scrub cache-prune sut docs \
 	docs-serve clean require-target require-base require-scenario require-pr require-docs
 
 help: ## Show this help
@@ -127,6 +129,17 @@ enterprise: require-target ## Enterprise-only tier of SUT on TARGET (plan enterp
 
 differential: require-base ## Offline (+ live with TARGET) differential of SUT against BASE_SUT
 	$(E2E) run $(if $(TARGET),--target "$(TARGET)") --sut "$(SUT)" --base-sut "$(BASE_SUT)" --suite offline,differential $(PARALLEL_ARG) $(ARGS)
+
+harness-check: ## Offline tier of SUT with the harness of HARNESS_BASE (origin/main), then of this tree: compare-runs
+	@set -e; out="$(abspath $(ARTIFACTS))/harness-check/$$(date -u +%Y%m%dT%H%M%SZ)"; \
+	trap 'git worktree remove --force "$$out/harness" >/dev/null 2>&1 || true' EXIT; \
+	git worktree add --quiet --detach "$$out/harness" "$(HARNESS_BASE)"; \
+	echo "== offline tier of $(SUT), harness of $(HARNESS_BASE) ($$(git rev-parse --short "$(HARNESS_BASE)"))"; \
+	(cd "$$out/harness" && $(POETRY) install --quiet --with dev --extras browser && \
+		.venv/bin/otterdog-acceptance run --suite offline --sut "$(SUT)" --artifacts "$$out/baseline" $(ARGS)) || true; \
+	echo "== offline tier of $(SUT), harness of this tree"; \
+	$(E2E) run --suite offline --sut "$(SUT)" --artifacts "$$out/run" $(ARGS) || true; \
+	$(E2E) compare-runs "$$out"/baseline/* "$$out"/run/*
 
 e2e: ## Every tier of SUT (live tiers are skipped without TARGET; differential with BASE_SUT)
 	$(E2E) run $(if $(TARGET),--target "$(TARGET)") --sut "$(SUT)" $(if $(BASE_SUT),--base-sut "$(BASE_SUT)") $(if $(SUITE),--suite "$(SUITE)") $(PARALLEL_ARG) $(ARGS)

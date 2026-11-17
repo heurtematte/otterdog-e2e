@@ -1,5 +1,5 @@
-"""``otterdog-acceptance report``, ``targets``, ``scrub-artifacts`` and ``cache prune`` (SPEC 16): local maintenance of
-the run artifacts, the target instances and the harness cache; none of them contacts GitHub.
+"""``otterdog-acceptance report``, ``compare-runs``, ``targets``, ``scrub-artifacts`` and ``cache prune`` (SPEC 16):
+local maintenance of the run artifacts, the target instances and the harness cache; none of them contacts GitHub.
 
 scrub-artifacts registers the secret values of its environment first (register_environment_secrets: a separate scrub
 process knows no secret of the session); cache prune never removes an entry whose lock a running session, export,
@@ -43,6 +43,32 @@ def report(directory: str) -> None:
     from otterdog_acceptance import report as report_module
 
     _echo(report_module.build_summary(Path(directory)))
+
+
+@main.command("compare-runs")
+@click.argument("baseline", type=click.Path(file_okay=False, exists=True))
+@click.argument("run_dir", metavar="RUN", type=click.Path(file_okay=False, exists=True))
+@click.option("--json", "as_json", is_flag=True, help="print the comparison as JSON")
+@_handled
+def compare_runs(baseline: str, run_dir: str, as_json: bool) -> None:
+    """Compare the outcome of every item of two runs of the same SUT: the check of a harness change.
+
+    BASELINE and RUN are run artifacts directories, typically the same tier run by two harness revisions
+    (``make harness-check``). With one otterdog on both sides, an item whose outcome changed can only come from the
+    harness. Exit 0 when every item run by both has the same outcome, 1 when an outcome changed, 2 when the runs are
+    not comparable (different SUTs or targets).
+    """
+    from otterdog_acceptance import compare_runs as compare_module
+
+    comparison = compare_module.compare_runs(Path(baseline), Path(run_dir))
+    if as_json:
+        _echo_json(comparison.to_json())
+    else:
+        _echo(compare_module.render(comparison).rstrip("\n"))
+    if not comparison.comparable:
+        sys.exit(2)
+    if comparison.changes:
+        sys.exit(1)
 
 
 def render_instances(instances: Sequence[InstanceInfo]) -> str:

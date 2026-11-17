@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from otterdog_acceptance import __version__
-from otterdog_acceptance.context.helpers import describe_error, lock_held
+from otterdog_acceptance.context.helpers import describe_error, harness_revision, lock_held
 from otterdog_acceptance.context.rundata import RunDataFacet
 from otterdog_acceptance.context.state import HTTP_CACHE_DIR, ContextError, E2EOptions
 from otterdog_acceptance.context.webapp import WebappFacet
@@ -96,6 +96,7 @@ class E2EContext(WebUiFacet, WebappFacet, RunDataFacet):
             run_id=self.run_ctx.run_id,
             started_at=self.run_ctx.created_at.isoformat(),
             harness_version=__version__,
+            harness=harness_revision(self.settings.project_root),
             argv=[str(arg) for arg in argv],
             command=REDACTOR(self.environ.get(INVOCATION_ENV) or "") or None,
             lane=self.environ.get(LANE_ENV),
