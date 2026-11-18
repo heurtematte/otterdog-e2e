@@ -612,6 +612,10 @@ What the workflows enforce (and `tests/unit/test_workflows_static.py` checks):
   a token shape when the session step was killed before its own scrub), times out after 150 minutes (the session step
   after 120), always runs `janitor --run-id <run> --apply` when the session reached the test organization, and uploads
   artifacts only after `scrub-artifacts` succeeded;
+- the callers of `e2e.yml` and `e2e-webui.yml` (`nightly.yml`, `e2e-otterdog-pr.yml`) pass `secrets: inherit` and
+  nothing else: GitHub gives a reusable workflow no secret otherwise, not even those of the environment its job
+  declares. The repository holds no secret of its own, so the called jobs get the secrets of their environment only,
+  after its protections (an untrusted run still waits for its approval);
 - `cache-mode: none` everywhere: no Actions cache is restored or saved, so an untrusted run cannot poison a later
   trusted one; the upstream mirror and tool venvs are rebuilt in every run;
 - `e2e-otterdog-pr.yml` is `workflow_dispatch` only (no `repository_dispatch`, no `pull_request_target`); its

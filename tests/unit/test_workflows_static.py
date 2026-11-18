@@ -467,15 +467,19 @@ def test_harness_commands_and_options_exist() -> None:
 
 # --- secrets, environments and concurrency --------------------------------------------------------------------------
 def test_secrets_are_mapped_on_harness_steps_only() -> None:
-    """Secrets appear only in the ``env:`` of steps running the harness; never in workflow/job env, ``with:``,
-    ``secrets: inherit`` or reusable workflow calls."""
+    """Secrets appear only in the ``env:`` of steps running the harness; never in workflow/job env, ``with:`` or an
+    explicit ``secrets:`` mapping. A call of a reusable workflow passes ``secrets: inherit`` and nothing else: GitHub
+    gives a called workflow no secret otherwise, not even those of the environment its job declares (the nightly run
+    of 2026-11-18 got every E2E_* secret empty); no secret exists at repository level, so it passes those only."""
     for name in WORKFLOW_NAMES:
         data = workflow(name)
         assert not secret_names(data.get("env")), f"{name}: secrets in the workflow env"
-        assert "secrets: inherit" not in workflow_text(name)
         for job_id, job in jobs(name).items():
             assert not secret_names(job.get("env")), f"{name}.{job_id}: secrets in the job env"
-            assert "secrets" not in job, f"{name}.{job_id}: secrets passed to a reusable workflow"
+            if "uses" in job:
+                assert job.get("secrets") == "inherit", f"{name}.{job_id}: a reusable call needs secrets: inherit"
+            else:
+                assert "secrets" not in job, f"{name}.{job_id}: secrets on a job that calls no reusable workflow"
             for index, step in enumerate(steps(job)):
                 where = f"{name}.{job_id} step {index} ({step.get('name')})"
                 assert not secret_names(step.get("with")), f"{where}: secrets in with"

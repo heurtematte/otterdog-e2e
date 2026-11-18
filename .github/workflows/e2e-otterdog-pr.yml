@@ -127,6 +127,9 @@ jobs:
       id-token: write
     cache-mode: none
     uses: ./.github/workflows/e2e.yml
+    # the environment secrets of the called jobs: without inherit GitHub gives a called workflow no secret, not
+    # even those of the environment its job declares (the repository holds no secret: they all live in environments)
+    secrets: inherit
     with:
       target: ${{ needs.resolve.outputs.target }}
       sut: ${{ needs.resolve.outputs.sut }}

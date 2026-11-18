@@ -30,6 +30,9 @@ jobs:
       matrix:
         target: ${{ fromJSON(vars.E2E_TARGETS || '["free"]') }}
     uses: ./.github/workflows/e2e.yml
+    # the environment secrets of the called jobs: without inherit GitHub gives a called workflow no secret, not
+    # even those of the environment its job declares (the repository holds no secret: they all live in environments)
+    secrets: inherit
     with:
       target: ${{ matrix.target }}
       sut: release:latest
@@ -48,6 +51,9 @@ jobs:
       matrix:
         target: ${{ fromJSON(vars.E2E_TARGETS || '["free"]') }}
     uses: ./.github/workflows/e2e.yml
+    # the environment secrets of the called jobs: without inherit GitHub gives a called workflow no secret, not
+    # even those of the environment its job declares (the repository holds no secret: they all live in environments)
+    secrets: inherit
     with:
       target: ${{ matrix.target }}
       sut: branch:main
@@ -72,6 +78,9 @@ jobs:
       matrix:
         target: ${{ fromJSON(vars.E2E_WEB_UI_TARGETS || '["free"]') }}
     uses: ./.github/workflows/e2e-webui.yml
+    # the environment secrets of the called jobs: without inherit GitHub gives a called workflow no secret, not
+    # even those of the environment its job declares (the repository holds no secret: they all live in environments)
+    secrets: inherit
     with:
       target: ${{ matrix.target }}
       sut: release:latest
