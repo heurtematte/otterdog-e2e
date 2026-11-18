@@ -106,10 +106,10 @@ typecheck: ## mypy on src (and the documentation hooks)
 
 check: lint typecheck unit ## lint + typecheck + unit
 
-offline: ## Offline tier of SUT (no GitHub; docker for the webapp part)
+offline: ## Offline tier of SUT (no GitHub; otterdog in the SUT docker image, E2E_CLI_RUNTIME=host: a host venv)
 	$(E2E) run --suite offline --sut "$(SUT)" $(ARGS)
 
-lint-scenarios: ## Offline lint of every live scenario step with SUT (validate --local; no GitHub, no docker)
+lint-scenarios: ## Offline lint of every live scenario step with SUT (validate --local; no GitHub)
 	$(E2E) run --suite offline --sut "$(SUT)" -k lint $(ARGS)
 
 cli: require-target ## Live CLI tier of SUT on TARGET

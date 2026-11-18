@@ -49,7 +49,7 @@ Without any GitHub organization (offline tier only):
 ```bash
 make init        # poetry install --with dev -> .venv, and otterdog-acceptance (alias oda) on the PATH (~/.local/bin)
 make unit        # harness self-tests: no network, no docker, about 1 min
-make offline     # offline tier of the latest otterdog release (docker for the webapp part), about 6 min warm
+make offline     # offline tier of the latest otterdog release, in its docker image, about 15 min warm
 
 # differential proof of concept of otterdog#790: the offline tier of the head, then base and head CLIs on every
 # observed offline scenario, about 15 min warm
@@ -87,7 +87,7 @@ make cli TARGET=free,acme-a                                # one after the other
 | Tier | Directory | Needs | Content |
 |---|---|---|---|
 | unit | `tests/unit` | nothing (no network, no docker) | harness self-tests |
-| offline | `tests/offline`, `scenarios/offline` | the SUT (network once to fetch it), docker for the webapp part | configuration loading, credential providers, template hooks, `validate`, `local-plan`, `local-apply` (declined), `show`, `show-default`, `canonical-diff`, `list-projects`, `--help`, `--version` and exit codes with a vendored template; the offline lint of every live scenario step; webapp boot, runtime and webhook receiver contract with dummy credentials |
+| offline | `tests/offline`, `scenarios/offline` | the SUT image (docker; network once to build it) | configuration loading, credential providers, template hooks, `validate`, `local-plan`, `local-apply` (declined), `show`, `show-default`, `canonical-diff`, `list-projects`, `--help`, `--version` and exit codes with a vendored template; the offline lint of every live scenario step; webapp boot, runtime and webhook receiver contract with dummy credentials |
 | cli | `tests/cli`, `scenarios/cli` (regressions included) | target + admin identity | live CLI lifecycle (`plan -n`/`apply -f -n`), run-prefixed resources |
 | webhooks | `tests/webhooks` | target (+ GitHub App) | otterdog-managed repository/org webhooks, real App deliveries through the relay |
 | webapp | `tests/webapp` | target + GitHub App + docker | the webapp under test in docker compose, config-repo PR workflow |
@@ -151,9 +151,11 @@ SUT (`--base-sut`), and the [glossary](docs/glossary.md) defines the other terms
 | `path:<dir>` | the committed `HEAD` of a local checkout (read-only) | trusted |
 | `dirty:<dir>` | a local checkout including uncommitted changes (allow/deny listed paths) | trusted |
 
-Untrusted SUTs run only inside their own docker image (no network for offline commands, read-only root, no
-capabilities, credentials in a 0600 env-file); destructive resets always use a trusted reset SUT
-(`--e2e-reset-sut`, default `release:latest`). `otterdog-acceptance sut classify SPEC` prints the trust decision.
+Every SUT runs inside its own docker image (no network for offline commands, read-only root, no capabilities,
+credentials in a 0600 env-file). Trusted SUTs may run in a host virtualenv instead with `E2E_CLI_RUNTIME=host`, and
+the web mode of the web-UI tier always does (its login never reaches a container); untrusted SUTs never do.
+Destructive resets always use a trusted reset SUT (`--e2e-reset-sut`, default `release:latest`).
+`otterdog-acceptance sut classify SPEC` prints the trust decision.
 
 ## Commands
 

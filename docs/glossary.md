@@ -11,8 +11,9 @@ The words of the harness and of this documentation. On the documentation site, t
   `pr:<N>@<40-hex>`, `path:<dir>`, `dirty:<dir>` (the [README](../README.md#systems-under-test-sut-specs) lists
   them); `otterdog-acceptance sut resolve SPEC` resolves one to a commit.
 - **trusted and untrusted SUTs**: a release, a tag, upstream `main`, a commit reachable from them and a local checkout
-  are trusted, their CLI may run in a virtualenv on the host. A pull request, or another commit, is untrusted: it only
-  runs in its own docker image, without network for offline commands, and never receives web-UI credentials
+  are trusted: their CLI runs in their docker image like every SUT, or in a virtualenv on the host with
+  `E2E_CLI_RUNTIME=host` and for the web mode. A pull request, or another commit, is untrusted: it only runs in its own
+  docker image, without network for offline commands, and never receives web-UI credentials
   ([architecture](architecture.md#systems-under-test-and-trust), [security](security.md#untrusted-suts-t1-t3)).
 - **head and base SUT**: a differential run compares two SUTs, the head (`--sut`) and the base (`--base-sut`; `auto`
   is the merge base of the head with upstream `main`).

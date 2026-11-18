@@ -304,7 +304,7 @@ def test_summary_skips_known_bugs_budgets_rate_differential(summary: str) -> Non
     assert "| cli scenario C-REPO-LIFECYCLE | 4m 00s | 4m 13s | **over budget** |" in summary
     assert "| webapp flow W-PR-VALID | 5m 00s | 5m 20s | **over budget** |" in summary
     assert "| webapp tier (P0) | 25m 00s | 5m 20s | ok |" in summary
-    assert "| offline tier (pr792-d0d3b08) | 10m 00s | 12.5 s | ok |" in summary
+    assert "| offline tier (pr792-d0d3b08) | 20m 00s | 12.5 s | ok |" in summary
     assert "| pr-fast lane | 45m 00s | 41m 10s | ok |" in summary and "never failures" in summary
     assert "| admin | core | 4000 | 4800 | 3500 | 600 |" in summary
     assert "Base `v1.6.1` vs head `pr792`: **1 unexpected**, 1 expected delta(s), 1 unchanged" in summary

@@ -63,11 +63,13 @@ from otterdog_acceptance.otterdog.api_usage import (
 )
 from otterdog_acceptance.otterdog.output import parse_apply, parse_plan, parse_validation, strip_ansi
 from otterdog_acceptance.otterdog.runtime import (
+    CONTAINER_PATH,
     CONTAINER_WORKDIR,
     CWD_DIR,
     PYCACHE_DIR,
     DockerRuntime,
     container_name,
+    rewrite_path,
     runtime_for,
 )
 from otterdog_acceptance.otterdog.workspace import (
@@ -493,6 +495,19 @@ class OtterdogCli:
     def _in_container(self) -> bool:
         """True when the runtime runs otterdog inside a container (mounted workspace layout)."""
         return bool(getattr(self.runtime, "in_container", False))
+
+    def process_path(self, path: Path) -> str:
+        """``path`` as the otterdog process sees it: below /ws in a container for a path of the workspace root (the
+        only host directory mounted there), unchanged on the host. For what tests hand to otterdog or to a stub it
+        runs: store directories, marker files, stub directories."""
+        resolved = str(path.resolve())
+        return rewrite_path(resolved, self._workdir) if self._in_container else resolved
+
+    def search_path(self, first: Path) -> str:
+        """A PATH for ``invoke(env=...)`` with ``first`` (a directory of the workspace root, e.g. stub binaries)
+        before the system PATH of the process: the image's in a container, the harness's on the host."""
+        system = CONTAINER_PATH if self._in_container else os.environ.get("PATH", "/usr/bin:/bin")
+        return f"{self.process_path(first)}{os.pathsep}{system}"
 
     @property
     def _workdir(self) -> Path:

@@ -1415,7 +1415,7 @@ features:
     status: partial
     covered_by: [tests/offline/test_config_credentials.py::test_plain_and_default_providers, tests/offline/test_config_credentials.py::test_pass_provider_with_a_stub_store, tests/offline/test_config_credentials.py::test_pass_store_dir_from_the_defaults_override, tests/offline/test_config_credentials.py::test_bitwarden_provider_with_a_stub_vault, tests/offline/test_config_credentials.py::test_credential_lookups_never_reach_a_shell]
     known_bugs: [KB-086]
-    notes: "plain, default provider, unexpected defaults keys, 'unsupported credential provider', 'no credential provider configured', pass (stub CLI) and bitwarden (stub CLI) covered on host runtimes; since 1.8.0 (GHSA-886p-g538-rcmp, KB-086) their lookups never reach a shell ('pass show <key>', ';' and '$(...)' run nothing) and a key or item id starting with '-' is refused."
+    notes: "plain, default provider, unexpected defaults keys, 'unsupported credential provider', 'no credential provider configured', pass (stub CLI) and bitwarden (stub CLI) covered in the SUT image and on host runtimes (the stubs first on the PATH of the otterdog process); since 1.8.0 (GHSA-886p-g538-rcmp, KB-086) their lookups never reach a shell ('pass show <key>', ';' and '$(...)' run nothing) and a key or item id starting with '-' is refused."
     gap_outline:
       scenario: O-CREDENTIALS-PROVIDERS
       file: tests/offline/test_config_credentials.py

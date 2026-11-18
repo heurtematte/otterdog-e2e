@@ -89,10 +89,10 @@ class WebUiFacet(SutFacet):
         """PLAYWRIGHT_BROWSERS_PATH with the Firefox of a role's SUT installed (once per role and session)."""
 
         def build() -> Path:
-            """Install the browser with the role's own Playwright (trusted host installs only)."""
+            """Install the browser with the role's own Playwright (trusted host installs only: host_installed)."""
             from otterdog_acceptance.sut.cli_install import ensure_playwright_firefox
 
-            return ensure_playwright_firefox(self.installed(role), self.settings)
+            return ensure_playwright_firefox(self.host_installed(role), self.settings)
 
         return self._memo(f"web_browsers:{role}", build)
 
@@ -122,7 +122,7 @@ class WebUiFacet(SutFacet):
             mode = WebMode(credentials=credentials, gate=self.web_gate(), browsers_path=self.web_browsers(role))
             workspace = self.workspace(f"webui-{name}", self.template_for("head"))
             cli = WebOtterdogCli(
-                self.installed(role),
+                self.host_installed(role),  # on the host whatever E2E_CLI_RUNTIME says: no container gets the login
                 workspace,
                 verified=self.require_verified(),
                 identity=self.require_identity("admin"),

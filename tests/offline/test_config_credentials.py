@@ -17,16 +17,16 @@ A failure is printed as ``invalid credentials`` followed by the provider's messa
   vault provider needs a Vault server (hvac over HTTP), which the network sandbox of the offline tier cannot reach: not
   exercised.
 
-The pass and bitwarden tests run stub CLIs (shell scripts of the test workspace, first on PATH) that only answer for
-the test's own store directory and items: the user's password store and vault are never read (the harness also
-strips PASSWORD_STORE_* and BW_* from the environment). Container runtimes skip them (their PATH is the image's).
+The pass and bitwarden tests run stub CLIs (shell scripts of the test workspace, first on the PATH of the otterdog
+process) that only answer for the test's own store directory and items: the user's password store and vault are never
+read (the harness also strips PASSWORD_STORE_* and BW_* from the environment). In a container the workspace is mounted
+at /ws: every path otterdog or a stub reads is the process's own (OtterdogCli.process_path, search_path).
 Since 1.8.0 (GHSA-886p-g538-rcmp) the pass and bitwarden CLIs run without a shell: O-KB-CREDENTIAL-SHELL (KB-086)
 checks that shell metacharacters of a key run nothing. Verified on v1.6.1, v1.7.1, v1.8.0 and main 9bdeb75.
 """
 
 from __future__ import annotations
 
-import os
 import stat
 from collections.abc import Mapping
 from pathlib import Path
@@ -164,12 +164,6 @@ def refused(result: CliResult, message: str) -> None:
     assert SUCCEEDED not in text, tail(result)
 
 
-def host_only(cli: OtterdogCli) -> None:
-    """Skip on container runtimes: the stub provider must be on the PATH of the CLI process."""
-    if cli.installed.runtime != "host":
-        pytest.skip(f"stub provider binaries need a host runtime ({cli.installed.sut.label} runs in docker)")
-
-
 BW_ITEM = "e2e-item"
 BW_ITEM_WITHOUT_TOTP = "e2e-item-without-totp"
 # a stub of the bitwarden CLI: an unlocked vault with two items (never the user's vault)
@@ -194,34 +188,35 @@ exit 1
 """
 
 
-def write_bw_stub(workspace: ConfigWorkspace) -> tuple[Path, Path]:
+def write_bw_stub(cli: OtterdogCli) -> tuple[Path, Path]:
     """The stub bitwarden CLI in <workspace>/stubs; returns (stub dir, lock file: the vault is locked while it
     exists)."""
-    stubs, locked = workspace.root / "stubs", workspace.root / "bw-locked"
+    root = cli.workspace.root
+    stubs, locked = root / "stubs", root / "bw-locked"
     stubs.mkdir(mode=0o700, exist_ok=True)
     script = stubs / "bw"
-    script.write_text(
-        BW_STUB.format(locked=locked.resolve(), item=BW_ITEM, no_totp=BW_ITEM_WITHOUT_TOTP, token=DUMMY),
-        encoding="utf-8",
-    )
+    text = BW_STUB.format(locked=cli.process_path(locked), item=BW_ITEM, no_totp=BW_ITEM_WITHOUT_TOTP, token=DUMMY)
+    script.write_text(text, encoding="utf-8")
     script.chmod(stat.S_IRWXU)
     return stubs, locked
 
 
-def write_pass_stub(workspace: ConfigWorkspace) -> tuple[Path, Path]:
+def write_pass_stub(cli: OtterdogCli) -> tuple[Path, Path]:
     """The stub pass CLI in <workspace>/stubs and an empty store directory; returns (stub dir, store dir)."""
-    stubs, store = workspace.root / "stubs", workspace.root / "pass-store"
+    root = cli.workspace.root
+    stubs, store = root / "stubs", root / "pass-store"
     stubs.mkdir(mode=0o700, exist_ok=True)
     store.mkdir(mode=0o700, exist_ok=True)
     script = stubs / "pass"
-    script.write_text(PASS_STUB.format(store=store.resolve(), path=PASS_TOKEN_PATH, token=DUMMY), encoding="utf-8")
+    text = PASS_STUB.format(store=cli.process_path(store), path=PASS_TOKEN_PATH, token=DUMMY)
+    script.write_text(text, encoding="utf-8")
     script.chmod(stat.S_IRWXU)
     return stubs, store
 
 
-def stub_path(stubs: Path) -> dict[str, str]:
-    """PATH with the stub directory first (the system PATH after it: the sandbox command is looked up there)."""
-    return {"PATH": f"{stubs.resolve()}{os.pathsep}{os.environ.get('PATH', '/usr/bin:/bin')}"}
+def stub_path(cli: OtterdogCli, stubs: Path) -> dict[str, str]:
+    """PATH with the stub directory first, then the system PATH of the process (the sandbox command and /bin/sh)."""
+    return {"PATH": cli.search_path(stubs)}
 
 
 # --- env provider ---------------------------------------------------------------------------------------------------
@@ -308,10 +303,9 @@ def test_pass_provider_with_a_stub_store(vendored_cli: OtterdogCli) -> None:
     gives the token, the path being the organization's api_token or defaults.pass.api_token_pattern with its
     {github_id} placeholder. An organization path the store lacks and an inaccessible store are refused with the CLI's
     own message; a pattern path the store lacks only warns (the pattern lookup of api_token is not strict)."""
-    host_only(vendored_cli)
-    stubs, store = write_pass_stub(vendored_cli.workspace)
-    env = stub_path(stubs)
-    store_dir = {"password_store_dir": str(store.resolve())}
+    stubs, store = write_pass_stub(vendored_cli)
+    env = stub_path(vendored_cli, stubs)
+    store_dir = {"password_store_dir": vendored_cli.process_path(store)}
     use_credentials(vendored_cli, {"provider": "pass", "api_token": PASS_TOKEN_PATH}, defaults={"pass": store_dir})
     succeeded(validate(vendored_cli, env))
     pattern = {"pass": {**store_dir, "api_token_pattern": "e2e/{github_id}/api_token"}}
@@ -334,11 +328,10 @@ def test_pass_provider_with_a_stub_store(vendored_cli: OtterdogCli) -> None:
 def test_pass_store_dir_from_the_defaults_override(vendored_cli: OtterdogCli) -> None:
     """#725: defaults.pass.password_store_dir given by .otterdog-defaults.json (and only there) reaches the pass
     provider: the stub store answers and the organization validates."""
-    host_only(vendored_cli)
-    stubs, store = write_pass_stub(vendored_cli.workspace)
-    override = {"pass": {"password_store_dir": str(store.resolve())}}
+    stubs, store = write_pass_stub(vendored_cli)
+    override = {"pass": {"password_store_dir": vendored_cli.process_path(store)}}
     use_credentials(vendored_cli, {"provider": "pass", "api_token": PASS_TOKEN_PATH}, override=override)
-    succeeded(validate(vendored_cli, stub_path(stubs)))
+    succeeded(validate(vendored_cli, stub_path(vendored_cli, stubs)))
 
 
 @pytest.mark.scenario("O-CREDENTIALS-PROVIDERS")
@@ -346,9 +339,8 @@ def test_bitwarden_provider_with_a_stub_vault(local_apply_cli: OtterdogCli) -> N
     """bitwarden: the item's api_token_admin field (or the organization's api_token_key, or defaults.bitwarden
     api_token_key) gives the token; a missing item, a missing field, a missing item_id and a locked vault are refused
     with the provider's message; local-apply without -n also reads the login and refuses an item without totp."""
-    host_only(local_apply_cli)
-    stubs, locked = write_bw_stub(local_apply_cli.workspace)
-    env = stub_path(stubs)
+    stubs, locked = write_bw_stub(local_apply_cli)
+    env = stub_path(local_apply_cli, stubs)
     use_credentials(local_apply_cli, {"provider": "bitwarden", "item_id": BW_ITEM})
     succeeded(validate(local_apply_cli, env))
     use_credentials(local_apply_cli, {"provider": "bitwarden", "item_id": BW_ITEM, "api_token_key": "e2e_token"})
@@ -394,19 +386,18 @@ def test_credential_lookups_never_reach_a_shell(vendored_cli: OtterdogCli) -> No
     answer that they hold no such entry) and run nothing; a key or item id starting with '-' is refused before the CLI
     runs, since it would read it as an option. Before 1.8.0 the command line went through /bin/sh -c and the injected
     command ran (KB-086)."""
-    host_only(vendored_cli)
-    workspace = vendored_cli.workspace
-    stubs, store = write_pass_stub(workspace)
-    write_bw_stub(workspace)  # the same stubs directory
-    env = stub_path(stubs)
-    marker = (workspace.root / "e2e-shell-ran").resolve()
-    store_dir = {"pass": {"password_store_dir": str(store.resolve())}}
+    stubs, store = write_pass_stub(vendored_cli)
+    write_bw_stub(vendored_cli)  # the same stubs directory
+    env = stub_path(vendored_cli, stubs)
+    marker = (vendored_cli.workspace.root / "e2e-shell-ran").resolve()  # mounted: a container creates it here too
+    touch = f"touch {vendored_cli.process_path(marker)}"
+    store_dir = {"pass": {"password_store_dir": vendored_cli.process_path(store)}}
 
-    use_credentials(vendored_cli, {"provider": "pass", "api_token": f"e2e/x;touch {marker}"}, defaults=store_dir)
+    use_credentials(vendored_cli, {"provider": "pass", "api_token": f"e2e/x;{touch}"}, defaults=store_dir)
     no_shell_ran(marker, validate(vendored_cli, env), "pass key with ';'")
-    use_credentials(vendored_cli, {"provider": "pass", "api_token": f"e2e/$(touch {marker})"}, defaults=store_dir)
+    use_credentials(vendored_cli, {"provider": "pass", "api_token": f"e2e/$({touch})"}, defaults=store_dir)
     no_shell_ran(marker, validate(vendored_cli, env), "pass key with '$(...)'")
-    use_credentials(vendored_cli, {"provider": "bitwarden", "item_id": f"{BW_ITEM};touch {marker}"})
+    use_credentials(vendored_cli, {"provider": "bitwarden", "item_id": f"{BW_ITEM};{touch}"})
     no_shell_ran(marker, validate(vendored_cli, env), "bitwarden item id with ';'")
 
     use_credentials(vendored_cli, {"provider": "pass", "api_token": OPTION_LIKE}, defaults=store_dir)

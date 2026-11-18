@@ -10,7 +10,8 @@ cli.kb.blueprint-commands-without-webapp (known bug KB-042): the two operation m
     install (``pip install otterdog``: "No module named 'otterdog.webapp'"; ``poetry sync --only main``, the
     harness's host install: "No module named 'quart_flask_patch'") crashes with a ModuleNotFoundError traceback
     (exit 1) before the base_url check. The test asserts the documented refusal. It only runs where the bug can show:
-    a host install of the SUT without the webapp dependencies (the SUT image of untrusted SUTs bundles them).
+    a host install of a trusted SUT without the webapp dependencies (E2E_CLI_RUNTIME aside: the SUT images bundle
+    them, and untrusted SUTs never run on the host).
 
 The commands against a running webapp (a remediation PR listed, then merged) need a CLI with the ``app`` group in a
 build directory of its own and the webapp tier's ``blueprints`` fixture (W-BP-APPROVE, tests/webapp).
@@ -27,7 +28,8 @@ import pytest
 from otterdog_acceptance.otterdog.workspace import WorkspaceLayout
 
 if TYPE_CHECKING:
-    from otterdog_acceptance.otterdog.runner import CliResult, OtterdogCli
+    from otterdog_acceptance.context import E2EContext
+    from otterdog_acceptance.otterdog.runner import CliResult
     from otterdog_acceptance.otterdog.workspace import ConfigWorkspace
     from otterdog_acceptance.sut.cli_install import InstalledCli
 
@@ -50,21 +52,22 @@ def webapp_dependencies_installed(sut: InstalledCli) -> bool:
 @pytest.mark.parametrize("command", ["list-blueprints", "approve-blueprints"])
 def test_blueprint_commands_need_a_base_url(
     command: str,
+    e2e: E2EContext,
     sut: InstalledCli,
     fresh_workspace: ConfigWorkspace,
-    make_cli: Callable[[ConfigWorkspace], OtterdogCli],
     cli_lines: Callable[[CliResult], str],
 ) -> None:
     """Without defaults.base_url the command refuses to run ('no base_url set ...', exit 2) instead of crashing on
     the webapp modules a CLI-only install lacks (KB-042)."""
-    if sut.runtime != "host":
-        pytest.skip(f"the SUT runs in its image ({sut.runtime}), which bundles the webapp dependencies")
-    if webapp_dependencies_installed(sut):
+    if not sut.sut.trusted:
+        pytest.skip(f"{sut.sut.label} runs only in its image, which bundles the webapp dependencies")
+    host = e2e.host_installed("head")  # a CLI-only install, as `pip install otterdog` gives: the host venv
+    if webapp_dependencies_installed(host):
         pytest.skip("the SUT install holds the webapp dependencies (app group): the CLI-only install is not tested")
     document = copy.deepcopy(fresh_workspace.otterdog_json())
     document["defaults"].pop("base_url", None)
     fresh_workspace.use_layout(WorkspaceLayout(document=document))
-    result = make_cli(fresh_workspace).run(command)
+    result = e2e.cli(host, fresh_workspace, name=f"ws-{fresh_workspace.root.name}").run(command)
     text = cli_lines(result)
     crash = [marker for marker in CRASH_MARKERS if marker in text]
     assert not crash, f"{command} crashed ({', '.join(crash)}):\n{text[-1500:]}"

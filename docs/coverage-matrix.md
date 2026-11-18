@@ -645,7 +645,7 @@ Details:
     - Source: `otterdog/credentials/__init__.py:101-155`, `otterdog/credentials/plain_provider.py:24-58`, `otterdog/credentials/pass_provider.py:29-136`, `otterdog/credentials/bitwarden_provider.py:25-120`, `otterdog/credentials/vault_provider.py:37-305`
     - Operations: config, error
     - Known bugs: KB-086
-    - Notes: plain, default provider, unexpected defaults keys, 'unsupported credential provider', 'no credential provider configured', pass (stub CLI) and bitwarden (stub CLI) covered on host runtimes; since 1.8.0 (GHSA-886p-g538-rcmp, KB-086) their lookups never reach a shell ('pass show &lt;key&gt;', ';' and '$(...)' run nothing) and a key or item id starting with '-' is refused.
+    - Notes: plain, default provider, unexpected defaults keys, 'unsupported credential provider', 'no credential provider configured', pass (stub CLI) and bitwarden (stub CLI) covered in the SUT image and on host runtimes (the stubs first on the PATH of the otterdog process); since 1.8.0 (GHSA-886p-g538-rcmp, KB-086) their lookups never reach a shell ('pass show &lt;key&gt;', ';' and '$(...)' run nothing) and a key or item id starting with '-' is refused.
     - Suggested: `O-CREDENTIALS-PROVIDERS` in `tests/offline/test_config_credentials.py`
     - Steps:
         - provider vault with defaults.vault {vault_addr: &lt;mock&gt;, vault_token: e2e-dummy, mount_point: e2e} and a Vault KV mock answering &lt;github_id&gt;/github.com/api-token

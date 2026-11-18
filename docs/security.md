@@ -255,8 +255,9 @@ The web-UI tier ([web-ui-testing.md](web-ui-testing.md)) lets otterdog log in to
 - the credentials are resolved apart from the tokens (`settings.WebCredentials`), must belong to the admin machine
   account, and reach otterdog only for the commands that log in, through the env credential provider; ordinary CLIs
   and every other command get `unset`;
-- `WebOtterdogCli` refuses container runtimes and untrusted SUTs (even with `--e2e-trust-code`); the Playwright
-  browser is installed only with the Playwright of trusted host installs;
+- `WebOtterdogCli` refuses container runtimes and untrusted SUTs (even with `--e2e-trust-code`): the web mode gets a
+  host install of its trusted SUT (`host_installed`) even though every other command runs in the SUT image; the
+  Playwright browser is installed only with the Playwright of trusted host installs;
 - the password and the seed are redacted (their variable names end with `_PASSWORD` and `_TOTP_SEED`); otterdog never
   gets more than `-v` (`-vvv` logs TOTP codes and exception locals); its Playwright page dumps stay in the scratch;
 - a login gate serializes the web logins of a machine and spaces them by a TOTP window; a blocking login failure

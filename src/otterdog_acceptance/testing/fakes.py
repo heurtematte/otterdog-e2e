@@ -22,6 +22,7 @@ import fnmatch
 import hashlib
 import itertools
 import json
+import os
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -1264,6 +1265,14 @@ class FakeCli:
     def http_cache_dir(self) -> Path:
         """A fixed (never created) HTTP cache path."""
         return FAKE_CLI_CWD / "http-cache"
+
+    def process_path(self, path: Path) -> str:
+        """``path`` as a host process sees it (the fake has no container)."""
+        return str(path.resolve())
+
+    def search_path(self, first: Path) -> str:
+        """A PATH with ``first`` before a fixed system PATH."""
+        return f"{self.process_path(first)}{os.pathsep}/usr/bin:/bin"
 
     def _next(
         self, command: str, args: Sequence[str] = (), /, **kwargs: Any

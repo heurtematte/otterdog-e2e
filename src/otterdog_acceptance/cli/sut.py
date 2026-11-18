@@ -58,7 +58,7 @@ def sut_install(spec: str) -> None:
         resolved = context.resolve(spec)
         if not resolved.trusted:
             raise click.ClickException(f"{resolved.label} is untrusted: it never runs on the host (use `sut image`)")
-        installed = context.installed("head")
+        installed = context.host_installed("head")
         _echo_json(
             {
                 "label": resolved.label,

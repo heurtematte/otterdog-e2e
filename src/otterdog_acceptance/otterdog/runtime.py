@@ -43,6 +43,7 @@ CONTAINER_WORKDIR = "/ws"
 CONTAINER_CWD = f"{CONTAINER_WORKDIR}/cwd"
 CWD_DIR = "cwd"  # name of otterdog's cwd inside the mounted workdir (container runtimes)
 CONTAINER_ENV = {"HOME": "/tmp", "COLUMNS": "4096", "NO_COLOR": "1", "PYTHON_DOTENV_DISABLED": "1"}  # noqa: S108
+CONTAINER_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"  # the system PATH of the SUT images
 HARDENING = ("--cap-drop", "ALL", "--security-opt", "no-new-privileges")
 CONTAINER_PREFIX = (
     "otterdog-e2e"  # container names: otterdog-e2e-<run>-<seq> (docker names keep the former project name)

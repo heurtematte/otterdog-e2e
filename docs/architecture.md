@@ -60,7 +60,7 @@ flowchart LR
   subgraph sut["sut/"]
     SPEC["spec.py<br/>parse, resolve, trust"]
     SRC["source.py<br/>upstream mirror, export"]
-    INST["cli_install.py<br/>trusted host venv"]
+    INST["cli_install.py<br/>image CLI, trusted host venv"]
     IMG["image.py<br/>webapp image"]
     TPL["template.py<br/>base template"]
   end
@@ -132,7 +132,7 @@ roles, otterdog (CLI and webapp) and the test organization interact.
 | Tier | Needs | Timeout per test |
 |---|---|---|
 | unit | nothing | none (pytest default) |
-| offline | SUT, docker for the webapp part | 300 s |
+| offline | SUT image (docker: the CLI and the webapp part; a host venv with `E2E_CLI_RUNTIME=host`) | 300 s |
 | cli | target + admin identity | 600 s |
 | webhooks | target (+ App) | 900 s |
 | webapp | target + App + docker | 900 s |
@@ -150,9 +150,9 @@ live session (verification, probes, the org lease and `E2E_LEASE_WAIT`) is built
 session fixtures the first live item triggers (template clone, first baseline reset) are bounded by the per-command
 timeouts of otterdog and the HTTP clients instead; a timeout there would otherwise be cached by the session fixture
 and error every later item. An interrupted live setup leaves no live session: it is reported by every live item, and
-a session whose org lease is lost (failed renewal) stops being live. Time budgets (checked by `report.py`, overruns flagged in `summary.md`, never failures): offline 10 min per
-SUT, P0 cli 30 min (4 min per scenario), P0 webapp 25 min (5 min per PR flow), web_ui 30 min, differential 15 min,
-`pr-fast` lane 45 min.
+a session whose org lease is lost (failed renewal) stops being live. Time budgets (checked by `report.py`, overruns
+flagged in `summary.md`, never failures): offline 20 min per SUT (its CLI runs in the SUT image), P0 cli 30 min (4 min
+per scenario), P0 webapp 25 min (5 min per PR flow), web_ui 30 min, differential 15 min, `pr-fast` lane 45 min.
 
 ## Organizations and shards
 
@@ -305,9 +305,17 @@ flowchart TD
   R -->|"yes"| T
   R -->|"no"| U["untrusted"]
   K -->|"pr:N@sha"| U
-  T --> TH["CLI in a host venv (pinned poetry, locked deps)<br/>trusted caches"]
+  T --> TD["CLI and webapp in the SUT docker image (reused)<br/>host venv: E2E_CLI_RUNTIME=host, web mode"]
   U --> UD["CLI and webapp only in the SUT docker image<br/>untrusted cache namespace, private export"]
 ```
+
+- Every otterdog command runs in the docker image of its SUT, trusted or not (`otterdog/runtime.py` DockerRuntime:
+  read-only root, no capabilities, `--network none` for offline commands), so offline commands need no `unshare`
+  sandbox, and the base and head of a differential both run with the Python of their image instead of the host's against
+  the image's. `E2E_CLI_RUNTIME=host` (environment or env file of the instance) installs trusted SUTs in a host venv
+  instead (pinned poetry, locked dependencies), whose offline commands run under `unshare -rn`. The web mode of the
+  web-UI tier always uses the host venv: the admin's web login never reaches a container, and the browser is the SUT's
+  own Playwright Firefox.
 
 - The upstream mirror is a blob-less bare clone; every git command disables hooks and fsmonitor; trusted refs are
   cross-checked with `git ls-remote`.

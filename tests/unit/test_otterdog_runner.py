@@ -16,7 +16,7 @@ import pytest
 
 from otterdog_acceptance.otterdog import runner as runner_module
 from otterdog_acceptance.otterdog.runner import OtterdogCli, infra_error_line
-from otterdog_acceptance.otterdog.runtime import DockerRuntime, set_container_scope
+from otterdog_acceptance.otterdog.runtime import CONTAINER_PATH, DockerRuntime, set_container_scope
 from otterdog_acceptance.otterdog.workspace import ConfigWorkspace
 from otterdog_acceptance.safety import SafetyError
 from otterdog_acceptance.settings import HarnessSettings, Identity
@@ -786,3 +786,16 @@ def test_a_report_planted_as_a_link_is_never_followed(env: Env, tmp_path: Path) 
     plant(env, {"path": "api-usage.json", "link": str(secret)})
     result = container_cli(env).validate()
     assert result.api_usage is None
+
+
+def test_process_path_and_search_path(env: Env, monkeypatch: pytest.MonkeyPatch) -> None:
+    """process_path: a workspace path as otterdog sees it (unchanged on the host, below /ws in a container, other
+    host paths unchanged); search_path puts a directory before the system PATH of the process."""
+    monkeypatch.setenv("PATH", "/host/bin")
+    stubs = env.workspace.root / "stubs"
+    host, docker = env.cli(offline=True), docker_cli(env)
+    assert host.process_path(stubs) == str(stubs.resolve())
+    assert host.search_path(stubs) == f"{stubs.resolve()}{os.pathsep}/host/bin"
+    assert docker.process_path(stubs) == "/ws/stubs" and docker.process_path(env.workspace.root) == "/ws"
+    assert docker.process_path(env.scratch / "elsewhere") == str((env.scratch / "elsewhere").resolve())
+    assert docker.search_path(stubs) == f"/ws/stubs{os.pathsep}{CONTAINER_PATH}"

@@ -78,7 +78,8 @@ is not a `run`/`pr` option; call pytest directly:
   `otterdog.sh`, `Makefile`) and never copies secrets or local state (`*.pem`, `*.key`, `.env*`, `values*.yaml`,
   `otterdog.json`, `otterdog.jsonnet`, `orgs/**`, `approot/**`, `github-app/**`, `.venv/**`, `*.sqlite`, ...).
   Labels: `local-<sha7>` and `local-<sha7>-dirty-<hash8>`; the version carries `.dirty.<hash8>`.
-- Local SUTs are trusted (your own code): the CLI is installed on the host.
+- Local SUTs are trusted (your own code): the CLI runs in the image built from the export, or in a host venv with
+  `E2E_CLI_RUNTIME=host`.
 - The checkout is only read. Every git command on it runs with `GIT_OPTIONAL_LOCKS=0`, so even the index is not
   refreshed. Verified with a clean checkout (`dirty:` of a checkout without changes gives label `local-<sha7>`):
   `git status`, HEAD, refs, stash, the content hash of every file and the mtimes of `.git` and `.git/index` were

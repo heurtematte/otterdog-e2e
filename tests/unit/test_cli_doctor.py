@@ -127,6 +127,7 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
     monkeypatch.setattr("otterdog_acceptance.onboard.accounts.load_accounts_config", lambda environ: world.accounts)
     monkeypatch.setattr("otterdog_acceptance.vaults.resolve", world.resolve)
     monkeypatch.delenv("CI", raising=False)
+    monkeypatch.delenv("E2E_CLI_RUNTIME", raising=False)
     for spec in ROLE_TOKENS.values():
         monkeypatch.delenv(spec.login_env, raising=False)
     monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
@@ -367,14 +368,31 @@ def test_app_installed_on_a_foreign_org_fails_the_isolation_row(world: World) ->
 
 
 def test_missing_tokens_and_tools(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Declared identities without tokens WARN; docker WARN; unshare FAIL in CI."""
+    """Declared identities without tokens WARN; with E2E_CLI_RUNTIME=host, docker WARN and unshare FAIL in CI."""
     world.identities = make_identities("admin")
     world.docker = False
     world.unshare = False
     monkeypatch.setenv("CI", "true")
+    monkeypatch.setenv("E2E_CLI_RUNTIME", "host")
     _code, rows = doctor_json()
     assert rows["env:author"]["status"] == "WARN" and "E2E_AUTHOR_TOKEN" in rows["env:author"]["detail"]
     assert rows["docker"]["status"] == "WARN" and rows["unshare"]["status"] == "FAIL"
+
+
+def test_cli_runtime_rows(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The CLIs run in docker by default: docker FAIL without a daemon, unshare not needed even when it is missing;
+    an unknown E2E_CLI_RUNTIME FAILs."""
+    world.unshare = False
+    monkeypatch.setenv("CI", "true")
+    _code, rows = doctor_json()
+    assert rows["docker"]["status"] == "OK" and "SUT images" in rows["docker"]["detail"]
+    assert rows["unshare"]["status"] == "OK" and "not needed" in rows["unshare"]["detail"]
+    world.docker = False
+    code, rows = doctor_json()
+    assert code == 1 and rows["docker"]["status"] == "FAIL" and "E2E_CLI_RUNTIME=host" in rows["docker"]["remediation"]
+    monkeypatch.setenv("E2E_CLI_RUNTIME", "vm")
+    code, rows = doctor_json()
+    assert code == 1 and rows["runtime"]["status"] == "FAIL" and "'vm'" in rows["runtime"]["detail"]
 
 
 def test_missing_admin_token(world: World) -> None:

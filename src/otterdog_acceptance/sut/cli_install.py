@@ -1,7 +1,11 @@
-"""Host installation of the otterdog CLI for trusted SUTs (SPEC 10.4).
+"""Host installation of the otterdog CLI for trusted SUTs (SPEC 10.4), and the CLI inside a SUT image (image_cli).
+
+Every SUT runs through image_cli by default, trusted ones included: ``E2E_CLI_RUNTIME`` (cli_runtime) is ``docker``
+unless set to ``host``, which installs trusted SUTs on the host instead. A host install is still made for what cannot
+run in a container: the web mode (web credentials never reach a container, its Playwright Firefox) and ``sut install``.
 
 Untrusted SUTs never run on the host: install_cli raises SafetyError for them (unless ``--e2e-trust-code <sha>`` was
-given interactively, refused in CI: see grant_host_trust); they run through image_cli (the CLI inside the SUT image).
+given interactively, refused in CI: see grant_host_trust); they always run through image_cli.
 
 Installs use a private Poetry tool venv (never the operator's poetry: Poetry 2 installs a project's
 ``requires-plugins`` next to Poetry and writes their console scripts into Poetry's own bin directory) and a locked
@@ -48,6 +52,8 @@ IMAGE_OTTERDOG_BIN = "/app/.venv/bin/otterdog"
 INSTALL_MARKER = ".e2e-installed.json"
 TOOL_MARKER = ".e2e-tool.json"
 RUNTIMES = ("host", "docker")
+CLI_RUNTIME_ENV = "E2E_CLI_RUNTIME"  # where the CLI of a trusted SUT runs (untrusted SUTs: always docker)
+DEFAULT_CLI_RUNTIME = "docker"
 TOOL_TIMEOUT = 1200.0
 SYNC_TIMEOUT = 1800.0
 VERSION_TIMEOUT = 300.0
@@ -60,6 +66,15 @@ PIP_ENV: Mapping[str, str] = {"PIP_CONFIG_FILE": os.devnull, "PIP_DISABLE_PIP_VE
 _VERSION_OUTPUT_RE = re.compile(r"version\s+(\S+)")
 
 _logger = logging.getLogger(__name__)
+
+
+def cli_runtime(environ: Mapping[str, str]) -> str:
+    """Where the CLI of a trusted SUT runs: ``E2E_CLI_RUNTIME`` of ``environ``, ``docker`` (the default: the CLI of its
+    image, like untrusted SUTs) or ``host`` (a host venv); ValueError for another value."""
+    value = (environ.get(CLI_RUNTIME_ENV) or "").strip().lower() or DEFAULT_CLI_RUNTIME
+    if value not in RUNTIMES:
+        raise ValueError(f"{CLI_RUNTIME_ENV}={value!r}: expected {' or '.join(sorted(RUNTIMES))}")
+    return value
 
 
 @dataclass

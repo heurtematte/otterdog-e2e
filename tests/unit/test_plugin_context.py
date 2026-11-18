@@ -542,7 +542,7 @@ def suts(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
         "pr:792@" + fake_sha("pr"): FakeResolved("pr792-abc1234", fake_sha("pr"), False, base_sha=fake_sha("base")),
         "sha:" + fake_sha("base"): FakeResolved("sha-base", fake_sha("base"), True),
     }
-    state: dict[str, Any] = {"resolved": resolved, "installs": [], "images": []}
+    state: dict[str, Any] = {"resolved": resolved, "installs": [], "images": [], "docker": True}
 
     def install(sut: Any, settings: Any, **kwargs: Any) -> Any:
         """Record a host install."""
@@ -565,22 +565,66 @@ def suts(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     monkeypatch.setattr("otterdog_acceptance.sut.cli_install.install_cli", install)
     monkeypatch.setattr("otterdog_acceptance.sut.cli_install.image_cli", image_cli)
     monkeypatch.setattr("otterdog_acceptance.sut.image.build_webapp_image", build)
+    monkeypatch.setattr("otterdog_acceptance.sut.image.docker_available", lambda: state["docker"])
     monkeypatch.setattr(
         "otterdog_acceptance.github.http.GitHubHttp", lambda token, **kw: FakeGitHubHttp(identity="anonymous")
     )
     return state
 
 
-def test_trusted_sut_installs_on_host(tmp_path: Path, suts: dict[str, Any]) -> None:
-    """A trusted SUT is installed on the host and recorded in run.json."""
+def test_trusted_sut_runs_in_its_image_by_default(tmp_path: Path, suts: dict[str, Any]) -> None:
+    """A trusted SUT runs in its image too (E2E_CLI_RUNTIME unset: docker), recorded in run.json; nothing is
+    installed on the host."""
     context = new_context(tmp_path)
     installed = context.installed("head")
-    assert installed.runtime == "host" and installed is context.installed("head")
-    assert len(suts["installs"]) == 1
+    assert installed.runtime == "docker" and installed is context.installed("head")
+    assert suts["images"] == ["v1.6.1"] and not suts["installs"]
     run = json.loads((context.artifacts_dir / "run.json").read_text())
-    assert run["sut"]["label"] == "v1.6.1" and run["sut"]["runtime"] == "host"
-    assert run["versions"]["head"] == "otterdog.sh, version 1.6.1"
+    assert run["sut"]["label"] == "v1.6.1" and run["sut"]["runtime"] == "docker"
+    assert run["versions"]["head"] == "otterdog.sh, version 1.7.0"
     assert context.sut_label() == "v1.6.1"
+
+
+def test_cli_runtime_host_installs_trusted_suts_on_the_host(tmp_path: Path, suts: dict[str, Any]) -> None:
+    """E2E_CLI_RUNTIME=host: a trusted SUT is installed on the host (one install, shared with host_installed) and
+    recorded in run.json; an untrusted SUT still runs in its image."""
+    settings = make_settings(tmp_path)
+    context = E2EContext.create(
+        E2EOptions(run_id=FAKE_RUN_ID), environ={"E2E_CLI_RUNTIME": " Host "}, settings=settings
+    )
+    installed = context.installed("head")
+    assert installed.runtime == "host" and installed is context.host_installed("head")
+    assert len(suts["installs"]) == 1 and not suts["images"]
+    run = json.loads((context.artifacts_dir / "run.json").read_text())
+    assert run["sut"]["runtime"] == "host" and run["versions"]["head"] == "otterdog.sh, version 1.6.1"
+    pr = E2EContext.create(
+        E2EOptions(sut="pr:792@" + fake_sha("pr")), environ={"E2E_CLI_RUNTIME": "host"}, settings=settings
+    )
+    assert pr.installed("head").runtime == "docker" and len(suts["installs"]) == 1
+
+
+def test_host_installed_is_for_trusted_suts(tmp_path: Path, suts: dict[str, Any]) -> None:
+    """host_installed (web mode, ``sut install``) installs a trusted SUT on the host whatever E2E_CLI_RUNTIME says,
+    once per role, and refuses an untrusted one."""
+    context = new_context(tmp_path)
+    assert context.host_installed("head").runtime == "host" and context.installed("head").runtime == "docker"
+    assert context.host_installed("head") is context.host_installed("head") and len(suts["installs"]) == 1
+    with pytest.raises(SafetyError, match="never runs on the host"):
+        new_context(tmp_path, sut="pr:792@" + fake_sha("pr")).host_installed("head")
+
+
+def test_cli_runtime_errors(tmp_path: Path, suts: dict[str, Any]) -> None:
+    """Without a docker daemon a trusted SUT cannot run in its image (ContextError naming E2E_CLI_RUNTIME=host); an
+    unknown E2E_CLI_RUNTIME is a ValueError."""
+    suts["docker"] = False
+    with pytest.raises(ContextError, match="E2E_CLI_RUNTIME=host"):
+        new_context(tmp_path).installed("head")
+    bad = E2EContext.create(
+        E2EOptions(run_id=FAKE_RUN_ID), environ={"E2E_CLI_RUNTIME": "vm"}, settings=make_settings(tmp_path)
+    )
+    with pytest.raises(ValueError, match="expected docker or host"):
+        bad.installed("head")
+    assert not suts["images"] and not suts["installs"]
 
 
 def test_untrusted_sut_runs_in_its_image(tmp_path: Path, suts: dict[str, Any]) -> None:
@@ -687,7 +731,7 @@ def test_base_spec_auto_is_the_merge_base(tmp_path: Path, suts: dict[str, Any]) 
     """--e2e-base-sut auto resolves to the SUT's merge base; missing options raise ContextError."""
     context = new_context(tmp_path, sut="pr:792@" + fake_sha("pr"), base_sut="auto")
     assert context.spec_for("base") == "sha:" + fake_sha("base")
-    assert context.installed("base").runtime == "host"
+    assert context.installed("base").runtime == "docker" and suts["images"] == ["sha-base"]
     with pytest.raises(ContextError, match="--e2e-base-sut"):
         new_context(tmp_path).spec_for("base")
     with pytest.raises(ContextError, match="no merge base"):

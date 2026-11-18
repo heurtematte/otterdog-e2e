@@ -1,9 +1,10 @@
 """SUT facet of the session context (SPEC 5.5, SPEC 15): the systems under test and the otterdog drivers.
 
 SutFacet resolves the SUT of each role (head: --e2e-sut, base: --e2e-base-sut with ``auto`` = the merge base, reset:
-the trusted --e2e-reset-sut), installs its CLI (host venv for trusted SUTs or one granted host trust with
---e2e-trust-code, the CLI of the SUT image otherwise), builds webapp images and templates, and creates the otterdog
-drivers (renderer, baseline manager, workspaces, CLIs) and the base/head sides of the differential (SutPair).
+the trusted --e2e-reset-sut), provides its CLI (the CLI of the SUT image, trusted SUTs included; a host venv for a
+trusted SUT with E2E_CLI_RUNTIME=host or one granted host trust with --e2e-trust-code; host_installed for the web mode,
+whose credentials never reach a container), builds webapp images and templates, and creates the otterdog drivers
+(renderer, baseline manager, workspaces, CLIs) and the base/head sides of the differential (SutPair).
 """
 
 from __future__ import annotations
@@ -86,19 +87,53 @@ class SutFacet(LiveFacet):
         return self._memo(f"resolved:{spec}", build)
 
     def installed(self, role: str) -> InstalledCli:
-        """InstalledCli of a role: host venv for trusted SUTs, the CLI of the SUT image otherwise (SPEC 5.5)."""
+        """InstalledCli of a role: the CLI of the SUT image (SPEC 5.5), or a host venv for a trusted SUT when
+        E2E_CLI_RUNTIME is ``host``."""
         return self._memo(f"installed:{role}", lambda: self._install(role))
+
+    def cli_runtime(self) -> str:
+        """Where the CLI of a trusted SUT runs (cli_install.cli_runtime: ``docker`` unless E2E_CLI_RUNTIME is
+        ``host``), read from the environment and the env files of the target."""
+        from otterdog_acceptance.settings import load_env_files, target_env_name
+        from otterdog_acceptance.sut.cli_install import cli_runtime
+
+        if self.options.target:
+            load_env_files(target_env_name(self.options.target), self.settings.project_root, self.environ)
+        return cli_runtime(self.environ)
+
+    def host_installed(self, role: str) -> InstalledCli:
+        """Host venv of a role's trusted SUT whatever E2E_CLI_RUNTIME says: the web mode (its credentials never reach a
+        container, its Playwright Firefox) and ``sut install``. SafetyError for an untrusted SUT."""
+
+        def build() -> InstalledCli:
+            """Install the CLI on the host."""
+            from otterdog_acceptance.safety import SafetyError
+            from otterdog_acceptance.sut.cli_install import install_cli
+
+            resolved = self.resolve(self.spec_for(role))
+            if not resolved.trusted:
+                raise SafetyError(f"SUT {resolved.label} is untrusted: it never runs on the host")
+            return install_cli(resolved, self.settings)
+
+        return self._memo(f"host_installed:{role}", build)
 
     def _install(self, role: str) -> InstalledCli:
         """Install (or wrap) the CLI of a role and record it in run.json."""
         from otterdog_acceptance.safety import SafetyError
-        from otterdog_acceptance.sut.cli_install import image_cli, install_cli
+        from otterdog_acceptance.sut.cli_install import CLI_RUNTIME_ENV, image_cli, install_cli
 
         resolved = self.resolve(self.spec_for(role))
         if role == "reset" and not resolved.trusted:
             raise SafetyError(f"the reset SUT {resolved.label} is not trusted: resets never run untrusted code")
-        if resolved.trusted:
-            installed = install_cli(resolved, self.settings)
+        if resolved.trusted and self.cli_runtime() == "host":
+            installed = self.host_installed(role)
+        elif resolved.trusted:
+            if not self.docker_available():
+                raise ContextError(
+                    f"the CLI of {resolved.label} runs in its docker image ({CLI_RUNTIME_ENV} is docker by default)"
+                    f" and the docker daemon does not answer: start docker, or set {CLI_RUNTIME_ENV}=host"
+                )
+            installed = image_cli(resolved, self.image_for(role))
         else:
             granted = self._host_trust(resolved)
             if granted is not None:

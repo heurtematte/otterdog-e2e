@@ -74,7 +74,7 @@ _YAML_LOADER: Any = getattr(yaml, "CSafeLoader", yaml.SafeLoader)  # libyaml whe
 SUMMARY_MAX_BYTES = 1024 * 1024  # GitHub job summaries are limited to 1 MiB
 # time budgets in seconds (SPEC 2); overruns are flagged in the summary, never failures
 BUDGETS: dict[str, int] = {
-    "offline": 600,
+    "offline": 1200,  # every CLI command in the SUT image: about 15 min for release:latest (2026-11-18)
     "cli": 1800,
     "cli_scenario": 240,
     "webapp": 1500,

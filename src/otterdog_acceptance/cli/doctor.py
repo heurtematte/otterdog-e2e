@@ -743,14 +743,31 @@ class Doctor:
             )
 
     def check_tools(self) -> None:
-        """docker (webapp tiers) and unshare (offline sandbox; required in CI)."""
+        """docker (the CLI of every SUT unless E2E_CLI_RUNTIME=host, the webapp tiers) and unshare (the offline sandbox
+        of host CLIs; required in CI)."""
         from otterdog_acceptance import procs
+        from otterdog_acceptance.sut.cli_install import CLI_RUNTIME_ENV, cli_runtime
 
+        try:
+            runtime: str | None = cli_runtime(self.ctx.environ)
+        except ValueError as exc:
+            self.add("runtime", FAIL, str(exc), f"set {CLI_RUNTIME_ENV} to docker (the default) or host")
+            runtime = None
         if self.ctx.docker_available():
-            self.add("docker", OK, "daemon answers")
+            detail = "otterdog runs in the SUT images" if runtime == "docker" else "webapp tiers"
+            self.add("docker", OK, f"daemon answers ({detail})")
+        elif runtime == "docker":
+            self.add(
+                "docker",
+                FAIL,
+                f"not available: otterdog runs in the SUT images ({CLI_RUNTIME_ENV}=docker, the default)",
+                f"start the docker daemon, or set {CLI_RUNTIME_ENV}=host",
+            )
         else:
             self.add("docker", WARN, "not available: webapp tests are skipped")
-        if procs.unshare_available():
+        if runtime == "docker":
+            self.add("unshare", OK, "not needed: offline commands run in docker without network")
+        elif procs.unshare_available():
             self.add("unshare", OK, "offline commands run without network")
         else:
             status = FAIL if in_ci(os.environ) else WARN

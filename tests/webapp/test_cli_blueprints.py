@@ -5,12 +5,13 @@ operations/list_blueprints.py, operations/approve_blueprints.py).
 Both commands read ``<defaults.base_url>/api/blueprints/remediations`` anonymously (``RuntimeError("no base_url set
 which is required when using operation '<command>'")`` without a base_url: the CLI prints it and exits 2) and import
 otterdog.webapp.db.models: they need otterdog's ``app`` dependency group, which the session's CLIs leave out, so the
-test installs the SUT CLI with it (sut.cli_install.install_cli with_app=True; trusted SUTs on the host only: the
-CLI must reach the webapp's loopback URL). ``list-blueprints`` prints a "Projects" table (Index, Blueprint ID, GitHub
-ID, Repo, PR url); ``approve-blueprints`` loads the local configuration (the repository must be declared), merges each
-listed remediation PR with the repository's merge method (rebase, else squash, else merge) and prints "Merging PR
-#<n>: merged.". The webapp then records the merged remediation (UpdateBlueprintStatusTask: recheck), deletes the
-``otterdog/blueprint/<id>`` branch (DeleteBranchTask) and, at the next check, sets the blueprint to success.
+test installs the SUT CLI with it (sut.cli_install.install_cli with_app=True; trusted SUTs on the host only, whatever
+E2E_CLI_RUNTIME says: the CLI must reach the webapp's loopback URL). ``list-blueprints`` prints a "Projects" table
+(Index, Blueprint ID, GitHub ID, Repo, PR url); ``approve-blueprints`` loads the local configuration (the repository
+must be declared), merges each listed remediation PR with the repository's merge method (rebase, else squash, else
+merge) and prints "Merging PR #<n>: merged.". The webapp then records the merged remediation
+(UpdateBlueprintStatusTask: recheck), deletes the ``otterdog/blueprint/<id>`` branch (DeleteBranchTask) and, at the
+next check, sets the blueprint to success.
 
 The remediation PR comes from an org ``required_file`` blueprint of this run on a run repository (BlueprintHelper,
 cleaned up by the ``blueprints`` fixture); ``-b <blueprint id>`` always restricts both commands to it (without it
@@ -78,8 +79,8 @@ def test_list_and_approve_blueprints(
     """list-blueprints lists the run's remediation PR (and refuses to run without base_url); approve-blueprints
     merges it; the webapp records the merge, deletes the remediation branch and the blueprint becomes success."""
     s, bp = webapp_scenario, blueprints
-    if sut.runtime != "host":
-        pytest.skip(f"the SUT CLI runs in {sut.runtime!r}: list/approve-blueprints need the webapp loopback URL")
+    if not sut.sut.trusted:
+        pytest.skip(f"{sut.sut.label} runs only in its image: list/approve-blueprints need the webapp loopback URL")
     repo = s.run_repo("target")
     main_text = s.declare_live({repo: s.describe("required_file target of the blueprint commands")})
     definition = BlueprintDefinition.required_file(
