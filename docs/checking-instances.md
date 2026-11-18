@@ -4,7 +4,7 @@
 accounts, organization, memberships, teams, repositories, GitHub App, web-UI credentials and local tools. It never runs
 otterdog, never logs in to the web UI and does not read the rate budgets of the identities, so only a run proves an
 installation. This page checks every organization at once, says which `WARN` rows matter, gives the runs that prove
-what doctor cannot and how GitHub Actions then runs them automatically.
+what doctor cannot and how GitHub Actions runs them, at night or on demand.
 
 ## Every organization at once
 
@@ -180,3 +180,55 @@ file, `E2E_SHARD` included, so that each job runs the share of its shard ([CI: c
 Every workflow of `main` can read the secrets of these environments, which only deploy from `main`: the security
 model protects `main` with a ruleset (pull request with review, no bypass), see
 [CI environments](security.md#ci-environments).
+
+### The whole suite on demand
+
+Each workflow also starts by hand, from the Actions tab of the repository (Run workflow) or with `gh workflow run`
+from a checkout of it; a run takes the workflows and the harness of `main`. Runs of one instance never overlap: they
+share the concurrency group `e2e-<instance>` with the nightly runs and the janitor, and wait for each other.
+
+- **Everything, as at night**: `nightly.yml` has no input. On each instance of `E2E_TARGETS`, `release:latest` (the
+  offline and live tiers), then `branch:main` against `release:latest` (the differential tier added), then the web-UI
+  tier on the instances of `E2E_WEB_UI_TARGETS` when `E2E_WEB_UI_ENABLED` is `true`:
+
+  ```bash
+  gh workflow run nightly.yml
+  gh run watch
+  ```
+
+- **One SUT on chosen instances**: `e2e.yml`, one job per instance, in parallel. Without `suites` it runs the default
+  tiers of `run` (offline, cli, webhooks, webapp and enterprise, plus the differential with a `base_sut`), each
+  instance the live items of its shard:
+
+  ```bash
+  gh workflow run e2e.yml -f target=enterprise,free,webapp,org-level,automation -f sut=release:latest
+  gh workflow run e2e.yml -f target=enterprise,free,webapp,org-level,automation -f sut=branch:main \
+    -f base_sut=release:latest
+  ```
+
+  | Input | Value |
+  |---|---|
+  | `target` | instances, comma separated, at most 8, each in the allowlist `E2E_INSTANCES` (default `free`) |
+  | `sut` | `release:latest` (default), `tag:vX.Y.Z`, `branch:main`, `sha:<hex>` or `pr:<N>@<40-hex sha>`; an untrusted SUT waits for an approval of `e2e-<instance>-untrusted` |
+  | `base_sut` | the base of the differential tier (`auto`: the merge base of a `pr:` SUT); empty: no differential |
+  | `suites` | comma separated tiers instead of the default; `auto`, for a `pr:` SUT only, picks them from its changed files |
+  | `tags`, `scenario`, `k` | narrow the selection: scenario tags, scenario id globs (`cli.smoke`), a pytest `-k` expression |
+  | `lane` | `nightly-full` (default) or `pr-fast`: the time budgets the report checks |
+  | `strict_diff` | fail on unexpected differential deltas |
+
+- **The web-UI tier**: its own workflow and environment (`e2e-<instance>-webui`), trusted SUTs only, one instance at a
+  time ([web-ui-testing.md](web-ui-testing.md)):
+
+  ```bash
+  gh workflow run e2e-webui.yml -f target=org-level -f sut=release:latest
+  ```
+
+- **A pull request of otterdog**, pinned to the commit you reviewed, after an approval of the untrusted environments
+  ([testing an otterdog PR](testing-an-otterdog-pr.md#in-ci)):
+
+  ```bash
+  gh workflow run e2e-otterdog-pr.yml -f pr=<N> -f sha=<40-hex sha> -f target=enterprise,free,webapp,org-level,automation
+  ```
+
+Each job writes the report of its instance (`summary.md`) to its job summary and uploads the artifacts of its run,
+kept 7 days, once `scrub-artifacts` found no secret in them: `gh run download <run id>` fetches them.
