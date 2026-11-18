@@ -455,3 +455,18 @@ def test_external_webapp_init_url() -> None:
     responses.replace(responses.GET, "http://127.0.0.1:5001/internal/init", status=500, json={})
     with pytest.raises(WebappStackError):
         webapp.init()
+
+
+@responses.activate
+def test_external_webapp_init_waits_for_a_running_init() -> None:
+    """Since otterdog#949 an init while one runs answers 429 with Retry-After: init() sleeps it and calls again."""
+    webapp = ExternalWebapp("http://127.0.0.1:5000", init_url="http://127.0.0.1:5001/internal/init")
+    sleeps: list[float] = []
+    webapp.api.sleep = sleeps.append
+    url = "http://127.0.0.1:5001/internal/init"
+    responses.get(
+        url, status=429, json={"status": "an initialization is already running"}, headers={"Retry-After": "60"}
+    )
+    responses.get(url, json={})
+    webapp.init()
+    assert sleeps == [60.0] and len(responses.calls) == 2

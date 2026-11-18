@@ -17,7 +17,9 @@ exactly ``application/json`` or ``application/x-www-form-urlencoded`` with a ``p
 parameter too -> 415), a ``null`` body and undecodable JSON answer 400; accepted deliveries answer 204 (ping, events
 nobody handles, events of an installation the webapp does not know, which it logs as "received event for unknown
 installation '<id>'"), replays included (no deduplication). Each event is logged with a description built from its
-payload (``<description> (<delivery id>)``), workflow_job only when queued and workflow_run only when completed.
+payload (``<description> (<delivery id>)``), workflow_job only when queued and workflow_run only when completed (SUTs
+with #944, an open pull request removing the dependency_track_upload policy and its workflow_run hook, describe every
+workflow_run delivery as ``workflow_run (<delivery id>)``).
 Since 5466db5 (#775, after v1.6.1) a description that cannot be formatted (a null field) only warns and the event is
 processed (older SUTs answer 500 and drop it), rejections are logged with their delivery id, and X-GitHub-Delivery is
 optional (older SUTs answer 400 ``Missing header: X-Github-Delivery``): these expectations follow the ancestry of the
@@ -87,6 +89,21 @@ EMPTY_PAGE = {"data": [], "itemsCount": 0}
 # eclipse-csi/otterdog#852 "Replace jsgrid with datatables" (v1.7.0): the paged /api listings add totalCount, the count
 # of their scope without the filters
 FIX_852 = "b84249bb33421b923614c053c8b3f605202db3be"
+# eclipse-csi/otterdog#944 "chore(webapp): remove the dependency_track_upload policy" (open: the head of the pull
+# request; add its merge commit once merged): the workflow_run hook, its description and its filter are gone
+FEATURE_944 = ("bdcf4e5bb3d6d2f486f324088a2443cb85cfaa7d",)
+REFERENCES_944 = [
+    {
+        "pr": 944,
+        "note": (
+            "'chore(webapp): remove the dependency_track_upload policy' (open, head bdcf4e5): the workflow_run hook, "
+            "its description ('workflow <name> completed in repository <repo>') and its filter (completed runs only) "
+            "are removed, so every workflow_run delivery is still accepted (204) but logged as 'workflow_run "
+            "(<delivery id>)'; must not change: workflow_job descriptions and their filter (queued jobs only). Webapp "
+            "only: the CLI and the offline scenarios must not change"
+        ),
+    }
+]
 # eclipse-csi/otterdog#891 "validate configurations with otterdog in the playground" (main after v1.7.1)
 FIX_891 = "d6f14f41d3226a206771514e32adf867786d32c8"
 PLAYGROUND_MAX_SIZE = 5 * 1024 * 1024  # PLAYGROUND_VALIDATION_MAX_SIZE default (otterdog/webapp/config.py:135)
@@ -154,6 +171,13 @@ def has_fix_775(offline_context: E2EContext, webapp_image: BuiltImage) -> bool |
 def has_fix_891(offline_context: E2EContext, webapp_image: BuiltImage) -> bool | None:
     """Whether the webapp image contains #891 (None: undecidable)."""
     return image_contains(offline_context, webapp_image, FIX_891, "#891")
+
+
+@pytest.fixture(scope="module")
+def has_944(offline_context: E2EContext, webapp_image: BuiltImage) -> bool | None:
+    """Whether the webapp image contains #944 (one of FEATURE_944; None: undecidable)."""
+    found = [image_contains(offline_context, webapp_image, commit, "#944") for commit in FEATURE_944]
+    return True if True in found else (False if False in found else None)
 
 
 @pytest.fixture(scope="module")
@@ -379,11 +403,14 @@ def test_replayed_delivery_is_processed_again(offline_stack: WebappStack, inject
 
 
 # --- O-WEB-SIG: event descriptions (receiver.event-logging, #775) -------------------------------------------------
-@pytest.mark.scenario("O-WEB-SIG")
-def test_workflow_events_are_described_selectively(offline_stack: WebappStack, injector: WebhookInjector) -> None:
+@pytest.mark.scenario("O-WEB-SIG", references=REFERENCES_944)
+def test_workflow_events_are_described_selectively(
+    offline_stack: WebappStack, injector: WebhookInjector, has_944: bool | None
+) -> None:
     """Every workflow_job and workflow_run delivery is accepted (204), but only a queued job and a completed run are
     described in the log ('workflow '<name>' on '<labels>' queued in repository <repo>' / 'workflow '<name>'
-    completed in repository <repo>'), in_progress jobs and requested runs are not."""
+    completed in repository <repo>'), in_progress jobs and requested runs are not. With #944 (no workflow_run hook)
+    both runs are logged as 'workflow_run (<delivery id>)'; the jobs are unchanged."""
     installation = stable_id("otterdog-acceptance offline: workflow events", base=900_000_000)
     ids = {case: delivery_id(case) for case in ("job-in-progress", "job-queued", "run-requested", "run-completed")}
     job = {"org": OFFLINE_ORG, "repo": EVENT_REPO, "run_id": 4242, "installation_id": installation}
@@ -395,11 +422,23 @@ def test_workflow_events_are_described_selectively(offline_stack: WebappStack, i
     ]
     assert [response.status_code for response in statuses] == [204] * 4
     full_name = f"{OFFLINE_ORG}/{EVENT_REPO}"
-    logs = wait_logged(
-        offline_stack,
-        f"workflow 'e2e' on '['ubuntu-latest']' queued in repository {full_name} ({ids['job-queued']})",
-        f"workflow 'e2e' completed in repository {full_name} ({ids['run-completed']})",
-    )
+    queued = f"workflow 'e2e' on '['ubuntu-latest']' queued in repository {full_name} ({ids['job-queued']})"
+    completed = f"workflow 'e2e' completed in repository {full_name} ({ids['run-completed']})"
+    if has_944:
+        logs = wait_logged(
+            offline_stack,
+            queued,
+            f"workflow_run ({ids['run-requested']})",
+            f"workflow_run ({ids['run-completed']})",
+        )
+        assert completed not in logs, "a SUT without the workflow_run hook described a completed run"
+        assert ids["job-in-progress"] not in logs, "an in_progress job was described"
+        return
+    if has_944 is None:  # undecidable: either form of the completed run
+        logs = wait_logged(offline_stack, queued, ids["run-completed"])
+        assert ids["job-in-progress"] not in logs, "an in_progress job was described"
+        return
+    logs = wait_logged(offline_stack, queued, completed)
     # the queued/completed lines were sent last: the earlier deliveries would be logged by now
     assert ids["job-in-progress"] not in logs and ids["run-requested"] not in logs, "a filtered event was described"
 

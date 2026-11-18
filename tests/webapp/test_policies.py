@@ -30,6 +30,11 @@ it allows it (the harness cancels it then); never dispatched where larger runner
 W-POL-SBOM: a successful run calling the reusable SBOM workflow uploads its SBOM to the Dependency-Track mock; with a
 workflow_filter that does not match nothing is uploaded; an upload answered 500 fails UploadSBOMTask.
 
+eclipse-csi/otterdog#944 (open, head bdcf4e5) removes the dependency_track_upload policy, its upload task and the
+workflow_run hook: on a webapp built from it a dependency_track_upload file "fails to parse, the error is logged" and
+the other policies still load. W-POL-LOAD then asserts that the files of the removed type never show up and never keep
+the macos policy from loading (the fetch still finishes); W-POL-SBOM is skipped (nothing uploads any more).
+
 Definitions, workflow runs and run repositories are removed by the ``blueprints`` fixture and the webapp_case teardown.
 """
 
@@ -70,6 +75,30 @@ TOTAL, PERMITTED, CANCELLED = (
 )
 FINAL = ("finished", "failed")
 DUMMY_TOKEN_PREFIX = "e2e-dummy"  # DEPENDENCY_TRACK_TOKEN of the compose stack (resources/compose.e2e.yaml)
+# the policy type removed by eclipse-csi/otterdog#944 (open: the head of the pull request; add its merge commit once
+# merged): a webapp built from a source without this file has no dependency_track_upload policy
+SBOM_POLICY_SOURCE = "otterdog/webapp/policies/dependency_track_upload.py"
+FEATURE_944 = ("bdcf4e5bb3d6d2f486f324088a2443cb85cfaa7d",)
+REFERENCES_944_LOAD = [
+    {
+        "pr": 944,
+        "note": (
+            "'chore(webapp): remove the dependency_track_upload policy' (open, head bdcf4e5): a global or org "
+            "dependency_track_upload file no longer loads (unknown policy type, logged) and its card disappears; must "
+            "not change: the macos_large_runners policy next to it loads and merges, the fetch finishes"
+        ),
+    }
+]
+REFERENCES_944_SBOM = [
+    {
+        "pr": 944,
+        "note": (
+            "'chore(webapp): remove the dependency_track_upload policy' (open, head bdcf4e5): the policy, "
+            "UploadSBOMTask and the workflow_run hook are removed (replaced by eclipse-csi/pia), so no SBOM is ever "
+            "uploaded: the test is skipped on a webapp built without the policy"
+        ),
+    }
+]
 DEFAULT_PARENT = "00000000-0000-0000-0000-000000000000"  # parent-project default of blueprints.sbom_store_workflow
 EXPECTED_BOM = {"bomFormat": "CycloneDX", "specVersion": "1.5", "version": 1, "components": []}
 CLOCK_SKEW = timedelta(seconds=60)
@@ -110,6 +139,15 @@ def _skip_if_foreign_global(bp: BlueprintHelper, *types: str) -> None:
             continue
         if isinstance(document, dict) and document.get("type") in types:
             pytest.skip(f"{bp.configs_repo}/{path} defines a foreign global {document.get('type')} policy")
+
+
+def _sbom_policy_supported(s: WebappScenario) -> bool:
+    """Whether the webapp under test still has the dependency_track_upload policy (removed by #944): from the source
+    the compose stack was built from, else from the ancestry of FEATURE_944; True when unknown (releases have it)."""
+    has_source = s.webapp_source_has(SBOM_POLICY_SOURCE)
+    if has_source is not None:
+        return has_source
+    return not any(s.webapp_includes(commit) for commit in FEATURE_944)
 
 
 def _blob_url(org: str, repo: str, path: str) -> str:
@@ -225,16 +263,18 @@ def _counter(counters: dict[str, int], name: str) -> int:
 
 
 # --- definitions ----------------------------------------------------------------------------------------------------
-@pytest.mark.scenario("W-POL-LOAD", priority="P2")
+@pytest.mark.scenario("W-POL-LOAD", priority="P2", references=REFERENCES_944_LOAD)
 @pytest.mark.tags("webapp", "webhooks-app")
 def test_policy_definitions_are_loaded_and_merged(
     webapp_scenario: WebappScenario, blueprints: BlueprintHelper, relay: DeliveryRelay
 ) -> None:
     """Global policies load on /internal/init; org policies pushed to config repo main merge over them (path, name,
     allowed and workflow_filter from the org, description and artifact_name kept from the global one); removing the
-    org macos policy restores the global values."""
+    org macos policy restores the global values. Without the dependency_track_upload type (#944) its files are
+    ignored: no card, and the macos policy loads and merges as before."""
     s, bp = webapp_scenario, blueprints
     _skip_if_foreign_global(bp, MACOS, SBOM)
+    sbom_supported = _sbom_policy_supported(s)
     run = s.run_ctx.run_id
     global_description = f"e2e {run} global macos description"
     global_macos = PolicyDefinition.macos_large_runners(
@@ -250,13 +290,19 @@ def test_policy_definitions_are_loaded_and_merged(
     page = _project_page(s, bp)
     cards = _policy_cards(page)
     macos, sbom = cards.get(MACOS), cards.get(SBOM)
-    assert macos is not None and sbom is not None, f"global policies missing from the project page: {sorted(cards)}"
+    assert macos is not None, f"the global macos policy is missing from the project page: {sorted(cards)}"
     assert macos["name"] == global_macos.name, f"global macos card: {macos}"
     assert macos["path"] == _blob_url(s.org, bp.configs_repo, global_macos_path), f"global macos card: {macos}"
     assert _config(macos["config"]) == {"allowed": False}, f"global macos config: {macos['config']!r}"
     assert global_description in page, "the global macos description is not shown"  # rendered by a script
-    assert sbom["name"] == "Overview" and sbom["path"] == _blob_url(s.org, bp.configs_repo, global_sbom_path)
-    assert _config(sbom["config"]) == dict(global_sbom.config), f"global dependency-track config: {sbom['config']!r}"
+    if not sbom_supported:
+        assert sbom is None, f"a webapp without the dependency_track_upload policy shows it (#944): {sbom}"
+    else:
+        assert sbom is not None, f"the global dependency-track policy is missing from the project page: {sorted(cards)}"
+        assert sbom["name"] == "Overview" and sbom["path"] == _blob_url(s.org, bp.configs_repo, global_sbom_path)
+        assert _config(sbom["config"]) == dict(global_sbom.config), (
+            f"global dependency-track config: {sbom['config']!r}"
+        )
 
     org_macos = PolicyDefinition.macos_large_runners(allowed=True, name=f"e2e {run} org macos")
     org_sbom = PolicyDefinition.dependency_track_upload(
@@ -272,21 +318,23 @@ def test_policy_definitions_are_loaded_and_merged(
         bp,
         until=lambda found: (
             (found.get(MACOS) or {}).get("path") == org_macos_url
-            and (found.get(SBOM) or {}).get("path") == org_sbom_url
+            and (found.get(SBOM) or {}).get("path") == (org_sbom_url if sbom_supported else None)
         ),
         what="org policies merged over the global ones",
     )
     page = _project_page(s, bp)
-    macos, sbom = cards[MACOS], cards[SBOM]
+    macos = cards[MACOS]
     assert macos["name"] == org_macos.name, f"merged macos card: {macos}"
     assert _config(macos["config"]) == {"allowed": True}, f"the org 'allowed' does not win: {macos['config']!r}"
     assert global_description in page, "the merged policy lost the global description (the org sets none)"
-    assert sbom["name"] == org_sbom.name, f"merged dependency-track card: {sbom}"
-    expected = {
-        "artifact_name": global_sbom.config["artifact_name"],
-        "workflow_filter": org_sbom.config["workflow_filter"],
-    }
-    assert _config(sbom["config"]) == expected, f"merged dependency-track config: {sbom['config']!r}"
+    if sbom_supported:
+        sbom = cards[SBOM]
+        assert sbom["name"] == org_sbom.name, f"merged dependency-track card: {sbom}"
+        expected = {
+            "artifact_name": global_sbom.config["artifact_name"],
+            "workflow_filter": org_sbom.config["workflow_filter"],
+        }
+        assert _config(sbom["config"]) == expected, f"merged dependency-track config: {sbom['config']!r}"
 
     bp.remove_policy(org_macos)
     _push_fetch(s, bp, relay)
@@ -299,7 +347,10 @@ def test_policy_definitions_are_loaded_and_merged(
         what="global macos policy back after the removal of the org one",
     )
     assert cards[MACOS]["name"] == global_macos.name and _config(cards[MACOS]["config"]) == {"allowed": False}
-    assert cards[SBOM]["path"] == org_sbom_url, f"the org dependency-track policy was lost: {cards[SBOM]}"
+    if sbom_supported:
+        assert cards[SBOM]["path"] == org_sbom_url, f"the org dependency-track policy was lost: {cards[SBOM]}"
+    else:
+        assert SBOM not in cards, f"a webapp without the dependency_track_upload policy shows it (#944): {cards[SBOM]}"
 
 
 @pytest.mark.scenario("W-POL-LOAD-MALFORMED", priority="P2")
@@ -397,7 +448,7 @@ def _upload_of(project: str) -> Any:
     return lambda entry: ((entry.get("json") or {}).get("projectName")) == project
 
 
-@pytest.mark.scenario("W-POL-SBOM", priority="P2")
+@pytest.mark.scenario("W-POL-SBOM", priority="P2", references=REFERENCES_944_SBOM)
 @pytest.mark.tags("webapp", "workflows", "webhooks-app")
 @pytest.mark.timeout(LONG_TIMEOUT, func_only=True)
 def test_sbom_upload_to_dependency_track(
@@ -406,6 +457,8 @@ def test_sbom_upload_to_dependency_track(
     """A matching successful run uploads {projectName, projectVersion, parentUUID, autoCreate, bom} with the API key;
     a non-matching workflow_filter uploads nothing; an upload answered 500 fails UploadSBOMTask."""
     s, bp = webapp_scenario, blueprints
+    if not _sbom_policy_supported(s):
+        pytest.skip("the webapp under test has no dependency_track_upload policy (removed by otterdog#944)")
     _skip_if_foreign_global(bp, SBOM)
     repo, project = s.run_repo("a"), s.run_ctx.name(f"{s.slug}-project")
     s.declare_live({repo: s.describe("SBOM upload")})

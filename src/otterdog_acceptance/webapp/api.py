@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import ipaddress
 import logging
+import math
 import re
 import time
 import urllib.parse
@@ -44,6 +45,14 @@ LOOPBACK_NAMES = frozenset({"localhost", "localhost.localdomain"})
 DEFAULT_PAGE_SIZE = 100
 MAX_PAGES = 20
 INIT_TIMEOUT = 180.0  # /internal/init reloads otterdog.json and lists the App installations synchronously
+# Since eclipse-csi/otterdog#949 (main 2f18e71, after v1.8.0) /internal/init and /internal/check run once at a time
+# across the workers: a call while one runs answers 429 {"status": "<what> is already running"} with Retry-After (60 s;
+# the lease of an init is held until the installation tasks it scheduled completed). init() and check() wait and call
+# again, at most BUSY_BUDGET seconds in all, then raise the 429 as WebappApiError.
+BUSY_STATUS = 429
+BUSY_BUDGET = 900.0
+BUSY_RETRY_DEFAULT = 60.0  # when Retry-After is missing or not a number of seconds
+BUSY_RETRY_MIN = 5.0
 VERSION_RE = re.compile(r"OtterDog - v([^<\s]+)")  # footer of GET /index (templates/includes/footer.html)
 BLUEPRINT_PAGE_SIZE = 100
 STATISTICS_INTERVALS = ("day", "week", "month")
@@ -301,6 +310,16 @@ def parse_timestamp(value: Any) -> datetime | None:
         return None
 
 
+def retry_after_seconds(value: str | None) -> float:
+    """Seconds of a Retry-After header given in seconds (the webapp's form); BUSY_RETRY_DEFAULT when absent, an HTTP
+    date or not a non-negative number."""
+    try:
+        seconds = float(value) if value is not None else BUSY_RETRY_DEFAULT
+    except ValueError:
+        return BUSY_RETRY_DEFAULT
+    return seconds if math.isfinite(seconds) and seconds >= 0 else BUSY_RETRY_DEFAULT
+
+
 def floor_to_millis(value: datetime) -> datetime:
     """Truncate to milliseconds (MongoDB stores datetimes with millisecond precision)."""
     return value.replace(microsecond=value.microsecond // 1000 * 1000)
@@ -367,17 +386,38 @@ class WebappApi:
             return False
         return response.status_code == 200
 
-    def init(self, *, timeout: float = INIT_TIMEOUT) -> None:
+    def init(self, *, timeout: float = INIT_TIMEOUT, busy_budget: float = BUSY_BUDGET) -> None:
         """GET /internal/init (reload otterdog.json, policies, blueprints and installations); WebappApiError unless
-        200."""
-        self.get("/internal/init", timeout=timeout)
+        200 (a 429 of a running init is waited out, get_once_at_a_time)."""
+        self.get_once_at_a_time("/internal/init", timeout=timeout, busy_budget=busy_budget)
 
-    def check(self, limit: int | None = None, *, timeout: float = INIT_TIMEOUT) -> None:
+    def check(
+        self, limit: int | None = None, *, timeout: float = INIT_TIMEOUT, busy_budget: float = BUSY_BUDGET
+    ) -> None:
         """GET /internal/check (or /internal/check/<limit>): evaluate the blueprints whose last check is older than
-        BLUEPRINT_CHECK_INTERVAL (0 in the e2e stack); answers once their tasks are scheduled."""
+        BLUEPRINT_CHECK_INTERVAL (0 in the e2e stack); answers once their tasks are scheduled (a 429 of a running
+        check is waited out, get_once_at_a_time)."""
         if limit is not None and (isinstance(limit, bool) or int(limit) < 0):
             raise ValueError(f"invalid blueprint check limit {limit!r}")
-        self.get("/internal/check" if limit is None else f"/internal/check/{int(limit)}", timeout=timeout)
+        path = "/internal/check" if limit is None else f"/internal/check/{int(limit)}"
+        self.get_once_at_a_time(path, timeout=timeout, busy_budget=busy_budget)
+
+    def get_once_at_a_time(self, path: str, *, timeout: float, busy_budget: float = BUSY_BUDGET) -> requests.Response:
+        """GET an /internal endpoint that runs once at a time (#949): while it answers 429 (another call is running),
+        sleep its Retry-After (BUSY_RETRY_DEFAULT when absent, at least BUSY_RETRY_MIN, never past the budget) and
+        call again; WebappApiError for any other status but 200, and for a 429 once ``busy_budget`` seconds are
+        spent. SUTs without #949 never answer 429 here."""
+        deadline = self.clock() + busy_budget
+        while True:
+            response = self.get(path, allow=(200, BUSY_STATUS), timeout=timeout)
+            if response.status_code == 200:
+                return response
+            remaining = deadline - self.clock()
+            if remaining <= 0:
+                raise WebappApiError("GET", response.url or self.url(path), response.status_code, response.text)
+            delay = min(max(retry_after_seconds(response.headers.get("Retry-After")), BUSY_RETRY_MIN), remaining)
+            _logger.info("GET %s answered %d (already running): calling again in %.0f s", path, BUSY_STATUS, delay)
+            self.sleep(delay)
 
     def deployed_version(self) -> str | None:
         """Version in the footer of GET /index (VERSION_RE), None when absent (e.g. 'OtterDog dev')."""

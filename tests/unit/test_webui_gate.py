@@ -208,6 +208,7 @@ def test_summary(tmp_path: Path) -> None:
         ("too many failed login attempts, please try again later", "lockout", True),
         ("RuntimeError: incorrect 2FA TOTP", "totp", True),
         ("the 2FA TOTP seed is not valid: Incorrect padding", "totp", True),
+        ("RuntimeError: 2FA checkup failed, TOTP has not been accepted", "totp", True),
         ("unexpected page after login, expected 'Two-factor authentication' in title", "challenge", True),
         (
             "Your organization requires single sign-on login which is currently not supported by the web client.",

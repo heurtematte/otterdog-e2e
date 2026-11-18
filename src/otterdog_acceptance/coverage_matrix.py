@@ -228,6 +228,7 @@ EXPECTED_INVENTORY: dict[str, tuple[str, ...]] = {
         "POST /playground/validate",
         "POST /projects/<project_name>/playground/validate",
         "GET /internal/health",
+        "GET /internal/ready",  # since #949 (main 2f18e71, after v1.8.0)
         "GET /internal/init",
         "GET /internal/check",
         "GET /internal/check/<limit>",

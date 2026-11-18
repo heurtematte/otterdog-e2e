@@ -22,7 +22,10 @@ The battery adds the PR lifecycle and the content rules of a validation:
 * W-PR-NO-CHANGES (P2): a PR touching only README.md is "No changes." and success, the org config plus README.md
   in one commit (a multi-file PR) is validated on its config change; neither is ever auto-mergeable;
 * W-PR-IMPORT-CONFINEMENT (P1): an import outside the org directory is refused before any file is read;
-* W-SYNC-PROPAGATION-DRIFT (P2, KB-066): the copied sync status of a new commit must keep an out-of-sync result.
+* W-SYNC-PROPAGATION-DRIFT (P2, KB-066): the copied sync status of a new commit must keep an out-of-sync result;
+* W-PR-OUTDATED-BRANCH (P1, #950): a PR whose branch predates a change of main is validated as merged: the diff of
+  its merge commit against main (``Diff for <head> merged into <main>``) never shows the change of main as reverted;
+  when the branch conflicts with main the webapp falls back to the head and warns that the branch is not up-to-date.
 
 Nothing here is merged: every PR is closed and its branch deleted by the webapp_case teardown.
 """
@@ -53,11 +56,50 @@ WORDING_771 = "some of the requested changes"
 WORDING_BEFORE_771 = "some of requested changes"
 IMPORT_REFUSED = "is not allowed"  # utils.py _make_jsonnet_import_callback: "import of '<path>' is not allowed"
 IMPORT_ATTEMPTED = "can't resolve"  # what an unconfined evaluation of a missing import reports
+# eclipse-csi/otterdog#950 "fix(web): validate the merge commit of a pull request" (open: the head of the pull
+# request; add its merge commit once merged)
+FEATURE_950 = ("3e6e8fa78bacadfd22e08fbbcc8d452dcd4880c3",)
+MERGED_INTO = "merged into"  # summary "Diff for <head sha> merged into <sha of main>" (validation_comment.txt, #950)
+NOT_UP_TO_DATE = "The branch of this pull request is not up-to-date"  # fallback warning of #950
+REFERENCES_950 = [
+    {
+        "pr": 950,
+        "note": (
+            "'fix(web): validate the merge commit of a pull request' (open, head 3e6e8fa): the validation compares "
+            "the merge commit GitHub creates (mergeable, merging the current head into the current main) with its "
+            "first parent, so a change made on main after the branch was created no longer shows as reverted "
+            "(eclipse-score/.eclipsefdn#257: a phantom secret change refused /otterdog merge); the summary reads "
+            "'Diff for <head> merged into <main>'. Without merge commit (conflicts, GitHub too slow) it validates "
+            "head.sha against main as before and warns 'The branch of this pull request is not up-to-date' when "
+            "main changed the org configuration since the branch. Base: the phantom revert (xfail scoped to "
+            "OutdatedBranchRevertError). Webapp only: no CLI delta"
+        ),
+    }
+]
+REFERENCES_943 = [
+    {
+        "pr": 943,
+        "note": (
+            "'feat(web): explain in the validation comment why a pull request cannot be auto-merged' (main "
+            "127c063, after v1.8.0): the validate comment of a PR that is not auto-mergeable lists why ('> "
+            "[!NOTE]' block 'This pull request cannot be auto-merged via `/otterdog merge`:', one reason per "
+            "line) and mentions the admin team, also without warnings; must not change: supports_auto_merge and "
+            "the refusal of /otterdog merge. Webapp only: no CLI delta; here: no note on a valid auto-mergeable "
+            "PR (W-PR-VALID, the new repository of W-PR-WARNINGS), the secrets and costs reasons (W-PR-WARNINGS), "
+            "the non-configuration reason of a README-only and a multi-file PR (W-PR-NO-CHANGES)"
+        ),
+    }
+]
 
 
 class CostAutoMergeRegressionError(AssertionError):
     """Cost-related changes are handled like before otterdog#770 (c4f75eb): a new repository with the default cache
     size counts as cost-related, or the refusal of ``/otterdog merge`` does not name costs."""
+
+
+class OutdatedBranchRevertError(AssertionError):
+    """The validation of a PR whose branch predates a change of main shows that change as reverted by the PR (the
+    head is compared with main instead of the merge, before otterdog#950)."""
 
 
 class ImportConfinementRegressionError(AssertionError):
@@ -87,7 +129,7 @@ def _assert_one_propagated_sync_status(s: WebappScenario, pr: ConfigPr, copied: 
     assert statuses[0][0] == copied.get("state"), f"copied sync state {statuses[0]} != {copied} (SUT)"
 
 
-@pytest.mark.scenario("W-PR-VALID", priority="P0")
+@pytest.mark.scenario("W-PR-VALID", priority="P0", references=REFERENCES_943)
 @pytest.mark.tags("webapp", "repo", "smoke")
 def test_valid_config_pr(webapp_scenario: WebappScenario) -> None:
     """Fixture repo description change: pending then success status on the head sha, validate comment naming the
@@ -105,6 +147,8 @@ def test_valid_config_pr(webapp_scenario: WebappScenario) -> None:
     assert comment_contains(body, f"{texts.DIFF_FOR} {pr.head_sha}"), f"validate comment is not for {pr.head_sha}"
     assert comment_contains(body, s.harmless_repo), f"validate comment does not name {s.harmless_repo}: {body[:2000]!r}"
     assert "description" in normalize_comment(body), f"validate comment shows no description diff: {body[:2000]!r}"
+    s.assert_merge_blockers(pr, body, [])  # auto-mergeable: no note (#943)
+    assert not comment_contains(body, f"cc @{s.org}/"), f"a PR without warnings or blockers mentions a team: {body!r}"
 
     help_comment = s.wait_comment(pr, marker="help")
     assert comment_contains(help_comment.get("body") or "", texts.HELP), "help comment without its greeting"
@@ -284,13 +328,14 @@ def test_evaluation_error_gets_a_friendly_comment(webapp_scenario: WebappScenari
     s.wait_api_pull(pr, until=lambda r: r.get("valid") is False, what="invalid")
 
 
-@pytest.mark.scenario("W-PR-WARNINGS", priority="P1")
+@pytest.mark.scenario("W-PR-WARNINGS", priority="P1", references=REFERENCES_943)
 @pytest.mark.tags("webapp", "secrets", "workflows", "repo")
 @pytest.mark.timeout(1800, func_only=True)  # three PRs: validation, sync check and a refused merge each
 def test_validation_warnings(request: pytest.FixtureRequest, webapp_scenario: WebappScenario) -> None:
     """Secret: secrets warning, manual apply, no auto-merge. Cost change: cost warning, no auto-merge, refused naming
     costs (#770). New repository with the default cache size: no warning, auto-merge offered (#770). The warnings
-    use the wording of #771 on SUTs that include 476bf5e (the older one before, either when unknown)."""
+    use the wording of #771 on SUTs that include 476bf5e (the older one before, either when unknown). Since #943 the
+    validate comment also lists why the first two cannot be auto-merged (secrets, costs) and the third has no note."""
     s, texts = webapp_scenario, webapp_scenario.texts
     s.xfail_unless_includes(
         request,
@@ -311,9 +356,11 @@ def test_validation_warnings(request: pytest.FixtureRequest, webapp_scenario: We
     new_pr = s.open_pr(s.render(repositories=[pin, new]), suffix="new-repo")
 
     included_771 = s.webapp_includes(FIX_771)
+    blockers = {secret_pr.number: [texts.BLOCKER_SECRETS], cost_pr.number: [texts.BLOCKER_COST]}
     for pr, warning in ((secret_pr, SECRETS_WARNING), (cost_pr, COST_WARNING)):
         s.wait_validation(pr)
         body = s.wait_comment(pr, marker="validate").get("body") or ""
+        s.assert_merge_blockers(pr, body, blockers[pr.number])
         new_wording = comment_contains(body, f"{WORDING_771} {warning}")
         old_wording = comment_contains(body, f"{WORDING_BEFORE_771} {warning}")
         assert comment_contains(body, texts.WARNINGS_HEADING) and (new_wording or old_wording), (
@@ -339,6 +386,7 @@ def test_validation_warnings(request: pytest.FixtureRequest, webapp_scenario: We
     new_body = s.wait_comment(new_pr, marker="validate").get("body") or ""
     if comment_contains(new_body, texts.WARNINGS_HEADING):
         raise CostAutoMergeRegressionError(f"a new repository with the default cache size got warnings: {new_body!r}")
+    s.assert_merge_blockers(new_pr, new_body, [])
     s.wait_api_pull(new_pr, until=lambda r: r.get("supports_auto_merge") is True, what="new repo: auto-mergeable")
     automerge = s.wait_comment(new_pr, marker="automerge")
     assert comment_contains(automerge.get("body") or "", texts.AUTOMERGE), "automerge comment without its offer"
@@ -357,13 +405,14 @@ def test_validation_warnings(request: pytest.FixtureRequest, webapp_scenario: We
     s.write_evidence({"secret_pr": secret_pr.number, "cost_pr": cost_pr.number, "new_pr": new_pr.number})
 
 
-@pytest.mark.scenario("W-PR-NO-CHANGES", priority="P2")
+@pytest.mark.scenario("W-PR-NO-CHANGES", priority="P2", references=REFERENCES_943)
 @pytest.mark.tags("webapp", "repo")
 @pytest.mark.timeout(1800, func_only=True)  # two PRs, each validated, sync-checked and refused
 def test_non_configuration_change(webapp_scenario: WebappScenario) -> None:
     """README.md only: "No changes." and success; the org config plus README.md in one commit (multi-file PR): the
     config diff is validated. Both are valid but never auto-mergeable (non-configuration file): no automerge
-    comment, ``/otterdog merge`` refused naming that reason, the PRs stay open."""
+    comment, ``/otterdog merge`` refused naming that reason, the PRs stay open; since #943 both validate comments
+    say so and mention the admin team (no warning is shown)."""
     s, texts = webapp_scenario, webapp_scenario.texts
     readme = f"# otterdog e2e\n\nRun {s.run_ctx.run_id}, scenario {s.sid}: a change of a non-configuration file.\n"
     readme_pr = s.open_pr_files({"README.md": readme}, suffix="readme")
@@ -374,12 +423,14 @@ def test_non_configuration_change(webapp_scenario: WebappScenario) -> None:
     body = s.wait_comment(readme_pr, marker="validate").get("body") or ""
     assert comment_contains(body, f"{texts.DIFF_FOR} {readme_pr.head_sha}"), "validate comment of the README PR"
     assert comment_contains(body, texts.NO_CHANGES), f"an unchanged org config must say 'No changes.' (SUT): {body!r}"
+    s.assert_merge_blockers(readme_pr, body, [texts.BLOCKER_NON_CONFIG])
     status = s.wait_validation(multi_pr)
     assert status.get("description") == texts.VALIDATION_SUCCESS, f"multi-file PR validation: {status}"
     body = s.wait_comment(multi_pr, marker="validate").get("body") or ""
     assert comment_contains(body, s.harmless_repo) and not comment_contains(body, texts.NO_CHANGES), (
         f"the multi-file PR must be validated on its org config change (SUT): {body[:2000]!r}"
     )
+    s.assert_merge_blockers(multi_pr, body, [texts.BLOCKER_NON_CONFIG])
 
     for pr in (readme_pr, multi_pr):
         record = s.wait_api_pull(pr, until=lambda r: r.get("supports_auto_merge") is not None, what="decided")
@@ -465,3 +516,86 @@ def test_out_of_sync_status_survives_a_new_commit(webapp_scenario: WebappScenari
             f"the sync status copied to {second_pr.head_sha[:12]} hides the drift of {name}: "
             f"{copied.get('description')!r}, /api in_sync {record.get('in_sync')!r}"
         )
+
+
+@pytest.mark.scenario("W-PR-OUTDATED-BRANCH", priority="P1", references=REFERENCES_950)
+@pytest.mark.tags("webapp", "repo")
+@pytest.mark.timeout(1800, func_only=True)  # three validations and a change of main
+def test_outdated_branch_is_validated_as_merged(
+    request: pytest.FixtureRequest, webapp_scenario: WebappScenario
+) -> None:
+    """A PR changes the harmless repository; main then changes the description of a declared run repository, and a
+    second commit on the stale branch changes the harmless repository again: its validation must show only the
+    PR's change, as merged into the new main (#950), never the description of main reverted. A third commit that
+    conflicts with main (the same description) has no merge commit: the head is validated against main and the
+    comment warns that the branch is not up-to-date."""
+    s, texts = webapp_scenario, webapp_scenario.texts
+    included = s.webapp_includes_any(FEATURE_950)
+    if included is not True:
+        request.node.add_marker(
+            pytest.mark.xfail(
+                reason="the webapp under test may predate otterdog#950: an outdated branch is validated against main",
+                strict=False,
+                raises=OutdatedBranchRevertError,
+            )
+        )
+    name = s.run_repo()
+    declared, moved, conflicting = s.describe("declared"), s.describe("changed on main"), s.describe("changed by PR")
+    s.declare_live({name: declared})
+    main_before = s.flow.main_sha()
+    pr = s.open_pr(s.harmless_text(repos={name: declared}))
+    s.wait_validation(pr)
+    first = s.wait_comment(pr, marker="validate").get("body") or ""
+    if included:
+        assert comment_contains(first, f"{texts.DIFF_FOR} {pr.head_sha} {MERGED_INTO} {main_before}"), (
+            f"the validation of an up-to-date PR does not name the merge into main {main_before[:12]} (SUT): "
+            f"{first[:600]!r}"
+        )
+
+    main_after = s.flow.reset_main(
+        s.text(repos={name: moved}), message=f"otterdog-acceptance {s.run_ctx.run_id}: {s.sid} changes {name} on main"
+    )
+    second_description = s.describe("second commit")
+    second = s.flow.push_commit(
+        pr,
+        s.text(repos={name: declared}, overrides={s.harmless_repo: second_description}),
+        message=f"e2e {s.run_ctx.run_id} {s.sid}: second commit on a branch that predates main",
+    )
+    s.wait_validation(second)
+    body = s.wait_comment(second, marker="validate").get("body") or ""
+    assert comment_contains(body, f"{texts.DIFF_FOR} {second.head_sha}"), f"not the comment of {second.head_sha}"
+    assert comment_contains(body, second_description), f"the PR's own change is not validated (SUT): {body[:2000]!r}"
+    s.write_evidence({"main_before": main_before, "main_after": main_after, "second": second.head_sha, "body": body})
+    if comment_contains(body, name):
+        if included and comment_contains(body, NOT_UP_TO_DATE):
+            pytest.fail(
+                f"GitHub had not created the merge commit of {second.head_sha[:12]} within the retries of #950, so "
+                f"the fallback compared the head with main (infra: GitHub): {body[:2000]!r}",
+                pytrace=False,
+            )
+        raise OutdatedBranchRevertError(
+            f"the validation of {second.head_sha[:12]} shows the change of {name} made on main ({main_after[:12]}) "
+            f"as reverted by the PR: {body[:2000]!r}"
+        )
+    if included:
+        assert comment_contains(body, f"{MERGED_INTO} {main_after}"), (
+            f"the validation does not name the merge into the new main {main_after[:12]} (SUT): {body[:600]!r}"
+        )
+        assert not comment_contains(body, NOT_UP_TO_DATE), f"a mergeable PR was warned as outdated (SUT): {body!r}"
+
+    third = s.flow.push_commit(
+        second,
+        s.text(repos={name: conflicting}, overrides={s.harmless_repo: second_description}),
+        message=f"e2e {s.run_ctx.run_id} {s.sid}: a commit that conflicts with main",
+    )
+    s.wait_validation(third)
+    body = s.wait_comment(third, marker="validate").get("body") or ""
+    assert comment_contains(body, f"{texts.DIFF_FOR} {third.head_sha}"), f"not the comment of {third.head_sha}"
+    assert comment_contains(body, conflicting), f"the conflicting change is not validated (SUT): {body[:2000]!r}"
+    if included:
+        assert comment_contains(body, NOT_UP_TO_DATE) and not comment_contains(body, MERGED_INTO), (
+            f"a PR that conflicts with main must be validated on its head with the not up-to-date warning (SUT): "
+            f"{body[:2500]!r}"
+        )
+    elif included is False:
+        assert not comment_contains(body, NOT_UP_TO_DATE), "a webapp without #950 warned about an outdated branch"

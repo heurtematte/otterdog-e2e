@@ -273,7 +273,9 @@ WEB_FAILURES: tuple[tuple[re.Pattern[str], WebFailure], ...] = (
         WebFailure("credentials", True, "wrong username or password of the bot account"),
     ),
     (
-        re.compile(r"incorrect 2FA TOTP|the 2FA TOTP seed is not valid", re.IGNORECASE),
+        # "2FA checkup failed, TOTP has not been accepted": the 2FA checkup GitHub may request after a login refused
+        # the TOTP (since eclipse-csi/otterdog#938, main 0f00daa after v1.8.0; before, the client stayed on that page)
+        re.compile(r"incorrect 2FA TOTP|the 2FA TOTP seed is not valid|2FA checkup failed", re.IGNORECASE),
         WebFailure("totp", True, "wrong TOTP seed (or a code reused within 30 s by another process)", 3600.0),
     ),
     (

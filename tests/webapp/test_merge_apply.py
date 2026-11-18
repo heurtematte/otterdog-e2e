@@ -42,6 +42,20 @@ import pytest
 
 from otterdog_acceptance.config_repo import comment_contains
 
+REFERENCES_943 = [
+    {
+        "pr": 943,
+        "note": (
+            "'feat(web): explain in the validation comment why a pull request cannot be auto-merged' (main "
+            "127c063, after v1.8.0): the validate comment of a PR that is not auto-mergeable lists why ('> "
+            "[!NOTE]' block 'This pull request cannot be auto-merged via `/otterdog merge`:', one reason per "
+            "line) and mentions the admin team, also without warnings; must not change: supports_auto_merge and "
+            "the refusal of /otterdog merge. Webapp only: no CLI delta; here: the removed resources reason of a "
+            "PR removing a repository (W-MERGE-DELETE)"
+        ),
+    }
+]
+
 if TYPE_CHECKING:
     from conftest import WebappScenario
     from otterdog_acceptance.config_repo import ConfigPr
@@ -222,7 +236,7 @@ def test_closed_prs_are_never_applied(webapp_scenario: WebappScenario) -> None:
         s.remove_side_pr(side, base)
 
 
-@pytest.mark.scenario("W-MERGE-DELETE", priority="P0")
+@pytest.mark.scenario("W-MERGE-DELETE", priority="P0", references=REFERENCES_943)
 @pytest.mark.tags("webapp", "repo")
 def test_merged_removal_is_applied(webapp_scenario: WebappScenario) -> None:
     """A PR removing a declared run repository: the validation shows the removal, auto-merge is never offered and
@@ -236,6 +250,7 @@ def test_merged_removal_is_applied(webapp_scenario: WebappScenario) -> None:
     assert comment_contains(body, f'remove repository[name="{name}"]'), (
         f"the validate comment does not show the removal of {name} (SUT): {body[:2000]!r}"
     )
+    s.assert_merge_blockers(pr, body, [texts.BLOCKER_DELETIONS])
     s.wait_api_pull(pr, until=lambda r: r.get("supports_auto_merge") is False, what="deletion: no auto-merge")
     s.quiesce()
     assert not s.flow.bot_comments(pr, marker="automerge"), "auto-merge offered for a deletion (SUT)"

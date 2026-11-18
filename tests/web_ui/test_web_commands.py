@@ -57,6 +57,22 @@ ADVISORY_FIELDS = (
     "html_url",
     "summary",
 )
+# eclipse-csi/otterdog#938 "fix(web): perform the 2FA checkup requested by GitHub on web login" (main 0f00daa, after
+# v1.8.0): every web login of the SUT goes through it
+REFERENCES_938 = [
+    {
+        "pr": 938,
+        "note": (
+            "'fix(web): perform the 2FA checkup requested by GitHub on web login': after the 2FA step the web client "
+            "enters another TOTP on /settings/two_factor_checkup when GitHub shows 'Verify two-factor authentication' "
+            "(before, it stayed on that page and the web operations failed) and fails with '2FA checkup failed, TOTP "
+            "has not been accepted' (LoginGate kind totp); it waits for the 'load' event of the login and TOTP forms "
+            "and gets the TOTP outside of that wait. GitHub requests the checkup once per account and it cannot be "
+            "forced: a run shows it only when the bot has one pending; must not change: a login without checkup (exit "
+            "0, the org page, logout). CLI web client only: no offline delta"
+        ),
+    }
+]
 REVIEW_HEADER = "Reviewing permission updates for app installations:"
 REVIEW_FAILURE = "failed to process app installation with id"  # review_app_permissions.py: an unknown installation
 APPROVED_TEXT = "requested permissions approved."
@@ -78,7 +94,7 @@ def _failure_hint(output: str) -> str:
     return f" [{failure.kind}: {failure.hint}]" if failure is not None else ""
 
 
-@pytest.mark.scenario("webui.cmd.review-permissions")
+@pytest.mark.scenario("webui.cmd.review-permissions", references=REFERENCES_938)
 @pytest.mark.timeout(1200)
 def test_review_permissions_lists_requests(web_tier: WebUiTier) -> None:
     """``review-permissions``: logs in, reads the installations page, exits 0 without approving anything; every
@@ -151,7 +167,7 @@ def test_install_and_uninstall_app(web_tier: WebUiTier) -> None:
         )
 
 
-@pytest.mark.scenario("webui.cmd.web-login")
+@pytest.mark.scenario("webui.cmd.web-login", references=REFERENCES_938)
 @pytest.mark.skipif(
     not WEB_LOGIN_POSSIBLE,
     reason="web-login opens a visible browser: local runs with a display and E2E_WEB_LOGIN=1 only, never in CI",

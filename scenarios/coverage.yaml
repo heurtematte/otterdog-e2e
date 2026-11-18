@@ -982,6 +982,7 @@ features:
     priority: P2
     status: covered
     covered_by: [tests/web_ui/test_web_commands.py::test_web_login_opens_a_session]
+    notes: "Since #938 (main 0f00daa, after v1.8.0) every web login performs the 2FA checkup GitHub may request ('Verify two-factor authentication': another TOTP on /settings/two_factor_checkup) and fails with '2FA checkup failed, TOTP has not been accepted' (LoginGate kind totp, blocking). GitHub requests it once per account and it cannot be forced: only a bot with a pending checkup exercises it."
 
   - id: cli.install-app
     area: cli
@@ -4211,6 +4212,19 @@ features:
     covered_by: [tests/webapp/test_pr_validation.py::test_valid_config_pr, tests/webapp/test_pr_validation.py::test_invalid_config_pr, tests/webapp/test_commands.py::test_validate_command]
     known_bugs: [KB-026]
 
+  - id: webapp-pr.outdated-branch
+    area: webapp-pr
+    title: "a PR whose branch predates a change of main: validated on the merge commit GitHub creates (diff against its first parent, 'Diff for <head> merged into <main>'), so the change of main is not shown reverted; without merge commit (conflict, GitHub too slow) the head is validated against main with the warning 'The branch of this pull request is not up-to-date' (#950, open)"
+    source: ["otterdog/webapp/tasks/validate_pull_request.py:105-231"]
+    operations: [task, comment, validate]
+    min_plan: free
+    tier: webapp
+    ui_only: false
+    priority: P1
+    status: covered
+    covered_by: [tests/webapp/test_pr_validation.py::test_outdated_branch_is_validated_as_merged]
+    notes: "W-PR-OUTDATED-BRANCH: main changes the description of a declared run repository after the PR branch was created; a second commit on the stale branch must be validated as merged into the new main (no phantom revert of that description), a third commit conflicting with main gets the not up-to-date warning. Webapps without #950 (an open pull request) show the phantom revert: non-strict xfail scoped to OutdatedBranchRevertError (eclipse-score/.eclipsefdn#257). Not run here: needs the webapp tier."
+
   - id: webapp-pr.pending-statuses
     area: webapp-pr
     title: "pending statuses are set first: 'validating configuration change using otterdog' and 'checking if configuration is in-sync using otterdog'"
@@ -4454,7 +4468,7 @@ features:
     priority: P1
     status: covered
     covered_by: [tests/webapp/test_web_ui_flags.py::test_web_ui_setting_needs_a_manual_apply, tests/webapp/test_pr_validation.py::test_validation_warnings, tests/webapp/test_pr_validation.py::test_non_configuration_change, tests/webapp/test_merge_apply.py::test_merged_removal_is_applied]
-    notes: "Each blocker is asserted in the test of its change type (secret, cost, README/multi-file, deletion, web UI) with admin-authored (eligible) PRs: no automerge comment after quiesce, /otterdog merge refused with the supports_auto_merge sentence, PR open. No separate W-AUTOMERGE-BLOCKERS (would duplicate those PRs)."
+    notes: "Each blocker is asserted in the test of its change type (secret, cost, README/multi-file, deletion, web UI) with admin-authored (eligible) PRs: no automerge comment after quiesce, /otterdog merge refused with the supports_auto_merge sentence, PR open. No separate W-AUTOMERGE-BLOCKERS (would duplicate those PRs). Since #943 (main 127c063, after v1.8.0) the validate comment lists the blockers ('> [!NOTE]' 'This pull request cannot be auto-merged via `/otterdog merge`:', one reason per line) and mentions the admin team: WebappScenario.assert_merge_blockers in the same tests, and W-PR-VALID / the new repository of W-PR-WARNINGS get no note and no cc."
 
   - id: webapp-automerge.comment
     area: webapp-automerge
@@ -4500,6 +4514,33 @@ features:
     status: covered
     covered_by: [tests/offline/test_webapp_contract.py::test_webapp_boots_with_dummy_credentials, tests/webapp/test_boot.py::test_webapp_boot]
     known_bugs: [KB-061]
+
+  - id: webapp-runtime.ready
+    area: webapp-runtime
+    title: "GET /internal/ready (#949, main after v1.8.0): MongoDB, Redis and ghproxy (TCP connect) checked within 2 s each, the result reused 5 s; 200 {status: ok, checks} when all are reachable, 503 {status: error} with {status: error, error: <exception type>} for the others; /internal/health stays the liveness probe"
+    source: ["otterdog/webapp/internal/routes.py:41-160"]
+    inventory: ["endpoint:GET /internal/ready"]
+    operations: [api, error]
+    min_plan: free
+    tier: offline
+    ui_only: false
+    priority: P2
+    status: covered
+    covered_by: [tests/offline/test_webapp_runtime.py::test_readiness_reports_each_dependency]
+    notes: "O-WEB-READINESS: Redis then MongoDB stopped and started again on the runtime stack: 503 with the failed check naming only the exception type, /internal/health 200 meanwhile, ok again after the restart. ghproxy is https://api.github.com in the offline stack (not overridable): only the form of its check is asserted. SUTs without #949: 404 {}."
+
+  - id: webapp-runtime.internal-once
+    area: webapp-runtime
+    title: "/internal/init and /internal/check run once at a time across the workers (#949): a Redis lease (internal-init, internal-check; 300 s, renewed; the init keeps it until its installation tasks completed, 1 h at most) and 429 {status: '<what> is already running'} with Retry-After 60 while it is held"
+    source: ["otterdog/webapp/internal/routes.py:162-236", "otterdog/webapp/lease.py:1-69", "otterdog/webapp/db/service.py:368-431"]
+    operations: [api, state]
+    min_plan: free
+    tier: offline
+    ui_only: false
+    priority: P2
+    status: covered
+    covered_by: [tests/offline/test_webapp_runtime.py::test_init_and_check_run_once_at_a_time, tests/offline/test_webapp_runtime.py::test_database_outage]
+    notes: "O-WEB-INTERNAL-LEASE: the harness holds the Redis keys as another worker would (WebappStack.hold_lease, dummy stacks only): /internal/check and /internal/init answer 429 with Retry-After 60 and the lease stays the holder's; once it is dropped, a check answers 200 and releases its own lease. O-WEB-HOOK-ERROR: a check failing with 500 releases it too (the check after the outage answers 200). The harness waits out a 429 of /internal/init and /internal/check (WebappApi.get_once_at_a_time). Not covered: two real concurrent inits (the init needs GitHub)."
 
   - id: webapp-runtime.config
     area: webapp-runtime
@@ -4885,7 +4926,7 @@ features:
     status: covered
     covered_by: [tests/webapp/test_policies.py::test_policy_definitions_are_loaded_and_merged, tests/webapp/test_policies.py::test_malformed_policy_does_not_block_the_others]
     known_bugs: [KB-069]
-    notes: "W-POL-LOAD: global macos_large_runners and dependency_track_upload policies load on /internal/init (project page cards: name or 'Overview', Reference URL, config parsed from PrettyFormatter). Org policies pushed to config repo main merge over them: path and name from the org file, the global description kept when the org sets none, allowed and workflow_filter from the org, artifact_name always from the global one (Policy.merge). Removing the org macos file restores the global values. KB-069 (W-POL-LOAD-MALFORMED): a file without 'type' fails FetchPoliciesTask (non-strict xfail, scoped)."
+    notes: "W-POL-LOAD: global macos_large_runners and dependency_track_upload policies load on /internal/init (project page cards: name or 'Overview', Reference URL, config parsed from PrettyFormatter). Org policies pushed to config repo main merge over them: path and name from the org file, the global description kept when the org sets none, allowed and workflow_filter from the org, artifact_name always from the global one (Policy.merge). Removing the org macos file restores the global values. KB-069 (W-POL-LOAD-MALFORMED): a file without 'type' fails FetchPoliciesTask (non-strict xfail, scoped). #944 (open) removes the dependency_track_upload type: on a webapp built without it W-POL-LOAD asserts that its files never show up and the macos policy still loads and merges."
 
   - id: policies.macos-large-runners
     area: policies
@@ -4913,7 +4954,7 @@ features:
     priority: P2
     status: covered
     covered_by: [tests/webapp/test_policies.py::test_sbom_upload_to_dependency_track]
-    notes: "W-POL-SBOM (dtrack_mock): a successful run of the caller of the reusable store workflow -> workflow_run completed -> UploadSBOMTask finished -> PUT /api/v1/bom with X-Api-Key e2e-dummy*, application/json, {projectName, projectVersion 1.0.0, parentUUID default, autoCreate true, bom == the CycloneDX document}. A non-matching workflow_filter -> no UploadSBOMTask and no upload. The mock answering 500 -> UploadSBOMTask failed ('failed to upload SBOM')."
+    notes: "W-POL-SBOM (dtrack_mock): a successful run of the caller of the reusable store workflow -> workflow_run completed -> UploadSBOMTask finished -> PUT /api/v1/bom with X-Api-Key e2e-dummy*, application/json, {projectName, projectVersion 1.0.0, parentUUID default, autoCreate true, bom == the CycloneDX document}. A non-matching workflow_filter -> no UploadSBOMTask and no upload. The mock answering 500 -> UploadSBOMTask failed ('failed to upload SBOM'). #944 (open) removes the policy, UploadSBOMTask and the workflow_run hook: W-POL-SBOM is skipped on a webapp built without them; offline, O-WEB-SIG then expects every workflow_run delivery logged as 'workflow_run (<delivery id>)'."
 
   # ==================================================================================================================
   # regressions: notable fixes of CHANGELOG.md (and the commits after v1.6.1 on main, cited by their code) that a

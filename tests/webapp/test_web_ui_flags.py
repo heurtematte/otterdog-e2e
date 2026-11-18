@@ -37,6 +37,19 @@ WEB_UI_WARNING = "require accessing the Web UI, need to apply these changes manu
 AUTOMERGE_REFUSED = "cannot be auto-merged"
 WEB_UI_PROBLEM = "requires web UI changes"
 PARTIAL_APPLY = "only partially applied as it requires some access to secrets or the Web UI"
+REFERENCES_943 = [
+    {
+        "pr": 943,
+        "note": (
+            "'feat(web): explain in the validation comment why a pull request cannot be auto-merged' (main "
+            "127c063, after v1.8.0): the validate comment of a PR that is not auto-mergeable lists why ('> "
+            "[!NOTE]' block 'This pull request cannot be auto-merged via `/otterdog merge`:', one reason per "
+            "line) and mentions the admin team, also without warnings; must not change: supports_auto_merge and "
+            "the refusal of /otterdog merge. Webapp only: no CLI delta; here: the Web UI reason of a web UI "
+            "setting change (W-PR-WEBUI)"
+        ),
+    }
+]
 DONE = "The PR has been marked as being completed"
 
 
@@ -52,7 +65,7 @@ def _live(s: WebappScenario) -> bool | None:
     return value if isinstance(value, bool) else None
 
 
-@pytest.mark.scenario("W-PR-WEBUI", priority="P1")
+@pytest.mark.scenario("W-PR-WEBUI", priority="P1", references=REFERENCES_943)
 @pytest.mark.tags("webapp", "org-settings")
 def test_web_ui_setting_needs_a_manual_apply(webapp_scenario: WebappScenario) -> None:
     """Web-only change: flagged, not auto-mergeable, merged without effect on GitHub, completed by /otterdog done."""
@@ -66,6 +79,7 @@ def test_web_ui_setting_needs_a_manual_apply(webapp_scenario: WebappScenario) ->
     body = s.wait_comment(pr, marker="validate").get("body") or ""
     assert comment_contains(body, SETTING.key), f"the validation diff does not show {SETTING.key}"
     assert comment_contains(body, WEB_UI_WARNING), "the validation comment does not warn about the Web UI"
+    s.assert_merge_blockers(pr, body, [s.texts.BLOCKER_WEB_UI])
     s.wait_api_pull(
         pr,
         until=lambda r: r.get("requires_manual_apply") is True and r.get("supports_auto_merge") is False,

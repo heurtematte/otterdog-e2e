@@ -98,6 +98,26 @@ if TYPE_CHECKING:
 
 T = TypeVar("T")
 
+# eclipse-csi/otterdog#943 "feat(web): explain in the validation comment why a pull request cannot be auto-merged":
+# merge commit on main (after v1.8.0) and head of the pull request (a pr: SUT of that head lacks the merge commit)
+FEATURE_943 = ("127c06393e04bf5ee3ab38e76d4d2626dc905121", "82880ded0fa55780a52a6039037dea6273edf16a")
+
+
+def merge_blockers(body: str) -> list[str] | None:
+    """The reasons of the "cannot be auto-merged" note of a validate comment (#943), in order; None without note."""
+    lines = body.splitlines()
+    start = next((i for i, line in enumerate(lines) if Texts.AUTOMERGE_PROBLEMS in line and line.startswith(">")), None)
+    if start is None:
+        return None
+    reasons: list[str] = []
+    for line in lines[start + 1 :]:
+        if not line.startswith(">"):
+            break
+        text = line[1:].strip()
+        if text.startswith("- "):
+            reasons.append(text[2:].strip())
+    return reasons
+
 
 class Texts:
     """Verified otterdog texts and patterns (module docstring), reachable from tests as ``webapp_scenario.texts``."""
@@ -144,6 +164,16 @@ class Texts:
     PARTIAL_APPLY = "only partially applied as it requires some access to secrets or the Web UI"
     APPLY_CRASH = "Applying the configuration failed."  # apply_changes.py:213-221 (exception inside the apply)
     PATCH_FAILURE = "failed to apply patch"  # operations/apply.py:148-151
+    # since #943 (main 127c063, after v1.8.0) the validate comment explains why /otterdog merge would refuse the PR: a
+    # "> [!NOTE]" block opened by the AUTOMERGE_PROBLEMS sentence, one "> - <reason>" line per reason (in this order,
+    # ValidationResult.auto_merge_blockers), "> It needs to be reviewed and merged by a member of the admin team(s)."
+    # and "cc @<org>/<admin team>" lines (before, the cc lines followed the warnings only)
+    BLOCKER_SECRETS = "some of the requested changes require secrets"
+    BLOCKER_WEB_UI = "some of the requested changes require accessing the Web UI"
+    BLOCKER_COST = "some of the requested changes may incur costs"
+    BLOCKER_DELETIONS = "some of the requested changes remove resources"
+    BLOCKER_NON_CONFIG = "the pull request modifies files other than the organization configuration"
+    BLOCKERS_ADMIN = "It needs to be reviewed and merged by a member of the admin team(s)."
 
 
 # --- budgets (seconds; counted from the forward time of the triggering delivery) ------------------------------------
@@ -816,6 +846,36 @@ class WebappScenario:
             return mirror.is_ancestor(commit, revision)
         except (OSError, ValueError, procs.CalledProcessError, procs.TimeoutExpired):  # mirror unusable: unknown
             return None
+
+    def webapp_includes_any(self, commits: Sequence[str]) -> bool | None:
+        """webapp_includes of a change given as several commits (its merge commit, the head of its pull request):
+        True when one is included, False when one is known missing and none included, None when unknown."""
+        found = [self.webapp_includes(commit) for commit in commits]
+        if True in found:
+            return True
+        return False if False in found else None
+
+    def assert_merge_blockers(self, pr: ConfigPr, body: str, expected: Sequence[str]) -> None:
+        """Since #943 the validate comment lists why ``/otterdog merge`` would refuse the PR and mentions the admin
+        team; an auto-mergeable PR (``expected`` empty) gets neither. Asserted on webapps known to include #943;
+        webapps known to predate it must show no note; nothing is asserted when the inclusion is unknown."""
+        included = self.webapp_includes_any(FEATURE_943)
+        if included is None:
+            return
+        found = merge_blockers(body)
+        if not included or not expected:
+            why = "a webapp without #943 explained" if not included else "an auto-mergeable PR lists"
+            assert found is None, f"PR #{pr.number}: {why} merge blockers {found} (SUT): {body[-1500:]!r}"
+            return
+        assert found == list(expected), (
+            f"PR #{pr.number}: the validate comment lists the merge blockers {found}, expected {list(expected)} "
+            f"(SUT): {body[-1500:]!r}"
+        )
+        cc = f"cc @{self.org}/{self.target.admin_team}"
+        assert comment_contains(body, Texts.BLOCKERS_ADMIN) and comment_contains(body, cc), (
+            f"PR #{pr.number}: the merge blockers note does not send the PR to the admin team ({cc!r}) (SUT): "
+            f"{body[-1500:]!r}"
+        )
 
     def webapp_source_has(self, relative: str) -> bool | None:
         """Whether the source the webapp under test was built from contains the file ``relative`` (features that

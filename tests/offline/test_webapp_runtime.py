@@ -20,10 +20,25 @@ refused container exits with status 0 (hypercorn's supervisor of the workers): O
 O-WEB-LOGIN-REQUIRED: with an OAuth client configured (dummy GITHUB_OAUTH_CLIENT_ID / _SECRET: QuartAuth and the
 login routes exist, no login is possible) the login-required page /myprojects answers the 401 page to a request
 without session; without OAuth configuration it answers 500 instead (KB-059, tests/offline/test_webapp_contract.py).
+
+O-WEB-READINESS (#949, main 2f18e71 after v1.8.0): GET /internal/ready checks MongoDB, Redis and ghproxy (a TCP connect
+to GHPROXY_URI, no request) within 2 s each, reuses the result for 5 s, and answers 200 ``{"status": "ok", "checks":
+{<name>: {"status": "ok"}}}`` when all are reachable, 503 with ``"status": "error"`` and ``{"status": "error", "error":
+"<exception type>"}`` (the type only, never the message) for the others; /internal/health stays the liveness probe and
+answers 200 during an outage. The ghproxy of the offline stack is https://api.github.com (never overridable): whether
+the container reaches it depends on the host network, so only its form is asserted. SUTs without #949 answer 404 ``{}``
+(an unknown /internal path).
+O-WEB-INTERNAL-LEASE (#949): /internal/init and /internal/check take a Redis lease (keys ``internal-init`` and
+``internal-check``, 300 s, renewed while the work runs; the init keeps it until the installation tasks it scheduled
+completed) before doing anything, and answer 429 ``{"status": "<what> is already running"}`` with ``Retry-After: 60``
+while another worker holds it. The test holds the leases itself (WebappStack.hold_lease, as another worker would), so
+/internal/init is refused before it could reach GitHub; a check that answered releases its lease. SUTs without #949
+ignore the keys (the check of an empty database answers 200) and /internal/init is never called on them.
 """
 
 from __future__ import annotations
 
+import re
 import socket
 import uuid
 import warnings
@@ -58,6 +73,34 @@ OUTAGE_TIMEOUT = 180.0  # the requests that wait for the database (30 s server s
 LOG_WAIT = 30.0
 CUSTOM_ENDPOINT = "/e2e-hooks/receive"
 SENDER = "e2e-user"  # payloads.DEFAULT_SENDER
+# eclipse-csi/otterdog#949 "feat(web): add /internal/ready and run init and check once at a time": merge commit on main
+# (after v1.8.0) and head of the pull request (a pr: SUT of that head does not contain the merge commit)
+FEATURE_949 = ("2f18e71fb22f93a63da5badda852c8ee1c1ba2f0", "9c27dc109b43fc5dce0e76abbeb2d6833dbdecf0")
+REFERENCES_949 = [
+    {
+        "pr": 949,
+        "note": (
+            "'feat(web): add /internal/ready and run init and check once at a time': a readiness probe of MongoDB, "
+            "Redis and ghproxy (200 or 503 with each check) and Redis leases that make /internal/init and "
+            "/internal/check answer 429 with Retry-After 60 while another call runs; before, /internal/ready was an "
+            "unknown path (404 {}) and nothing kept two inits or checks apart. Webapp only: the CLI and the offline "
+            "scenarios must not change"
+        ),
+    }
+]
+REFERENCE_949_OUTAGE = [
+    {
+        "pr": 949,
+        "note": (
+            "must not change: /internal/check now takes a Redis lease first; a check failing with 500 during the "
+            "MongoDB outage must release it, so the check after the outage answers 200 (not 429)"
+        ),
+    }
+]
+READY_CHECKS = {"mongodb", "redis", "ghproxy"}
+READY_WAIT = 60.0  # the readiness result is reused for 5 s, each check gives up after 2 s
+LEASE_TTL = 120
+ERROR_TYPE_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")  # an exception type name, never a message
 
 
 def free_loopback_port() -> int:
@@ -105,6 +148,77 @@ def has_fix_775(offline_context: E2EContext, webapp_image: BuiltImage) -> bool |
     return found
 
 
+@pytest.fixture(scope="module")
+def has_949(offline_context: E2EContext, webapp_image: BuiltImage) -> bool:
+    """Whether the webapp image contains #949 (its merge commit or the head of its pull request); skip when
+    undecidable (/internal/init must never be called on a SUT without the lease)."""
+    settings = offline_context.settings
+    mirror = UpstreamMirror(settings.cache_dir, settings.upstream_repo)
+    found: list[bool | None] = []
+    for commit in FEATURE_949:
+        try:
+            if not webapp_image.revision or not (
+                mirror.has_commit(commit) and mirror.has_commit(webapp_image.revision)
+            ):
+                found.append(None)
+            else:
+                found.append(mirror.is_ancestor(commit, webapp_image.revision))
+        except (ValueError, OSError, procs.CalledProcessError):
+            found.append(None)
+    if True in found:
+        return True
+    if False in found:
+        return False
+    pytest.skip(f"cannot tell whether {webapp_image.tag} contains #949 ({FEATURE_949[0][:7]})")
+
+
+def readiness(stack: WebappStack) -> tuple[int, dict[str, Any]]:
+    """Status and JSON body of GET /internal/ready."""
+    response = local_session().get(stack.api.url("/internal/ready"), timeout=60, allow_redirects=False)
+    return response.status_code, response.json()
+
+
+def wait_readiness(stack: WebappStack, expected: dict[str, str], what: str) -> tuple[int, dict[str, Any]]:
+    """/internal/ready once the status of the named checks is ``expected`` ({name: ok|error}); pytest.fail with the
+    last answer after READY_WAIT seconds."""
+    last: list[tuple[int, dict[str, Any]]] = []
+
+    def matches() -> tuple[int, dict[str, Any]] | None:
+        """The answer when every named check has the expected status."""
+        code, body = readiness(stack)
+        last[:] = [(code, body)]
+        checks = body.get("checks") if isinstance(body, dict) else None
+        if isinstance(checks, dict) and all(
+            (checks.get(name) or {}).get("status") == status for name, status in expected.items()
+        ):
+            return code, body
+        return None
+
+    try:
+        found: tuple[int, dict[str, Any]] = waiting.wait_until(matches, timeout=READY_WAIT, interval=1.0, what=what)
+    except waiting.WaitTimeoutError:
+        pytest.fail(f"/internal/ready never reported {expected} ({what}): last answer {last}", pytrace=False)
+    return found
+
+
+def assert_readiness_form(code: int, body: dict[str, Any]) -> dict[str, dict[str, str]]:
+    """The answer of /internal/ready is consistent: the three checks, each ok or an error with an exception type
+    only, 200 and 'ok' exactly when every check is ok, else 503 and 'error'; returns the checks."""
+    checks = body.get("checks")
+    assert isinstance(checks, dict) and set(checks) == READY_CHECKS, f"/internal/ready checks: {body}"
+    for name, check in checks.items():
+        assert check.get("status") in ("ok", "error"), f"check {name}: {check}"
+        if check["status"] == "error":
+            assert set(check) == {"status", "error"} and ERROR_TYPE_RE.match(str(check["error"])), (
+                f"the failed check {name} must only name the exception type (no message): {check}"
+            )
+        else:
+            assert set(check) == {"status"}, f"check {name}: {check}"
+    ready = all(check["status"] == "ok" for check in checks.values())
+    assert (code, body.get("status")) == ((200, "ok") if ready else (503, "error")), f"/internal/ready {code} {body}"
+    return checks
+
+
 def injector_for(stack: WebappStack, url: str | None = None) -> WebhookInjector:
     """WebhookInjector on ``url`` (default: the stack's current receiver), signing with the stack's dummy secret."""
     return WebhookInjector(url or stack.webhook_url, stack.settings.app.webhook_secret)
@@ -150,7 +264,7 @@ def concurrently(*calls: Callable[[], requests.Response]) -> list[requests.Respo
         return [future.result() for future in [pool.submit(call) for call in calls]]
 
 
-@pytest.mark.scenario("O-WEB-HOOK-ERROR")
+@pytest.mark.scenario("O-WEB-HOOK-ERROR", references=REFERENCE_949_OUTAGE)
 def test_database_outage(runtime_stack: WebappStack, has_fix_775: bool | None) -> None:
     """MongoDB stopped: a pull_request delivery answers 500 (with #775 the hook failure is logged with the delivery
     context), /internal/check 500 {} and /index the 500 page, a ping still 204; MongoDB started again: the same
@@ -275,3 +389,62 @@ def test_login_required_page_with_oauth_configured(runtime_stack: WebappStack) -
     finally:
         stack.restart_webapp({})
     assert stack.health()
+
+
+@pytest.mark.scenario("O-WEB-READINESS", references=REFERENCES_949)
+def test_readiness_reports_each_dependency(runtime_stack: WebappStack, has_949: bool) -> None:
+    """/internal/ready: MongoDB and Redis ok (ghproxy depends on the host network); Redis stopped: 503 with the redis
+    check failed (exception type only) while /internal/health stays 200; Redis back: ok again; the same for MongoDB.
+    Without #949: 404 {}."""
+    stack = runtime_stack
+    if not has_949:
+        code, body = readiness(stack)
+        assert (code, body) == (404, {}), f"a SUT without #949 has no /internal/ready: {code} {body}"
+        return
+    code, body = wait_readiness(stack, {"mongodb": "ok", "redis": "ok"}, "every dependency up")
+    assert_readiness_form(code, body)
+    for service in ("redis", "mongodb"):
+        others = {name: "ok" for name in ("mongodb", "redis") if name != service}
+        stack.stop_service(service)
+        try:
+            code, body = wait_readiness(stack, {service: "error", **others}, f"{service} stopped")
+            checks = assert_readiness_form(code, body)
+            assert code == 503 and checks[service]["status"] == "error", f"{service} stopped: {code} {body}"
+            assert stack.health(), f"/internal/health must not depend on {service} (liveness probe)"
+        finally:
+            stack.start_service(service)
+        code, body = wait_readiness(stack, {"mongodb": "ok", "redis": "ok"}, f"{service} started again")
+        assert_readiness_form(code, body)
+
+
+@pytest.mark.scenario("O-WEB-INTERNAL-LEASE", references=REFERENCES_949)
+def test_init_and_check_run_once_at_a_time(runtime_stack: WebappStack, has_949: bool) -> None:
+    """While another worker holds the lease, /internal/check and /internal/init answer 429 'already running' with
+    Retry-After 60 and leave the lease alone; once it is gone, a check answers 200 {} and releases its own lease.
+    Without #949 the keys mean nothing: the check answers 200 (init is never called on such a SUT)."""
+    stack = runtime_stack
+    internal = local_session()
+    check_url, init_url = stack.api.url("/internal/check"), stack.api.url("/internal/init")
+    try:
+        assert stack.hold_lease("internal-check", ttl=LEASE_TTL), "the check lease is already held"
+        busy = internal.get(check_url, timeout=60, allow_redirects=False)
+        if not has_949:
+            assert busy.status_code == 200 and busy.json() == {}, f"a SUT without #949 has no lease: {busy.status_code}"
+            return
+        assert busy.status_code == 429, f"/internal/check while the lease is held: {busy.status_code} {busy.text[:200]}"
+        assert busy.headers.get("Retry-After") == "60", f"Retry-After of the refused check: {dict(busy.headers)}"
+        assert busy.json() == {"status": "a check of the blueprints is already running"}, busy.json()
+        assert stack.hold_lease("internal-init", ttl=LEASE_TTL), "the init lease is already held"
+        refused = internal.get(init_url, timeout=60, allow_redirects=False)
+        assert refused.status_code == 429, f"/internal/init while the lease is held: {refused.status_code}"
+        assert refused.headers.get("Retry-After") == "60", f"Retry-After of the refused init: {dict(refused.headers)}"
+        assert refused.json() == {"status": "an initialization is already running"}, refused.json()
+        assert stack.lease_held("internal-init") and stack.lease_held("internal-check"), (
+            "a refused call dropped the lease of the worker holding it"
+        )
+    finally:
+        stack.drop_lease("internal-init")
+        stack.drop_lease("internal-check")
+    done = internal.get(check_url, timeout=60, allow_redirects=False)
+    assert done.status_code == 200 and done.json() == {}, f"/internal/check after the lease is gone: {done.status_code}"
+    assert not stack.lease_held("internal-check"), "the check kept its lease after answering"

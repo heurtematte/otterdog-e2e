@@ -9,7 +9,7 @@ otterdog feature coverage of the e2e battery
 
 Inventory of otterdog main @d9dac78 (after v1.7.1; release:latest is v1.7.1), first built at main 9bdeb75 (after v1.6.1): every CLI command and its flags, every property of the configuration model grouped by feature, validation rules, diff semantics, the webapp (webhook events, comment commands, tasks, auto-merge, apply, blueprints, policies, /api and /internal), the webhook receiver contract and notable CHANGELOG fixes, mapped to the existing scenarios and tests of this repository. Gaps and partial coverage carry the outline of the missing test.
 
-**363 features** in 27 areas: 309 covered, 43 partial, 11 gaps; covered 85%, weighted 91% (a partial feature counts half). *Offline-verified* counts the covered or partial features with at least one covering item in the offline tier; *live-verified* those with a recorded green live run of their covering items (`verified_on`: target, SUT, run id, date); *unverified* the others: their coverage is implemented but has never run, so it is a claim, not evidence. A covered feature needs at least one covering item that runs strictly on the default SUT (not only known-bug xfails or scenarios skipped by `fixed_in`).
+**366 features** in 27 areas: 312 covered, 43 partial, 11 gaps; covered 85%, weighted 91% (a partial feature counts half). *Offline-verified* counts the covered or partial features with at least one covering item in the offline tier; *live-verified* those with a recorded green live run of their covering items (`verified_on`: target, SUT, run id, date); *unverified* the others: their coverage is implemented but has never run, so it is a claim, not evidence. A covered feature needs at least one covering item that runs strictly on the default SUT (not only known-bug xfails or scenarios skipped by `fixed_in`).
 
 ## Summary by area
 
@@ -35,23 +35,23 @@ Inventory of otterdog main @d9dac78 (after v1.7.1; release:latest is v1.7.1), fi
 | [Webhook receiver contract](#receiver) | 8 | 8 | 0 | 0 | 100% | 100% | 8 | 0 | 0 |
 | [Webapp webhook event routing](#webapp-events) | 10 | 9 | 1 | 0 | 90% | 95% | 1 | 0 | 9 |
 | [Pull request comment commands](#webapp-commands) | 9 | 8 | 1 | 0 | 89% | 94% | 0 | 0 | 9 |
-| [Pull request validation, sync check and apply](#webapp-pr) | 15 | 13 | 2 | 0 | 87% | 93% | 0 | 0 | 15 |
+| [Pull request validation, sync check and apply](#webapp-pr) | 16 | 14 | 2 | 0 | 88% | 94% | 0 | 0 | 16 |
 | [Auto-merge eligibility and merge](#webapp-automerge) | 4 | 4 | 0 | 0 | 100% | 100% | 0 | 0 | 4 |
-| [Webapp boot, init, API and pages](#webapp-runtime) | 19 | 14 | 2 | 3 | 74% | 79% | 9 | 0 | 7 |
+| [Webapp boot, init, API and pages](#webapp-runtime) | 21 | 16 | 2 | 3 | 76% | 81% | 11 | 0 | 7 |
 | [Blueprints](#blueprints) | 8 | 6 | 2 | 0 | 75% | 88% | 0 | 0 | 8 |
 | [Policies](#policies) | 3 | 3 | 0 | 0 | 100% | 100% | 0 | 0 | 3 |
 | [CHANGELOG fixes (regression guards)](#regressions) | 36 | 33 | 1 | 2 | 92% | 93% | 10 | 0 | 24 |
 | [Unmerged otterdog changes (pull requests and local branches)](#pending) | 5 | 4 | 1 | 0 | 80% | 90% | 0 | 0 | 5 |
-| **Total** | 363 | 309 | 43 | 11 | 85% | 91% | 160 | 0 | 192 |
+| **Total** | 366 | 312 | 43 | 11 | 85% | 91% | 162 | 0 | 193 |
 
 ## Summary by tier
 
 | Tier | Features | Covered | Partial | Gap | Covered % | Weighted % | Offline-verified | Live-verified | Unverified |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| `offline` | 119 | 108 | 11 | 0 | 91% | 95% | 119 | 0 | 0 |
+| `offline` | 121 | 110 | 11 | 0 | 91% | 95% | 121 | 0 | 0 |
 | `cli` | 144 | 121 | 18 | 5 | 84% | 90% | 35 | 0 | 104 |
 | `webhooks` | 4 | 3 | 1 | 0 | 75% | 88% | 2 | 0 | 2 |
-| `webapp` | 80 | 68 | 8 | 4 | 85% | 90% | 3 | 0 | 73 |
+| `webapp` | 81 | 69 | 8 | 4 | 85% | 90% | 3 | 0 | 74 |
 | `web_ui` | 14 | 7 | 5 | 2 | 50% | 68% | 1 | 0 | 11 |
 | `enterprise` | 2 | 2 | 0 | 0 | 100% | 100% | 0 | 0 | 2 |
 
@@ -60,8 +60,8 @@ Inventory of otterdog main @d9dac78 (after v1.7.1; release:latest is v1.7.1), fi
 | Priority | Features | Covered | Partial | Gap | Covered % | Weighted % | Offline-verified | Live-verified | Unverified |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
 | P0 | 62 | 62 | 0 | 0 | 100% | 100% | 31 | 0 | 31 |
-| P1 | 142 | 121 | 19 | 2 | 85% | 92% | 65 | 0 | 75 |
-| P2 | 159 | 126 | 24 | 9 | 79% | 87% | 64 | 0 | 86 |
+| P1 | 143 | 122 | 19 | 2 | 85% | 92% | 65 | 0 | 76 |
+| P2 | 161 | 128 | 24 | 9 | 80% | 87% | 66 | 0 | 86 |
 
 Tiers:
 
@@ -403,6 +403,10 @@ Details:
     - Operations: add, modify, remove, run
     - Known bugs: KB-077
     - Notes: prompt 'n' -&gt; 'Apply cancelled.' nothing created; -f '1 added'; live drift ignored ('No changes required.'); removal only with -d ('1 resource(s) would be deleted ...' then '1 deleted'), guarded by guard_config_change.
+- **`cli.web-login`** (covered, P2, `web_ui`): web-login: opens a headful browser logged in as the bot, waits for input, logs out
+    - Source: `otterdog/cli.py:830-837`, `otterdog/operations/web_login.py:32-55`, `otterdog/providers/github/web.py:254-284`
+    - Operations: run
+    - Notes: Since #938 (main 0f00daa, after v1.8.0) every web login performs the 2FA checkup GitHub may request ('Verify two-factor authentication': another TOTP on /settings/two_factor_checkup) and fails with '2FA checkup failed, TOTP has not been accepted' (LoginGate kind totp, blocking). GitHub requests it once per account and it cannot be forced: only a bot with a pending checkup exercises it.
 - **`cli.install-app`** (partial, P2, `web_ui`): install-app -a SLUG: installs an App through the web UI ('app already installed, skipping.' / 'app installed.')
     - Source: `otterdog/cli.py:840-853`, `otterdog/operations/install_app.py:39-74`, `otterdog/providers/github/web.py:286-317`
     - Operations: run
@@ -2171,11 +2175,12 @@ Details:
 
 ## Pull request validation, sync check and apply
 
-`webapp-pr`: 15 features, 13 covered, 2 partial, 0 gaps (weighted 93%).
+`webapp-pr`: 16 features, 14 covered, 2 partial, 0 gaps (weighted 94%).
 
 | Id | Feature | Tier | Plan | Prio | Status | Verified | Covered by |
 |---|---|---|---|---|---|---|---|
 | `webapp-pr.validation` | validation: local-plan of the PR head against the default branch HEAD, validate comment (plan output escaped), status success / error on the head sha | webapp | free | P0 | covered | **unverified** | `tests/webapp/test_pr_validation.py::test_valid_config_pr`, `tests/webapp/test_pr_validation.py::test_invalid_config_pr`, `tests/webapp/test_commands.py::test_validate_command` |
+| `webapp-pr.outdated-branch` | a PR whose branch predates a change of main: validated on the merge commit GitHub creates (diff against its first parent, 'Diff for &lt;head&gt; merged into &lt;main&gt;'), so the change of main is not shown reverted; without merge commit (conflict, GitHub too slow) the head is validated against main with the warning 'The branch of this pull request is not up-to-date' (#950, open) | webapp | free | P1 | covered | **unverified** | `tests/webapp/test_pr_validation.py::test_outdated_branch_is_validated_as_merged` |
 | `webapp-pr.pending-statuses` | pending statuses are set first: 'validating configuration change using otterdog' and 'checking if configuration is in-sync using otterdog' | webapp | free | P2 | covered | **unverified** | `tests/webapp/test_pr_validation.py::test_valid_config_pr` |
 | `webapp-pr.validation-failure` | a crashing validation task: status failure 'otterdog validation failed, please contact an admin'; evaluation exceptions give the friendly comment 'Validation failed while evaluating the configuration. ...' | webapp | free | P1 | **partial** | **unverified** | `tests/webapp/test_pr_validation.py::test_evaluation_error_gets_a_friendly_comment` |
 | `webapp-pr.validation-warnings` | validation warnings: changes requiring secrets, the web UI or that may incur costs (max_cache_size_gb) are listed and block auto-merge | webapp | free | P1 | covered | **unverified** | `tests/webapp/test_web_ui_flags.py::test_web_ui_setting_needs_a_manual_apply`, `tests/webapp/test_pr_validation.py::test_validation_warnings` |
@@ -2197,6 +2202,10 @@ Details:
     - Source: `otterdog/webapp/tasks/validate_pull_request.py:105-231`, `otterdog/webapp/tasks/validate_pull_request.py:255-271`
     - Operations: task, status, comment, validate
     - Known bugs: KB-026
+- **`webapp-pr.outdated-branch`** (covered, P1, `webapp`): a PR whose branch predates a change of main: validated on the merge commit GitHub creates (diff against its first parent, 'Diff for &lt;head&gt; merged into &lt;main&gt;'), so the change of main is not shown reverted; without merge commit (conflict, GitHub too slow) the head is validated against main with the warning 'The branch of this pull request is not up-to-date' (#950, open)
+    - Source: `otterdog/webapp/tasks/validate_pull_request.py:105-231`
+    - Operations: task, comment, validate
+    - Notes: W-PR-OUTDATED-BRANCH: main changes the description of a declared run repository after the PR branch was created; a second commit on the stale branch must be validated as merged into the new main (no phantom revert of that description), a third commit conflicting with main gets the not up-to-date warning. Webapps without #950 (an open pull request) show the phantom revert: non-strict xfail scoped to OutdatedBranchRevertError (eclipse-score/.eclipsefdn#257). Not run here: needs the webapp tier.
 - **`webapp-pr.pending-statuses`** (covered, P2, `webapp`): pending statuses are set first: 'validating configuration change using otterdog' and 'checking if configuration is in-sync using otterdog'
     - Source: `otterdog/webapp/tasks/validate_pull_request.py:233-242`, `otterdog/webapp/tasks/check_sync.py:214-223`
     - Operations: status
@@ -2299,7 +2308,7 @@ Details:
 - **`webapp-automerge.blockers`** (covered, P1, `webapp`): auto-merge is refused when the PR contains secrets, needs the web UI, may incur costs, includes deletions or touches non-configuration files
     - Source: `otterdog/webapp/tasks/validate_pull_request.py:273-296`, `otterdog/webapp/db/models.py:151-158`
     - Operations: permission
-    - Notes: Each blocker is asserted in the test of its change type (secret, cost, README/multi-file, deletion, web UI) with admin-authored (eligible) PRs: no automerge comment after quiesce, /otterdog merge refused with the supports_auto_merge sentence, PR open. No separate W-AUTOMERGE-BLOCKERS (would duplicate those PRs).
+    - Notes: Each blocker is asserted in the test of its change type (secret, cost, README/multi-file, deletion, web UI) with admin-authored (eligible) PRs: no automerge comment after quiesce, /otterdog merge refused with the supports_auto_merge sentence, PR open. No separate W-AUTOMERGE-BLOCKERS (would duplicate those PRs). Since #943 (main 127c063, after v1.8.0) the validate comment lists the blockers ('&gt; [!NOTE]' 'This pull request cannot be auto-merged via `/otterdog merge`:', one reason per line) and mentions the admin team: WebappScenario.assert_merge_blockers in the same tests, and W-PR-VALID / the new repository of W-PR-WARNINGS get no note and no cc.
 - **`webapp-automerge.third-party`** (covered, P1, `webapp`): /otterdog merge by someone else than the author requires approval/admin team membership ('Only the author of the pull request, a member of ..., or a member of ... is allowed to auto-merge.')
     - Source: `otterdog/webapp/tasks/merge_pull_request.py:66-83`
     - Operations: permission, comment
@@ -2310,11 +2319,13 @@ Details:
 
 ## Webapp boot, init, API and pages
 
-`webapp-runtime`: 19 features, 14 covered, 2 partial, 3 gaps (weighted 79%).
+`webapp-runtime`: 21 features, 16 covered, 2 partial, 3 gaps (weighted 81%).
 
 | Id | Feature | Tier | Plan | Prio | Status | Verified | Covered by |
 |---|---|---|---|---|---|---|---|
 | `webapp-runtime.boot` | the webapp container boots with MongoDB and Valkey/Redis (dummy App credentials suffice), GET /internal/health answers 200, the /index footer shows 'OtterDog - v&lt;version&gt;' | offline | free | P0 | covered | offline | `tests/offline/test_webapp_contract.py::test_webapp_boots_with_dummy_credentials`, `tests/webapp/test_boot.py::test_webapp_boot` |
+| `webapp-runtime.ready` | GET /internal/ready (#949, main after v1.8.0): MongoDB, Redis and ghproxy (TCP connect) checked within 2 s each, the result reused 5 s; 200 {status: ok, checks} when all are reachable, 503 {status: error} with {status: error, error: &lt;exception type&gt;} for the others; /internal/health stays the liveness probe | offline | free | P2 | covered | offline | `tests/offline/test_webapp_runtime.py::test_readiness_reports_each_dependency` |
+| `webapp-runtime.internal-once` | /internal/init and /internal/check run once at a time across the workers (#949): a Redis lease (internal-init, internal-check; 300 s, renewed; the init keeps it until its installation tasks completed, 1 h at most) and 429 {status: '&lt;what&gt; is already running'} with Retry-After 60 while it is held | offline | free | P2 | covered | offline | `tests/offline/test_webapp_runtime.py::test_init_and_check_run_once_at_a_time`, `tests/offline/test_webapp_runtime.py::test_database_outage` |
 | `webapp-runtime.config` | environment configuration: GITHUB_APP_ID/PRIVATE_KEY, GITHUB_WEBHOOK_SECRET/ENDPOINT, validation and sync status contexts, GITHUB_ADMIN_TEAMS / GITHUB_APPROVAL_TEAMS (regex patterns), OTTERDOG_CONFIG_OWNER/REPO/PATH/TOKEN, MONGO_URI, REDIS_URI, GHPROXY_URI, BLUEPRINT_CHECK_INTERVAL, DEPENDENCY_TRACK_URL/TOKEN, CACHE_CONTROL | webapp | free | P1 | covered | offline | `tests/offline/test_webapp_contract.py::test_webapp_boots_with_dummy_credentials`, `tests/webapp/test_boot.py::test_webapp_boot`, `tests/webapp/test_merge_apply.py::test_automerge_after_approval`, `tests/webapp/test_runtime.py::test_organization_teams_override_the_environment`, `tests/webapp/test_runtime.py::test_admin_teams_list_with_spaces`, `tests/webapp/test_blueprints.py::test_check_interval_and_limit`, `tests/webapp/test_policies.py::test_sbom_upload_to_dependency_track` |
 | `webapp-runtime.init` | GET /internal/init: reload otterdog.json, global policies and blueprints from the configs repo, sync the installation list (orgs not installed are NOT_INSTALLED), refresh data of active installations | webapp | free | P0 | covered | **unverified** | `tests/webapp/test_boot.py::test_webapp_boot`, `tests/webapp/test_runtime.py::test_init_imports_existing_pull_requests`, `tests/webapp/test_policies.py::test_policy_definitions_are_loaded_and_merged`, `tests/webapp/test_blueprints.py::test_blueprint_definitions_are_loaded` |
 | `webapp-runtime.fetch-all-pull-requests` | FetchAllPullRequestsTask (on init/installation refresh) imports the config repo's existing pull requests (only those targeting 'main') | webapp | free | P2 | covered | **unverified** | `tests/webapp/test_runtime.py::test_init_imports_existing_pull_requests`, `tests/webapp/test_runtime.py::test_init_keeps_the_apply_status` |
@@ -2340,6 +2351,14 @@ Details:
     - Source: `otterdog/app.py:21-68`, `otterdog/webapp/__init__.py:95-140`, `otterdog/webapp/internal/routes.py:33-35`, `otterdog/webapp/home/routes.py:61-150`
     - Operations: run, api
     - Known bugs: KB-061
+- **`webapp-runtime.ready`** (covered, P2, `offline`): GET /internal/ready (#949, main after v1.8.0): MongoDB, Redis and ghproxy (TCP connect) checked within 2 s each, the result reused 5 s; 200 {status: ok, checks} when all are reachable, 503 {status: error} with {status: error, error: &lt;exception type&gt;} for the others; /internal/health stays the liveness probe
+    - Source: `otterdog/webapp/internal/routes.py:41-160`
+    - Operations: api, error
+    - Notes: O-WEB-READINESS: Redis then MongoDB stopped and started again on the runtime stack: 503 with the failed check naming only the exception type, /internal/health 200 meanwhile, ok again after the restart. ghproxy is https://api.github.com in the offline stack (not overridable): only the form of its check is asserted. SUTs without #949: 404 {}.
+- **`webapp-runtime.internal-once`** (covered, P2, `offline`): /internal/init and /internal/check run once at a time across the workers (#949): a Redis lease (internal-init, internal-check; 300 s, renewed; the init keeps it until its installation tasks completed, 1 h at most) and 429 {status: '&lt;what&gt; is already running'} with Retry-After 60 while it is held
+    - Source: `otterdog/webapp/internal/routes.py:162-236`, `otterdog/webapp/lease.py:1-69`, `otterdog/webapp/db/service.py:368-431`
+    - Operations: api, state
+    - Notes: O-WEB-INTERNAL-LEASE: the harness holds the Redis keys as another worker would (WebappStack.hold_lease, dummy stacks only): /internal/check and /internal/init answer 429 with Retry-After 60 and the lease stays the holder's; once it is dropped, a check answers 200 and releases its own lease. O-WEB-HOOK-ERROR: a check failing with 500 releases it too (the check after the outage answers 200). The harness waits out a 429 of /internal/init and /internal/check (WebappApi.get_once_at_a_time). Not covered: two real concurrent inits (the init needs GitHub).
 - **`webapp-runtime.config`** (covered, P1, `webapp`): environment configuration: GITHUB_APP_ID/PRIVATE_KEY, GITHUB_WEBHOOK_SECRET/ENDPOINT, validation and sync status contexts, GITHUB_ADMIN_TEAMS / GITHUB_APPROVAL_TEAMS (regex patterns), OTTERDOG_CONFIG_OWNER/REPO/PATH/TOKEN, MONGO_URI, REDIS_URI, GHPROXY_URI, BLUEPRINT_CHECK_INTERVAL, DEPENDENCY_TRACK_URL/TOKEN, CACHE_CONTROL
     - Source: `otterdog/webapp/config.py:15-112`, `otterdog/webapp/utils.py:315-423`
     - Operations: config
@@ -2529,7 +2548,7 @@ Details:
     - Source: `otterdog/webapp/policies/__init__.py:21-118`, `otterdog/webapp/tasks/fetch_policies.py:39-87`, `otterdog/webapp/webhook/__init__.py:293-303`
     - Operations: config, task, state
     - Known bugs: KB-069
-    - Notes: W-POL-LOAD: global macos_large_runners and dependency_track_upload policies load on /internal/init (project page cards: name or 'Overview', Reference URL, config parsed from PrettyFormatter). Org policies pushed to config repo main merge over them: path and name from the org file, the global description kept when the org sets none, allowed and workflow_filter from the org, artifact_name always from the global one (Policy.merge). Removing the org macos file restores the global values. KB-069 (W-POL-LOAD-MALFORMED): a file without 'type' fails FetchPoliciesTask (non-strict xfail, scoped).
+    - Notes: W-POL-LOAD: global macos_large_runners and dependency_track_upload policies load on /internal/init (project page cards: name or 'Overview', Reference URL, config parsed from PrettyFormatter). Org policies pushed to config repo main merge over them: path and name from the org file, the global description kept when the org sets none, allowed and workflow_filter from the org, artifact_name always from the global one (Policy.merge). Removing the org macos file restores the global values. KB-069 (W-POL-LOAD-MALFORMED): a file without 'type' fails FetchPoliciesTask (non-strict xfail, scoped). #944 (open) removes the dependency_track_upload type: on a webapp built without it W-POL-LOAD asserts that its files never show up and the macos policy still loads and merges.
 - **`policies.macos-large-runners`** (covered, P2, `webapp`): macos_large_runners: queued jobs on 'macos\*large' runners are cancelled unless allowed; counters total_workflow_jobs, permitted/cancelled_on_restricted_runners
     - Source: `otterdog/webapp/policies/macos_large_runners.py:21-79`, `otterdog/webapp/webhook/__init__.py:351-385`
     - Operations: event, task, state
@@ -2537,7 +2556,7 @@ Details:
 - **`policies.dependency-track-upload`** (covered, P2, `webapp`): dependency_track_upload: a successful workflow run referencing workflow_filter uploads the SBOM artifact (bom.json + metadata.json) to DEPENDENCY_TRACK_URL /api/v1/bom
     - Source: `otterdog/webapp/policies/dependency_track_upload.py:23-81`, `otterdog/webapp/tasks/policies/upload_sbom.py:1-119`, `otterdog/webapp/webhook/__init__.py:388-420`
     - Operations: event, task
-    - Notes: W-POL-SBOM (dtrack_mock): a successful run of the caller of the reusable store workflow -&gt; workflow_run completed -&gt; UploadSBOMTask finished -&gt; PUT /api/v1/bom with X-Api-Key e2e-dummy\*, application/json, {projectName, projectVersion 1.0.0, parentUUID default, autoCreate true, bom == the CycloneDX document}. A non-matching workflow_filter -&gt; no UploadSBOMTask and no upload. The mock answering 500 -&gt; UploadSBOMTask failed ('failed to upload SBOM').
+    - Notes: W-POL-SBOM (dtrack_mock): a successful run of the caller of the reusable store workflow -&gt; workflow_run completed -&gt; UploadSBOMTask finished -&gt; PUT /api/v1/bom with X-Api-Key e2e-dummy\*, application/json, {projectName, projectVersion 1.0.0, parentUUID default, autoCreate true, bom == the CycloneDX document}. A non-matching workflow_filter -&gt; no UploadSBOMTask and no upload. The mock answering 500 -&gt; UploadSBOMTask failed ('failed to upload SBOM'). #944 (open) removes the policy, UploadSBOMTask and the workflow_run hook: W-POL-SBOM is skipped on a webapp built without them; offline, O-WEB-SIG then expects every workflow_run delivery logged as 'workflow_run (&lt;delivery id&gt;)'.
 
 <a id="regressions"></a>
 

@@ -18,6 +18,7 @@ from typing import Any
 import pytest
 import yaml
 
+from otterdog_acceptance.safety import SafetyError
 from otterdog_acceptance.settings import AppCredentials
 from otterdog_acceptance.testing.fakes import FAKE_ORG, make_run_context, make_verified_org
 from otterdog_acceptance.webapp import stack as stack_module
@@ -25,6 +26,7 @@ from otterdog_acceptance.webapp.api import WebappApi
 from otterdog_acceptance.webapp.stack import (
     COMPOSE_VARIABLES,
     DTRACK_INTERNAL_URL,
+    LEASE_HOLDER,
     SERVICES,
     WEBAPP_ENV_OVERRIDES,
     DtrackMock,
@@ -396,3 +398,40 @@ def test_check_env_overrides_refuses(env: dict[str, Any]) -> None:
     non-dummy tokens are refused."""
     with pytest.raises(ValueError):
         check_env_overrides(env)
+
+
+# --- leases of /internal/init and /internal/check (otterdog#949) ------------------------------------------------------
+def test_leases_are_held_and_dropped_in_redis_of_a_dummy_stack(tmp_path: Path, docker: FakeDocker) -> None:
+    """hold_lease: SET <key> <holder> NX EX <ttl> (True on OK, False when held); lease_held: EXISTS; drop_lease: DEL;
+    all through ``exec -T redis valkey-cli``."""
+    stack = WebappStack(
+        dummy_webapp_settings(port=PORT),
+        verified=None,
+        image="otterdog-e2e/otterdog:v1.6.1",
+        run_ctx=make_run_context(),
+        scratch=tmp_path / "scratch",
+        artifacts_dir=tmp_path / "artifacts",
+    )
+    stack.up(timeout=60)
+    docker.answers["exec"] = (0, "OK\n", "")
+    assert stack.hold_lease("internal-check", ttl=90) is True
+    docker.answers["exec"] = (0, "\n", "")
+    assert stack.hold_lease("internal-init") is False
+    docker.answers["exec"] = (0, "1\n", "")
+    assert stack.lease_held("internal-init") is True
+    stack.drop_lease("internal-init")
+    assert docker.commands()[1:] == [
+        ["exec", "-T", "redis", "valkey-cli", "SET", "internal-check", LEASE_HOLDER, "NX", "EX", "90"],
+        ["exec", "-T", "redis", "valkey-cli", "SET", "internal-init", LEASE_HOLDER, "NX", "EX", "120"],
+        ["exec", "-T", "redis", "valkey-cli", "EXISTS", "internal-init"],
+        ["exec", "-T", "redis", "valkey-cli", "DEL", "internal-init"],
+    ]
+    with pytest.raises(ValueError, match="not a lease key"):
+        stack.lease_held("installation-token")
+
+
+def test_leases_are_never_touched_in_a_live_stack(up: WebappStack, docker: FakeDocker) -> None:
+    """The Redis of a live stack holds installation tokens: the lease helpers refuse it before running anything."""
+    with pytest.raises(SafetyError):
+        up.hold_lease("internal-check")
+    assert docker.commands() == [docker.commands()[0]]  # only the compose up

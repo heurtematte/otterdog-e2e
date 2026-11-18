@@ -46,6 +46,9 @@ from otterdog_acceptance.redact import REDACTOR
 from otterdog_acceptance.safety import SafetyError
 from otterdog_acceptance.settings import AppCredentials
 from otterdog_acceptance.webapp.api import (
+    BUSY_BUDGET,
+    BUSY_RETRY_MIN,
+    BUSY_STATUS,
     VERSION_RE,
     WebappApi,
     WebappApiError,
@@ -53,6 +56,7 @@ from otterdog_acceptance.webapp.api import (
     local_session,
     parse_timestamp,
     require_loopback_url,
+    retry_after_seconds,
 )
 
 if TYPE_CHECKING:
@@ -130,6 +134,10 @@ COMPOSE_DOWN_TIMEOUT = 180.0
 SERVICE_TIMEOUT = 300.0
 LOG_TAIL = 150
 SERVICES = ("webapp", "mongodb", "redis", "dtrack-mock")  # services of compose.e2e.yaml
+# Redis keys of the leases that make /internal/init and /internal/check run once at a time across the workers (since
+# otterdog#949, otterdog/webapp/internal/routes.py _INIT_LEASE_KEY / _CHECK_LEASE_KEY); the value is the holder's token
+LEASE_KEYS = ("internal-init", "internal-check")
+LEASE_HOLDER = "e2e-other-worker"
 # Dependency-Track mock (compose profile, resources/dtrack_mock.py)
 DTRACK_PROFILE = "dtrack"
 DTRACK_SERVICE = "dtrack-mock"
@@ -709,6 +717,32 @@ class WebappStack:
             states[service] = (state, int(code) if state == "exited" and code.lstrip("-").isdigit() else None)
         return states
 
+    # --- leases of /internal/init and /internal/check (otterdog#949) ------------------------------------------------
+    def _lease_command(self, *args: str) -> str:
+        """``valkey-cli <args>`` in the redis service of a dummy stack (offline tier only: the Redis of a live stack
+        holds installation tokens, the harness never talks to it); the output is never written to artifacts."""
+        if not is_dummy(self.settings):
+            raise SafetyError("lease keys are only touched in an offline stack with dummy credentials")
+        if args[1] not in LEASE_KEYS:
+            raise ValueError(f"not a lease key of the webapp: {args[1]!r}, expected one of {LEASE_KEYS}")
+        result = self._compose_checked(
+            "exec", "-T", self._service("redis"), "valkey-cli", *args, timeout=60, what=f"valkey-cli {args[0]}"
+        )
+        return result.stdout.strip()
+
+    def hold_lease(self, key: str, *, ttl: int = 120) -> bool:
+        """Take the lease ``key`` the way another worker would (``SET key <token> NX EX ttl``): True when taken,
+        False when it was already held."""
+        return self._lease_command("SET", key, LEASE_HOLDER, "NX", "EX", str(int(ttl))) == "OK"
+
+    def lease_held(self, key: str) -> bool:
+        """Whether someone (a worker of the webapp or hold_lease) holds the lease ``key``."""
+        return self._lease_command("EXISTS", key) == "1"
+
+    def drop_lease(self, key: str) -> None:
+        """Remove the lease ``key`` whoever holds it."""
+        self._lease_command("DEL", key)
+
     def restart_webapp(self, env: Mapping[str, str] | None = None, *, timeout: float = SERVICE_TIMEOUT) -> None:
         """Recreate the webapp container with exactly ``env`` as environment overrides (None or {}: the defaults again)
         and wait until it is healthy; MongoDB and Redis keep their data. ``webhook_url`` follows an overridden
@@ -912,10 +946,18 @@ class ExternalWebapp:
             _logger.info("external webapp: no init URL configured, /internal/init not called")
             return
         self.init_at = datetime.now(UTC)
-        try:
-            response = local_session().get(self.init_url, timeout=180, allow_redirects=False)
-        except requests.RequestException as exc:
-            raise WebappStackError(f"GET {REDACTOR(self.init_url)} failed: {exc}") from exc
+        session, clock, sleep = local_session(), self._api.clock, self._api.sleep
+        deadline = clock() + BUSY_BUDGET
+        while True:
+            try:
+                response = session.get(self.init_url, timeout=180, allow_redirects=False)
+            except requests.RequestException as exc:
+                raise WebappStackError(f"GET {REDACTOR(self.init_url)} failed: {exc}") from exc
+            remaining = deadline - clock()
+            if response.status_code != BUSY_STATUS or remaining <= 0:
+                break
+            # an initialization is already running (otterdog#949): wait for it as WebappApi.get_once_at_a_time does
+            sleep(min(max(retry_after_seconds(response.headers.get("Retry-After")), BUSY_RETRY_MIN), remaining))
         if response.status_code != 200:
             raise WebappStackError(f"GET {REDACTOR(self.init_url)} -> HTTP {response.status_code}")
 

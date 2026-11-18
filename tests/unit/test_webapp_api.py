@@ -15,6 +15,8 @@ from otterdog_acceptance.redact import REDACTOR
 from otterdog_acceptance.safety import SafetyError
 from otterdog_acceptance.waiting import WaitTimeoutError
 from otterdog_acceptance.webapp.api import (
+    BUSY_RETRY_DEFAULT,
+    BUSY_RETRY_MIN,
     RemoteEndpointError,
     WebappApi,
     WebappApiError,
@@ -22,6 +24,7 @@ from otterdog_acceptance.webapp.api import (
     is_loopback_url,
     parse_timestamp,
     require_loopback_url,
+    retry_after_seconds,
 )
 
 BASE = "http://127.0.0.1:5999"
@@ -334,6 +337,55 @@ def test_quiesce_zero_returns_on_first_quiet_check(api: WebappApi, fake_time: Fa
 
 
 @responses.activate
+def test_a_running_init_or_check_is_waited_out(api: WebappApi, fake_time: FakeTime) -> None:
+    """Since otterdog#949 /internal/init and /internal/check answer 429 with Retry-After while one runs: init() and
+    check() sleep the Retry-After (at least BUSY_RETRY_MIN) and call again until 200."""
+    busy = {"status": "an initialization is already running"}
+    responses.get(f"{BASE}/internal/init", status=429, json=busy, headers={"Retry-After": "60"})
+    responses.get(f"{BASE}/internal/init", status=429, json=busy, headers={"Retry-After": "1"})
+    responses.get(f"{BASE}/internal/init", json={})
+    api.init()
+    assert fake_time.sleeps == [60.0, BUSY_RETRY_MIN] and len(responses.calls) == 3
+    responses.get(
+        f"{BASE}/internal/check/3", status=429, json={"status": "a check of the blueprints is already running"}
+    )
+    responses.get(f"{BASE}/internal/check/3", json={})
+    api.check(3)
+    assert fake_time.sleeps[-1] == BUSY_RETRY_DEFAULT, "no Retry-After: the default delay"
+
+
+@responses.activate
+def test_a_busy_endpoint_fails_once_the_budget_is_spent(api: WebappApi, fake_time: FakeTime) -> None:
+    """A 429 that lasts longer than the budget raises it as WebappApiError; the last sleep never passes the budget;
+    any other status is not retried."""
+    responses.get(f"{BASE}/internal/check", status=429, json={}, headers={"Retry-After": "60"})
+    with pytest.raises(WebappApiError, match="HTTP 429"):
+        api.check(busy_budget=150)
+    assert fake_time.sleeps == [60.0, 60.0, 30.0] and len(responses.calls) == 4
+    responses.replace(responses.GET, f"{BASE}/internal/check", status=500, json={})
+    with pytest.raises(WebappApiError, match="HTTP 500"):
+        api.check()
+    assert len(responses.calls) == 5
+
+
+@pytest.mark.parametrize(
+    ("value", "seconds"),
+    [
+        ("60", 60.0),
+        ("2.5", 2.5),
+        ("0", 0.0),
+        (None, BUSY_RETRY_DEFAULT),
+        ("-1", BUSY_RETRY_DEFAULT),
+        ("Wed, 21 Oct 2026 07:28:00 GMT", BUSY_RETRY_DEFAULT),
+        ("nan", BUSY_RETRY_DEFAULT),
+    ],
+)
+def test_retry_after_seconds(value: str | None, seconds: float) -> None:
+    """Retry-After in seconds; anything else falls back to the default delay."""
+    assert retry_after_seconds(value) == seconds
+
+
+@responses.activate
 def test_init_and_deployed_version(api: WebappApi) -> None:
     """/internal/init must answer 200; the version comes from the /index footer."""
     responses.get(f"{BASE}/internal/init", json={})
@@ -341,6 +393,9 @@ def test_init_and_deployed_version(api: WebappApi) -> None:
     responses.replace(responses.GET, f"{BASE}/internal/init", status=500, json={})
     with pytest.raises(WebappApiError):
         api.init()
+    responses.replace(responses.GET, f"{BASE}/internal/init", status=429, json={})
+    with pytest.raises(WebappApiError, match="HTTP 429"):
+        api.init(busy_budget=0)
     footer = '<a href="https://github.com/eclipse-csi/otterdog">OtterDog - v1.7.0.dev19+e2e.g9bdeb75</a>'
     responses.get(f"{BASE}/index", body=f"<html><footer>{footer}</footer></html>")
     assert api.deployed_version() == "1.7.0.dev19+e2e.g9bdeb75"
