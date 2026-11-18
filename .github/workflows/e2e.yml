@@ -302,6 +302,8 @@ jobs:
         env:
           # the instance's profile: targets/<profile>.yaml (empty: the instance name)
           E2E_PROFILE: ${{ vars.E2E_PROFILE }}
+          # the instance's shard (scenarios/shards.yaml): its share of the live items (empty: every live item)
+          E2E_SHARD: ${{ vars.E2E_SHARD }}
           E2E_ORG: ${{ vars.E2E_ORG }}
           E2E_ORG_ID: ${{ vars.E2E_ORG_ID }}
           E2E_ALLOWED_ORG_IDS: ${{ vars.E2E_ALLOWED_ORG_IDS }}
