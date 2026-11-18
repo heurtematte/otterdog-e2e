@@ -1273,24 +1273,21 @@ features:
 
   - id: config.template-clone
     area: config
-    title: "non-local runs clone the template (unauthenticated) into <config_dir>/templates/<owner>/<repo>/<ref>, pull branch refs, never refresh tags/SHAs, copy into vendor/"
+    title: "non-local runs clone the template (unauthenticated) into <config_dir>/templates/<owner>/<repo>/<ref>, pull branch refs, never refresh tags/SHAs, copy into vendor/; a branch ref is reported (#921) and the update holds <template dir>.lock (#927)"
     source: ["otterdog/jsonnet.py:372-426"]
     operations: [config]
     min_plan: free
     tier: cli
     ui_only: false
     priority: P1
-    status: partial
-    covered_by: [tests/cli/test_baseline.py::test_baseline_in_sync_after_reset, cli.repo.lifecycle]
-    notes: "live commands clone the template pinned to a commit sha (sut/template.py); the branch pull and the subdirectory copy rules are not asserted"
-    gap_outline:
-      scenario: cli.template.branch-ref
-      file: tests/cli/test_template.py
-      steps:
-        - "publish the template to the defaults repository on a branch e2e/<run>/tpl; validate with base_template ...@e2e/<run>/tpl"
-        - "push a change to the branch template (a new default topic); validate/plan again"
-      assertions: ["the second run sees the change (git pull of branch refs); with a tag ref the cached clone is not refreshed"]
-      needs: [target, "TemplatePublisher on a branch (today only immutable tags)"]
+    status: covered
+    covered_by:
+      - tests/cli/test_baseline.py::test_baseline_in_sync_after_reset
+      - cli.repo.lifecycle
+      - tests/offline/test_config_template_cache.py::test_a_branch_ref_is_pulled_and_reported_once
+      - tests/offline/test_config_template_cache.py::test_a_tag_or_commit_ref_is_never_refreshed_nor_reported
+      - tests/offline/test_config_template_cache.py::test_a_process_waits_for_the_lock_of_the_cached_clone
+    notes: "live commands clone the template pinned to a commit sha (sut/template.py). Offline, O-TEMPLATE-CACHE seeds the cached clone with a bare repository of the workspace as its origin: validate (without --local) pulls a branch ref before the copy to vendor/<repo> (without .git), never refreshes a tag (even one moved in the origin) or a commit sha. Since 1.8.0 a branch ref logs once per process (#921, two organizations: one warning) 'base template '<url>' references the branch '<ref>': every push to it changes the default configuration and the python scripts that otterdog executes from it, reference a tag or a commit SHA instead', and the clone or pull holds an exclusive flock on <template dir>.lock (#927: v1.8.0 validated after 10.4 s while the test held the lock for 10 s, 2.2 s otherwise). The subdirectory copy rule is config.hook.subdirectory-template."
 
   - id: config.template-feature-gating
     area: config

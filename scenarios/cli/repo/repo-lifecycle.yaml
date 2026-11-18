@@ -9,6 +9,14 @@ description: |
 priority: P0
 min_plan: free
 tags: [repo, smoke]
+references:
+  - pr: 942
+    note: >-
+      "Perf/parallel repo loading" (c91d111, after v1.8.0): the live settings of the repositories are loaded
+      concurrently (no more chunks of 50 repositories with 30 s pauses; the ~20 requests of a repository sent at once,
+      at most 30 REST and 10 GraphQL requests in flight) and a rate-limited REST request is sent again up to 3 times.
+      Only the order of the requests may change: the plan of each step, the requests of apply.api and the no-op of the
+      converge loop must not
 steps:
   - name: create
     fragments:

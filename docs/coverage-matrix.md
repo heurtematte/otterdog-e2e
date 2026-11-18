@@ -9,14 +9,14 @@ otterdog feature coverage of the e2e battery
 
 Inventory of otterdog main @d9dac78 (after v1.7.1; release:latest is v1.7.1), first built at main 9bdeb75 (after v1.6.1): every CLI command and its flags, every property of the configuration model grouped by feature, validation rules, diff semantics, the webapp (webhook events, comment commands, tasks, auto-merge, apply, blueprints, policies, /api and /internal), the webhook receiver contract and notable CHANGELOG fixes, mapped to the existing scenarios and tests of this repository. Gaps and partial coverage carry the outline of the missing test.
 
-**373 features** in 27 areas: 316 covered, 46 partial, 11 gaps; covered 85%, weighted 91% (a partial feature counts half). *Offline-verified* counts the covered or partial features with at least one covering item in the offline tier; *live-verified* those with a recorded green live run of their covering items (`verified_on`: target, SUT, run id, date); *unverified* the others: their coverage is implemented but has never run, so it is a claim, not evidence. A covered feature needs at least one covering item that runs strictly on the default SUT (not only known-bug xfails or scenarios skipped by `fixed_in`).
+**373 features** in 27 areas: 317 covered, 45 partial, 11 gaps; covered 85%, weighted 91% (a partial feature counts half). *Offline-verified* counts the covered or partial features with at least one covering item in the offline tier; *live-verified* those with a recorded green live run of their covering items (`verified_on`: target, SUT, run id, date); *unverified* the others: their coverage is implemented but has never run, so it is a claim, not evidence. A covered feature needs at least one covering item that runs strictly on the default SUT (not only known-bug xfails or scenarios skipped by `fixed_in`).
 
 ## Summary by area
 
 | Area | Features | Covered | Partial | Gap | Covered % | Weighted % | Offline-verified | Live-verified | Unverified |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
 | [CLI commands and global options](#cli) | 63 | 56 | 7 | 0 | 89% | 94% | 33 | 0 | 30 |
-| [otterdog.json, base template and credentials](#config) | 27 | 14 | 7 | 6 | 52% | 65% | 16 | 0 | 5 |
+| [otterdog.json, base template and credentials](#config) | 27 | 15 | 6 | 6 | 56% | 67% | 17 | 0 | 4 |
 | [Validation rules](#validation) | 38 | 37 | 1 | 0 | 97% | 99% | 37 | 0 | 1 |
 | [Diff engine and plan semantics](#plan-semantics) | 18 | 17 | 1 | 0 | 94% | 97% | 16 | 0 | 2 |
 | [Organization settings](#org-settings) | 14 | 10 | 4 | 0 | 71% | 86% | 3 | 0 | 11 |
@@ -42,14 +42,14 @@ Inventory of otterdog main @d9dac78 (after v1.7.1; release:latest is v1.7.1), fi
 | [Policies](#policies) | 3 | 3 | 0 | 0 | 100% | 100% | 0 | 0 | 3 |
 | [CHANGELOG fixes (regression guards)](#regressions) | 36 | 33 | 1 | 2 | 92% | 93% | 10 | 0 | 24 |
 | [Unmerged otterdog changes (pull requests and local branches)](#pending) | 5 | 4 | 1 | 0 | 80% | 90% | 0 | 0 | 5 |
-| **Total** | 373 | 316 | 46 | 11 | 85% | 91% | 169 | 0 | 193 |
+| **Total** | 373 | 317 | 45 | 11 | 85% | 91% | 170 | 0 | 192 |
 
 ## Summary by tier
 
 | Tier | Features | Covered | Partial | Gap | Covered % | Weighted % | Offline-verified | Live-verified | Unverified |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
 | `offline` | 122 | 111 | 11 | 0 | 91% | 95% | 122 | 0 | 0 |
-| `cli` | 150 | 124 | 21 | 5 | 83% | 90% | 41 | 0 | 104 |
+| `cli` | 150 | 125 | 20 | 5 | 83% | 90% | 42 | 0 | 103 |
 | `webhooks` | 4 | 3 | 1 | 0 | 75% | 88% | 2 | 0 | 2 |
 | `webapp` | 81 | 69 | 8 | 4 | 85% | 90% | 3 | 0 | 74 |
 | `web_ui` | 14 | 7 | 5 | 2 | 50% | 68% | 1 | 0 | 11 |
@@ -60,7 +60,7 @@ Inventory of otterdog main @d9dac78 (after v1.7.1; release:latest is v1.7.1), fi
 | Priority | Features | Covered | Partial | Gap | Covered % | Weighted % | Offline-verified | Live-verified | Unverified |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
 | P0 | 62 | 62 | 0 | 0 | 100% | 100% | 31 | 0 | 31 |
-| P1 | 146 | 123 | 21 | 2 | 84% | 91% | 69 | 0 | 75 |
+| P1 | 146 | 124 | 20 | 2 | 85% | 92% | 70 | 0 | 74 |
 | P2 | 165 | 131 | 25 | 9 | 79% | 87% | 69 | 0 | 87 |
 
 Tiers:
@@ -490,7 +490,7 @@ Details:
 
 ## otterdog.json, base template and credentials
 
-`config`: 27 features, 14 covered, 7 partial, 6 gaps (weighted 65%).
+`config`: 27 features, 15 covered, 6 partial, 6 gaps (weighted 67%).
 
 | Id | Feature | Tier | Plan | Prio | Status | Verified | Covered by |
 |---|---|---|---|---|---|---|---|
@@ -505,7 +505,7 @@ Details:
 | `config.exclude-teams` | defaults.github.exclude_teams (regexes): matching teams are not loaded (import, plan) and configuring one is a validation error | cli | free | P2 | covered | **unverified** | `tests/cli/test_org_config.py::test_excluded_teams_are_neither_loaded_nor_configurable` |
 | `config.template-url` | base_template URL `https://github.com/<owner>/<repo>#<file>@<ref>`: only github.com, ref mandatory (exit 2 at load) | offline | free | P1 | covered | offline | `tests/offline/test_config_loading.py::test_invalid_template_url`, `tests/offline/test_config_loading.py::test_organization_entry_variants` |
 | `config.local-base-template` | base_template as a local path (#917): relative to otterdog.json, linked as vendor/&lt;directory name&gt; on every run (--local included); missing file and a template directory holding the organization are load errors | offline | free | P2 | **partial** | offline | `O-VAL-LOCAL-BASE-TEMPLATE` |
-| `config.template-clone` | non-local runs clone the template (unauthenticated) into &lt;config_dir&gt;/templates/&lt;owner&gt;/&lt;repo&gt;/&lt;ref&gt;, pull branch refs, never refresh tags/SHAs, copy into vendor/ | cli | free | P1 | **partial** | **unverified** | `tests/cli/test_baseline.py::test_baseline_in_sync_after_reset`, `cli.repo.lifecycle` |
+| `config.template-clone` | non-local runs clone the template (unauthenticated) into &lt;config_dir&gt;/templates/&lt;owner&gt;/&lt;repo&gt;/&lt;ref&gt;, pull branch refs, never refresh tags/SHAs, copy into vendor/; a branch ref is reported (#921) and the update holds &lt;template dir&gt;.lock (#927) | cli | free | P1 | covered | offline | `tests/cli/test_baseline.py::test_baseline_in_sync_after_reset`, `cli.repo.lifecycle`, `tests/offline/test_config_template_cache.py::test_a_branch_ref_is_pulled_and_reported_once`, `tests/offline/test_config_template_cache.py::test_a_tag_or_commit_ref_is_never_refreshed_nor_reported`, `tests/offline/test_config_template_cache.py::test_a_process_waits_for_the_lock_of_the_cached_clone` |
 | `config.template-feature-gating` | the template drives what is managed: missing constructors skip a resource type, only template org-settings keys are fetched, hidden '::' fields are unmanaged | cli | free | P2 | **partial** | **unverified** | `tests/cli/test_baseline.py::test_baseline_in_sync_after_reset`, `tests/cli/test_org_config.py::test_hidden_fields_are_unmanaged` |
 | `config.hook.validate-org-settings` | template hook validate-org-settings.py (exec'ed at validation, context.property_equals -&gt; "&lt;h&gt; has '&lt;k&gt;' set to '&lt;v&gt;' but '&lt;r&gt;' is required.") | offline | free | P0 | covered | offline | `tests/offline/test_config_template_hooks.py::test_validate_org_settings_hook`, `tests/offline/test_config_template_hooks.py::test_without_the_hook_the_template_default_validates` |
 | `config.hook.validate-team` | template hook validate-team.py (per team at validation) | cli | free | P1 | **gap** | - | - |
@@ -578,19 +578,10 @@ Details:
     - Needs:
         - offline
         - available: WorkspaceLayout(local_template=...), OtterdogCli.invoke(..., env={'HOME': ...})
-- **`config.template-clone`** (partial, P1, `cli`): non-local runs clone the template (unauthenticated) into &lt;config_dir&gt;/templates/&lt;owner&gt;/&lt;repo&gt;/&lt;ref&gt;, pull branch refs, never refresh tags/SHAs, copy into vendor/
+- **`config.template-clone`** (covered, P1, `cli`): non-local runs clone the template (unauthenticated) into &lt;config_dir&gt;/templates/&lt;owner&gt;/&lt;repo&gt;/&lt;ref&gt;, pull branch refs, never refresh tags/SHAs, copy into vendor/; a branch ref is reported (#921) and the update holds &lt;template dir&gt;.lock (#927)
     - Source: `otterdog/jsonnet.py:372-426`
     - Operations: config
-    - Notes: live commands clone the template pinned to a commit sha (sut/template.py); the branch pull and the subdirectory copy rules are not asserted
-    - Suggested: `cli.template.branch-ref` in `tests/cli/test_template.py`
-    - Steps:
-        - publish the template to the defaults repository on a branch e2e/&lt;run&gt;/tpl; validate with base_template ...@e2e/&lt;run&gt;/tpl
-        - push a change to the branch template (a new default topic); validate/plan again
-    - Assert:
-        - the second run sees the change (git pull of branch refs); with a tag ref the cached clone is not refreshed
-    - Needs:
-        - target
-        - TemplatePublisher on a branch (today only immutable tags)
+    - Notes: live commands clone the template pinned to a commit sha (sut/template.py). Offline, O-TEMPLATE-CACHE seeds the cached clone with a bare repository of the workspace as its origin: validate (without --local) pulls a branch ref before the copy to vendor/&lt;repo&gt; (without .git), never refreshes a tag (even one moved in the origin) or a commit sha. Since 1.8.0 a branch ref logs once per process (#921, two organizations: one warning) 'base template '&lt;url&gt;' references the branch '&lt;ref&gt;': every push to it changes the default configuration and the python scripts that otterdog executes from it, reference a tag or a commit SHA instead', and the clone or pull holds an exclusive flock on &lt;template dir&gt;.lock (#927: v1.8.0 validated after 10.4 s while the test held the lock for 10 s, 2.2 s otherwise). The subdirectory copy rule is config.hook.subdirectory-template.
 - **`config.template-feature-gating`** (partial, P2, `cli`): the template drives what is managed: missing constructors skip a resource type, only template org-settings keys are fetched, hidden '::' fields are unmanaged
     - Source: `otterdog/jsonnet.py:120-318`, `otterdog/models/github_organization.py:579-610`, `otterdog/models/github_organization.py:615-871`
     - Operations: coerce, config

@@ -20,6 +20,12 @@ description: |
 priority: P1
 min_plan: free
 tags: [repo]
+references:
+  - pr: 942
+    note: >-
+      "Perf/parallel repo loading" (c91d111, after v1.8.0): the requests that load a repository are sent concurrently
+      instead of one after the other; an archived repository must read back the same settings (the fields of
+      Repository._unavailable_fields_in_archived_repos still ignored), so the plan of each step must not change
 steps:
   - name: create
     fragments:

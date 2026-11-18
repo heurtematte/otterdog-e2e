@@ -14,6 +14,12 @@ description: |
 priority: P1
 min_plan: free
 tags: [environments, repo]
+references:
+  - pr: 942
+    note: >-
+      "Perf/parallel repo loading" (c91d111, after v1.8.0): the environments of a repository and their deployment
+      branch policies are loaded concurrently with its other settings; the environment read back (and so the plan of
+      each step and the converge no-op) must not change
 libraries:
   e2e: ../../lib/e2e.libsonnet
 steps:

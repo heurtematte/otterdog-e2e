@@ -109,7 +109,21 @@ def test_validate_command(webapp_scenario: WebappScenario) -> None:
     assert texts.VALIDATION_SUCCESS_RE.search(status.get("description") or ""), f"unexpected status: {status}"
 
 
-@pytest.mark.scenario("W-DRIFT-CHECKSYNC", priority="P1")
+@pytest.mark.scenario(
+    "W-DRIFT-CHECKSYNC",
+    priority="P1",
+    references=[
+        {
+            "pr": 942,
+            "note": (
+                "'Perf/parallel repo loading' (c91d111, after v1.8.0): the sync check of a pull request loads the "
+                "repositories concurrently, at most CHECK_SYNC_MAX_CONCURRENT_REQUESTS REST requests in flight "
+                "(default 20, a positive integer checked at boot) instead of chunks of 20 repositories with 30 s "
+                "pauses; the drift it reports, its comment and its status must not change"
+            ),
+        }
+    ],
+)
 @pytest.mark.tags("webapp", "repo")
 def test_drift_check_sync(webapp_scenario: WebappScenario, mutator: Mutator) -> None:
     """Drift of a declared run repository: out-of-sync comment (a WARNING alert since #765) and sync description,

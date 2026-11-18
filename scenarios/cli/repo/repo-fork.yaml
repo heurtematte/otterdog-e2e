@@ -15,6 +15,12 @@ description: |
 priority: P2
 min_plan: free
 tags: [repo]
+references:
+  - pr: 942
+    note: >-
+      "Perf/parallel repo loading" (c91d111, after v1.8.0): the requests that load a repository are sent concurrently
+      instead of one after the other; a fork must read back the same settings (forked_repository and
+      fork_default_branch_only stay model-only), so the converge loop still reaches a no-op
 steps:
   - name: fork
     fragments:
