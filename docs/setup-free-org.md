@@ -313,7 +313,8 @@ make cli TARGET=free,acme-a                    # several instances, one after th
 
 Skipped tests always state why (missing capability, identity, App, docker, low rate budget). After a crash run
 `make janitor TARGET=free` (dry run) and `make janitor TARGET=free APPLY=1`. Several instances in one command:
-[onboarding.md](onboarding.md#running-on-one-organization-or-a-list).
+[onboarding.md](onboarding.md#running-on-one-organization-or-a-list). Which `WARN` rows of doctor matter, and the
+runs that prove an installation: [checking-instances.md](checking-instances.md).
 
 ## 10. Web-UI tier (optional)
 

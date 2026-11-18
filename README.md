@@ -276,6 +276,7 @@ The documentation is published at https://heurtematte.github.io/otterdog-e2e/ (Z
 | [roles.md](docs/roles.md) | the roles (machine accounts) admin, oracle, author, approver, outsider, config_reader: what each one does in the tests, what is skipped without it, diagrams of their interactions with otterdog and the test organization |
 | [setup-free-org.md](docs/setup-free-org.md) | machine accounts, organization, tokens (classic or fine-grained), bootstrap, GitHub App, first run, by hand |
 | [setup-enterprise-org.md](docs/setup-enterprise-org.md) | GitHub Enterprise Cloud specifics (trial, SAML SSO, policies), the Team profile |
+| [checking-instances.md](docs/checking-instances.md) | doctor on every organization at once, the usual `WARN` rows and whether they block, the `unshare` sandbox on Ubuntu, the runs that prove an installation |
 | [github-app.md](docs/github-app.md) | the e2e GitHub App: permissions, manifest flow, webhook sink, relay |
 | [writing-scenarios.md](docs/writing-scenarios.md) | the YAML scenario model, checks, rules, examples |
 | [battery-guide.md](docs/battery-guide.md) | authoring guide of the test battery: which harness API, YAML key, fixture or check kind closes which kind of coverage gap, conventions, the lint and the login budget |

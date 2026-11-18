@@ -493,7 +493,8 @@ The workflow installs `docs/requirements.txt`: the docs group of `poetry.lock` w
 
 | Symptom | Cause and fix |
 |---|---|
-| `unshare` FAIL in doctor, offline commands refused in CI | unprivileged user namespaces are disabled (Ubuntu 24.04 AppArmor): `sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0`, or an AppArmor profile for `unshare` |
+| `unshare` WARN in doctor (FAIL in CI), offline commands refused in CI | only with `E2E_CLI_RUNTIME=host`: unprivileged user namespaces are restricted (Ubuntu 24.04 AppArmor); leave `E2E_CLI_RUNTIME` unset (docker), or allow `unshare` ([the unshare row on Ubuntu](checking-instances.md#the-unshare-row-on-ubuntu)) |
+| `docker` FAIL in doctor, `the CLI of ... runs in its docker image ... the docker daemon does not answer` | every otterdog command runs in the SUT image: start the docker daemon, or set `E2E_CLI_RUNTIME=host` |
 | `live session setup failed: ...` on every live test | verification, isolation, scopes, lease or token problem: run `otterdog-acceptance doctor --target <instance>` |
 | `LeaseBusy` | another session holds the org lease (its holder and expiry are in the message); wait, set `E2E_LEASE_WAIT`, or, for a crashed run, `make janitor TARGET=<instance> RUN_ID=<id> APPLY=1` |
 | `target 'acme-a' not found: no profile targets/acme-a.yaml ... E2E_PROFILE is not set` | the instance has no env file or no `E2E_PROFILE`: `otterdog-acceptance setup --target acme-a`, or add `E2E_PROFILE=<profile>` to `~/.config/otterdog-acceptance/acme-a.env` |

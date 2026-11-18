@@ -28,6 +28,7 @@ nav = [
     { "GitHub Free organization" = "setup-free-org.md" },
     { "GitHub Enterprise Cloud organization" = "setup-enterprise-org.md" },
     { "The e2e GitHub App" = "github-app.md" },
+    { "Checking the instances" = "checking-instances.md" },
     { "Local development" = "local-development.md" },
   ] },
   { "Writing tests" = [
