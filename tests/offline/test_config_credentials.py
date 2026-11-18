@@ -9,17 +9,19 @@ A failure is printed as ``invalid credentials`` followed by the provider's messa
 
 * env: an organization-level key names the variable literally (``{``/``}`` refused); otherwise ``defaults.env.<key>``
   is a template whose ``{org_name}`` / ``{github_id}`` placeholders are upper-cased with ' ' and '-' replaced by '_';
-* plain: the values themselves; pass: ``pass ls`` must work, then ``pass <path>`` per key, ``password_store_dir`` of
-  ``defaults.pass`` exported as PASSWORD_STORE_DIR (also from .otterdog-defaults.json, #725); bitwarden: ``bw unlock
-  --check`` must work, then ``bw get item <item_id>`` gives a JSON item whose field ``api_token_admin`` (or the
-  configured ``api_token_key``) holds the token and whose login holds username, password and totp; unknown providers
-  and a missing provider are refused; unexpected keys of ``defaults.<provider>`` only warn. The vault provider needs a
-  Vault server (hvac over HTTP), which the network sandbox of the offline tier cannot reach: not exercised.
+* plain: the values themselves; pass: ``pass ls`` must work, then ``pass show <path>`` per key (``pass <path>`` before
+  1.8.0), ``password_store_dir`` of ``defaults.pass`` exported as PASSWORD_STORE_DIR (also from .otterdog-defaults.json,
+  #725); bitwarden: ``bw unlock --check`` must work, then ``bw get item <item_id>`` gives a JSON item whose field
+  ``api_token_admin`` (or the configured ``api_token_key``) holds the token and whose login holds username, password and
+  totp; unknown providers and a missing provider are refused; unexpected keys of ``defaults.<provider>`` only warn. The
+  vault provider needs a Vault server (hvac over HTTP), which the network sandbox of the offline tier cannot reach: not
+  exercised.
 
 The pass and bitwarden tests run stub CLIs (shell scripts of the test workspace, first on PATH) that only answer for
 the test's own store directory and items: the user's password store and vault are never read (the harness also
 strips PASSWORD_STORE_* and BW_* from the environment). Container runtimes skip them (their PATH is the image's).
-Verified on v1.6.1 and main 9bdeb75.
+Since 1.8.0 (GHSA-886p-g538-rcmp) the pass and bitwarden CLIs run without a shell: O-KB-CREDENTIAL-SHELL (KB-086)
+checks that shell metacharacters of a key run nothing. Verified on v1.6.1, v1.7.1, v1.8.0 and main 9bdeb75.
 """
 
 from __future__ import annotations
@@ -80,6 +82,9 @@ if [ "$PASSWORD_STORE_DIR" != "{store}" ]; then
 fi
 case "$1" in
   ls) echo "Password Store"; echo "e2e"; exit 0 ;;
+  show) shift ;;  # 1.8.0 (GHSA-886p-g538-rcmp) runs 'pass show <key>', older releases 'pass <key>'
+esac
+case "$1" in
   {path}) echo "{token}"; exit 0 ;;
   *) echo "Error: $1 is not in the password store." >&2; exit 1 ;;
 esac
@@ -368,3 +373,43 @@ def test_bitwarden_provider_with_a_stub_vault(local_apply_cli: OtterdogCli) -> N
     locked.touch()
     use_credentials(local_apply_cli, {"provider": "bitwarden", "item_id": BW_ITEM})
     refused(validate(local_apply_cli, env), "could not access bitwarden vault:\nVault is locked.")
+
+
+# --- no shell between a lookup and its CLI (GHSA-886p-g538-rcmp, 1.8.0) ---------------------------------------------
+OPTION_LIKE = "-e2e-option"
+
+
+def no_shell_ran(marker: Path, result: CliResult, what: str) -> None:
+    """The command injected through ``what`` did not run (``marker`` was not created) and the lookup was refused."""
+    assert not marker.exists(), f"{what}: the injected command ran: the lookup went through a shell\n{tail(result)}"
+    text = normalize_text(result.output)
+    assert result.exit_code == 1 and INVALID in text and SUCCEEDED not in text, f"{what}\n{tail(result)}"
+
+
+@pytest.mark.scenario("O-KB-CREDENTIAL-SHELL")
+@pytest.mark.known_bug("KB-086")
+def test_credential_lookups_never_reach_a_shell(vendored_cli: OtterdogCli) -> None:
+    """GHSA-886p-g538-rcmp (CVE-2026-123717, fixed in 1.8.0): the pass and bitwarden providers run their CLI with an
+    argument vector. Shell metacharacters of a pass key or of a bitwarden item id reach the CLI verbatim (the stubs
+    answer that they hold no such entry) and run nothing; a key or item id starting with '-' is refused before the CLI
+    runs, since it would read it as an option. Before 1.8.0 the command line went through /bin/sh -c and the injected
+    command ran (KB-086)."""
+    host_only(vendored_cli)
+    workspace = vendored_cli.workspace
+    stubs, store = write_pass_stub(workspace)
+    write_bw_stub(workspace)  # the same stubs directory
+    env = stub_path(stubs)
+    marker = (workspace.root / "e2e-shell-ran").resolve()
+    store_dir = {"pass": {"password_store_dir": str(store.resolve())}}
+
+    use_credentials(vendored_cli, {"provider": "pass", "api_token": f"e2e/x;touch {marker}"}, defaults=store_dir)
+    no_shell_ran(marker, validate(vendored_cli, env), "pass key with ';'")
+    use_credentials(vendored_cli, {"provider": "pass", "api_token": f"e2e/$(touch {marker})"}, defaults=store_dir)
+    no_shell_ran(marker, validate(vendored_cli, env), "pass key with '$(...)'")
+    use_credentials(vendored_cli, {"provider": "bitwarden", "item_id": f"{BW_ITEM};touch {marker}"})
+    no_shell_ran(marker, validate(vendored_cli, env), "bitwarden item id with ';'")
+
+    use_credentials(vendored_cli, {"provider": "pass", "api_token": OPTION_LIKE}, defaults=store_dir)
+    refused(validate(vendored_cli, env), f"invalid pass key '{OPTION_LIKE}'")
+    use_credentials(vendored_cli, {"provider": "bitwarden", "item_id": OPTION_LIKE})
+    refused(validate(vendored_cli, env), f"invalid bitwarden item id '{OPTION_LIKE}'")

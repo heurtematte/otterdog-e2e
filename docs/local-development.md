@@ -407,7 +407,7 @@ The harness must tell otterdog's defects from its own. Three mechanisms do it:
 
 ```bash
 make harness-check                                  # origin/main's harness vs the working tree, release:latest
-make harness-check HARNESS_BASE=HEAD~3 SUT=release:1.7.1
+make harness-check HARNESS_BASE=HEAD~3 SUT=tag:v1.7.1
 .venv/bin/otterdog-acceptance compare-runs artifacts/<baseline run> artifacts/<run>   # two runs you already have
 ```
 

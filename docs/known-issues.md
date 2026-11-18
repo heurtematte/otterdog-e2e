@@ -164,6 +164,7 @@ shortened to the relevant lines.
 | KB-082 | archiving with a topics change: requests sent after the archiving PATCH | suspected | provider | step of `cli.repo.archive-side-requests` |
 | KB-083 | default branch of an archived repository planned and sent | suspected | model | step of `cli.repo.archive-side-requests` |
 | KB-084 | organization entry with `base_template: null`: TypeError at load (since #917) | confirmed | config | step of `O-VAL-LOCAL-BASE-TEMPLATE` |
+| KB-086 | pass / bitwarden lookups through a shell: injected commands run (CVE-2026-123717) | fixed (GHSA-886p-g538-rcmp, 1.8.0) | credentials | `O-KB-CREDENTIAL-SHELL` |
 
 ## Issues
 
@@ -2699,4 +2700,36 @@ urls: b''` (exit 2), not a good message either but one that points at the templa
 ```console
 $ otterdog validate -c otterdog.json --local e2e-test-org         # exit code 2
 │ Error:   argument of type 'NoneType' is not iterable
+```
+
+### KB-086 — pass and bitwarden lookups go through a shell, so injected commands run
+
+Status: **fixed** (1.8.0) · Upstream: https://github.com/eclipse-csi/otterdog/security/advisories/GHSA-886p-g538-rcmp
+(CVE-2026-123717) · Scenarios: `O-KB-CREDENTIAL-SHELL` (tests/offline/test_config_credentials.py)
+
+Evidence: `otterdog/credentials/pass_provider.py:125-128`, `otterdog/credentials/bitwarden_provider.py:56`,
+`otterdog/credentials/bitwarden_provider.py:100` (v1.7.1).
+
+Fixed by the advisory's merge e3cc999 (main, 2026-11-10; released in 1.8.0): both providers run their CLI through
+`run_command_sync`, an argument vector without a shell (`pass show <key>`, `bw get item <item_id>`), refuse a key or
+item id starting with `-` (`invalid pass key '<key>'`, `invalid bitwarden item id '<id>'`) and report a missing CLI as
+an inaccessible vault. `O-KB-CREDENTIAL-SHELL` runs strict on SUTs from 1.8.0 and stays an expected failure on older
+ones. The text below describes the defect as it was.
+
+`subprocess.getstatusoutput(f"pass {key} 2>/dev/null")` and `getstatusoutput(f"bw get item {item_id}")` hand the
+command line to `/bin/sh -c`: a pass key or bitwarden item id from otterdog.json (an organization's `api_token`, a
+`defaults.pass.*_pattern`, an `item_id`) or from a secret reference of an organization configuration
+(`pass:<path>`, `bitwarden:<item>@<field>`) is parsed by the shell, so `;`, `$(...)` or backquotes run commands with
+the rights of the otterdog process. The status is the shell's last command, so the injection can also hide a failed
+lookup.
+
+#### Reproduction
+
+```json
+{"organizations": [{"name": "e2e-test-org", "github_id": "e2e-test-org",
+  "credentials": {"provider": "pass", "api_token": "e2e/x;touch /tmp/e2e-shell-ran"}}]}
+```
+
+```console
+$ otterdog validate -c otterdog.json --local e2e-test-org   # 1.7.1: /tmp/e2e-shell-ran is created
 ```

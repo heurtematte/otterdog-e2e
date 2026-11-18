@@ -1030,3 +1030,15 @@
   upstream: null
   fixed_in: null
   scenarios: []
+
+- id: KB-086
+  title: the pass and bitwarden credential providers run their CLI through /bin/sh -c, so shell metacharacters of a pass key or a bitwarden item id run commands (CVE-2026-123717)
+  status: fixed
+  evidence:
+    - otterdog/credentials/pass_provider.py:125-128
+    - otterdog/credentials/bitwarden_provider.py:56
+    - otterdog/credentials/bitwarden_provider.py:100
+    - "e2e: tests/offline/test_config_credentials.py (test_credential_lookups_never_reach_a_shell)"
+  upstream: https://github.com/eclipse-csi/otterdog/security/advisories/GHSA-886p-g538-rcmp
+  fixed_in: 1.8.0
+  scenarios: [O-KB-CREDENTIAL-SHELL]
