@@ -127,6 +127,24 @@ def test_plan_local_plan_and_apply_with_options(env: Env) -> None:
     ]
 
 
+def test_apply_with_a_delete_filter(env: Env) -> None:
+    """--delete-filter (otterdog#939): one argv pair per selector right after -d, quotes and brackets kept as given
+    (never a shell); refused without delete (otterdog's usage error) and for empty selectors."""
+    cli = env.cli()
+    selectors = ('repo_variable[name="E2E_T3C7Z8A5_B", repository=e2e-t3c7z8a5-a]', "environment")
+    cli.apply_with(DiffOptions(FILTER), delete=True, delete_filter=selectors)
+    config = str(env.workspace.config_file.resolve())
+    filters = ["--delete-filter", selectors[0], "--delete-filter", selectors[1]]
+    assert [call["argv"] for call in env.calls()] == [
+        ["apply", "-c", config, "-f", "-n", "-r", FILTER, "-d", *filters, ORG]
+    ]
+    with pytest.raises(ValueError, match="requires -d"):
+        cli.apply_with(DiffOptions(FILTER), delete_filter=["environment"])
+    with pytest.raises(ValueError, match="non-empty strings"):
+        cli.apply_with(DiffOptions(FILTER), delete=True, delete_filter=[" "])
+    assert len(env.calls()) == 1
+
+
 def test_the_pinned_methods_keep_their_argv(env: Env) -> None:
     """plan/apply/local_plan delegate to the *_with methods with the exact argv of before."""
     cli = env.cli()

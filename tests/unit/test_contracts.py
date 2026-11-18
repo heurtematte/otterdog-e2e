@@ -1152,7 +1152,14 @@ SIGNATURES: dict[str, list[str]] = {
     ],
     "otterdog_acceptance.otterdog.runner.OtterdogCli.local_plan": ["self", "suffix", "local", "observe"],
     "otterdog_acceptance.otterdog.runner.OtterdogCli.plan_with": ["self", "options", "local", "observe"],
-    "otterdog_acceptance.otterdog.runner.OtterdogCli.apply_with": ["self", "options", "delete", "local", "observe"],
+    "otterdog_acceptance.otterdog.runner.OtterdogCli.apply_with": [
+        "self",
+        "options",
+        "delete",
+        "delete_filter",
+        "local",
+        "observe",
+    ],
     "otterdog_acceptance.otterdog.runner.OtterdogCli.local_plan_with": [
         "self",
         "options",

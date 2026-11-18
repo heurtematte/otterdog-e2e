@@ -15,7 +15,9 @@ otterdog 1.7.0.dev19 offline, samples in tests/unit/data, OC-10):
   never indented; logger lines (RichHandler) are ``WARNING  <msg><padding> <file>.py:<line>`` (OC-08);
 * apply: ``Executed plan: A added, C changed, D deleted.`` (or ``D live resources ignored.``), ``No changes required.``,
   ``N resource(s) would be deleted with flag '--delete-resources'.``, error boxes ``failed to apply patch: <OP> -
-  <header>``, and a progress bar ``   ━━━━━   11% -:--:--``.
+  <header>``, and a progress bar ``   ━━━━━   11% -:--:--``; with ``--delete-filter`` (eclipse-csi/otterdog#939, after
+  v1.8.0) the summary ends with ``, S skipped.`` and ``S other change(s) are skipped, only the deletions selected by
+  '--delete-filter' are applied.`` is printed before the prompt or after ``No changes required.``.
 """
 
 from __future__ import annotations
@@ -67,7 +69,12 @@ LOAD_ERROR_RE = re.compile(
 )
 EXECUTED_RE = re.compile(
     r"^\s*Executed plan: (?P<added>\d+) added, (?P<changed>\d+) changed, (?P<deleted>\d+) "
-    r"(?P<mode>deleted|live resources ignored)\.\s*$"
+    r"(?P<mode>deleted|live resources ignored)(?:, (?P<skipped>\d+) skipped)?\.\s*$"
+)
+# apply --delete-filter (otterdog#939): the changes other than the selected deletions are counted, never applied
+SKIPPED_RE = re.compile(
+    r"^\s*(?P<count>\d+) other change\(s\) are skipped, only the deletions selected by '--delete-filter' are "
+    r"applied\.\s*$"
 )
 NO_CHANGES_RE = re.compile(r"^\s*No changes required\.\s*$")
 WOULD_DELETE_RE = re.compile(r"^\s*(?P<count>\d+) resource\(s\) would be deleted with flag '--delete-resources'\.\s*$")
@@ -334,7 +341,8 @@ class PlanResult:
 
 @dataclass
 class ApplyResult:
-    """Parsed ``apply`` output (``Executed plan: A added, C changed, D deleted|live resources ignored.``)."""
+    """Parsed ``apply`` output (``Executed plan: A added, C changed, D deleted|live resources ignored[, S skipped].``);
+    ``skipped``: the changes a ``--delete-filter`` left out (None without the filter's summary or message)."""
 
     added: int | None
     changed: int | None
@@ -346,6 +354,7 @@ class ApplyResult:
     failed_patches: list[str]
     messages: list[Message]
     raw: str
+    skipped: int | None = None
 
 
 def _level_counts(boxes: Iterable[_Box]) -> dict[str, int]:
@@ -507,7 +516,8 @@ def parse_apply(text: str) -> ApplyResult:
 
     ``Executed plan: ... D deleted.`` sets deleted=D (ignored 0); ``... D live resources ignored.`` sets ignored=D and
     pending_deletions=D (deleted 0); ``No changes required.`` sets the counts to 0 and pending_deletions to the
-    ``N resource(s) would be deleted`` number. Counts stay None when apply stopped early.
+    ``N resource(s) would be deleted`` number. Counts stay None when apply stopped early. ``skipped`` comes from the
+    summary's ``, S skipped`` or the ``S other change(s) are skipped`` line of ``--delete-filter``.
     """
     lines = strip_ansi(text).splitlines()
     boxes = _boxes(lines)
@@ -522,17 +532,20 @@ def parse_apply(text: str) -> ApplyResult:
     no_changes = any(NO_CHANGES_RE.match(line) for line in plain)
     would_delete = next((int(m.group("count")) for m in map(WOULD_DELETE_RE.match, plain) if m), None)
     executed = next((m for m in map(EXECUTED_RE.match, plain) if m), None)
+    skipped = next((int(m.group("count")) for m in map(SKIPPED_RE.match, plain) if m), None)
     added = changed = deleted = ignored = pending = None
     if executed is not None:
         added, changed = int(executed.group("added")), int(executed.group("changed"))
         count = int(executed.group("deleted"))
         deleted, ignored = (count, 0) if executed.group("mode") == "deleted" else (0, count)
         pending = ignored
+        if executed.group("skipped") is not None:
+            skipped = int(executed.group("skipped"))
     elif no_changes:
         added = changed = deleted = 0
         ignored = pending = would_delete or 0
     return ApplyResult(
-        added, changed, deleted, ignored, no_changes, aborted_validation, pending, failed, messages, text
+        added, changed, deleted, ignored, no_changes, aborted_validation, pending, failed, messages, text, skipped
     )
 
 

@@ -166,7 +166,7 @@ Tag vocabulary (also used by the PR tag selection, `otterdog_acceptance.selectio
 |---|---|
 | `validate` | `ok` (default: `errors == 0`, so `true` without `errors`), `errors`, `warnings_min`, `infos`, `infos_min` (both need `verbose`), `exit_code` (`null`: not checked), `verbose` (`validate -v`), `contains`, `not_contains` |
 | `plan` | `expect`: `changes` \| `noop` \| `validation_error` \| `error` \| `any`; `contains`, `not_contains` (checked whatever the outcome); `counts`: `{add, change, delete}`; `exit_code`; flags `repo_filter`, `update_secrets`, `update_webhooks`, `update_filter`, `only_secrets`, `verbose` ([Plan and apply options](#plan-and-apply-options)) |
-| `apply` | `expect`: `ok` \| `error` \| `validation_error` \| `any`; `delete` (`-d`); flags `repo_filter`, `update_secrets`, `update_webhooks`, `update_filter`, `only_secrets`, `verbose`; `contains`, `not_contains`; `api`: `{sent, not_sent}` endpoints of its HTTP requests ([HTTP requests of an apply](#http-requests-of-an-apply)) |
+| `apply` | `expect`: `ok` \| `error` \| `validation_error` \| `any`; `delete` (`-d`), `delete_filter` (`--delete-filter` selectors, with `delete`); flags `repo_filter`, `update_secrets`, `update_webhooks`, `update_filter`, `only_secrets`, `verbose`; `contains`, `not_contains`; `api`: `{sent, not_sent}` endpoints of its HTTP requests ([HTTP requests of an apply](#http-requests-of-an-apply)) |
 
 ## Steps are declarative
 
@@ -448,17 +448,18 @@ unless a `contains` of the step's `validate`, `plan` or `apply` mentions "unknow
 | `update_filter` | `--update-filter <pattern>` | shell pattern of the secret names / webhook urls a forced update includes; needs `update_secrets` or `update_webhooks` |
 | `only_secrets` | `--only-secrets` | only secret changes are planned or applied |
 | `verbose` | `-v` | Info messages (never more than one `-v` live) |
+| `delete_filter` (apply only) | `--delete-filter <selector>` per item | with `delete: true`: only the deletions of the selected resources are applied, every other change of the plan is skipped (otterdog#939, after v1.8.0) |
 
-Live steps: the plan flags go to `plan -n`, the apply flags to `apply -f -n`; they are independent (`update_secrets`
-on the plan shows the forced updates, on the apply performs them), except `repo_filter`: the apply uses the plan's
-unless it has its own, and an apply with `delete: true` must use the plan's filter and the plan's diff flags
-(`update_secrets`, `update_webhooks`, `update_filter`, `only_secrets`; the guard checked that plan), and never
-`only_secrets` (a secrets-only plan hides the other removals). Converge
-plans with the apply's filter and never with an update flag (forced updates never converge; an `only_secrets` apply
-leaves other changes pending: use `converge: false`). Without `repo_filter` live plans use `-r e2e-<run>-*`
-(`org_level`: no filter). A live `repo_filter` must start with `{{ p }}-` unless the scenario is `org_level`: the
-loader checks it with a sample prefix and the engine again with the real one (SafetyError), so a scenario can never
-plan or apply other repositories.
+Live steps: the plan flags go to `plan -n`, the apply flags to `apply -f -n`; they are independent (`update_secrets` on
+the plan shows the forced updates, on the apply performs them), except `repo_filter`: the apply uses the plan's unless
+it has its own, and an apply with `delete: true` must use the plan's filter and the plan's diff flags (`update_secrets`,
+`update_webhooks`, `update_filter`, `only_secrets`; the guard checked that plan), and never `only_secrets` (a
+secrets-only plan hides the other removals). Converge plans with the apply's filter and never with an update flag
+(forced updates never converge; an `only_secrets` apply leaves other changes pending: use `converge: false`, as after a
+`delete_filter` apply that skips other changes). Without `repo_filter` live plans use `-r e2e-<run>-*` (`org_level`: no
+filter). A live `repo_filter` must start with `{{ p }}-` unless the scenario is `org_level`: the loader checks it with a
+sample prefix and the engine again with the real one (SafetyError), so a scenario can never plan or apply other
+repositories.
 
 ```yaml
 - name: force-one-secret          # after a step that created the repository and its secrets

@@ -42,6 +42,7 @@ from otterdog_acceptance.scenarios.model import Scenario, domain_problem, load_s
 from otterdog_acceptance.selection import SCENARIO_TAGS
 from otterdog_acceptance.settings import IDENTITY_ROLES
 from otterdog_acceptance.sut.template import offline_template
+from otterdog_acceptance.sut.version import predates
 from otterdog_acceptance.testing.fakes import FAKE_MARKER, FAKE_ORG, default_org_json, make_target
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -407,8 +408,10 @@ UNRELEASED_FIXES = {  # scenario -> first otterdog release with the change it as
     "cli.code-security.configuration": "1.8.0",  # #892, main after v1.7.1
     "cli.ruleset.copilot-code-scanning": "1.8.0",  # #900 not merged: the release its head leads to, until the merge
     "regression.archived-repo-team-permissions": "1.8.0",  # #924, main e6ab19e after v1.7.1
+    "cli.apply.delete-filter": "1.9.0",  # #939, main 61faaff after v1.8.0
 }
-LATEST_RELEASE = "1.7.1"  # release:latest; its fixed_in scenarios run there, the 1.8.0 ones skip
+LATEST_RELEASE = "1.7.1"  # release:latest; its fixed_in scenarios run there, the later ones skip
+LATER_RELEASE = "9.0.0"  # a release after every fixed_in: each scenario runs there
 
 
 def test_unreleased_regressions_skip_on_older_suts() -> None:
@@ -420,11 +423,12 @@ def test_unreleased_regressions_skip_on_older_suts() -> None:
         scenario = by_id[scenario_id]
         assert scenario.fixed_in == version, scenario_id
         assert fixed_in_skip_reason(scenario, "1.6.1"), scenario_id
-        released = not version.startswith("1.8.0")
+        released = not predates(LATEST_RELEASE, version)
         assert (fixed_in_skip_reason(scenario, LATEST_RELEASE) is None) is released, scenario_id
         assert fixed_in_skip_reason(scenario, f"{version}.dev3+e2e.gd9dac78") is None, scenario_id  # its dev builds
         assert fixed_in_skip_reason(scenario, f"{version}.dev3+e2e.gd9dac78.dirty.1a2b3c4d") is None, scenario_id
-        assert fixed_in_skip_reason(scenario, "1.8.0") is None, scenario_id
+        assert fixed_in_skip_reason(scenario, version) is None, scenario_id  # the release itself
+        assert fixed_in_skip_reason(scenario, LATER_RELEASE) is None, scenario_id
         assert fixed_in_skip_reason(scenario, None) is None, scenario_id  # unknown version: run it
     others = [s for s in live_scenarios() if s.id not in UNRELEASED_FIXES]
     assert not [s.id for s in others if s.fixed_in is not None]

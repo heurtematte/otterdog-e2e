@@ -328,6 +328,32 @@ def test_apply_delete_is_guarded_by_a_plan_with_the_apply_flags(tmp_path: Path) 
     assert any("guarded by a plan with the apply's diff flags" in note for note in outcome.steps[0].notes)
 
 
+DELETE_FILTER = """
+id: cli.delete-filter
+title: delete filter
+steps:
+  - name: drop-one
+    fragments: {repositories: ["orgs.newRepo('{{ p }}-a')"]}
+    plan: {expect: changes}
+    apply: {delete: true, delete_filter: ['repo_variable[name="{{ P }}_B"]', "environment"]}
+    converge: false
+"""
+
+
+def test_a_delete_filter_reaches_apply_after_the_guard_of_the_full_plan(tmp_path: Path) -> None:
+    """apply.delete_filter (otterdog#939) goes to apply -d as --delete-filter selectors, rendered with the run's
+    variables; check_removals still guards every removal of the step's plan (the filter only narrows them)."""
+    r = rig()
+    full = planned(remove(f"{P}-gone"))
+    r.cli.queue("plan", canned("plan", full))
+    r.cli.queue("apply", canned("apply", applied(0)))
+    assert r.engine.run(scenario(tmp_path, DELETE_FILTER)).ok
+    plan, apply = r.cli.calls
+    assert apply.kwargs["delete"] is True and apply.kwargs["options"] == plan.kwargs["options"]
+    assert apply.kwargs["delete_filter"] == (f'repo_variable[name="{RUN.const_prefix}B"]', "environment")
+    assert ("check_removals", full) in r.baseline.calls
+
+
 def test_every_apply_runs_the_change_guard(tmp_path: Path) -> None:
     """DESTR-07: the baseline's change guard sees the plan of every apply (with or without -d); its refusal stops the
     step before otterdog applies anything."""

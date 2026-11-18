@@ -102,6 +102,31 @@ def test_update_filter_needs_a_forced_update(tmp_path: Path) -> None:
     refused(tmp_path, "update_filter: it only selects", "apply: {update_filter: 'E2E_*', only_secrets: true}")
 
 
+def test_apply_delete_filter(tmp_path: Path) -> None:
+    """apply.delete_filter: --delete-filter selectors (otterdog#939), a string or a list, rendered with the step;
+    only with delete: true (otterdog refuses the flag without -d) and each a type with optional bracketed
+    conditions."""
+    step = load(
+        tmp_path,
+        """
+        fragments: {}
+        apply: {delete: true, delete_filter: ['repo_variable[name="{{ P }}_B*"]', environment]}
+        converge: false
+        """,
+    ).steps[0]
+    assert step.apply == ApplySpec(delete=True, delete_filter=['repo_variable[name="{{ P }}_B*"]', "environment"])
+    assert render_step(step, VARIABLES).apply.delete_filter == [
+        f'repo_variable[name="{RUN.const_prefix}B*"]',
+        "environment",
+    ]
+    single = load(tmp_path, "fragments: {}\napply: {delete: true, delete_filter: env_variable}").steps[0]
+    assert single.apply.delete_filter == ["env_variable"]
+    refused(tmp_path, "delete_filter: it narrows the deletions of delete: true", "apply: {delete_filter: environment}")
+    refused(tmp_path, "does not match", "apply: {delete: true, delete_filter: ['repo variable']}")
+    refused(tmp_path, "does not match", "apply: {delete: true, delete_filter: ['[name=x]']}")
+    refused(tmp_path, "expected a non-empty string", "apply: {delete: true, delete_filter: ['']}")
+
+
 def test_live_repo_filters_stay_inside_the_run(tmp_path: Path) -> None:
     """A live repo_filter must start with the run prefix unless org_level (load time, sample prefix)."""
     refused(tmp_path, r"plan.repo_filter '\*' does not start with the run prefix", "plan: {repo_filter: '*'}")

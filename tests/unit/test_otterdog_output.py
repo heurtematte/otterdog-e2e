@@ -416,6 +416,24 @@ def test_parse_apply_samples(name: str, expected: tuple[object, ...]) -> None:
     assert result.raw == sample(name)
 
 
+def test_parse_apply_of_a_delete_filter() -> None:
+    """apply -d --delete-filter (otterdog#939): the summary ends with ', S skipped' and the skipped changes are
+    announced before the prompt; with no selected deletion 'No changes required.' comes with the same line."""
+    applied = parse_apply(
+        '  - remove repo_variable[name="E2E_B", repository=e2e-a] {\n  }\n\n'
+        "2 other change(s) are skipped, only the deletions selected by '--delete-filter' are applied.\n\n"
+        "Done.\n\nExecuted plan: 0 added, 0 changed, 1 deleted, 2 skipped.\n"
+    )
+    assert (applied.added, applied.changed, applied.deleted, applied.ignored, applied.skipped) == (0, 0, 1, 0, 2)
+    nothing = parse_apply(
+        "Warning: no resource to delete matches the delete filter 'org_variable'.\nNo changes required.\n"
+        "3 other change(s) are skipped, only the deletions selected by '--delete-filter' are applied.\n"
+    )
+    assert (nothing.no_changes, nothing.added, nothing.deleted, nothing.skipped) == (True, 0, 0, 3)
+    plain = parse_apply("Executed plan: 1 added, 0 changed, 0 deleted.\n")
+    assert (plain.added, plain.skipped) == (1, None)
+
+
 def test_failed_patch_message_keeps_github_error() -> None:
     """The failed-patch box carries the GitHub error below the patch line."""
     (message,) = parse_apply(sample("apply-failed-patch")).messages

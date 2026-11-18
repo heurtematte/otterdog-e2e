@@ -306,6 +306,19 @@ features:
     findings: [F-07]
     notes: "0 valid, 1 one error, 1 jsonnet evaluation error (caught 'failed to load configuration'), 2 schema type error / unknown org (escaped exception, boxed Error, no summary, empty stderr). KB-034 (2 errors exit 2, 256 errors exit 0 for validate and local-plan) and KB-025 are asserted as the correct behaviour in known_bug-marked non-strict xfails (O-KB-EXIT-STATUS-ERROR-COUNT, O-KB-SECRET-WITH-COLONS)"
 
+  - id: cli.global.interrupt-at-startup
+    area: cli
+    title: "Ctrl+C while the otterdog command loads its modules: 'Aborted!' on stderr and exit 130, no traceback (#937, after v1.8.0; before: a KeyboardInterrupt traceback)"
+    source: ["otterdog/__main__.py:15-29", "pyproject.toml:45", "otterdog.sh:30"]
+    operations: [exit-code, error]
+    min_plan: free
+    tier: offline
+    ui_only: false
+    priority: P2
+    status: covered
+    covered_by: [tests/offline/test_cli_exit_codes.py::test_an_interrupt_while_loading_the_cli_aborts_without_traceback, tests/offline/test_cli_exit_codes.py::test_the_entry_point_keeps_the_cli_behaviour]
+    notes: "the interrupt is raised by a stand-in for click (the first third-party import of otterdog.cli) on PYTHONPATH, so it lands while the cli loads on every run; a real SIGINT is timing-dependent. Not covered: otterdog.sh (the harness runs the console script) and python -m otterdog; an interrupt during an operation ('operation interrupted', exit 130) is unchanged by #937 and untested."
+
   - id: cli.validate
     area: cli
     title: "validate: 'Validating organization configurations:', per-org header, 'Validation succeeded' / \"Validation succeeded': i info(s), w warning(s), 0 error(s)\" / 'Validation failed: ...'"
@@ -893,6 +906,19 @@ features:
     priority: P0
     status: covered
     covered_by: [cli.repo.lifecycle, cli.team, cli.bpr.public, cli.ruleset.public, cli.repo.webhook]
+
+  - id: cli.apply.delete-filter
+    area: cli
+    title: "apply/local-apply -d --delete-filter SELECTOR (repeatable): only the selected deletions are applied, every other change is skipped and counted (#939, after v1.8.0)"
+    source: ["otterdog/cli.py:267-292", "otterdog/models/__init__.py:237-372", "otterdog/operations/apply.py:69-86", "otterdog/operations/apply.py:131-160", "otterdog/operations/diff_operation.py:214-217"]
+    operations: [remove, run, exit-code]
+    min_plan: free
+    tier: cli
+    ui_only: false
+    priority: P1
+    status: covered
+    covered_by: [cli.apply.delete-filter, tests/offline/test_cli_local_apply.py::test_a_delete_filter_applies_only_the_selected_deletions, tests/offline/test_cli_local_apply.py::test_a_delete_filter_selecting_nothing_changes_nothing, tests/offline/test_cli_local_apply.py::test_delete_filter_usage_errors, tests/offline/test_cli_local_apply.py::test_deletions_in_a_renamed_repository]
+    notes: "offline (local-apply): selectors by key, by repeated types, by a value pattern, by the parent's type and by a type pattern show only the selected removals and 'N other change(s) are skipped, ...' before the prompt; selectors matching nothing warn ('no resource to delete matches the delete filter ...') and end with 'No changes required.'; without -d or with a malformed selector: usage error, exit 2; a renamed repository's variable is deleted under its old name (the rename is skipped). Live (cli.apply.delete-filter, fixed_in 1.9.0): only the DELETE of the selected object is sent, never the repository PATCH of the skipped change nor another DELETE, a renamed repository's variable is deleted under its current name. Not covered: team_sync and org_code_security_configuration selectors (identity provider, code security reads), organization-level deletions live (org_level)."
 
   - id: cli.apply.deletion-hints
     area: cli

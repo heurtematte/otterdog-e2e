@@ -1938,6 +1938,14 @@
               "delete": {
                 "type": "boolean"
               },
+              "delete_filter": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[^\\s\\[\\]]+(?:\\[[^\\n]*\\])?$"
+                },
+                "description": "--delete-filter selectors (otterdog > 1.8.0, #939), with delete: true: only the selected deletions are applied, every other change is skipped"
+              },
               "repo_filter": {
                 "type": [
                   "string",
@@ -2258,6 +2266,14 @@
                   },
                   "delete": {
                     "type": "boolean"
+                  },
+                  "delete_filter": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^[^\\s\\[\\]]+(?:\\[[^\\n]*\\])?$"
+                    },
+                    "description": "--delete-filter selectors (otterdog > 1.8.0, #939), with delete: true: only the selected deletions are applied, every other change is skipped"
                   },
                   "repo_filter": {
                     "type": [

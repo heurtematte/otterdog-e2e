@@ -28,7 +28,8 @@ with this run's prefix only (``repo_filter`` of plan/apply starts with ``{{ p }}
 
 Step options (verified against otterdog/cli.py @9bdeb75): ``validate.verbose`` runs ``validate -v`` (Info messages,
 ``infos``/``infos_min`` counts); ``plan`` and ``apply`` take the diff flags ``repo_filter`` (-r), ``update_secrets``,
-``update_webhooks``, ``only_secrets``, ``update_filter`` and ``verbose`` (offline: local-plan flags); ``exit_code``
+``update_webhooks``, ``only_secrets``, ``update_filter`` and ``verbose`` (offline: local-plan flags), ``apply`` also
+``delete_filter`` (``--delete-filter`` selectors, with ``delete``: only the selected deletions); ``exit_code``
 checks the exit status of validate and plan; a step's ``known_bug`` turns the failures of that step alone into
 expected failures (engine.ScenarioOutcome.expected_failures) while the other steps stay strict; an offline step's
 ``workspace`` (otterdog.workspace.WorkspaceLayout) changes otterdog's own configuration for that step (otterdog.jsonnet,
@@ -211,7 +212,10 @@ VALIDATE_KEYS = (
 DIFF_OPTION_KEYS = ("repo_filter", "update_secrets", "update_webhooks", "update_filter", "only_secrets", "verbose")
 DIFF_FLAG_KEYS = ("update_secrets", "update_webhooks", "only_secrets", "verbose")
 PLAN_KEYS = ("expect", "contains", "not_contains", "counts", "exit_code", *DIFF_OPTION_KEYS)
-APPLY_KEYS = ("expect", "delete", *DIFF_OPTION_KEYS, "contains", "not_contains", "api")
+APPLY_KEYS = ("expect", "delete", "delete_filter", *DIFF_OPTION_KEYS, "contains", "not_contains", "api")
+# apply.delete_filter: one --delete-filter selector, a type (shell pattern) optionally followed by its conditions in
+# brackets, as otterdog's ResourceSelector.parse reads it (otterdog/models/__init__.py, #939); otterdog checks the rest
+DELETE_FILTER_RE = re.compile(r"^[^\s\[\]]+(?:\[[^\n]*\])?$")
 API_KEYS = ("sent", "not_sent")  # apply.api (api_usage.ApiSpec): endpoints of otterdog's request statistics
 ENDPOINT_PATTERN = ENDPOINT_RE.pattern
 COMMAND_KEYS = ("exit_code", "contains", "not_contains")
@@ -302,7 +306,9 @@ class PlanSpec:
 @dataclass
 class ApplySpec:
     """Expected ``apply`` outcome and its flags (``repo_filter`` None = the plan's filter); ``api``: the requests it
-    must (``sent``) and must not (``not_sent``) send, from otterdog's request statistics (api_usage.py)."""
+    must (``sent``) and must not (``not_sent``) send, from otterdog's request statistics (api_usage.py);
+    ``delete_filter``: ``--delete-filter`` selectors (otterdog#939, after v1.8.0), only with ``delete``: the apply
+    performs the selected deletions only and skips every other change."""
 
     expect: str = "ok"
     delete: bool = False
@@ -315,6 +321,7 @@ class ApplySpec:
     repo_filter: str | None = None
     verbose: bool = False
     api: ApiSpec | None = None
+    delete_filter: list[str] = field(default_factory=list)  # last: positional constructions keep their order
 
 
 @dataclass
@@ -1027,7 +1034,14 @@ def _parse_apply(value: Any, where: str, base: ApplySpec | None = None) -> Apply
         spec.not_contains = _str_list(data["not_contains"], f"{where}.not_contains")
     if "api" in data:
         spec.api = _parse_api(data["api"], f"{where}.api")
+    if "delete_filter" in data:
+        spec.delete_filter = _str_list(data["delete_filter"], f"{where}.delete_filter", pattern=DELETE_FILTER_RE)
     _parse_diff_options(data, spec, where)
+    if spec.delete_filter and not spec.delete:
+        raise ScenarioError(
+            f"{where}.delete_filter: it narrows the deletions of delete: true, set it (otterdog refuses "
+            "'--delete-filter' without '--delete-resources')"
+        )
     return spec
 
 
@@ -1941,7 +1955,18 @@ def json_schema() -> dict[str, Any]:
         "properties": {"sent": endpoints, "not_sent": endpoints},
         "additionalProperties": False,
     }
-    apply_properties = {"expect": {"enum": list(APPLY_EXPECTS)}, "delete": {"type": "boolean"}, "api": api}
+    delete_filter = {
+        "type": "array",
+        "items": {"type": "string", "pattern": DELETE_FILTER_RE.pattern},
+        "description": "--delete-filter selectors (otterdog > 1.8.0, #939), with delete: true: only the selected "
+        "deletions are applied, every other change is skipped",
+    }
+    apply_properties = {
+        "expect": {"enum": list(APPLY_EXPECTS)},
+        "delete": {"type": "boolean"},
+        "delete_filter": delete_filter,
+        "api": api,
+    }
     apply = {
         "type": ["object", "null"],
         "properties": {key: (apply_properties | diff_options | texts)[key] for key in APPLY_KEYS},

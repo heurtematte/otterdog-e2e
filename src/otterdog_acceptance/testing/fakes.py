@@ -1323,10 +1323,19 @@ class FakeCli:
         return self._next("apply", repo_filter=repo_filter, delete=delete, observe=observe, **options)[0]
 
     def apply_with(
-        self, options: DiffOptions, *, delete: bool = False, local: bool = False, observe: str | None = None
+        self,
+        options: DiffOptions,
+        *,
+        delete: bool = False,
+        delete_filter: Sequence[str] = (),
+        local: bool = False,
+        observe: str | None = None,
     ) -> CliResult:
-        """apply with DiffOptions (recorded as ``apply`` with the options, their fields and ``delete``)."""
-        return self._next("apply", **self._diff_kwargs(options), delete=delete, local=local, observe=observe)[0]
+        """apply with DiffOptions (recorded as ``apply`` with the options, their fields and ``delete``; a non-empty
+        ``delete_filter`` is recorded as a tuple)."""
+        selectors = {"delete_filter": tuple(delete_filter)} if delete_filter else {}
+        kwargs = {**self._diff_kwargs(options), "delete": delete, **selectors}
+        return self._next("apply", **kwargs, local=local, observe=observe)[0]
 
     def local_plan(self, *, suffix: str = "-BASE", local: bool = True, observe: str | None = None) -> CliResult:
         """local-plan."""

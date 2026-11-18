@@ -9,13 +9,13 @@ otterdog feature coverage of the e2e battery
 
 Inventory of otterdog main @d9dac78 (after v1.7.1; release:latest is v1.7.1), first built at main 9bdeb75 (after v1.6.1): every CLI command and its flags, every property of the configuration model grouped by feature, validation rules, diff semantics, the webapp (webhook events, comment commands, tasks, auto-merge, apply, blueprints, policies, /api and /internal), the webhook receiver contract and notable CHANGELOG fixes, mapped to the existing scenarios and tests of this repository. Gaps and partial coverage carry the outline of the missing test.
 
-**366 features** in 27 areas: 312 covered, 43 partial, 11 gaps; covered 85%, weighted 91% (a partial feature counts half). *Offline-verified* counts the covered or partial features with at least one covering item in the offline tier; *live-verified* those with a recorded green live run of their covering items (`verified_on`: target, SUT, run id, date); *unverified* the others: their coverage is implemented but has never run, so it is a claim, not evidence. A covered feature needs at least one covering item that runs strictly on the default SUT (not only known-bug xfails or scenarios skipped by `fixed_in`).
+**368 features** in 27 areas: 314 covered, 43 partial, 11 gaps; covered 85%, weighted 91% (a partial feature counts half). *Offline-verified* counts the covered or partial features with at least one covering item in the offline tier; *live-verified* those with a recorded green live run of their covering items (`verified_on`: target, SUT, run id, date); *unverified* the others: their coverage is implemented but has never run, so it is a claim, not evidence. A covered feature needs at least one covering item that runs strictly on the default SUT (not only known-bug xfails or scenarios skipped by `fixed_in`).
 
 ## Summary by area
 
 | Area | Features | Covered | Partial | Gap | Covered % | Weighted % | Offline-verified | Live-verified | Unverified |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| [CLI commands and global options](#cli) | 60 | 53 | 7 | 0 | 88% | 94% | 31 | 0 | 29 |
+| [CLI commands and global options](#cli) | 62 | 55 | 7 | 0 | 89% | 94% | 33 | 0 | 29 |
 | [otterdog.json, base template and credentials](#config) | 27 | 14 | 7 | 6 | 52% | 65% | 16 | 0 | 5 |
 | [Validation rules](#validation) | 38 | 37 | 1 | 0 | 97% | 99% | 37 | 0 | 1 |
 | [Diff engine and plan semantics](#plan-semantics) | 18 | 17 | 1 | 0 | 94% | 97% | 16 | 0 | 2 |
@@ -42,14 +42,14 @@ Inventory of otterdog main @d9dac78 (after v1.7.1; release:latest is v1.7.1), fi
 | [Policies](#policies) | 3 | 3 | 0 | 0 | 100% | 100% | 0 | 0 | 3 |
 | [CHANGELOG fixes (regression guards)](#regressions) | 36 | 33 | 1 | 2 | 92% | 93% | 10 | 0 | 24 |
 | [Unmerged otterdog changes (pull requests and local branches)](#pending) | 5 | 4 | 1 | 0 | 80% | 90% | 0 | 0 | 5 |
-| **Total** | 366 | 312 | 43 | 11 | 85% | 91% | 162 | 0 | 193 |
+| **Total** | 368 | 314 | 43 | 11 | 85% | 91% | 164 | 0 | 193 |
 
 ## Summary by tier
 
 | Tier | Features | Covered | Partial | Gap | Covered % | Weighted % | Offline-verified | Live-verified | Unverified |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| `offline` | 121 | 110 | 11 | 0 | 91% | 95% | 121 | 0 | 0 |
-| `cli` | 144 | 121 | 18 | 5 | 84% | 90% | 35 | 0 | 104 |
+| `offline` | 122 | 111 | 11 | 0 | 91% | 95% | 122 | 0 | 0 |
+| `cli` | 145 | 122 | 18 | 5 | 84% | 90% | 36 | 0 | 104 |
 | `webhooks` | 4 | 3 | 1 | 0 | 75% | 88% | 2 | 0 | 2 |
 | `webapp` | 81 | 69 | 8 | 4 | 85% | 90% | 3 | 0 | 74 |
 | `web_ui` | 14 | 7 | 5 | 2 | 50% | 68% | 1 | 0 | 11 |
@@ -60,8 +60,8 @@ Inventory of otterdog main @d9dac78 (after v1.7.1; release:latest is v1.7.1), fi
 | Priority | Features | Covered | Partial | Gap | Covered % | Weighted % | Offline-verified | Live-verified | Unverified |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
 | P0 | 62 | 62 | 0 | 0 | 100% | 100% | 31 | 0 | 31 |
-| P1 | 143 | 122 | 19 | 2 | 85% | 92% | 65 | 0 | 76 |
-| P2 | 161 | 128 | 24 | 9 | 80% | 87% | 66 | 0 | 86 |
+| P1 | 144 | 123 | 19 | 2 | 85% | 92% | 66 | 0 | 76 |
+| P2 | 162 | 129 | 24 | 9 | 80% | 87% | 67 | 0 | 86 |
 
 Tiers:
 
@@ -124,7 +124,7 @@ Defects found while building the inventory (not yet in `scenarios/known_bugs.yam
 
 ## CLI commands and global options
 
-`cli`: 60 features, 53 covered, 7 partial, 0 gaps (weighted 94%).
+`cli`: 62 features, 55 covered, 7 partial, 0 gaps (weighted 94%).
 
 | Id | Feature | Tier | Plan | Prio | Status | Verified | Covered by |
 |---|---|---|---|---|---|---|---|
@@ -134,6 +134,7 @@ Defects found while building the inventory (not yet in `scenarios/known_bugs.yam
 | `cli.global.local-mode` | --local uses the vendored template without cloning; a missing vendor file fails with "template file '&lt;f&gt;' does not exist" (exit 2) | offline | free | P1 | covered | offline | `O-VAL-OK`, `O-LPLAN-ADD`, `tests/offline/test_config_loading.py::test_local_mode_needs_the_vendored_template` |
 | `cli.global.verbosity` | -v shows Info messages (otherwise 'in order to print validation infos, enable printing info messages by adding '-v' flag.'); -vv adds tracebacks | offline | free | P2 | covered | offline | `O-VAL-INFOS`, `tests/offline/test_cli_exit_codes.py::test_verbosity_levels`, `tests/offline/test_cli_exit_codes.py::test_debug_verbosity_prints_the_traceback` |
 | `cli.global.exit-codes` | Uncaught exceptions and config load errors exit 2 ('Error: &lt;message&gt;', traceback on stderr only with -vv) | offline | free | P1 | covered | offline | `O-VAL-SYNTAX`, `tests/offline/test_cli_exit_codes.py::test_validation_outcomes_set_the_exit_status`, `tests/offline/test_cli_exit_codes.py::test_load_errors_and_crashes`, `tests/offline/test_cli_exit_codes.py::test_debug_verbosity_prints_the_traceback`, `tests/offline/test_cli_exit_codes.py::test_local_plan_exit_status`, `tests/offline/test_cli_exit_codes.py::test_validation_errors_never_exit_like_a_crash`, `tests/offline/test_cli_exit_codes.py::test_secret_reference_with_colons_validates` |
+| `cli.global.interrupt-at-startup` | Ctrl+C while the otterdog command loads its modules: 'Aborted!' on stderr and exit 130, no traceback (#937, after v1.8.0; before: a KeyboardInterrupt traceback) | offline | free | P2 | covered | offline | `tests/offline/test_cli_exit_codes.py::test_an_interrupt_while_loading_the_cli_aborts_without_traceback`, `tests/offline/test_cli_exit_codes.py::test_the_entry_point_keeps_the_cli_behaviour` |
 | `cli.validate` | validate: 'Validating organization configurations:', per-org header, 'Validation succeeded' / "Validation succeeded': i info(s), w warning(s), 0 error(s)" / 'Validation failed: ...' | offline | free | P0 | covered | offline | `O-VAL-OK`, `O-VAL-SYNTAX`, `O-VAL-PLAN-GATE`, `O-VAL-ORGSECRET-PRIVATE-FREE`, `O-VAL-RULESET-STRICT`, `cli.secrets` |
 | `cli.validate.missing-config` | validate/plan of a missing org file: "configuration file '&lt;f&gt;' does not exist, run 'fetch-config' or 'import' first." (exit 1) | offline | free | P2 | covered | offline | `tests/offline/test_config_loading.py::test_missing_organization_configuration`, `tests/cli/test_commands_errors.py::test_commands_need_the_org_config` |
 | `cli.show` | show: prints every model object as key = value blocks (no credentials) | offline | free | P2 | covered | offline | `O-VAL-OK`, `O-LPLAN-ADD`, `O-SHOW`, `tests/offline/test_cli_basics.py::test_show_needs_no_credentials` |
@@ -176,6 +177,7 @@ Defects found while building the inventory (not yet in `scenarios/known_bugs.yam
 | `cli.local-plan.dummy-secrets` | local-plan replaces dummy secrets by '&lt;DUMMY&gt;' and diffs secret references ('pass:a' -&gt; 'pass:b'), resolve_secrets off | offline | free | P1 | covered | offline | `O-LPLAN-ADD`, `O-LPLAN-FORCED-SECRETS`, `O-LPLAN-FORCED-WEBHOOKS`, `O-LPLAN-SECRET-REFS`, `tests/offline/test_cli_local_plan_flags.py::test_local_apply_forces_no_dummy_secret`, `tests/offline/test_cli_local_plan_flags.py::test_local_plan_forces_no_dummy_secret` |
 | `cli.apply` | apply -f -n: applies the plan ('Applying changes:', progress, 'Executed plan: A added, C changed, D deleted.' / 'D live resources ignored.') | cli | free | P0 | covered | **unverified** | `cli.repo.lifecycle`, `cli.team`, `cli.secrets`, `cli.bpr.public`, `cli.ruleset.public`, `cli.environment` |
 | `cli.apply.delete-resources` | -d/--delete-resources: REMOVE patches are applied only with -d (else skipped) | cli | free | P0 | covered | **unverified** | `cli.repo.lifecycle`, `cli.team`, `cli.bpr.public`, `cli.ruleset.public`, `cli.repo.webhook` |
+| `cli.apply.delete-filter` | apply/local-apply -d --delete-filter SELECTOR (repeatable): only the selected deletions are applied, every other change is skipped and counted (#939, after v1.8.0) | cli | free | P1 | covered | offline | `cli.apply.delete-filter`, `tests/offline/test_cli_local_apply.py::test_a_delete_filter_applies_only_the_selected_deletions`, `tests/offline/test_cli_local_apply.py::test_a_delete_filter_selecting_nothing_changes_nothing`, `tests/offline/test_cli_local_apply.py::test_delete_filter_usage_errors`, `tests/offline/test_cli_local_apply.py::test_deletions_in_a_renamed_repository` |
 | `cli.apply.deletion-hints` | without -d: 'No changes required.' + '&lt;n&gt; resource(s) would be deleted with flag '--delete-resources'.' or 'No resource will be removed, use flag ...' | offline | free | P1 | covered | offline | `tests/offline/test_cli_local_apply.py::test_removals_without_delete_flag_are_only_hinted`, `tests/offline/test_cli_local_apply.py::test_declined_approval_cancels_the_apply` |
 | `cli.apply.prompt` | apply/local-apply without -f: "Do you want to perform these actions? (Only 'yes' or 'y' ...)"; 'n' -&gt; 'Apply cancelled.' (exit 0); EOF -&gt; exit 2 | offline | free | P2 | covered | offline | `tests/offline/test_cli_local_apply.py::test_declined_approval_cancels_the_apply`, `tests/offline/test_cli_local_apply.py::test_end_of_input_at_the_prompt_exits_2`, `tests/cli/test_commands_local_apply.py::test_local_apply_applies_the_local_diff` |
 | `cli.apply.validation-errors` | apply with validation errors prints 'Planning aborted due to validation errors.' and exits with the error count (#923, 1.8.0; before: 'No changes required.' and exit 0, KB-001) | cli | free | P1 | **partial** | offline | `tests/cli/test_known_bugs.py::test_apply_fails_on_validation_errors`, `tests/offline/test_cli_local_apply.py::test_validation_errors_fail_the_local_apply` |
@@ -213,6 +215,10 @@ Details:
     - Known bugs: KB-025, KB-034
     - New findings: F-07
     - Notes: 0 valid, 1 one error, 1 jsonnet evaluation error (caught 'failed to load configuration'), 2 schema type error / unknown org (escaped exception, boxed Error, no summary, empty stderr). KB-034 (2 errors exit 2, 256 errors exit 0 for validate and local-plan) and KB-025 are asserted as the correct behaviour in known_bug-marked non-strict xfails (O-KB-EXIT-STATUS-ERROR-COUNT, O-KB-SECRET-WITH-COLONS)
+- **`cli.global.interrupt-at-startup`** (covered, P2, `offline`): Ctrl+C while the otterdog command loads its modules: 'Aborted!' on stderr and exit 130, no traceback (#937, after v1.8.0; before: a KeyboardInterrupt traceback)
+    - Source: `otterdog/__main__.py:15-29`, `pyproject.toml:45`, `otterdog.sh:30`
+    - Operations: exit-code, error
+    - Notes: the interrupt is raised by a stand-in for click (the first third-party import of otterdog.cli) on PYTHONPATH, so it lands while the cli loads on every run; a real SIGINT is timing-dependent. Not covered: otterdog.sh (the harness runs the console script) and python -m otterdog; an interrupt during an operation ('operation interrupted', exit 130) is unchanged by #937 and untested.
 - **`cli.validate`** (covered, P0, `offline`): validate: 'Validating organization configurations:', per-org header, 'Validation succeeded' / "Validation succeeded': i info(s), w warning(s), 0 error(s)" / 'Validation failed: ...'
     - Source: `otterdog/cli.py:179-186`, `otterdog/operations/validate.py:43-104`
     - Operations: run, validate, exit-code
@@ -374,6 +380,10 @@ Details:
     - Operations: plan, security
     - Known bugs: KB-056
     - Notes: '&lt;DUMMY&gt;' adds (org/repo/env secrets, webhook), dummies unchanged noop, reference change, dummy -&gt; reference; also O-LPLAN-SECRET-REFS. '&lt;DUMMY&gt;' additions, unchanged dummies noop, org/repo/env references diffed ('\~ value = "pass:e2e/a" -&gt; "pass:e2e/b"'); local-plan --update-secrets forces dummies that local-apply skips
+- **`cli.apply.delete-filter`** (covered, P1, `cli`): apply/local-apply -d --delete-filter SELECTOR (repeatable): only the selected deletions are applied, every other change is skipped and counted (#939, after v1.8.0)
+    - Source: `otterdog/cli.py:267-292`, `otterdog/models/__init__.py:237-372`, `otterdog/operations/apply.py:69-86`, `otterdog/operations/apply.py:131-160`, `otterdog/operations/diff_operation.py:214-217`
+    - Operations: remove, run, exit-code
+    - Notes: offline (local-apply): selectors by key, by repeated types, by a value pattern, by the parent's type and by a type pattern show only the selected removals and 'N other change(s) are skipped, ...' before the prompt; selectors matching nothing warn ('no resource to delete matches the delete filter ...') and end with 'No changes required.'; without -d or with a malformed selector: usage error, exit 2; a renamed repository's variable is deleted under its old name (the rename is skipped). Live (cli.apply.delete-filter, fixed_in 1.9.0): only the DELETE of the selected object is sent, never the repository PATCH of the skipped change nor another DELETE, a renamed repository's variable is deleted under its current name. Not covered: team_sync and org_code_security_configuration selectors (identity provider, code security reads), organization-level deletions live (org_level).
 - **`cli.apply.deletion-hints`** (covered, P1, `offline`): without -d: 'No changes required.' + '&lt;n&gt; resource(s) would be deleted with flag '--delete-resources'.' or 'No resource will be removed, use flag ...'
     - Source: `otterdog/operations/apply.py:100-113`, `otterdog/operations/apply.py:155-163`
     - Operations: remove, run

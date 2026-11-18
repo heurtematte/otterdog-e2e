@@ -903,7 +903,7 @@ class ScenarioEngine:
 
     def _apply(self, state: _LiveStep) -> list[str] | None:
         """``apply -f -n`` with the step's diff flags when the plan expected changes (``-d`` only after
-        check_removals of the step's plan, which used the same filter)."""
+        check_removals of the step's plan, which used the same filter; ``--delete-filter`` selectors narrow it)."""
         assert state.rendered is not None
         spec, plan_spec = state.rendered.apply, state.rendered.plan
         if spec is None or plan_spec is None or plan_spec.expect != "changes" or state.plan is None:
@@ -914,8 +914,9 @@ class ScenarioEngine:
                 "apply -d must use the repository filter of the step's plan (the guard checked that plan)"
             )
         options = diff_options(spec, repo_filter=repo_filter)
+        # a --delete-filter only narrows what the guard plan allows -d to delete (otterdog#939)
         self._guard_apply(spec, self._guard_plan(state, options) if spec.delete else state.plan)
-        result = self.cli.apply_with(options, delete=spec.delete)
+        result = self.cli.apply_with(options, delete=spec.delete, delete_filter=tuple(spec.delete_filter))
         state.outcome.results["apply"] = result
         problems = infra_problems(result)
         if problems:

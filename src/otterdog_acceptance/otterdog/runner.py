@@ -761,11 +761,35 @@ class OtterdogCli:
         return self.apply_with(options, delete=delete, local=local, observe=observe)
 
     def apply_with(
-        self, options: DiffOptions, *, delete: bool = False, local: bool = False, observe: str | None = None
+        self,
+        options: DiffOptions,
+        *,
+        delete: bool = False,
+        delete_filter: Sequence[str] = (),
+        local: bool = False,
+        observe: str | None = None,
     ) -> CliResult:
-        """``apply -f -n [-r <filter>] [-d] [--update-secrets] [--update-webhooks] [--only-secrets]
-        [--update-filter <p>] [-v]`` (DiffOptions; no ``-n`` in web mode)."""
-        args = ["-f", *self._no_web_ui(), *options.repo_args(), *(["-d"] if delete else []), *options.flag_args()]
+        """``apply -f -n [-r <filter>] [-d [--delete-filter <selector>]...] [--update-secrets] [--update-webhooks]
+        [--only-secrets] [--update-filter <p>] [-v]`` (DiffOptions; no ``-n`` in web mode).
+
+        ``delete_filter`` (otterdog#939, after v1.8.0): resource selectors (``repo_variable[name="X*"]``); with them
+        apply only performs the selected deletions and skips every other change. They narrow ``-d`` and never come
+        without it (otterdog refuses that as a usage error), and each is one non-empty argv element (never a shell).
+        """
+        selectors = list(delete_filter)
+        if selectors and not delete:
+            raise ValueError("delete_filter narrows the deletions of delete=True (otterdog: requires -d)")
+        if any(not isinstance(selector, str) or not selector.strip() for selector in selectors):
+            raise ValueError(f"delete_filter selectors must be non-empty strings, got {selectors!r}")
+        filters = [arg for selector in selectors for arg in ("--delete-filter", selector)]
+        args = [
+            "-f",
+            *self._no_web_ui(),
+            *options.repo_args(),
+            *(["-d"] if delete else []),
+            *filters,
+            *options.flag_args(),
+        ]
         return self.run("apply", *args, local=local, observe=observe)
 
     def local_plan(self, *, suffix: str = "-BASE", local: bool = True, observe: str | None = None) -> CliResult:

@@ -14,6 +14,12 @@ exit 1, no traceback even with ``-vv``; the tests accept the behaviour of the SU
 ``-v`` (otterdog/logging.py init_logging) prints the Info messages (otherwise counted in a hint), ``-vv`` adds DEBUG
 logger lines and tracebacks on stderr, ``-vvv`` TRACE lines.
 
+An interrupt (Ctrl+C) once the cli runs is click's (``Aborted!``) or ``_execute_operation``'s (``operation
+interrupted``, exit 130). Since eclipse-csi/otterdog#937 (main eca3425 after v1.8.0) the ``otterdog`` console script
+runs otterdog/__main__.py, which imports only the standard library before loading otterdog.cli and reports an interrupt
+during that loading the same way (``Aborted!`` on stderr, exit 130); before, the KeyboardInterrupt escaped the import
+with a traceback. The test raises it from a stand-in for click on PYTHONPATH (deterministic, unlike a timed SIGINT).
+
 KB-034: the error count IS the exit status, so two validation errors exit 2 like a crash and 256 errors exit 0 (the
 status is taken modulo 256), for validate and local-plan alike; KB-025: a secret value with two ':' crashes the
 validation. Both are asserted as the correct behaviour in their own known-bug tests (non-strict xfail), the other tests
@@ -30,6 +36,7 @@ import pytest
 from otterdog_acceptance.otterdog.output import normalize_text, strip_ansi
 from otterdog_acceptance.otterdog.render import BaselineSpec, ConfigFragments
 from otterdog_acceptance.otterdog.runner import CliResult, DiffOptions, OtterdogCli
+from otterdog_acceptance.otterdog.runtime import CONTAINER_WORKDIR
 from otterdog_acceptance.otterdog.workspace import ConfigWorkspace
 from otterdog_acceptance.scenarios.offline import (
     OFFLINE_DEFAULT_PLAN,
@@ -52,6 +59,25 @@ TRACEBACK = "Traceback (most recent call last)"
 FIX_777 = "7ffc5e5d8bf8a7db7d2757a3fa40af89dc98e6e3"
 SCHEMA_LOAD_ERROR = "failed to load configuration: invalid value at 'repositories[name="
 FAILED_SUMMARY = "Validation failed: "
+# eclipse-csi/otterdog#937 "fix(cli): exit without a traceback when interrupted at startup": squash commit on main and
+# head of the pull request (a pr: SUT of that head does not contain the squash commit)
+FIX_937 = ("eca34251579bf69286a3be5d538cc0e97036184d", "786e385ceaee50d1e4c40bcd43c4bddc28fc955e")
+INTERRUPT_REFERENCES = [
+    {
+        "pr": 937,
+        "note": (
+            "'fix(cli): exit without a traceback when interrupted at startup': the console script runs "
+            "otterdog/__main__.py, which reports a KeyboardInterrupt raised while otterdog.cli is loading with "
+            "'Aborted!' and exit 130 instead of a traceback; the output and exit status of every command run through "
+            "it must not change"
+        ),
+    }
+]
+INTERRUPTED = 130  # 128 + SIGINT, otterdog/__main__.py EXIT_CODE_INTERRUPTED
+ABORTED = "Aborted!"
+# a stand-in for click, the first third-party module otterdog.cli imports (otterdog/cli.py:16), first on PYTHONPATH
+INTERRUPTING_MODULE = "click"
+INTERRUPTING_SOURCE = "# otterdog-acceptance: Ctrl+C while otterdog.cli is loading\nraise KeyboardInterrupt\n"
 # one fragment set per validation outcome (the error counts are otterdog's, verified offline)
 ONE_ERROR = ConfigFragments(settings=["description: std.repeat('d', 161)"])
 TWO_ERRORS = ConfigFragments(repositories=[f"orgs.newRepo('{REPO}') {{ squash_merge_commit_title: 'NOPE' }}"])
@@ -308,3 +334,62 @@ def test_verbosity_levels(vendored_cli: OtterdogCli) -> None:
     hidden, shown = vendored_cli.local_plan(), vendored_cli.local_plan_with(DiffOptions(verbose=True))
     assert hidden.exit_code == 0 and PLAN_INFOS_HINT in text_of(hidden) and DUMMY_INFO not in text_of(hidden)
     assert shown.exit_code == 0 and DUMMY_INFO in text_of(shown) and PLAN_INFOS_HINT not in text_of(shown)
+
+
+def has_937(history: SutHistory) -> bool:
+    """Whether the SUT contains #937 (its squash commit or the head of its pull request); skip when undecidable."""
+    found = [history.contains(commit) for commit in FIX_937]
+    if True in found:
+        return True
+    if False in found:
+        return False
+    pytest.skip(f"cannot tell whether {history.label} contains #937 ({FIX_937[0][:7]})")
+
+
+def interrupting_path(cli: OtterdogCli) -> str:
+    """PYTHONPATH (as the CLI sees it) of a directory of the workspace holding INTERRUPTING_MODULE: an interrupt the
+    moment otterdog.cli imports it (the workspace is /ws in a container)."""
+    directory = cli.workspace.root / "interrupt"
+    directory.mkdir(mode=0o700, exist_ok=True)
+    (directory / f"{INTERRUPTING_MODULE}.py").write_text(INTERRUPTING_SOURCE)
+    if cli.installed.runtime == "docker":
+        return f"{CONTAINER_WORKDIR}/{directory.name}"
+    return str(directory.resolve())
+
+
+@pytest.mark.scenario("O-EXIT-CODES", references=INTERRUPT_REFERENCES)
+@pytest.mark.parametrize(
+    "args",
+    [pytest.param(("--version",), id="version"), pytest.param(("validate", "--help"), id="command-help")],
+)
+def test_an_interrupt_while_loading_the_cli_aborts_without_traceback(
+    vendored_cli: OtterdogCli, sut_history: SutHistory, args: tuple[str, ...]
+) -> None:
+    """Ctrl+C while the otterdog command still loads its modules: since #937 the console script's entry point
+    (otterdog/__main__.py, standard library only) reports it like click does once the cli runs, 'Aborted!' on stderr
+    and exit 130, without a traceback; before, the KeyboardInterrupt escaped the import of otterdog.cli with a
+    traceback. The interrupt is raised by a stand-in for click, the first third-party module otterdog.cli imports, so
+    it lands while the cli is loading on every run (a real SIGINT would depend on timing)."""
+    fixed = has_937(sut_history)
+    result = vendored_cli.invoke(*args, env={"PYTHONPATH": interrupting_path(vendored_cli)})
+    text = strip_ansi(result.output)
+    assert ", version " not in text and "Usage:" not in text, tail(result)  # the cli never ran
+    if fixed:
+        assert result.exit_code == INTERRUPTED, f"exit {result.exit_code}\n{tail(result)}"
+        assert ABORTED in result.stderr and TRACEBACK not in text and "KeyboardInterrupt" not in text, tail(result)
+    else:
+        assert result.exit_code != 0 and TRACEBACK in text and "KeyboardInterrupt" in text, tail(result)
+        assert ABORTED not in text, tail(result)
+
+
+@pytest.mark.scenario("O-EXIT-CODES", references=INTERRUPT_REFERENCES)
+def test_the_entry_point_keeps_the_cli_behaviour(vendored_cli: OtterdogCli) -> None:
+    """Control on every SUT: through the console script (otterdog/__main__.py since #937) the version, a usage error
+    (exit 2, 'No such command') and a successful validation keep their output and exit status."""
+    version = vendored_cli.invoke("--version")
+    assert version.exit_code == 0 and ", version " in version.stdout, tail(version)
+    usage = vendored_cli.invoke("no-such-command")
+    assert usage.exit_code == 2 and "No such command" in strip_ansi(usage.output), tail(usage)
+    assert TRACEBACK not in strip_ansi(usage.output) and ABORTED not in strip_ansi(usage.output), tail(usage)
+    valid = validate(vendored_cli, ConfigFragments())
+    assert valid.exit_code == 0 and "Validation succeeded" in text_of(valid), tail(valid)
