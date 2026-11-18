@@ -411,6 +411,8 @@ UNRELEASED_FIXES = {  # scenario -> first otterdog release with the change it as
     "cli.apply.delete-filter": "1.9.0",  # #939, main 61faaff after v1.8.0
     "cli.repo.code-scanning-languages": "1.9.0",  # #941 (4c98381 after v1.8.0); #922 is in v1.8.0
     "cli.repo.actions.sha-pinning": "1.9.0",  # #946, main 44f2b7b after v1.8.0
+    "cli.workflows.org-actions-policies": "1.9.0",  # #947, main 639eaea after v1.8.0
+    "cli.workflows.repo-actions-policies": "1.9.0",  # #947
 }
 LATEST_RELEASE = "1.8.0"  # release:latest (v1.8.0, 2026-11-10); its fixed_in scenarios run there, the 1.9.0 ones skip
 LATER_RELEASE = "9.0.0"  # a release after every fixed_in: each scenario runs there

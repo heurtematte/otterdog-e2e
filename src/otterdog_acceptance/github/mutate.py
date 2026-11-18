@@ -508,6 +508,14 @@ class Mutator:
         if self._check_live_name("org ruleset", path, name):
             self._delete(path)
 
+    def delete_org_actions_policy(self, policy_id: int, *, name: str) -> None:
+        """DELETE /orgs/{org}/actions/policies/{id} (``name`` must be an e2e name and match the live policy; otterdog
+        manages organization Actions policies since #947, the trusted reset CLI of older releases does not)."""
+        self._check_name("org actions policy", name)
+        path = f"{self._orgp}/actions/policies/{int(policy_id)}"
+        if self._check_live_name("org actions policy", path, name):
+            self._delete(path)
+
     def delete_custom_property(self, name: str) -> None:
         """DELETE /orgs/{org}/properties/schema/{name} (e2e names only)."""
         self._check_name("custom property", name)

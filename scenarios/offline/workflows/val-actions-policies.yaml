@@ -1,0 +1,275 @@
+# Offline tier (battery, validation): the Actions policies of organizations and repositories (eclipse-csi/otterdog#947).
+id: O-VAL-ACTIONS-POLICIES
+tier: offline
+title: Actions policies of organizations and repositories are validated and shown
+description: >-
+  Since #947 (main after v1.8.0) the organization and its repositories manage actions_policies
+  (orgs.newOrgActionsPolicy, orgs.newRepoActionsPolicy: GitHub's workflow execution protections), with the rules
+  allowed_actors (restrict_actions_actors) and allowed_events (restrict_action_events), null when not required.
+  ActionsPolicy.validate refuses 'evaluate' below the enterprise plan, empty workflow targeting, '~ALL' combined with
+  other patterns or excluded, and actors that are neither '@<login>', '@<org>/<team>', '#<role>' (a known role or a
+  custom role id), '<app-slug>' nor '<type>:<id>' of a known type; it warns about an unknown event, an empty rule
+  (blocks every targeted workflow) and a policy without any rule. OrganizationActionsPolicy.validate warns about
+  repository patterns matching no repository, an empty include_repo_names (the template default: no repository is
+  targeted) and protect_repo_names without patterns. The JSON schemas refuse an unknown key, an enforcement outside
+  the enum and a rule that is neither a list nor null. show prints both objects and show-default their defaults.
+  None of these checks calls GitHub (actors are resolved only when applying). The canonical form (and import) drops
+  the '[bot]' of the documented actor '@dependabot[bot]' (KB-050, step bot-actor-in-canonical-form). Older SUTs skip
+  it (fixed_in).
+priority: P1
+tags: [offline, workflows, repo]
+observe: true
+fixed_in: 1.9.0
+variables: {plan: free}
+references:
+  - pr: 947
+    note: >-
+      "feat: manage the actions policies of organizations and repositories" (head c67a7f0, squash 639eaea, unreleased:
+      1.9.0) adds the models, their validation, schemas and template constructors: head validates and shows every step
+      as asserted; base has no newOrgActionsPolicy/newRepoActionsPolicy, so every step fails to evaluate the jsonnet
+      (validate, show and the extra commands error out).
+    expected_deltas:
+      - {kind: cli, key: validate}
+      - {kind: cli, key: show}
+      - {step: valid-policies, kind: cli, key: show-default}
+      - {kind: cli, key: canonical-diff}
+steps:
+  - name: valid-policies
+    fragments:
+      extra:
+        - |-
+          actions_policies+: [
+            orgs.newOrgActionsPolicy('{{ p }}-release') {
+              include_repo_names: ['{{ p }}-app'],
+              include_workflows: ['.github/workflows/release.yml'],
+              allowed_actors: ['@alice', '@{{ org }}/{{ p }}-releng', '#Maintain', '#42', 'my-app', '@dependabot[bot]', 'EnterpriseTeam:42'],
+              allowed_events: ['workflow_dispatch', 'push'],
+            },
+          ]
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-app') {
+            actions_policies: [
+              orgs.newRepoActionsPolicy('{{ p }}-labeler') {
+                include_workflows: ['.github/workflows/labeler.yml'],
+                exclude_workflows: ['.github/workflows/ci.yml'],
+                allowed_events: ['pull_request_target'],
+              },
+            ],
+          }
+    validate:
+      ok: true
+      errors: 0
+      exit_code: 0
+      contains: ["Validation succeeded"]
+      not_contains: ["actions_policy["]
+    commands:
+      show:
+        exit_code: 0
+        contains:
+          - 'org_actions_policy[name="{{ p }}-release"] {'
+          - '"@dependabot[bot]"'
+          - '"EnterpriseTeam:42"'
+          - '"#Maintain"'
+          - '".github/workflows/release.yml"'
+          - 'repo_actions_policy[name="{{ p }}-labeler", repository={{ p }}-app] {'
+          - '"pull_request_target"'
+        not_contains: ["Error:"]
+      show-default:
+        exit_code: 0
+        contains:
+          - "orgs.newOrgActionsPolicy('<name>') ="
+          - "orgs.newRepoActionsPolicy('<name>') ="
+      canonical-diff:
+        exit_code: null
+
+  - name: evaluate-needs-enterprise
+    fragments:
+      extra:
+        - "actions_policies+: [orgs.newOrgActionsPolicy('{{ p }}-org-eval') { include_repo_names: ['~ALL'], enforcement: 'evaluate', allowed_events: ['push'] }]"
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-app') {
+            actions_policies: [orgs.newRepoActionsPolicy('{{ p }}-eval') { enforcement: 'evaluate', allowed_events: ['push'] }],
+          }
+    validate:
+      ok: false
+      errors: 2
+      exit_code: 2  # validate exits with the number of errors
+      contains:
+        - >-
+          org_actions_policy[name="{{ p }}-org-eval"] has 'enforcement' of value 'evaluate' which is only available for
+          an 'enterprise' plan.
+        - >-
+          repo_actions_policy[name="{{ p }}-eval", repository={{ p }}-app] has 'enforcement' of value 'evaluate' which
+          is only available for an 'enterprise' plan.
+
+  - name: workflow-patterns
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-app') {
+            actions_policies: [
+              orgs.newRepoActionsPolicy('{{ p }}-none') { include_workflows: [], exclude_workflows: [], allowed_events: ['push'] },
+              orgs.newRepoActionsPolicy('{{ p }}-mixed') { include_workflows: ['~ALL', '.github/workflows/ci.yml'], allowed_events: ['push'] },
+              orgs.newRepoActionsPolicy('{{ p }}-excl') { include_workflows: [], exclude_workflows: ['~ALL'], allowed_events: ['push'] },
+              orgs.newRepoActionsPolicy('{{ p }}-ok') { include_workflows: ['~ALL'], exclude_workflows: ['.github/workflows/ci.yml'], allowed_events: ['push'] },
+            ],
+          }
+    validate:
+      ok: false
+      errors: 3
+      exit_code: 3  # validate exits with the number of errors
+      contains:
+        - >-
+          repo_actions_policy[name="{{ p }}-none", repository={{ p }}-app] has empty 'include_workflows' and
+          'exclude_workflows', while at least one pattern is required, use '~ALL' to target all workflows.
+        - >-
+          repo_actions_policy[name="{{ p }}-mixed", repository={{ p }}-app] has 'include_workflows' combining '~ALL'
+          with other patterns, while '~ALL' must be used on its own.
+        - >-
+          repo_actions_policy[name="{{ p }}-excl", repository={{ p }}-app] has '~ALL' in 'exclude_workflows', while it
+          is only allowed in 'include_workflows'.
+      not_contains: ['repo_actions_policy[name="{{ p }}-ok"']
+
+  - name: invalid-actors
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-app') {
+            actions_policies: [
+              orgs.newRepoActionsPolicy('{{ p }}-actors') {
+                allowed_actors: ['alice@example.org', '@{{ org }}/team/sub', '#Read', 'Organization:1', '#Write', '#7'],
+              },
+            ],
+          }
+    validate:
+      ok: false
+      errors: 4
+      exit_code: 4  # validate exits with the number of errors
+      contains:
+        - >-
+          repo_actions_policy[name="{{ p }}-actors", repository={{ p }}-app] has an invalid allowed actor
+          'alice@example.org', only users or bots ('@<login>'), teams ('@<org>/<team-slug>'), roles ('#<role>'), apps
+          ('<app-slug>') or actors referenced by their type and id ('<type>:<id>') are supported.
+        - >-
+          repo_actions_policy[name="{{ p }}-actors", repository={{ p }}-app] has an invalid allowed actor
+          '@{{ org }}/team/sub'
+        - >-
+          repo_actions_policy[name="{{ p }}-actors", repository={{ p }}-app] has allowed actor '#Read' with unknown
+          role 'Read', only roles ('RepositoryAdmin' | 'Write' | 'Maintain' | 'OrganizationAdmin') or the id of a
+          custom role are supported.
+        - >-
+          repo_actions_policy[name="{{ p }}-actors", repository={{ p }}-app] has allowed actor 'Organization:1' with
+          unknown type 'Organization', only types ('User' | 'Bot' | 'Team' | 'BusinessTeam' | 'EnterpriseTeam' |
+          'IntegrationInstallation' | 'App' | 'RepositoryRole') are supported.
+      not_contains: ["'#Write'", "'#7'"]
+
+  - name: rule-warnings
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-app') {
+            actions_policies: [
+              orgs.newRepoActionsPolicy('{{ p }}-event') { allowed_events: ['push', 'pull_request_closed'] },
+              orgs.newRepoActionsPolicy('{{ p }}-no-actor') { allowed_actors: [] },
+              orgs.newRepoActionsPolicy('{{ p }}-no-event') { allowed_events: [] },
+              orgs.newRepoActionsPolicy('{{ p }}-no-rule'),
+            ],
+          }
+    validate:
+      ok: true
+      errors: 0
+      warnings_min: 4
+      exit_code: 0
+      contains:
+        - >-
+          repo_actions_policy[name="{{ p }}-event", repository={{ p }}-app] has 'allowed_events' containing unknown
+          event 'pull_request_closed', GitHub might reject it.
+        - >-
+          repo_actions_policy[name="{{ p }}-no-actor", repository={{ p }}-app] has an empty 'allowed_actors', no actor
+          is allowed to run the targeted workflows.
+        - >-
+          repo_actions_policy[name="{{ p }}-no-event", repository={{ p }}-app] has an empty 'allowed_events', no event
+          is allowed to trigger the targeted workflows.
+        - >-
+          repo_actions_policy[name="{{ p }}-no-rule", repository={{ p }}-app] does not require any rule, set one of
+          ('allowed_actors' | 'allowed_events').
+
+  - name: org-repository-targeting
+    fragments:
+      extra:
+        - |-
+          actions_policies+: [
+            orgs.newOrgActionsPolicy('{{ p }}-nomatch') { include_repo_names: ['{{ p }}-other-*'], exclude_repo_names: ['{{ p }}-app'], allowed_events: ['push'] },
+            orgs.newOrgActionsPolicy('{{ p }}-default') { allowed_events: ['push'] },
+            orgs.newOrgActionsPolicy('{{ p }}-protect') { protect_repo_names: true, allowed_events: ['push'] },
+            orgs.newOrgActionsPolicy('{{ p }}-all') { include_repo_names: ['~ALL'], protect_repo_names: true, allowed_events: ['push'] },
+          ]
+      repositories: ["orgs.newRepo('{{ p }}-app')"]
+    validate:
+      ok: true
+      errors: 0
+      warnings_min: 4
+      exit_code: 0
+      contains:
+        - >-
+          org_actions_policy[name="{{ p }}-nomatch"] has an 'include_repo_names' pattern '{{ p }}-other-*' that does
+          not match any existing repository
+        - >-
+          org_actions_policy[name="{{ p }}-default"] has an empty 'include_repo_names', the policy does not apply to
+          any repository, use '~ALL' to target all repositories.
+        - >-
+          org_actions_policy[name="{{ p }}-protect"] has 'protect_repo_names' set to 'True' but 'include_repo_names'
+          and 'exclude_repo_names' are empty.
+      not_contains: ['org_actions_policy[name="{{ p }}-all"]', "'exclude_repo_names' pattern '{{ p }}-app'"]
+
+  - name: unknown-policy-key
+    fragments:
+      repositories:
+        - "orgs.newRepo('{{ p }}-app') { actions_policies: [orgs.newRepoActionsPolicy('{{ p }}-key') { allowed_events: ['push'], foo: 1 }] }"
+    validate:
+      ok: false
+      contains: ["Unevaluated properties are not allowed ('foo' was unexpected)"]
+      not_contains: ["Validation succeeded"]
+
+  - name: repo-names-on-a-repository-policy
+    fragments:
+      repositories:
+        - "orgs.newRepo('{{ p }}-app') { actions_policies: [orgs.newRepoActionsPolicy('{{ p }}-names') { allowed_events: ['push'], include_repo_names: ['~ALL'] }] }"
+    validate:
+      ok: false
+      contains: ["Unevaluated properties are not allowed ('include_repo_names' was unexpected)"]
+      not_contains: ["Validation succeeded"]
+
+  - name: invalid-enforcement
+    fragments:
+      extra:
+        - "actions_policies+: [orgs.newOrgActionsPolicy('{{ p }}-enforced') { include_repo_names: ['~ALL'], enforcement: 'enforced', allowed_events: ['push'] }]"
+    validate:
+      ok: false
+      contains: ["'enforced' is not one of ['active', 'disabled', 'evaluate']"]
+      not_contains: ["Validation succeeded"]
+
+  - name: rule-not-a-list
+    fragments:
+      extra:
+        - "actions_policies+: [orgs.newOrgActionsPolicy('{{ p }}-string') { include_repo_names: ['~ALL'], allowed_events: 'push' }]"
+    validate:
+      ok: false
+      contains: ["'push' is not valid under any of the given schemas"]
+      not_contains: ["Validation succeeded"]
+
+  - name: bot-actor-in-canonical-form
+    # the canonical form (and the configuration written by import) is printed as rich markup: '[bot]' vanishes, so an
+    # imported policy would allow '@dependabot', another account (KB-050)
+    known_bug: {id: KB-050, phases: [commands]}
+    fragments:
+      repositories:
+        - "orgs.newRepo('{{ p }}-app') { actions_policies: [orgs.newRepoActionsPolicy('{{ p }}-bots') { allowed_actors: ['@dependabot[bot]'] }] }"
+    validate: {ok: true, errors: 0, exit_code: 0}
+    commands:
+      show: {exit_code: 0, contains: ['"@dependabot[bot]"']}
+      canonical-diff:
+        exit_code: 0
+        contains: ['"@dependabot[bot]"']

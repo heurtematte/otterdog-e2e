@@ -433,6 +433,29 @@ def test_code_security_configurations_of_finished_runs_are_swept() -> None:
     assert oracle.code_security_default_configurations() == []
 
 
+def test_org_actions_policies_of_finished_runs_are_swept() -> None:
+    """Run-named organization Actions policies (otterdog#947, unknown to the trusted reset CLI of older releases) of
+    purgeable runs are listed with their id and deleted through the guarded Mutator call; foreign and active-run
+    policies are kept, and an unavailable listing is skipped."""
+    oracle = GitFakeOracle()
+    oracle.set(
+        "org_actions_policies",
+        value=[
+            {"id": 3, "name": f"e2e-{OLD}-events"},
+            {"id": 4, "name": "release"},
+            {"id": 5, "name": f"e2e-{ACTIVE}-p"},
+        ],
+    )
+    janitor = make_janitor(oracle, mutator=RecordingMutator(oracle=oracle))
+    items = [item for item in janitor.scan() if item.kind == "org_actions_policy"]
+    assert items == [JanitorItem("org_actions_policy", f"e2e-{OLD}-events", OLD, "", "3")]
+    assert set(janitor.sweep(items)) == set(items) and janitor.failures == []
+    calls = [(call.method, call.args, call.kwargs) for call in janitor.mutator.calls]  # type: ignore[attr-defined]
+    assert calls == [("delete_org_actions_policy", (3,), {"name": f"e2e-{OLD}-events"})]
+    oracle.mark_unavailable("org_actions_policies", status=404)
+    assert [item for item in janitor.scan() if item.kind == "org_actions_policy"] == []
+
+
 def test_org_dependabot_and_codespaces_secrets_of_finished_runs_are_swept() -> None:
     """Run-named organization Dependabot and Codespaces secrets (#890) of purgeable runs are listed and deleted through
     their own Mutator calls; foreign and active-run secrets are kept."""

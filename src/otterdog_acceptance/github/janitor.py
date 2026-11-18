@@ -9,7 +9,9 @@ deleted: only run-named objects inside them are. A ledger tag is swept only once
 Battery probes leave other run objects too: e2e-named code security configurations are swept (a default of one is set
 to ``none`` first, GitHub refuses to delete a default); security advisories cannot be deleted through the API, but the
 Mutator only creates them in run repositories, whose deletion removes them, and their temporary private forks
-(``<run repo>-ghsa-...``) carry the run prefix, so the repository sweep deletes them.
+(``<run repo>-ghsa-...``) carry the run prefix, so the repository sweep deletes them. Run-named organization Actions
+policies (otterdog#947) are swept too: the baseline reset of an older trusted CLI does not know them; the policies of
+a repository go with it.
 """
 
 from __future__ import annotations
@@ -44,6 +46,7 @@ JANITOR_KINDS = (
     "org_codespaces_secret",
     "org_variable",
     "org_ruleset",
+    "org_actions_policy",
     "custom_property",
     "org_hook",
     "org_role",
@@ -72,6 +75,7 @@ SWEEP_ORDER = (
     "repo_variable",
     "org_hook",
     "org_ruleset",
+    "org_actions_policy",
     "org_secret",
     "org_dependabot_secret",
     "org_codespaces_secret",
@@ -144,6 +148,11 @@ class Janitor:
             ),
             ("org variables", lambda: self._named("org_variable", self.oracle.org_variables())),
             ("org rulesets", lambda: self._named("org_ruleset", self.oracle.org_rulesets(), detail="id")),
+            # managed by otterdog since #947 (main after v1.7.1): the trusted reset CLI of older releases leaves them
+            (
+                "org Actions policies",
+                lambda: self._named("org_actions_policy", self.oracle.org_actions_policies(), detail="id"),
+            ),
             (
                 "custom properties",
                 lambda: self._named("custom_property", self.oracle.custom_properties(), key="property_name"),
@@ -382,6 +391,7 @@ class Janitor:
             "org_codespaces_secret": lambda: m.delete_org_codespaces_secret(name),
             "org_variable": lambda: m.delete_org_variable(name),
             "org_ruleset": lambda: m.delete_org_ruleset(int(item.detail), name=name),
+            "org_actions_policy": lambda: m.delete_org_actions_policy(int(item.detail), name=name),
             "custom_property": lambda: m.delete_custom_property(name),
             "org_hook": lambda: m.delete_org_hook(int(item.detail)),
             "org_role": lambda: m.delete_org_role(int(item.detail), name=name),

@@ -263,6 +263,26 @@ endpoints:
     trigger: an organization ruleset is removed (apply -d)
     feature: rulesets.org.repository-conditions
 
+  # --- organization Actions policies (#947, main after v1.7.1; sources at the PR head c67a7f0) ------------------------
+  - endpoint: POST /orgs/{org}/actions/policies
+    source: otterdog/providers/github/rest/org_client.py:1075
+    trigger: an organization Actions policy is added (orgs.newOrgActionsPolicy)
+    feature: org-workflows.actions-policies
+    notes: >-
+      Preceded by GET /orgs/{org}/actions/policies (the name lookup of OrganizationActionsPolicy.apply_live_patch): a
+      policy of the same name unknown to the configuration is updated (PUT) instead.
+  - endpoint: PUT /orgs/{org}/actions/policies/{id}
+    source: otterdog/providers/github/rest/org_client.py:1065
+    trigger: an organization Actions policy changes (enforcement, targeting or rules; the whole policy is sent)
+    feature: org-workflows.actions-policies
+    notes: >-
+      GitHub replaces all the rules of a policy: rules of a type otterdog does not support and keys missing from the
+      configuration are sent with their current values.
+  - endpoint: DELETE /orgs/{org}/actions/policies/{id}
+    source: otterdog/providers/github/rest/org_client.py:1083
+    trigger: an organization Actions policy is removed (apply -d)
+    feature: org-workflows.actions-policies
+
   # --- repositories -------------------------------------------------------------------------------------------------
   - endpoint: POST /orgs/{org}/repos
     source: otterdog/providers/github/rest/repo_client.py:330
@@ -470,6 +490,26 @@ endpoints:
     source: otterdog/providers/github/rest/repo_client.py:504
     trigger: a repository ruleset is removed (apply -d)
     feature: rulesets.repo.lifecycle
+
+  # --- repository Actions policies (#947, main after v1.7.1; sources at the PR head c67a7f0) --------------------------
+  - endpoint: POST /repos/{owner}/{repo}/actions/policies
+    source: otterdog/providers/github/rest/repo_client.py:574
+    trigger: a repository Actions policy is added (orgs.newRepoActionsPolicy), also with a new repository
+    feature: repo-workflows.actions-policies
+    notes: >-
+      Preceded by GET /repos/{owner}/{repo}/actions/policies (name lookup): a same-named policy unknown to the
+      configuration is updated (PUT) instead. Not planned for a repository that stays archived; a repository archived
+      in the same apply gets it before the archiving PATCH (operations/apply.py applies that patch last).
+  - endpoint: PUT /repos/{owner}/{repo}/actions/policies/{id}
+    source: otterdog/providers/github/rest/repo_client.py:562
+    trigger: a repository Actions policy changes (the whole policy is sent)
+    feature: repo-workflows.actions-policies
+    notes: >-
+      Not planned for a repository that stays archived; sent before the archiving PATCH of the same apply.
+  - endpoint: DELETE /repos/{owner}/{repo}/actions/policies/{id}
+    source: otterdog/providers/github/rest/repo_client.py:585
+    trigger: a repository Actions policy is removed (apply -d)
+    feature: repo-workflows.actions-policies
 
   # --- branch protection rules (GraphQL) -----------------------------------------------------------------------------
   - endpoint: mutation createBranchProtectionRule

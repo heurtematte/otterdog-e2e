@@ -38,6 +38,19 @@ references:
       - {step: missing-local-template, kind: cli, key: show}
       - {step: template-directory-contains-the-organization, kind: cli, key: validate}
       - {step: template-directory-contains-the-organization, kind: cli, key: show}
+  - pr: 947
+    note: >-
+      "feat: manage the actions policies of organizations and repositories" (head c67a7f0, squash 639eaea, unreleased:
+      1.9.0): the packaged template gains newOrgActionsPolicy, newRepoActionsPolicy and actions_policies: [] in newOrg
+      and newRepo, so the show-default of the step linking the packaged template prints them (as O-SHOW-DEFAULT); every
+      other step must not change.
+    expected_deltas:
+      - step: relative-default-template
+        kind: cli
+        key: show-default
+        note: >-
+          head prints the orgs.newOrgActionsPolicy and orgs.newRepoActionsPolicy blocks and actions_policies: [] in the
+          repository defaults (exit 0); base prints neither
 steps:
   - name: relative-default-template
     workspace:

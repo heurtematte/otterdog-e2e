@@ -622,6 +622,7 @@
     - otterdog/operations/import_configuration.py:122
     - "e2e: scenarios/offline/template/canonical-diff.yaml (step bracketed-description declares the bug)"
     - "e2e: scenarios/offline/secrets/val-secret-access-policy.yaml (step mode-of-an-organization declares the bug)"
+    - "e2e: scenarios/offline/workflows/val-actions-policies.yaml (step bot-actor-in-canonical-form declares the bug)"
   upstream: null
   fixed_in: null
   scenarios: [cli.kb.list-advisories-markup, O-KB-SHOW-MARKDOWN-LINKS, O-KB-VALIDATION-MARKUP]
@@ -1029,6 +1030,16 @@
     - "e2e: scenarios/offline/template/val-local-base-template.yaml (step organization-template-null declares the bug)"
   upstream: null
   fixed_in: null
+  scenarios: []
+
+- id: KB-085
+  title: canonical-diff and import crash with KeyError 'pattern' on a branch protection rule whose pattern is 'default' (the key the template's default object is evaluated with)
+  status: fixed
+  evidence:
+    - otterdog/models/__init__.py:965-970
+    - "e2e: scenarios/offline/template/canonical-diff.yaml (step key-equal-to-the-template-default declares the bug)"
+  upstream: https://github.com/eclipse-csi/otterdog/pull/947
+  fixed_in: 1.9.0
   scenarios: []
 
 - id: KB-086

@@ -129,7 +129,7 @@ shortened to the relevant lines.
 | KB-047 | install-deps exits 0 when the installation fails | confirmed | CLI | `webui.kb.install-deps-exit-code` |
 | KB-048 | re-import drops the secret of a masked webhook | confirmed | import | `cli.kb.import-masked-webhook-secret` |
 | KB-049 | fetch-config -r reports the default branch | confirmed | CLI | `cli.kb.fetch-config-ref-message` |
-| KB-050 | free text printed as rich markup (list-advisories, show --markdown, validation messages, canonical form) | confirmed | CLI | `cli.kb.list-advisories-markup`, `O-KB-SHOW-MARKDOWN-LINKS`, `O-KB-VALIDATION-MARKUP`, step of `O-CANON` |
+| KB-050 | free text printed as rich markup (list-advisories, show --markdown, validation messages, canonical form) | confirmed | CLI | `cli.kb.list-advisories-markup`, `O-KB-SHOW-MARKDOWN-LINKS`, `O-KB-VALIDATION-MARKUP`, steps of `O-CANON` and `O-VAL-ACTIONS-POLICIES` |
 | KB-051 | App installations read without pagination | suspected | provider | - |
 | KB-052 | bypass actor `<actor>:always` never converges | confirmed | model | step of `cli.ruleset.bypass` |
 | KB-053 | `merge_commit_message` sent without `merge_commit_title` | suspected | model | step of `cli.repo.merge-messages` |
@@ -164,6 +164,7 @@ shortened to the relevant lines.
 | KB-082 | archiving with a topics change: requests sent after the archiving PATCH | suspected | provider | step of `cli.repo.archive-side-requests` |
 | KB-083 | default branch of an archived repository planned and sent | suspected | model | step of `cli.repo.archive-side-requests` |
 | KB-084 | organization entry with `base_template: null`: TypeError at load (since #917) | confirmed | config | step of `O-VAL-LOCAL-BASE-TEMPLATE` |
+| KB-085 | branch protection pattern `default`: canonical-diff and import crash (KeyError 'pattern') | fixed (1.9.0) | model | step of `O-CANON` |
 | KB-086 | pass / bitwarden lookups through a shell: injected commands run (CVE-2026-123717) | fixed (GHSA-886p-g538-rcmp, 1.8.0) | credentials | `O-KB-CREDENTIAL-SHELL` |
 
 ## Issues
@@ -1819,7 +1820,8 @@ cli.cli.main(["fetch-config", "-c", "otterdog.json", "--local", "-f", "-r", "e2e
 
 Status: **confirmed** · Upstream: none · Scenarios: `cli.kb.list-advisories-markup` (tests/cli/test_commands_read.py),
 `O-KB-SHOW-MARKDOWN-LINKS` (tests/offline/test_cli_basics.py), `O-KB-VALIDATION-MARKUP` (tests/offline/test_cli_markup.py),
-step `bracketed-description` of `O-CANON` (scenarios/offline/template/canonical-diff.yaml)
+step `bracketed-description` of `O-CANON` (scenarios/offline/template/canonical-diff.yaml), step
+`bot-actor-in-canonical-form` of `O-VAL-ACTIONS-POLICIES` (scenarios/offline/workflows/val-actions-policies.yaml)
 
 Evidence: `otterdog/operations/list_advisories.py:140-146`, `otterdog/operations/show.py:177-182`,
 `otterdog/operations/show.py:207`, `otterdog/utils.py:301-315`, `otterdog/logging.py:174-198`,
@@ -1850,6 +1852,9 @@ outputs still hand free text to the console unescaped (follow-up of #440):
   close`, checked offline on 1.6.1). `import` writes the same `to_jsonnet` output (`import_configuration.py:122`), so
   an imported configuration loses the bracketed words of its values (the next apply changes them on GitHub) and `[/]`
   makes the import crash (read from the code: import needs GitHub, it is not run offline).
+  Since #947 (main after v1.8.0) it also changes who may run a workflow: the documented allowed actor `'@dependabot[bot]'` of an
+  Actions policy is written `"@dependabot"` in the canonical form (offline, PR head c67a7f0), so an imported
+  policy names the account `dependabot` instead of the bot, and the next apply replaces the actor on GitHub.
 
 #### Reproduction
 
@@ -2709,6 +2714,34 @@ urls: b''` (exit 2), not a good message either but one that points at the templa
 ```console
 $ otterdog validate -c otterdog.json --local e2e-test-org         # exit code 2
 │ Error:   argument of type 'NoneType' is not iterable
+```
+
+### KB-085 — canonical-diff and import crash on a branch protection rule whose pattern is `default`
+
+Status: **fixed** (1.9.0) · Upstream: https://github.com/eclipse-csi/otterdog/pull/947 · Scenarios: step
+`key-equal-to-the-template-default` of `O-CANON` (scenarios/offline/template/canonical-diff.yaml)
+
+Evidence: `otterdog/models/__init__.py:965-970` (main 44f2b7b, the base of #947).
+
+Fixed by #947 (squash 639eaea, after v1.8.0, unreleased: 1.9.0), which changed `ModelObject.to_jsonnet` while adding
+the Actions policies: the canonical form of a keyed object is its patch against the template's default object, which
+otterdog evaluates with the key `'default'` (`newBranchProtectionRule('default')`, `otterdog/jsonnet.py`). A key equal
+to the default's is no patch entry, and `to_jsonnet` popped it with `patch.pop(self.get_key())`: a branch protection
+rule with the pattern `default` stops `canonical-diff` with `Error: 'pattern'` (exit 2), and `import` writes its
+configuration through the same `to_jsonnet`. Since #947 the key is popped with a default and the object's own key is
+written. An environment and a repository ruleset named `default` were not affected (checked offline on 44f2b7b);
+found by `O-CANON` while testing #947, which runs strict on SUTs from 1.9.0 (their dev builds included) and stays an
+expected failure on older ones (release:latest 1.8.0). The text above describes the defect as it was.
+
+#### Reproduction
+
+```jsonnet
+  _repositories+: [orgs.newRepo('repo') { branch_protection_rules: [orgs.newBranchProtectionRule('default')] }],
+```
+
+```console
+$ otterdog canonical-diff -c otterdog.json --local e2e-test-org     # exit code 2 before #947
+│ Error:   'pattern'
 ```
 
 ### KB-086 — pass and bitwarden lookups go through a shell, so injected commands run

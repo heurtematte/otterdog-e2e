@@ -24,6 +24,15 @@ references:
       defaults of rulesets.
     expected_deltas:
       - {step: defaults, kind: cli, key: show-default}
+  - pr: 947
+    note: >-
+      "feat: manage the actions policies of organizations and repositories" (head c67a7f0): the packaged template
+      gains newOrgActionsPolicy and newRepoActionsPolicy and actions_policies: [] in newOrg and newRepo, so
+      show-default prints two more sections (Organization Actions Policy, Repository Actions Policy) and the
+      actions_policies key of the organization and repository defaults. show of a configuration without policies does
+      not change.
+    expected_deltas:
+      - {step: defaults, kind: cli, key: show-default}
 steps:
   - name: defaults
     fragments: {}

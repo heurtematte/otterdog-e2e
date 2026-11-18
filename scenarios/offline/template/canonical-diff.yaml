@@ -53,6 +53,22 @@ references:
         note: >-
           head prints an empty diff (exit 0); base writes 'secret_scanning_delegated_bypass_reviewers+: [', a one-line
           hunk (exit 0)
+  - pr: 947
+    note: >-
+      "feat: manage the actions policies of organizations and repositories" (head c67a7f0) also changes
+      ModelObject.to_jsonnet, which writes the canonical form (and import) of every keyed object: the key is no longer
+      popped from the patch, where it is missing when it equals the key the template's default object is evaluated
+      with ('default'), and the object's own key is written. Step key-equal-to-the-template-default writes keyed
+      objects named 'default' (environment, repository ruleset, branch protection pattern): the base crashes on the
+      branch protection rule (KB-085, fixed by #947), the environment and the ruleset were already written; every
+      other step must not change.
+    expected_deltas:
+      - step: key-equal-to-the-template-default
+        kind: cli
+        key: canonical-diff
+        note: >-
+          head writes newBranchProtectionRule('default') in the canonical form (exit 0); base stops with "Error:
+          'pattern'" (KeyError popping the key from the patch, exit 2), checked on the PR base 44f2b7b
 steps:
   - name: canonical
     fragments:
@@ -134,3 +150,25 @@ steps:
     commands:
       canonical-diff: {exit_code: null}
       show: {exit_code: null}
+  - name: key-equal-to-the-template-default
+    # the template's default objects are evaluated with the key 'default': objects named so keep their own key in the
+    # canonical form; before #947 a branch protection rule with the pattern 'default' crashed it (KB-085)
+    known_bug: {id: KB-085, phases: [commands]}
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-canon') {
+            description: 'otterdog e2e: canonical form',
+            has_wiki: false,
+            environments: [orgs.newEnvironment('default') { wait_timer: 5 }],
+            rulesets: [orgs.newRepoRuleset('default') { include_refs+: ['~DEFAULT_BRANCH'] }],
+            branch_protection_rules: [orgs.newBranchProtectionRule('default') { required_approving_review_count: 1 }],
+          }
+    validate: {ok: true, errors: 0}
+    commands:
+      canonical-diff:
+        exit_code: 0
+        contains:
+          - "orgs.newEnvironment('default')"
+          - "orgs.newRepoRuleset('default')"
+          - "orgs.newBranchProtectionRule('default')"

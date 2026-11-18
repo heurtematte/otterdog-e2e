@@ -1,0 +1,238 @@
+# repo-workflows.actions-policies (P1): repository Actions policies end to end, archived states included
+# (eclipse-csi/otterdog#947).
+id: cli.workflows.repo-actions-policies
+title: Repository Actions policies (create with a new repository, change, add, delete, archive in the same apply, archived)
+tier: cli
+description: |
+  Since #947 (main after v1.8.0) otterdog manages the Actions policies of a repository (GitHub's workflow execution
+  protections: POST/PUT/DELETE /repos/{owner}/{repo}/actions/policies, otterdog/providers/github/rest/repo_client.py
+  of the PR); the policies of the organization and the enterprise that apply to it are not part of the repository
+  (has_parents=false). A new repository is created with its policy in one apply (POST of the repository, then of the
+  policy). A change of the workflow targeting and of the rules is one PUT of the whole policy and no PATCH of the
+  repository. A second policy is added (POST) and the first one deleted with -d (DELETE). The object states of the
+  requests follow: archiving the repository in the same apply as a policy change sends the policy PUT (otterdog
+  applies the archiving patch last, operations/apply.py) and the archiving PATCH; a policy change of a repository that
+  stays archived plans nothing (Repository.generate_live_patch leaves the policies of an archived repository as they
+  are, like its rulesets), checked on the plan only. The policies are complete objects instead of
+  orgs.newRepoActionsPolicy() (tested offline by O-VAL-ACTIONS-POLICIES), so every step also renders with the vendored
+  template copy of the unit tier, which predates #947. The plans that offer the feature are not documented by the PR
+  (the listing answers 403/404 where it is unavailable): run it on the enterprise instance first. Older SUTs skip it
+  (fixed_in). The cleanup deletes the archived repository, and its policies with it.
+priority: P1
+fixed_in: 1.9.0
+tags: [workflows, repo]
+references:
+  - pr: 947
+    note: >-
+      "feat: manage the actions policies of organizations and repositories": repository policies are created with
+      their repository, changed, added and deleted, also when the repository is archived in the same apply; older
+      SUTs have no newRepoActionsPolicy and skip the scenario (fixed_in).
+steps:
+  - name: create-with-repository
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-pol') {
+            description: 'otterdog e2e: repository Actions policies',
+            actions_policies: [
+              {
+                name: '{{ p }}-labeler',
+                enforcement: 'active',
+                include_workflows: ['.github/workflows/labeler.yml'],
+                exclude_workflows: [],
+                allowed_actors: null,
+                allowed_events: ['pull_request_target'],
+              },
+            ],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '+ add repository[name="{{ p }}-pol"]'
+        - '+ add repo_actions_policy[name="{{ p }}-labeler", repository={{ p }}-pol]'
+    apply:
+      api:
+        sent:
+          - 'POST /orgs/{org}/repos'
+          - 'POST /repos/{owner}/{repo}/actions/policies'
+        not_sent:
+          - 'PUT /repos/{owner}/{repo}/actions/policies/{id}'
+    state:
+      - kind: repo_actions_policy
+        repo: "{{ p }}-pol"
+        name: "{{ p }}-labeler"
+        match:
+          enforcement: active
+          conditions: {workflow_path: {include: ['.github/workflows/labeler.yml'], exclude: []}}
+          rules: [{type: restrict_action_events, parameters: {allowed_events: [pull_request_target]}}]
+        timeout: 120
+
+  - name: change
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-pol') {
+            description: 'otterdog e2e: repository Actions policies',
+            actions_policies: [
+              {
+                name: '{{ p }}-labeler',
+                enforcement: 'active',
+                include_workflows: ['~ALL'],
+                exclude_workflows: ['.github/workflows/ci.yml'],
+                allowed_actors: ['#Write'],
+                allowed_events: ['pull_request_target', 'workflow_dispatch'],
+              },
+            ],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ repo_actions_policy[name="{{ p }}-labeler", repository={{ p }}-pol]'
+        - exclude_workflows
+        - allowed_actors
+      not_contains: ['~ repository[name="{{ p }}-pol"]']
+    apply:
+      api:
+        sent:
+          - 'PUT /repos/{owner}/{repo}/actions/policies/{id}'
+        not_sent:
+          - 'POST /repos/{owner}/{repo}/actions/policies'
+          - 'PATCH /repos/{owner}/{repo}'
+    state:
+      - kind: repo_actions_policy
+        repo: "{{ p }}-pol"
+        name: "{{ p }}-labeler"
+        match:
+          conditions: {workflow_path: {include: ['~ALL'], exclude: ['.github/workflows/ci.yml']}}
+          rules:
+            $unordered:
+              - {type: restrict_action_events, parameters: {allowed_events: {$unordered: [pull_request_target, workflow_dispatch]}}}
+              - {type: restrict_actions_actors, parameters: {allowed_actors: [{id: 4, type: RepositoryRole}]}}
+        timeout: 120
+
+  - name: add-second
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-pol') {
+            description: 'otterdog e2e: repository Actions policies',
+            actions_policies: [
+              {
+                name: '{{ p }}-labeler',
+                enforcement: 'active',
+                include_workflows: ['~ALL'],
+                exclude_workflows: ['.github/workflows/ci.yml'],
+                allowed_actors: ['#Write'],
+                allowed_events: ['pull_request_target', 'workflow_dispatch'],
+              },
+              {
+                name: '{{ p }}-release',
+                enforcement: 'active',
+                include_workflows: ['.github/workflows/release.yml'],
+                exclude_workflows: [],
+                allowed_actors: null,
+                allowed_events: ['workflow_dispatch'],
+              },
+            ],
+          }
+    plan:
+      expect: changes
+      contains: ['+ add repo_actions_policy[name="{{ p }}-release", repository={{ p }}-pol]']
+      not_contains: ['~ repo_actions_policy[name="{{ p }}-labeler"']
+    apply:
+      api:
+        sent:
+          - 'POST /repos/{owner}/{repo}/actions/policies'
+        not_sent:
+          - 'PUT /repos/{owner}/{repo}/actions/policies/{id}'
+          - 'DELETE /repos/{owner}/{repo}/actions/policies/{id}'
+    state:
+      - {kind: repo_actions_policy, repo: "{{ p }}-pol", name: "{{ p }}-release", match: {enforcement: active}, timeout: 120}
+
+  - name: delete-first
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-pol') {
+            description: 'otterdog e2e: repository Actions policies',
+            actions_policies: [
+              {
+                name: '{{ p }}-release',
+                enforcement: 'active',
+                include_workflows: ['.github/workflows/release.yml'],
+                exclude_workflows: [],
+                allowed_actors: null,
+                allowed_events: ['workflow_dispatch'],
+              },
+            ],
+          }
+    plan:
+      expect: changes
+      contains: ['- remove repo_actions_policy[name="{{ p }}-labeler", repository={{ p }}-pol]']
+    apply:
+      delete: true
+      api:
+        sent:
+          - 'DELETE /repos/{owner}/{repo}/actions/policies/{id}'
+        not_sent:
+          - 'PUT /repos/{owner}/{repo}/actions/policies/{id}'
+    state:
+      - {kind: repo_actions_policy, repo: "{{ p }}-pol", name: "{{ p }}-labeler", absent: true}
+      - {kind: repo_actions_policy, repo: "{{ p }}-pol", name: "{{ p }}-release", match: {enforcement: active}}
+
+  - name: archive-with-policy-change
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-pol') {
+            description: 'otterdog e2e: repository Actions policies',
+            archived: true,
+            actions_policies: [
+              {
+                name: '{{ p }}-release',
+                enforcement: 'disabled',
+                include_workflows: ['.github/workflows/release.yml'],
+                exclude_workflows: [],
+                allowed_actors: null,
+                allowed_events: ['workflow_dispatch'],
+              },
+            ],
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ archived = false -> true'
+        - '~ repo_actions_policy[name="{{ p }}-release", repository={{ p }}-pol]'
+        - '"active" -> "disabled"'
+    apply:
+      api:
+        sent:
+          - 'PUT /repos/{owner}/{repo}/actions/policies/{id}'
+          - 'PATCH /repos/{owner}/{repo}'
+    state:
+      - {kind: repo, name: "{{ p }}-pol", match: {archived: true}}
+      - {kind: repo_actions_policy, repo: "{{ p }}-pol", name: "{{ p }}-release", match: {enforcement: disabled}, timeout: 120}
+
+  - name: archived-policy-change
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-pol') {
+            description: 'otterdog e2e: repository Actions policies',
+            archived: true,
+            actions_policies: [
+              {
+                name: '{{ p }}-release',
+                enforcement: 'active',
+                include_workflows: ['.github/workflows/release.yml'],
+                exclude_workflows: [],
+                allowed_actors: null,
+                allowed_events: ['workflow_dispatch', 'push'],
+              },
+            ],
+          }
+    plan:  # a repository that stays archived is read-only: its policies are left as they are
+      expect: noop
+      not_contains: [repo_actions_policy]
+    apply: null
+    converge: false

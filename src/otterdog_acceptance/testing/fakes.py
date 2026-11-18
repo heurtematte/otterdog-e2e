@@ -753,6 +753,15 @@ class FakeOracle:
         """Explicit value or the org_rulesets() entry named ``name``."""
         return self._find("org_ruleset", (name,), self.org_rulesets(), lambda r: r.get("name") == name)
 
+    def org_actions_policies(self) -> list[dict[str, Any]]:
+        """Stored list or []."""
+        return self._list("org_actions_policies")
+
+    def org_actions_policy(self, name: str) -> dict[str, Any] | None:
+        """Explicit value or the org_actions_policies() entry named ``name``."""
+        policies = self.org_actions_policies()
+        return self._find("org_actions_policy", (name,), policies, lambda r: r.get("name") == name)
+
     def custom_properties(self) -> list[dict[str, Any]]:
         """Stored list or []."""
         return self._list("custom_properties")
@@ -1065,6 +1074,15 @@ class FakeOracle:
     def repo_ruleset(self, repo: str, name: str) -> dict[str, Any] | None:
         """Explicit value or the repo_rulesets(repo) entry named ``name``."""
         return self._find("repo_ruleset", (repo, name), self.repo_rulesets(repo), lambda r: r.get("name") == name)
+
+    def repo_actions_policies(self, repo: str) -> list[dict[str, Any]]:
+        """Stored list or []."""
+        return self._list("repo_actions_policies", repo)
+
+    def repo_actions_policy(self, repo: str, name: str) -> dict[str, Any] | None:
+        """Explicit value or the repo_actions_policies(repo) entry named ``name``."""
+        policies = self.repo_actions_policies(repo)
+        return self._find("repo_actions_policy", (repo, name), policies, lambda r: r.get("name") == name)
 
     def environments(self, repo: str) -> list[dict[str, Any]]:
         """Stored list or []."""
@@ -1745,6 +1763,11 @@ class RecordingMutator:
         """Record (guard: e2e name)."""
         self._check_name("org ruleset", name)
         self._record("delete_org_ruleset", ruleset_id, name=name)
+
+    def delete_org_actions_policy(self, policy_id: int, *, name: str) -> None:
+        """Record (guard: e2e name)."""
+        self._check_name("org actions policy", name)
+        self._record("delete_org_actions_policy", policy_id, name=name)
 
     def delete_custom_property(self, name: str) -> None:
         """Record (guard: e2e name)."""

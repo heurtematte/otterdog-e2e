@@ -24,6 +24,7 @@ from __future__ import annotations
 import re
 import warnings
 from pathlib import Path
+from typing import Protocol
 
 import pytest
 
@@ -96,6 +97,20 @@ REPOSITORY_TABS = (
     '=== "Branch Protection Rules"',
     '=== "Rulesets"',
 )
+# eclipse-csi/otterdog#947 (main after v1.8.0) adds an 'Actions Policies' tab to every repository page: its squash
+# commit on main and the head of its pull request (a pr: SUT of that head does not contain the squash commit)
+CHANGE_947 = ("639eaea2203e05636596e521a2aca6ee0a880c9d", "c67a7f08195b8d849c5064ed6ab7226bc0ca8840")
+ACTIONS_POLICIES_TAB = '=== "Actions Policies"'
+REFERENCES_947 = [
+    {
+        "pr": 947,
+        "note": (
+            "feat: manage the actions policies of organizations and repositories: show --markdown adds an 'Actions "
+            "Policies' tab ('No actions policies.') to every repository page, show-default --markdown the "
+            "newOrgActionsPolicy and newRepoActionsPolicy tabs (the template exports both functions)"
+        ),
+    }
+]
 FRONT_MATTER = "---\nhide:\n  - navigation\n---\n"
 JSONNET_FENCE = "``` jsonnet"
 
@@ -121,7 +136,29 @@ TEMPLATE_DEPENDENT_OBJECTS = {
     "newOrgCodeSecurityConfiguration": "orgs.newOrgCodeSecurityConfiguration('<name>') =",
     "newRepoDependabotSecret": "orgs.newRepoDependabotSecret('<name>') =",
     "newRepoCodespacesSecret": "orgs.newRepoCodespacesSecret('<name>') =",
+    # #947, main after v1.8.0
+    "newOrgActionsPolicy": "orgs.newOrgActionsPolicy('<name>') =",
+    "newRepoActionsPolicy": "orgs.newRepoActionsPolicy('<name>') =",
 }
+
+
+class History(Protocol):
+    """The sut_history fixture (tests/offline/conftest.py SutHistory)."""
+
+    label: str
+
+    def contains(self, commit: str) -> bool | None:
+        """True/False from the upstream mirror, None when undecidable."""
+
+
+def repository_tabs(history: History) -> list[str]:
+    """REPOSITORY_TABS, plus the Actions Policies tab on SUTs that contain #947; skip when undecidable."""
+    found = [history.contains(commit) for commit in CHANGE_947]
+    if True in found:
+        return [*REPOSITORY_TABS, ACTIONS_POLICIES_TAB]
+    if False in found:
+        return list(REPOSITORY_TABS)
+    pytest.skip(f"cannot tell whether {history.label} contains #947 ({CHANGE_947[0][:7]})")
 
 
 def default_objects(cli: OtterdogCli) -> tuple[str, ...]:
@@ -307,11 +344,13 @@ def test_usage_errors_exit_2(offline_cli: OtterdogCli, args: tuple[str, ...], ne
         assert "Usage: " in strip_ansi(result.stderr), f"the usage error is not on stderr\n{result.stderr[-800:]}"
 
 
-@pytest.mark.scenario("O-SHOW-MARKDOWN")
-def test_show_markdown_writes_the_pages(vendored_cli: OtterdogCli) -> None:
+@pytest.mark.scenario("O-SHOW-MARKDOWN", references=REFERENCES_947)
+def test_show_markdown_writes_the_pages(vendored_cli: OtterdogCli, sut_history: History) -> None:
     """``show --markdown --output-dir DIR`` creates DIR and writes configuration.md (front matter, the five
     organization tabs with the webhook, secret, variable and repository rows) and repo-<name>.md (the six repository
-    tabs with its settings, variable and branch protection rule) instead of printing the configuration."""
+    tabs with its settings, variable and branch protection rule, a seventh 'Actions Policies' tab since #947) instead
+    of printing the configuration."""
+    expected_tabs = repository_tabs(sut_history)
     names = markdown_fixture(vendored_cli.workspace)
     result, output_dir = run_show_markdown(vendored_cli)
     result.assert_ok("show --markdown")
@@ -343,7 +382,7 @@ def test_show_markdown_writes_the_pages(vendored_cli: OtterdogCli) -> None:
 
     page = (output_dir / f"repo-{names['repo']}.md").read_text(encoding="utf-8")
     assert page.startswith(FRONT_MATTER), page[:200]
-    assert [line for line in page.splitlines() if line.startswith("=== ")] == list(REPOSITORY_TABS), page[:400]
+    assert [line for line in page.splitlines() if line.startswith("=== ")] == expected_tabs, page[:400]
     repo_settings = section(page, REPOSITORY_TABS[0], REPOSITORY_TABS[1])
     assert "repository {" in repo_settings and re.search(r'description\s+: "e2e shown",', repo_settings), repo_settings
     assert re.search(rf'name\s+: "{re.escape(names["repo"])}",', repo_settings), repo_settings
@@ -354,6 +393,8 @@ def test_show_markdown_writes_the_pages(vendored_cli: OtterdogCli) -> None:
     assert "branch_protection_rule {" in rules and re.search(r'pattern\s+: "main",', rules), rules
     assert re.search(r"required_approving_review_count\s+: 2,", rules), rules
     assert "No rulesets." in section(page, REPOSITORY_TABS[5], None)
+    if ACTIONS_POLICIES_TAB in expected_tabs:
+        assert "No actions policies." in section(page, ACTIONS_POLICIES_TAB, None), page[-400:]
 
 
 @pytest.mark.scenario("O-KB-SHOW-MARKDOWN-LINKS")
@@ -372,11 +413,12 @@ def test_show_markdown_keeps_the_repository_links(vendored_cli: OtterdogCli) -> 
     assert f"| [{repo}](repo-{repo}.md)" in configuration, section(configuration, CONFIGURATION_TABS[4], None)
 
 
-@pytest.mark.scenario("O-SHOW-DEFAULT-MARKDOWN")
+@pytest.mark.scenario("O-SHOW-DEFAULT-MARKDOWN", references=REFERENCES_947)
 def test_show_default_markdown_prints_one_tab_per_object(vendored_cli: OtterdogCli) -> None:
     """``show-default --markdown`` prints the template defaults as mkdocs tabs: one ``=== "<object>"`` tab per object
     type holding a jsonnet code fence with the ``orgs.new...(...) = {`` block, and no plain-text header (12 types up
-    to v1.7.1, 17 with the template of main: Dependabot and Codespaces secrets, code security configurations)."""
+    to v1.7.1, 17 with the template of v1.8.0: Dependabot and Codespaces secrets, code security configurations, 19
+    since #947: the organization and repository Actions policies)."""
     result = vendored_cli.run("show-default", "--markdown", local=True).assert_ok("show-default --markdown")
     text = strip_ansi(result.stdout)
     assert "Showing defaults configurations:" not in text, text[:300]

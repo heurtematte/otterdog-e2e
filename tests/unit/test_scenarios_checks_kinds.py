@@ -73,6 +73,8 @@ NEW_KINDS = {
     "repo_immutable_releases",
     "org_immutable_releases",
     "org_immutable_releases_repos",
+    "org_actions_policy",
+    "repo_actions_policy",
 }
 
 
@@ -144,6 +146,28 @@ def test_actions_and_feature_kinds() -> None:
     fails(oracle, {"kind": "org_cache_storage_limit_orgs_path", "match": {"max_cache_size_gb": 5}}, "unavailable")
     ok(oracle, {"kind": "org_cache_storage_limit", "unavailable": False})
     ok(oracle, {"kind": "repo_selected_actions", "repo": REPO, "absent": True})
+
+
+def test_actions_policy_kinds() -> None:
+    """Organization and repository Actions policies (otterdog#947) by name; an absent policy needs an available
+    listing (BAT-11) and, at repository level, an existing repository."""
+    oracle = FakeOracle()
+    oracle.add_repo(REPO)
+    policy = {
+        "name": "e2e-p",
+        "enforcement": "active",
+        "conditions": {"workflow_path": {"include": ["~ALL"], "exclude": []}},
+        "rules": [{"type": "restrict_action_events", "parameters": {"allowed_events": ["push"]}}],
+    }
+    oracle.set("org_actions_policies", value=[{**policy, "id": 1}])
+    oracle.set("repo_actions_policies", REPO, value=[{**policy, "id": 2}])
+    rules = {"$unordered": [{"type": "restrict_action_events", "parameters": {"allowed_events": ["push"]}}]}
+    ok(oracle, {"kind": "org_actions_policy", "name": "e2e-p", "match": {"enforcement": "active", "rules": rules}})
+    ok(oracle, {"kind": "repo_actions_policy", "repo": REPO, "name": "e2e-p", "match": {"id": 2}})
+    ok(oracle, {"kind": "org_actions_policy", "name": "e2e-gone", "absent": True})
+    fails(oracle, {"kind": "repo_actions_policy", "repo": "e2e-missing", "name": "e2e-p", "absent": True}, "parent")
+    oracle.mark_unavailable("org_actions_policies", status=404)
+    fails(oracle, {"kind": "org_actions_policy", "name": "e2e-gone", "absent": True}, "cannot be trusted")
 
 
 def test_security_kinds() -> None:

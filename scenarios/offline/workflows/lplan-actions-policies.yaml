@@ -1,0 +1,246 @@
+# Offline tier (battery, plan): diff of the Actions policies of organizations and repositories (eclipse-csi/otterdog#947).
+id: O-LPLAN-ACTIONS-POLICIES
+tier: offline
+title: local-plan diffs organization and repository Actions policies by name, roles by name, archived repositories excepted
+description: >-
+  Since #947 (main after v1.8.0) local-plan compares the actions_policies of the organization and of each repository
+  by name: an added policy is one addition (two with the new repository holding it), a changed enforcement, rule or
+  targeting one change, a removed policy one deletion (applied only with -d). A rule set back to null is a change
+  (null is "not required"). Roles are compared in the form GitHub returns them, so '#2' and '#Maintain' are the same
+  actor (ActionsPolicy.get_mapping_from_model normalizes the custom role ids of the known roles). The policies of a
+  repository that stays archived are left as they are (Repository.generate_live_patch skips them like rulesets),
+  while a repository archived by the same plan still gets its policy changes (the archiving patch is applied last).
+  Older SUTs skip it (fixed_in).
+priority: P1
+tags: [offline, workflows, repo]
+observe: true
+fixed_in: 1.9.0
+variables: {plan: free}
+references:
+  - pr: 947
+    note: >-
+      "feat: manage the actions policies of organizations and repositories" (head c67a7f0, squash 639eaea, unreleased:
+      1.9.0): head plans every step as asserted; base has no newOrgActionsPolicy/newRepoActionsPolicy, so validate,
+      local-plan and show of every step fail to evaluate the jsonnet.
+    expected_deltas:
+      - {kind: cli, key: validate}
+      - {kind: cli, key: local-plan}
+      - {kind: cli, key: show}
+steps:
+  - name: org-policy-added
+    base_fragments: {}
+    fragments:
+      extra: &org-policy
+        - |-
+          actions_policies+: [
+            orgs.newOrgActionsPolicy('{{ p }}-events') {
+              include_repo_names: ['~ALL'],
+              include_workflows: ['.github/workflows/release.yml'],
+              allowed_events: ['push', 'workflow_dispatch'],
+            },
+          ]
+    plan:
+      expect: changes
+      counts: {add: 1, change: 0, delete: 0}
+      contains:
+        - '+ add org_actions_policy[name="{{ p }}-events"] {'
+        - '"workflow_dispatch"'
+
+  - name: org-policy-changed
+    base_fragments:
+      extra: *org-policy
+    fragments:
+      extra:
+        - |-
+          actions_policies+: [
+            orgs.newOrgActionsPolicy('{{ p }}-events') {
+              enforcement: 'disabled',
+              include_repo_names: ['~ALL'],
+              include_workflows: ['.github/workflows/release.yml'],
+              allowed_events: ['workflow_dispatch'],
+            },
+          ]
+    plan:
+      expect: changes
+      counts: {add: 0, change: 2, delete: 0}  # one per changed attribute
+      contains:
+        - '~ org_actions_policy[name="{{ p }}-events"] {'
+        - '~ allowed_events = ['
+        - '- "push"'
+        - '"active" -> "disabled"'
+
+  - name: org-policy-targeting-changed
+    base_fragments:
+      extra: *org-policy
+      repositories: &app ["orgs.newRepo('{{ p }}-app')"]
+    fragments:
+      extra:
+        - |-
+          actions_policies+: [
+            orgs.newOrgActionsPolicy('{{ p }}-events') {
+              include_repo_names: ['{{ p }}-app'],
+              protect_repo_names: true,
+              include_workflows: ['.github/workflows/release.yml'],
+              allowed_events: ['push', 'workflow_dispatch'],
+            },
+          ]
+      repositories: *app
+    plan:
+      expect: changes
+      counts: {add: 0, change: 2, delete: 0}
+      contains:
+        - '~ org_actions_policy[name="{{ p }}-events"] {'
+        - '~ include_repo_names = ['
+        - 'false -> true'
+      not_contains: [allowed_events]
+
+  - name: org-policy-removed
+    base_fragments:
+      extra: *org-policy
+    fragments: {}
+    plan:
+      expect: changes
+      counts: {add: 0, change: 0, delete: 1}
+      contains: ['- remove org_actions_policy[name="{{ p }}-events"] {']
+
+  - name: rule-no-longer-required
+    base_fragments:
+      extra:
+        - |-
+          actions_policies+: [
+            orgs.newOrgActionsPolicy('{{ p }}-actors') {
+              include_repo_names: ['~ALL'],
+              allowed_actors: ['#Maintain', '@{{ org }}/{{ p }}-releng'],
+              allowed_events: ['push'],
+            },
+          ]
+    fragments:
+      extra:
+        - "actions_policies+: [orgs.newOrgActionsPolicy('{{ p }}-actors') { include_repo_names: ['~ALL'], allowed_events: ['push'] }]"
+    plan:
+      expect: changes
+      counts: {add: 0, change: 1, delete: 0}
+      contains:
+        - '~ org_actions_policy[name="{{ p }}-actors"] {'
+        - allowed_actors
+      not_contains: [allowed_events]
+
+  - name: roles-compared-by-name
+    base_fragments:
+      repositories:
+        - "orgs.newRepo('{{ p }}-app') { actions_policies: [orgs.newRepoActionsPolicy('{{ p }}-roles') { allowed_actors: ['#Maintain', '#Write', '#RepositoryAdmin'] }] }"
+    fragments:
+      repositories:
+        - "orgs.newRepo('{{ p }}-app') { actions_policies: [orgs.newRepoActionsPolicy('{{ p }}-roles') { allowed_actors: ['#2', '#4', '#5'] }] }"
+    validate: {ok: true, errors: 0, exit_code: 0}
+    plan:
+      expect: noop
+      counts: {add: 0, change: 0, delete: 0}
+
+  - name: repo-policy-added
+    base_fragments:
+      repositories: *app
+    fragments:
+      repositories: &repo-policy
+        - |-
+          orgs.newRepo('{{ p }}-app') {
+            actions_policies: [
+              orgs.newRepoActionsPolicy('{{ p }}-labeler') {
+                include_workflows: ['.github/workflows/labeler.yml'],
+                allowed_events: ['pull_request_target'],
+              },
+            ],
+          }
+    plan:
+      expect: changes
+      counts: {add: 1, change: 0, delete: 0}
+      contains: ['+ add repo_actions_policy[name="{{ p }}-labeler", repository={{ p }}-app] {']
+      not_contains: ['~ repository[name="{{ p }}-app"]']
+
+  - name: repo-policy-changed
+    base_fragments:
+      repositories: *repo-policy
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-app') {
+            actions_policies: [
+              orgs.newRepoActionsPolicy('{{ p }}-labeler') {
+                include_workflows: ['.github/workflows/labeler.yml'],
+                exclude_workflows: ['.github/workflows/ci.yml'],
+                allowed_events: ['pull_request_target', 'workflow_dispatch'],
+              },
+            ],
+          }
+    plan:
+      expect: changes
+      counts: {add: 0, change: 2, delete: 0}
+      contains:
+        - '~ repo_actions_policy[name="{{ p }}-labeler", repository={{ p }}-app] {'
+        - '~ exclude_workflows = ['
+        - '+ ".github/workflows/ci.yml"'
+        - '~ allowed_events'
+        - '+ "workflow_dispatch"'
+
+  - name: repo-policy-removed
+    base_fragments:
+      repositories: *repo-policy
+    fragments:
+      repositories: *app
+    plan:
+      expect: changes
+      counts: {add: 0, change: 0, delete: 1}
+      contains: ['- remove repo_actions_policy[name="{{ p }}-labeler", repository={{ p }}-app] {']
+
+  - name: new-repository-with-policy
+    base_fragments: {}
+    fragments:
+      repositories: *repo-policy
+    plan:
+      expect: changes
+      counts: {add: 2, change: 0, delete: 0}
+      contains:
+        - '+ add repository[name="{{ p }}-app"]'
+        - '+ add repo_actions_policy[name="{{ p }}-labeler", repository={{ p }}-app] {'
+
+  - name: archived-repository
+    base_fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-arch') {
+            archived: true,
+            actions_policies: [orgs.newRepoActionsPolicy('{{ p }}-arch-pol') { allowed_events: ['push'] }],
+          }
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-arch') {
+            archived: true,
+            actions_policies: [
+              orgs.newRepoActionsPolicy('{{ p }}-arch-pol') { enforcement: 'disabled', allowed_events: ['push'] },
+              orgs.newRepoActionsPolicy('{{ p }}-arch-new') { allowed_events: ['push'] },
+            ],
+          }
+    plan:  # a repository that stays archived is read-only: its policies are left as they are
+      expect: noop
+      counts: {add: 0, change: 0, delete: 0}
+      not_contains: [repo_actions_policy]
+
+  - name: archived-by-the-same-plan
+    base_fragments:
+      repositories:
+        - "orgs.newRepo('{{ p }}-arch') { actions_policies: [orgs.newRepoActionsPolicy('{{ p }}-arch-pol') { allowed_events: ['push'] }] }"
+    fragments:
+      repositories:
+        - |-
+          orgs.newRepo('{{ p }}-arch') {
+            archived: true,
+            actions_policies: [orgs.newRepoActionsPolicy('{{ p }}-arch-pol') { enforcement: 'disabled', allowed_events: ['push'] }],
+          }
+    plan:
+      expect: changes
+      counts: {add: 0, change: 2, delete: 0}
+      contains:
+        - '~ archived = false -> true'
+        - '~ repo_actions_policy[name="{{ p }}-arch-pol", repository={{ p }}-arch] {'
+        - '~ enforcement = "active" -> "disabled"'

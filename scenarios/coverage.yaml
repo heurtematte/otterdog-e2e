@@ -2614,6 +2614,27 @@ features:
         - "org_level"
         - "harness: a capability derived from probes['org_cache_storage_limit_documented']"
 
+  - id: org-workflows.actions-policies
+    area: org-workflows
+    title: "organization actions_policies (orgs.newOrgActionsPolicy, GitHub's workflow execution protections): rules allowed_actors and allowed_events (null = not required), workflow and repository-name targeting, enforcement; add, change (PUT of the whole policy), delete with -d, by name (#947)"
+    source: ["otterdog/models/actions_policy.py:210-495", "otterdog/models/organization_actions_policy.py:34-216", "otterdog/providers/github/rest/org_client.py:1020-1090", "otterdog/models/github_organization.py:1414-1421"]
+    operations: [add, modify, remove, validate, plan, converge]
+    min_plan: free
+    tier: cli
+    ui_only: false
+    priority: P1
+    status: partial
+    covered_by: [O-VAL-ACTIONS-POLICIES, O-LPLAN-ACTIONS-POLICIES, cli.workflows.org-actions-policies]
+    notes: "sources at main 639eaea (#947, = the PR head c67a7f0). Verified offline with the PR head c67a7f0 (pr:947 in docker): validation errors (exit code = number of errors) for 'evaluate' below enterprise, empty or mixed '~ALL' workflow targeting, invalid actors (pattern, unknown role, unknown type), warnings for an unknown event, an empty rule, no rule, an empty include_repo_names (the template default), patterns matching no repository, protect_repo_names without patterns; schema errors for an unknown key, an enforcement outside the enum, a rule that is neither a list nor null. local-plan: '+ add org_actions_policy[name=\"<n>\"]', one change per changed attribute, '- remove ...' (1 to delete), roles compared by name ('#2' == '#Maintain'). canonical-diff prints '@dependabot[bot]' as '@dependabot' (the [bot] markup is eaten). The tests/unit/data/template copy predates #947, so the template keys are not inventoried here. The live journey (fixed_in 1.9.0, org_level) has not run yet."
+    gap_outline:
+      scenario: cli.workflows.org-actions-policies
+      file: scenarios/cli/workflows/org-actions-policies.yaml
+      steps:
+        - "run the scenario on a test organization with branch:main (org_level), the enterprise instance first, then on the first release containing #947"
+      assertions:
+        - "oracle org_actions_policy as written (conditions, rules with the resolved actor ids); covered on the default SUT once a release contains #947 (otterdog >= 1.9.0)"
+      needs: [target, org_level, "an otterdog release >= 1.9.0", "the plans offering Actions policies (unknown: the listing answers 403/404 where unavailable)", "no foreign organization Actions policy in the test org (the -d step would refuse to delete it)", "available: kind `org_actions_policy`, janitor kind org_actions_policy"]
+
   # ==================================================================================================================
   # custom-properties: newCustomProperty (models/custom_property.py) and repository values
   # ==================================================================================================================
@@ -3479,6 +3500,27 @@ features:
       steps: ["step 6: workflows+ {max_cache_size_gb: 5}"]
       assertions: ["oracle GET /repos/{o}/{r}/actions/cache/storage-limit (or the documented endpoint) reports 5; converge; KB-007 evidence when the GET reports it unavailable"]
       needs: [target, "available: kind `repo_cache_storage_limit`"]
+
+  - id: repo-workflows.actions-policies
+    area: repo-workflows
+    title: "repository actions_policies (orgs.newRepoActionsPolicy): add (also with a new repository), change, delete with -d, by name; left as they are on an archived repository, applied before the archiving patch of the same apply (#947)"
+    source: ["otterdog/models/repo_actions_policy.py:27-98", "otterdog/providers/github/rest/repo_client.py:514-590", "otterdog/models/repository.py:1716-1723"]
+    operations: [add, modify, remove, archive, validate, plan, converge]
+    min_plan: free
+    tier: cli
+    ui_only: false
+    priority: P1
+    status: partial
+    covered_by: [O-VAL-ACTIONS-POLICIES, O-LPLAN-ACTIONS-POLICIES, cli.workflows.repo-actions-policies]
+    notes: "sources at main 639eaea (#947). Verified offline with the PR head c67a7f0: '+ add repo_actions_policy[name=\"<n>\", repository=<r>]' (2 to add with a new repository), one change per changed attribute, '- remove ...'; a repository that stays archived plans nothing for its policies (noop), a repository archived by the same plan plans both changes. A repository policy refuses the organization's repository keys (schema). The live journey (fixed_in 1.9.0) has not run yet."
+    gap_outline:
+      scenario: cli.workflows.repo-actions-policies
+      file: scenarios/cli/workflows/repo-actions-policies.yaml
+      steps:
+        - "run the scenario on a test organization with branch:main, the enterprise instance first, then on the first release containing #947"
+      assertions:
+        - "POST/PUT/DELETE of .../actions/policies per step; archive in the same apply sends the policy PUT and the archiving PATCH; covered on the default SUT once a release contains #947"
+      needs: [target, "an otterdog release >= 1.9.0", "the plans offering Actions policies (unknown)", "available: kind `repo_actions_policy`"]
 
   # ==================================================================================================================
   # branch-protection: newBranchProtectionRule (models/branch_protection_rule.py, GraphQL providers/github/graphql.py).

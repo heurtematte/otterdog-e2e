@@ -513,6 +513,22 @@ class Oracle:
             return None
         return self._get(f"/orgs/{self._org}/rulesets/{int(summary['id'])}")
 
+    def org_actions_policies(self) -> list[dict[str, Any]]:
+        """GET /orgs/{org}/actions/policies?has_parents=false (``policies``): the summaries of the organization's own
+        Actions policies (workflow execution protections; [] on 403/404, recorded unavailable). otterdog reads the same
+        listing since #947 and also drops the items whose source_type is not Organization."""
+        params = {"has_parents": "false"}
+        path = f"/orgs/{self._org}/actions/policies"
+        return self._list("org_actions_policies", (), path, item_key="policies", params=params)
+
+    def org_actions_policy(self, name: str) -> dict[str, Any] | None:
+        """Full organization Actions policy by name: {id, name, enforcement, conditions: {workflow_path: {include,
+        exclude}, repository_name: {include, exclude, protected}}, rules: [{type, parameters}]}."""
+        summary = self._find(self.org_actions_policies(), "name", name)
+        if summary is None:
+            return None
+        return self._get(f"/orgs/{self._org}/actions/policies/{int(summary['id'])}")
+
     def custom_properties(self) -> list[dict[str, Any]]:
         """GET /orgs/{org}/properties/schema ([] on 403/404, recorded unavailable)."""
         return self._list("custom_properties", (), f"/orgs/{self._org}/properties/schema")
@@ -894,6 +910,21 @@ class Oracle:
             return None
         params = {"includes_parents": "false"}
         return self._get(f"{self._repo(repo)}/rulesets/{int(summary['id'])}", params=params)
+
+    def repo_actions_policies(self, repo: str) -> list[dict[str, Any]]:
+        """GET /repos/{org}/{repo}/actions/policies?has_parents=false (``policies``): the summaries of the repository's
+        own Actions policies, those of the organization and the enterprise left out ([] on 403/404, recorded
+        unavailable)."""
+        params = {"has_parents": "false"}
+        path = f"{self._repo(repo)}/actions/policies"
+        return self._list("repo_actions_policies", (repo,), path, item_key="policies", params=params)
+
+    def repo_actions_policy(self, repo: str, name: str) -> dict[str, Any] | None:
+        """Full repository Actions policy by name (the fields of org_actions_policy, without repository_name)."""
+        summary = self._find(self.repo_actions_policies(repo), "name", name)
+        if summary is None:
+            return None
+        return self._get(f"{self._repo(repo)}/actions/policies/{int(summary['id'])}")
 
     def environments(self, repo: str) -> list[dict[str, Any]]:
         """GET /repos/{org}/{repo}/environments (item_key environments)."""

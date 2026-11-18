@@ -1,0 +1,136 @@
+# org-workflows.actions-policies (P1), org_level: an organization Actions policy end to end (eclipse-csi/otterdog#947).
+id: cli.workflows.org-actions-policies
+title: Organization Actions policy (create with actor and event rules, change and drop a rule, delete)
+tier: cli
+description: |
+  Since #947 (main after v1.8.0) otterdog manages the Actions policies of the organization (GitHub's workflow
+  execution protections: POST/PUT/DELETE /orgs/{org}/actions/policies, otterdog/providers/github/rest/org_client.py
+  of the PR). The policy targets one run repository by name and one workflow file, and requires both rules: the
+  allowed actors are a role ('#Maintain', RepositoryRole 2), a baseline team ('@<org>/<team>', resolved through
+  GET /orgs/{org}/teams/{slug}) and a bot ('@dependabot[bot]', resolved through GET /users/{login}: type Bot), the
+  allowed events push and workflow_dispatch. Reading it back resolves the ids into the same names, so the plan
+  converges. A change of the enforcement, of the events and the removal of the actor rule (null: not required) is one
+  PUT of the whole policy (GitHub replaces its rules); -d deletes it. The policy is a complete object instead of
+  orgs.newOrgActionsPolicy() (tested offline by O-VAL-ACTIONS-POLICIES), so every step also renders with the
+  vendored template copy of the unit tier, which predates #947. Before an add, otterdog looks the name up
+  (GET .../actions/policies) and updates a same-named policy unknown to the configuration instead (not reachable from
+  a plan: it needs a stale configuration, e.g. the webapp applying an old pull request). Every plan of such a SUT lists
+  the organization policies missing from the configuration as deletions: with -d the guard refuses to delete one
+  without the run prefix, so the test organization must hold no foreign organization Actions policy. The plans that
+  offer the feature are not documented by the PR (the listing answers 403/404 where it is unavailable and otterdog
+  then reads none): run it on the enterprise instance first. Older SUTs skip it (fixed_in). org_level: unfiltered
+  plans, full baseline reset as cleanup; the reset CLI of older releases does not know the policies, the janitor
+  sweeps run-named ones.
+priority: P1
+org_level: true
+fixed_in: 1.9.0
+tags: [workflows]
+references:
+  - pr: 947
+    note: >-
+      "feat: manage the actions policies of organizations and repositories": organization policies are created,
+      changed and deleted; older SUTs have no newOrgActionsPolicy and skip the scenario (fixed_in).
+steps:
+  - name: create
+    fragments:
+      extra:
+        - |-
+          actions_policies+: [
+            {
+              name: '{{ p }}-events',
+              enforcement: 'active',
+              include_repo_names: ['{{ p }}-pol-app'],
+              exclude_repo_names: [],
+              protect_repo_names: false,
+              include_workflows: ['.github/workflows/release.yml'],
+              exclude_workflows: [],
+              allowed_actors: ['#Maintain', '@{{ org }}/{{ teams.contributors }}', '@dependabot[bot]'],
+              allowed_events: ['push', 'workflow_dispatch'],
+            },
+          ]
+      repositories: &app ["orgs.newRepo('{{ p }}-pol-app') { description: 'otterdog e2e: targeted by an Actions policy' }"]
+    plan:
+      expect: changes
+      contains:
+        - '+ add org_actions_policy[name="{{ p }}-events"]'
+        - '+ add repository[name="{{ p }}-pol-app"]'
+    apply:
+      api:
+        sent:
+          - 'POST /orgs/{org}/actions/policies'
+          - 'POST /orgs/{org}/repos'
+        not_sent:
+          - 'PUT /orgs/{org}/actions/policies/{id}'
+    state:
+      - kind: org_actions_policy
+        name: "{{ p }}-events"
+        match:
+          enforcement: active
+          conditions:
+            workflow_path: {include: ['.github/workflows/release.yml'], exclude: []}
+            repository_name: {include: ['{{ p }}-pol-app'], exclude: [], protected: false}
+          rules:
+            $unordered:
+              - type: restrict_action_events
+                parameters: {allowed_events: {$unordered: [push, workflow_dispatch]}}
+              - type: restrict_actions_actors
+                parameters:
+                  allowed_actors: {$unordered: [{id: 2, type: RepositoryRole}, {type: Team}, {type: Bot}]}
+
+  - name: change
+    fragments:
+      extra:
+        - |-
+          actions_policies+: [
+            {
+              name: '{{ p }}-events',
+              enforcement: 'disabled',
+              include_repo_names: ['{{ p }}-pol-app'],
+              exclude_repo_names: [],
+              protect_repo_names: false,
+              include_workflows: ['.github/workflows/release.yml'],
+              exclude_workflows: [],
+              allowed_actors: null,
+              allowed_events: ['workflow_dispatch'],
+            },
+          ]
+      repositories: *app
+    plan:
+      expect: changes
+      contains:
+        - '~ org_actions_policy[name="{{ p }}-events"]'
+        - '"active" -> "disabled"'
+        - allowed_actors
+      not_contains: ['~ repository[name="{{ p }}-pol-app"]']
+    apply:
+      api:
+        sent:
+          - 'PUT /orgs/{org}/actions/policies/{id}'
+        not_sent:
+          - 'POST /orgs/{org}/actions/policies'
+          - 'DELETE /orgs/{org}/actions/policies/{id}'
+          - 'PATCH /orgs/{org}'
+    state:
+      - kind: org_actions_policy
+        name: "{{ p }}-events"
+        match:
+          enforcement: disabled
+          rules: [{type: restrict_action_events, parameters: {allowed_events: [workflow_dispatch]}}]
+        timeout: 120
+
+  - name: delete
+    fragments:
+      repositories: *app
+    plan:
+      expect: changes
+      contains: ['- remove org_actions_policy[name="{{ p }}-events"]']
+      not_contains: ['~ repository[name="{{ p }}-pol-app"]']
+    apply:
+      delete: true
+      api:
+        sent:
+          - 'DELETE /orgs/{org}/actions/policies/{id}'
+        not_sent:
+          - 'PUT /orgs/{org}/actions/policies/{id}'
+    state:
+      - {kind: org_actions_policy, name: "{{ p }}-events", absent: true}

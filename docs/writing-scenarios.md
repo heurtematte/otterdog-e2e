@@ -575,6 +575,7 @@ parameters (a unit test checks that they match). Kinds marked *list* return a li
 | `org_webhook_deliveries` | `url` | *list* of the deliveries of the org hook with this URL (`[]` while it does not exist) |
 | `org_webhook_delivery` | `url`, `event` | the newest delivery of `event` of that hook, in full (`request.headers`, `request.payload`, `response`) |
 | `org_ruleset` | `name` | ruleset |
+| `org_actions_policy` | `name` | Actions policy `{id, name, enforcement, conditions: {workflow_path, repository_name}, rules: [{type, parameters}]}` (otterdog from #947; listing 403/404: unavailable) |
 | `org_role` | `name` | organization role (`GET /orgs/{org}/organization-roles`: `description`, `base_role`, `permissions`) |
 | `org_role_teams` | `name` | *list* of the team slugs holding the role (`[]` and recorded 404 for a missing role, 422 when roles are disabled) |
 | `security_managers` | | *list* of the team slugs of the predefined `security_manager` role (the legacy security-managers endpoint is closing down and never used) |
@@ -643,6 +644,7 @@ parameters (a unit test checks that they match). Kinds marked *list* return a li
 |---|---|---|
 | `bpr` | `repo`, `pattern` | branch protection rule (GraphQL): `pattern`, `requiresApprovingReviews`, `requiredApprovingReviewCount`, `requiresStatusChecks`, `requiresStrictStatusChecks`, `requiredStatusCheckContexts`, `isAdminEnforced`, `allowsForcePushes`, `allowsDeletions`, `requiresLinearHistory`, `requiresConversationResolution`, `requiresCommitSignatures`, `dismissesStaleReviews`, `requiresCodeOwnerReviews`, `lockBranch`, `restrictsPushes`, `blocksCreations`, `lockAllowsFetchAndMerge`, `requireLastPushApproval`, `restrictsReviewDismissals`, `requiresDeployments`, `requiredDeploymentEnvironments`, `requiredStatusChecks` (`[{context, app: {slug} \| null}]`, `null`: any source) and the actor lists `bypassPullRequestAllowances`, `bypassForcePushAllowances`, `pushAllowances`, `reviewDismissalAllowances` in otterdog's notation (`'@login'`, `'@org/team'`, `'app-slug'`) |
 | `repo_ruleset` | `repo`, `name` | ruleset |
+| `repo_actions_policy` | `repo`, `name` | the repository's own Actions policy (`has_parents=false`), fields of `org_actions_policy` without `repository_name` |
 | `environment` | `repo`, `name` | environment |
 | `env_branch_policies` | `repo`, `env` | *list* of deployment branch policies |
 | `env_secret` | `repo`, `env`, `name` | secret metadata |

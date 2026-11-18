@@ -207,6 +207,29 @@ def test_org_immutable_releases(api: responses.RequestsMock, oracle: Oracle) -> 
     assert oracle.org_immutable_releases_repositories() == []
 
 
+def test_actions_policies(api: responses.RequestsMock, oracle: Oracle) -> None:
+    """Organization and repository Actions policies (otterdog#947): the listing without parents (``policies``), the
+    policy by name read in full, None for an unknown name; 403/404 listings are recorded unavailable."""
+    no_parents = per_page(has_parents="false")
+    api.add(
+        responses.GET,
+        f"{ORG}/actions/policies",
+        json={"total_count": 1, "policies": [{"id": 3, "name": "e2e-p"}]},
+        match=no_parents,
+    )
+    api.add(responses.GET, f"{ORG}/actions/policies/3", json={"id": 3, "name": "e2e-p", "enforcement": "active"})
+    api.add(
+        responses.GET, f"{REPO}/actions/policies", json={"policies": [{"id": 9, "name": "e2e-r"}]}, match=no_parents
+    )
+    api.add(responses.GET, f"{REPO}/actions/policies/9", json={"id": 9, "name": "e2e-r", "rules": []})
+    assert oracle.org_actions_policy("e2e-p") == {"id": 3, "name": "e2e-p", "enforcement": "active"}
+    assert oracle.org_actions_policy("other") is None
+    assert oracle.repo_actions_policy("r", "e2e-r") == {"id": 9, "name": "e2e-r", "rules": []}
+    api.replace(responses.GET, f"{REPO}/actions/policies", status=404, json=NOT_FOUND)
+    assert oracle.repo_actions_policies("r") == []
+    assert oracle.unavailable == {("repo_actions_policies", "r"): 404}
+
+
 def test_dependabot_and_codespaces_secrets(api: responses.RequestsMock, oracle: Oracle) -> None:
     """Organization and repository Dependabot and Codespaces secrets: metadata, None on 404, selected repositories."""
     api.add(responses.GET, f"{ORG}/dependabot/secrets/S", json={"name": "S", "visibility": "selected"})

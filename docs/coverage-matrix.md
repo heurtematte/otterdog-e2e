@@ -9,7 +9,7 @@ otterdog feature coverage of the e2e battery
 
 Inventory of otterdog main @d9dac78 (after v1.7.1; release:latest is v1.7.1), first built at main 9bdeb75 (after v1.6.1): every CLI command and its flags, every property of the configuration model grouped by feature, validation rules, diff semantics, the webapp (webhook events, comment commands, tasks, auto-merge, apply, blueprints, policies, /api and /internal), the webhook receiver contract and notable CHANGELOG fixes, mapped to the existing scenarios and tests of this repository. Gaps and partial coverage carry the outline of the missing test.
 
-**371 features** in 27 areas: 316 covered, 44 partial, 11 gaps; covered 85%, weighted 91% (a partial feature counts half). *Offline-verified* counts the covered or partial features with at least one covering item in the offline tier; *live-verified* those with a recorded green live run of their covering items (`verified_on`: target, SUT, run id, date); *unverified* the others: their coverage is implemented but has never run, so it is a claim, not evidence. A covered feature needs at least one covering item that runs strictly on the default SUT (not only known-bug xfails or scenarios skipped by `fixed_in`).
+**373 features** in 27 areas: 316 covered, 46 partial, 11 gaps; covered 85%, weighted 91% (a partial feature counts half). *Offline-verified* counts the covered or partial features with at least one covering item in the offline tier; *live-verified* those with a recorded green live run of their covering items (`verified_on`: target, SUT, run id, date); *unverified* the others: their coverage is implemented but has never run, so it is a claim, not evidence. A covered feature needs at least one covering item that runs strictly on the default SUT (not only known-bug xfails or scenarios skipped by `fixed_in`).
 
 ## Summary by area
 
@@ -20,7 +20,7 @@ Inventory of otterdog main @d9dac78 (after v1.7.1; release:latest is v1.7.1), fi
 | [Validation rules](#validation) | 38 | 37 | 1 | 0 | 97% | 99% | 37 | 0 | 1 |
 | [Diff engine and plan semantics](#plan-semantics) | 18 | 17 | 1 | 0 | 94% | 97% | 16 | 0 | 2 |
 | [Organization settings](#org-settings) | 14 | 10 | 4 | 0 | 71% | 86% | 3 | 0 | 11 |
-| [Organization Actions settings](#org-workflows) | 6 | 4 | 2 | 0 | 67% | 83% | 1 | 0 | 5 |
+| [Organization Actions settings](#org-workflows) | 7 | 4 | 3 | 0 | 57% | 79% | 2 | 0 | 5 |
 | [Organization custom properties](#custom-properties) | 6 | 6 | 0 | 0 | 100% | 100% | 2 | 0 | 4 |
 | [Custom organization roles](#org-roles) | 2 | 2 | 0 | 0 | 100% | 100% | 1 | 0 | 1 |
 | [Code security configurations (organization) and their repositories](#code-security) | 3 | 0 | 3 | 0 | 0% | 50% | 3 | 0 | 0 |
@@ -28,7 +28,7 @@ Inventory of otterdog main @d9dac78 (after v1.7.1; release:latest is v1.7.1), fi
 | [Managed organization and repository webhooks](#webhooks) | 8 | 6 | 2 | 0 | 75% | 88% | 4 | 0 | 4 |
 | [Secrets and variables (organization, repository, environment)](#secrets-variables) | 12 | 10 | 2 | 0 | 83% | 92% | 6 | 0 | 6 |
 | [Repositories](#repositories) | 18 | 16 | 2 | 0 | 89% | 94% | 6 | 0 | 12 |
-| [Repository Actions settings](#repo-workflows) | 6 | 5 | 1 | 0 | 83% | 92% | 1 | 0 | 5 |
+| [Repository Actions settings](#repo-workflows) | 7 | 5 | 2 | 0 | 71% | 86% | 2 | 0 | 5 |
 | [Branch protection rules](#branch-protection) | 10 | 10 | 0 | 0 | 100% | 100% | 2 | 0 | 8 |
 | [Repository and organization rulesets](#rulesets) | 11 | 9 | 2 | 0 | 82% | 91% | 3 | 0 | 8 |
 | [Deployment environments](#environments) | 4 | 4 | 0 | 0 | 100% | 100% | 3 | 0 | 1 |
@@ -42,14 +42,14 @@ Inventory of otterdog main @d9dac78 (after v1.7.1; release:latest is v1.7.1), fi
 | [Policies](#policies) | 3 | 3 | 0 | 0 | 100% | 100% | 0 | 0 | 3 |
 | [CHANGELOG fixes (regression guards)](#regressions) | 36 | 33 | 1 | 2 | 92% | 93% | 10 | 0 | 24 |
 | [Unmerged otterdog changes (pull requests and local branches)](#pending) | 5 | 4 | 1 | 0 | 80% | 90% | 0 | 0 | 5 |
-| **Total** | 371 | 316 | 44 | 11 | 85% | 91% | 167 | 0 | 193 |
+| **Total** | 373 | 316 | 46 | 11 | 85% | 91% | 169 | 0 | 193 |
 
 ## Summary by tier
 
 | Tier | Features | Covered | Partial | Gap | Covered % | Weighted % | Offline-verified | Live-verified | Unverified |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
 | `offline` | 122 | 111 | 11 | 0 | 91% | 95% | 122 | 0 | 0 |
-| `cli` | 148 | 124 | 19 | 5 | 84% | 90% | 39 | 0 | 104 |
+| `cli` | 150 | 124 | 21 | 5 | 83% | 90% | 41 | 0 | 104 |
 | `webhooks` | 4 | 3 | 1 | 0 | 75% | 88% | 2 | 0 | 2 |
 | `webapp` | 81 | 69 | 8 | 4 | 85% | 90% | 3 | 0 | 74 |
 | `web_ui` | 14 | 7 | 5 | 2 | 50% | 68% | 1 | 0 | 11 |
@@ -60,7 +60,7 @@ Inventory of otterdog main @d9dac78 (after v1.7.1; release:latest is v1.7.1), fi
 | Priority | Features | Covered | Partial | Gap | Covered % | Weighted % | Offline-verified | Live-verified | Unverified |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
 | P0 | 62 | 62 | 0 | 0 | 100% | 100% | 31 | 0 | 31 |
-| P1 | 144 | 123 | 19 | 2 | 85% | 92% | 67 | 0 | 75 |
+| P1 | 146 | 123 | 21 | 2 | 84% | 91% | 69 | 0 | 75 |
 | P2 | 165 | 131 | 25 | 9 | 79% | 87% | 69 | 0 | 87 |
 
 Tiers:
@@ -1220,7 +1220,7 @@ Details:
 
 ## Organization Actions settings
 
-`org-workflows`: 6 features, 4 covered, 2 partial, 0 gaps (weighted 83%).
+`org-workflows`: 7 features, 4 covered, 3 partial, 0 gaps (weighted 79%).
 
 | Id | Feature | Tier | Plan | Prio | Status | Verified | Covered by |
 |---|---|---|---|---|---|---|---|
@@ -1230,6 +1230,7 @@ Details:
 | `org-workflows.fork-pr-approval` | org fork_pr_approval_policy (fork-pr-contributor-approval endpoint; not in the example template's org defaults: unmanaged unless set) | cli | free | P2 | covered | **unverified** | `cli.org.actions-allowed` |
 | `org-workflows.sha-pinning` | org sha_pinning_required (actions must be pinned to a full-length commit SHA; #946, 1.9.0) | cli | free | P2 | **partial** | offline | `O-VAL-ORG-WORKFLOWS`, `O-LPLAN-IGNORED-FIELDS` |
 | `org-workflows.cache-size` | org max_cache_size_gb (Actions cache storage limit; changes are cost-related in the webapp) | cli | free | P2 | **partial** | **unverified** | `cli.org.cache-size` |
+| `org-workflows.actions-policies` | organization actions_policies (orgs.newOrgActionsPolicy, GitHub's workflow execution protections): rules allowed_actors and allowed_events (null = not required), workflow and repository-name targeting, enforcement; add, change (PUT of the whole policy), delete with -d, by name (#947) | cli | free | P1 | **partial** | offline | `O-VAL-ACTIONS-POLICIES`, `O-LPLAN-ACTIONS-POLICIES`, `cli.workflows.org-actions-policies` |
 
 Details:
 
@@ -1287,6 +1288,22 @@ Details:
         - target
         - org_level
         - harness: a capability derived from probes['org_cache_storage_limit_documented']
+- **`org-workflows.actions-policies`** (partial, P1, `cli`): organization actions_policies (orgs.newOrgActionsPolicy, GitHub's workflow execution protections): rules allowed_actors and allowed_events (null = not required), workflow and repository-name targeting, enforcement; add, change (PUT of the whole policy), delete with -d, by name (#947)
+    - Source: `otterdog/models/actions_policy.py:210-495`, `otterdog/models/organization_actions_policy.py:34-216`, `otterdog/providers/github/rest/org_client.py:1020-1090`, `otterdog/models/github_organization.py:1414-1421`
+    - Operations: add, modify, remove, validate, plan, converge
+    - Notes: sources at main 639eaea (#947, = the PR head c67a7f0). Verified offline with the PR head c67a7f0 (pr:947 in docker): validation errors (exit code = number of errors) for 'evaluate' below enterprise, empty or mixed '\~ALL' workflow targeting, invalid actors (pattern, unknown role, unknown type), warnings for an unknown event, an empty rule, no rule, an empty include_repo_names (the template default), patterns matching no repository, protect_repo_names without patterns; schema errors for an unknown key, an enforcement outside the enum, a rule that is neither a list nor null. local-plan: '+ add org_actions_policy[name="&lt;n&gt;"]', one change per changed attribute, '- remove ...' (1 to delete), roles compared by name ('#2' == '#Maintain'). canonical-diff prints '@dependabot[bot]' as '@dependabot' (the [bot] markup is eaten). The tests/unit/data/template copy predates #947, so the template keys are not inventoried here. The live journey (fixed_in 1.9.0, org_level) has not run yet.
+    - Suggested: `cli.workflows.org-actions-policies` in `scenarios/cli/workflows/org-actions-policies.yaml`
+    - Steps:
+        - run the scenario on a test organization with branch:main (org_level), the enterprise instance first, then on the first release containing #947
+    - Assert:
+        - oracle org_actions_policy as written (conditions, rules with the resolved actor ids); covered on the default SUT once a release contains #947 (otterdog &gt;= 1.9.0)
+    - Needs:
+        - target
+        - org_level
+        - an otterdog release &gt;= 1.9.0
+        - the plans offering Actions policies (unknown: the listing answers 403/404 where unavailable)
+        - no foreign organization Actions policy in the test org (the -d step would refuse to delete it)
+        - available: kind `org_actions_policy`, janitor kind org_actions_policy
 
 <a id="custom-properties"></a>
 
@@ -1786,7 +1803,7 @@ Details:
 
 ## Repository Actions settings
 
-`repo-workflows`: 6 features, 5 covered, 1 partial, 0 gaps (weighted 92%).
+`repo-workflows`: 7 features, 5 covered, 2 partial, 0 gaps (weighted 86%).
 
 | Id | Feature | Tier | Plan | Prio | Status | Verified | Covered by |
 |---|---|---|---|---|---|---|---|
@@ -1796,6 +1813,7 @@ Details:
 | `repo-workflows.fork-pr-approval` | repository fork_pr_approval_policy (skipped for private repositories: GitHub answers 422, #635) | cli | free | P2 | covered | **unverified** | `regression.private-repo-template-defaults`, `cli.repo.actions` |
 | `repo-workflows.sha-pinning` | repository sha_pinning_required (actions pinned to a full-length commit SHA; ignored while the org requires it; #946, 1.9.0) | cli | free | P2 | covered | offline | `cli.repo.actions.sha-pinning`, `O-VAL-REPO-WORKFLOWS`, `O-LPLAN-IGNORED-FIELDS` |
 | `repo-workflows.cache-size` | repository max_cache_size_gb (cache storage limit; cost-related above defaults.cost_policy.free_max_cache_size_gb) | cli | free | P2 | **partial** | **unverified** | `cli.repo.cache-limit` |
+| `repo-workflows.actions-policies` | repository actions_policies (orgs.newRepoActionsPolicy): add (also with a new repository), change, delete with -d, by name; left as they are on an archived repository, applied before the archiving patch of the same apply (#947) | cli | free | P1 | **partial** | offline | `O-VAL-ACTIONS-POLICIES`, `O-LPLAN-ACTIONS-POLICIES`, `cli.workflows.repo-actions-policies` |
 
 Details:
 
@@ -1840,6 +1858,20 @@ Details:
     - Needs:
         - target
         - available: kind `repo_cache_storage_limit`
+- **`repo-workflows.actions-policies`** (partial, P1, `cli`): repository actions_policies (orgs.newRepoActionsPolicy): add (also with a new repository), change, delete with -d, by name; left as they are on an archived repository, applied before the archiving patch of the same apply (#947)
+    - Source: `otterdog/models/repo_actions_policy.py:27-98`, `otterdog/providers/github/rest/repo_client.py:514-590`, `otterdog/models/repository.py:1716-1723`
+    - Operations: add, modify, remove, archive, validate, plan, converge
+    - Notes: sources at main 639eaea (#947). Verified offline with the PR head c67a7f0: '+ add repo_actions_policy[name="&lt;n&gt;", repository=&lt;r&gt;]' (2 to add with a new repository), one change per changed attribute, '- remove ...'; a repository that stays archived plans nothing for its policies (noop), a repository archived by the same plan plans both changes. A repository policy refuses the organization's repository keys (schema). The live journey (fixed_in 1.9.0) has not run yet.
+    - Suggested: `cli.workflows.repo-actions-policies` in `scenarios/cli/workflows/repo-actions-policies.yaml`
+    - Steps:
+        - run the scenario on a test organization with branch:main, the enterprise instance first, then on the first release containing #947
+    - Assert:
+        - POST/PUT/DELETE of .../actions/policies per step; archive in the same apply sends the policy PUT and the archiving PATCH; covered on the default SUT once a release contains #947
+    - Needs:
+        - target
+        - an otterdog release &gt;= 1.9.0
+        - the plans offering Actions policies (unknown)
+        - available: kind `repo_actions_policy`
 
 <a id="branch-protection"></a>
 
