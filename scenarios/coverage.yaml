@@ -126,7 +126,7 @@ operations:
 models:
   - {id: org, constructor: newOrg, source: "otterdog/models/github_organization.py:84-99", nested: [settings, roles, teams, secrets, variables, webhooks, rulesets, code_security_configurations, _repositories, repositories]}
   - {id: org-settings, constructor: newOrg.settings, source: "otterdog/models/organization_settings.py:48-89", nested: [workflows, custom_properties]}
-  - {id: org-workflows, constructor: newOrg.settings.workflows, source: "otterdog/models/organization_workflow_settings.py:27-34", extra: [fork_pr_approval_policy]}
+  - {id: org-workflows, constructor: newOrg.settings.workflows, source: "otterdog/models/organization_workflow_settings.py:27-34", extra: [fork_pr_approval_policy, sha_pinning_required]}
   - {id: custom-property, constructor: newCustomProperty, source: "otterdog/models/custom_property.py:32-46"}
   - {id: org-role, constructor: newOrgRole, source: "otterdog/models/organization_role.py:23-30", extra: [visibility, selected_repositories]}
   - {id: team, constructor: newTeam, source: "otterdog/models/team.py:33-47"}
@@ -145,7 +145,7 @@ models:
   - {id: env-variable, constructor: newEnvVariable, source: "otterdog/models/environment_variable.py:24-31"}
   - {id: repository, constructor: newRepo, source: "otterdog/models/repository.py:56-125", nested: [workflows, webhooks, secrets, variables, environments, branch_protection_rules, rulesets], extra: [aliases, post_process_template_content]}
   - {id: repository-extend, constructor: extendRepo, source: "examples/template/otterdog-defaults.libsonnet:121-124"}
-  - {id: repo-workflows, constructor: newRepo.workflows, source: "otterdog/models/repo_workflow_settings.py:32-38"}
+  - {id: repo-workflows, constructor: newRepo.workflows, source: "otterdog/models/repo_workflow_settings.py:32-38", extra: [sha_pinning_required]}
   - {id: bpr, constructor: newBranchProtectionRule, source: "otterdog/models/branch_protection_rule.py:41-82"}
   - {id: repo-ruleset, constructor: newRepoRuleset, source: "otterdog/models/ruleset.py:328-358", nested: [required_pull_request, required_status_checks, required_merge_queue]}
   - {id: org-ruleset, constructor: newOrgRuleset, extends: repo-ruleset, source: "otterdog/models/organization_ruleset.py:27-35"}
@@ -615,6 +615,19 @@ features:
     status: covered
     covered_by: [tests/web_ui/test_web_settings.py::test_import_reads_web_settings, tests/cli/test_commands_import.py::test_import_without_web_ui_warns_and_skips_web_settings]
     notes: "import -n: the warning, no web-only key written (template defaults), secrets read as ********; web import: no warning (assertion added inside the existing login)."
+
+  - id: cli.import.workflow-keys
+    area: cli
+    title: "import reads only the workflow settings the default configuration defines (absent or null keys are never requested; #919, 1.8.0)"
+    source: ["otterdog/models/github_organization.py:1216-1223", "otterdog/models/github_organization.py:1664-1671"]
+    operations: [import]
+    min_plan: free
+    tier: cli
+    ui_only: false
+    priority: P2
+    status: covered
+    covered_by: [tests/cli/test_import.py::test_import_reads_only_the_workflow_settings_of_the_template]
+    notes: "request statistics of import -f -n: the standard template reads the org and repository cache sizes; a local copy of it (#917) with max_cache_size_gb null at both levels reads neither and writes no max_cache_size_gb, repository Actions settings still read. Skipped on SUTs before 1.8.0."
 
   - id: cli.fetch-config
     area: cli
@@ -2547,6 +2560,33 @@ features:
     findings: [F-11]
     notes: "all_external_contributors then first_time_contributors (oracle org_fork_pr_approval, converge); invalid value refused at validation (stable prefix only, KB-038). The template has no org-level key, so the baseline never restores it: the scenario ends on GitHub's default first_time_contributors."
 
+  - id: org-workflows.sha-pinning
+    area: org-workflows
+    title: "org sha_pinning_required (actions must be pinned to a full-length commit SHA; #946, 1.9.0)"
+    source: ["otterdog/models/workflow_settings.py:69-75", "otterdog/providers/github/rest/org_client.py:748-762"]
+    model: org-workflows
+    properties: [sha_pinning_required]
+    operations: [validate, modify]
+    min_plan: free
+    tier: cli
+    ui_only: false
+    priority: P2
+    status: partial
+    covered_by: [O-VAL-ORG-WORKFLOWS, O-LPLAN-IGNORED-FIELDS]
+    notes: "offline only: the boolean is validated (a string is a load error) and local-plan diffs false -> true; older SUTs refuse the key at load (steps record, SUT_EXPECTATIONS asserts per SUT). No live apply: PUT /orgs/{org}/actions/permissions with the key is unasserted."
+    gap_outline:
+      scenario: cli.org.actions.sha-pinning
+      file: scenarios/cli/workflows/org-actions-sha-pinning.yaml
+      steps:
+        - "org_level: settings.workflows.sha_pinning_required true, a run repository keeping false (validate -v Info: the repository setting is ignored)"
+        - "back to the template's false"
+      assertions:
+        - "apply.api sent PUT /orgs/{org}/actions/permissions, not_sent PUT /repos/{owner}/{repo}/actions/permissions for the coerced repository; oracle org_actions sha_pinning_required true then false; converge"
+      needs:
+        - "target"
+        - "org_level"
+        - "a reset SUT >= 1.9.0 (--reset-sut): the release:latest reset cannot restore an organization left requiring SHA-pinned actions, which stops its unpinned workflows"
+
   - id: org-workflows.cache-size
     area: org-workflows
     title: "org max_cache_size_gb (Actions cache storage limit; changes are cost-related in the webapp)"
@@ -3402,6 +3442,21 @@ features:
     status: covered
     covered_by: [regression.private-repo-template-defaults, cli.repo.actions]
     notes: "all_external_contributors on a public repository, read through repo_fork_pr_approval."
+
+  - id: repo-workflows.sha-pinning
+    area: repo-workflows
+    title: "repository sha_pinning_required (actions pinned to a full-length commit SHA; ignored while the org requires it; #946, 1.9.0)"
+    source: ["otterdog/models/repo_workflow_settings.py:67-68", "otterdog/models/repo_workflow_settings.py:131-137", "otterdog/providers/github/rest/repo_client.py:1240-1256"]
+    model: repo-workflows
+    properties: [sha_pinning_required]
+    operations: [add, modify, validate, coerce, converge]
+    min_plan: free
+    tier: cli
+    ui_only: false
+    priority: P2
+    status: covered
+    covered_by: [cli.repo.actions.sha-pinning, O-VAL-REPO-WORKFLOWS, O-LPLAN-IGNORED-FIELDS]
+    notes: "live (fixed_in 1.9.0): created requiring it, then false, then removed, PUT .../actions/permissions and repo_actions read back. Offline: the Info of a repository not requiring it under an org that does, the coerced (noop) and managed plans; older SUTs refuse the key at load (SUT_EXPECTATIONS asserts per SUT)."
 
   - id: repo-workflows.cache-size
     area: repo-workflows

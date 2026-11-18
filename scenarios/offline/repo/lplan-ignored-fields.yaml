@@ -8,11 +8,43 @@ description: >-
   a workflow), the code scanning suite while the default setup is off, model-only creation fields
   (fork_default_branch_only, forked_repository, auto_init), and the Actions fields the allowed_actions or
   enabled_repositories value make unused, for the organization and for a repository. Each ignored change plans
-  nothing; each control step flips the toggle and shows the change.
+  nothing; each control step flips the toggle and shows the change. Since #946 (1.9.0) the repository
+  sha_pinning_required is coerced away while the organization requires SHA pinning (coerce_from_org_settings), and
+  diffed otherwise, at both levels; older SUTs refuse the key at load, so these steps record only (SUT_EXPECTATIONS
+  of tests/offline/test_scenarios.py).
 priority: P1
 tags: [offline, repo, workflows, org-settings]
 observe: true
 variables: {plan: free}
+references:
+  - pr: 946
+    note: >-
+      "feat: support sha_pinning_required in the workflow settings" (head ddc6fdd, squash 44f2b7b after v1.8.0, 1.9.0): a
+      repository's sha_pinning_required is ignored (coerced to unset) while the organization requires SHA pinning,
+      and diffed otherwise; the organization value is diffed. Base refuses the key at load (exit 1). Template base,
+      as on O-VAL-ORG-WORKFLOWS. The other steps must not change.
+    template: base
+    expected_deltas:
+      - step: repository-sha-pinning-ignored
+        kind: cli
+        key: local-plan
+        note: head plans nothing (0/0/0); base load error on the unknown key (exit 1)
+      - step: repository-sha-pinning-managed
+        kind: cli
+        key: local-plan
+        note: head plans one change of the repository workflows (sha_pinning_required true to false); base load error
+      - step: organization-sha-pinning-managed
+        kind: cli
+        key: local-plan
+        note: head plans one change of settings.workflows (sha_pinning_required false to true); base load error
+      - step: "*sha-pinning-*"
+        kind: cli
+        key: validate
+        note: head validates the configuration (exit 0); base load error on the unknown key (exit 1)
+      - step: "*sha-pinning-*"
+        kind: cli
+        key: show
+        note: head shows the configuration; base load error (exit 1)
 steps:
   - name: private-security-ignored
     base_fragments:
@@ -190,3 +222,31 @@ steps:
       expect: changes
       counts: {add: 0, change: 1, delete: 0}
       contains: ['~ repository[name="{{ p }}-wf"] {', '~ workflows', '+ "actions/*@*"']
+  - name: repository-sha-pinning-ignored
+    # outcome per SUT (#946): SUT_EXPECTATIONS of tests/offline/test_scenarios.py
+    commands: {show: {exit_code: null}}  # before #946, show cannot load the key either
+    base_fragments:
+      settings: ["workflows+: { sha_pinning_required: true }"]
+      repositories: ["orgs.newRepo('{{ p }}-pin') { workflows+: { sha_pinning_required: true } }"]
+    fragments:
+      settings: ["workflows+: { sha_pinning_required: true }"]
+      repositories: ["orgs.newRepo('{{ p }}-pin') { workflows+: { sha_pinning_required: false } }"]
+    plan: {expect: any}
+  - name: repository-sha-pinning-managed
+    # outcome per SUT (#946): SUT_EXPECTATIONS of tests/offline/test_scenarios.py
+    commands: {show: {exit_code: null}}  # before #946, show cannot load the key either
+    base_fragments:
+      settings: ["workflows+: { sha_pinning_required: false }"]
+      repositories: ["orgs.newRepo('{{ p }}-pin') { workflows+: { sha_pinning_required: true } }"]
+    fragments:
+      settings: ["workflows+: { sha_pinning_required: false }"]
+      repositories: ["orgs.newRepo('{{ p }}-pin') { workflows+: { sha_pinning_required: false } }"]
+    plan: {expect: any}
+  - name: organization-sha-pinning-managed
+    # outcome per SUT (#946): SUT_EXPECTATIONS of tests/offline/test_scenarios.py
+    commands: {show: {exit_code: null}}  # before #946, show cannot load the key either
+    base_fragments:
+      settings: ["workflows+: { sha_pinning_required: false }"]
+    fragments:
+      settings: ["workflows+: { sha_pinning_required: true }"]
+    plan: {expect: any}

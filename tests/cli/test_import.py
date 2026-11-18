@@ -12,6 +12,13 @@ xfails (raises=PrivatePagesNotAllowedError) only when that error is the only one
 other validation error fails (BAT-07), and from 1.8.0 it runs strict. The plan test then leaves that one key unmanaged
 (``members_can_create_private_pages:: null``, the baseline's own way) in a copy of the import and still checks the
 round trip; other validation errors fail it.
+
+cli.import.workflow-keys (eclipse-csi/otterdog#919, 1.8.0): without an expected configuration, import reads only the
+workflow settings the default configuration of the base template defines (a key absent or null is never requested),
+like plan and apply. The standard template sets max_cache_size_gb at both levels, so the cache size of the
+organization and of every repository is read; a local copy of that template (#917, 1.8.0) with max_cache_size_gb null
+at both levels sends none of these requests and writes no max_cache_size_gb, the other workflow settings are still
+read (otterdog's request statistics, CliResult.api_usage).
 """
 
 from __future__ import annotations
@@ -21,8 +28,13 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from otterdog_acceptance.otterdog.workspace import WorkspaceLayout, read_untrusted_text, write_private_text
+from otterdog_acceptance.sut.template import PUBLISHED_TEMPLATE_FILE, copy_template, template_source_dir
+from otterdog_acceptance.sut.version import predates
+
 if TYPE_CHECKING:
     from otterdog_acceptance.context import E2EContext
+    from otterdog_acceptance.otterdog.api_usage import ApiUsage
     from otterdog_acceptance.otterdog.baseline import BaselineManager
     from otterdog_acceptance.otterdog.output import PlanObject
     from otterdog_acceptance.otterdog.runner import OtterdogCli
@@ -51,6 +63,45 @@ PRIVATE_PAGES_REFERENCES = [
         ),
     }
 ]
+# eclipse-csi/otterdog#919 "fix: only retrieve workflow settings defined by the default config on import" (squash
+# 7c5477c after v1.7.1, 1.8.0); the local base template of the test needs #917 (1.8.0) too
+WORKFLOW_KEYS_SINCE = "1.8.0"
+WORKFLOW_KEYS_REFERENCES = [
+    {
+        "pr": 919,
+        "note": (
+            "'fix: only retrieve workflow settings defined by the default config on import': without an expected "
+            "configuration, import requested every workflow setting (the cache size of the organization and of each "
+            "repository whatever the template); it now requests the keys the default configuration defines (not "
+            "absent nor null), as plan and apply already did. With the standard template, which defines every key, "
+            "nothing changes"
+        ),
+    }
+]
+IMPORT_PLAN_REFERENCES = [
+    {
+        "pr": 925,
+        "note": (
+            "fix: ignore the private pages setting reported for non-enterprise plans (c0d9203, in v1.8.0):"
+            " OrganizationSettings.get_mapping_from_provider leaves members_can_create_private_pages unset when the"
+            " organization's plan is not enterprise, so import no longer writes the 'true' GitHub reports for a Free or"
+            " Team organization (KB-024 fixed: the import validates) and plan no longer compares it; an enterprise"
+            " organization, or an unknown plan, keeps the value. Live only (provider data): no offline delta."
+        ),
+    },
+    {
+        "pr": 919,
+        "note": (
+            "the standard template defines every workflow key, so import still reads them all and the import must "
+            "still plan no change"
+        ),
+    },
+]
+LOCAL_TEMPLATE_DIR = "local-templates/template"
+CACHE_SIZE_RE = re.compile(r"^(?P<indent>[ \t]*)max_cache_size_gb:[^,\n]*,", re.MULTILINE)
+ORG_CACHE_SIZE = "GET /orgs/{org}/actions/cache/storage-limit"
+REPO_CACHE_SIZE = "GET /repos/{owner}/{repo}/actions/cache/storage-limit"
+REPO_ACTIONS = "GET /repos/{owner}/{repo}/actions/permissions"
 
 
 class PrivatePagesNotAllowedError(AssertionError):
@@ -105,7 +156,7 @@ def test_import_validates(imported: tuple[ConfigWorkspace, OtterdogCli], verifie
     raise AssertionError(message)
 
 
-@pytest.mark.scenario("cli.import.plan", references=PRIVATE_PAGES_REFERENCES)
+@pytest.mark.scenario("cli.import.plan", references=IMPORT_PLAN_REFERENCES)
 def test_import_plans_no_change(
     imported: tuple[ConfigWorkspace, OtterdogCli],
     e2e: E2EContext,
@@ -136,3 +187,56 @@ def test_import_plans_no_change(
     changed = run_independent(plan.objects)
     shown = "; ".join(obj.header.strip() for obj in changed[:MAX_LISTED])
     assert not changed, f"{len(changed)} object(s) differ right after the import: {shown}"
+
+
+def imported_usage(cli: OtterdogCli) -> ApiUsage:
+    """The requests of ``import -f -n`` (otterdog's request statistics), which must succeed."""
+    result = cli.import_config(force=True).assert_ok("import -f -n")
+    assert result.api_usage is not None, "import wrote no request statistics (OTTERDOG_STATS_FILE)"
+    return result.api_usage
+
+
+def cache_size_requests(usage: ApiUsage) -> str:
+    """The cache size and repository Actions requests of an import (assertion messages)."""
+    counts = {endpoint: usage.count(endpoint) for endpoint in (ORG_CACHE_SIZE, REPO_CACHE_SIZE, REPO_ACTIONS)}
+    return ", ".join(f"{endpoint} x{count}" for endpoint, count in counts.items())
+
+
+@pytest.mark.scenario("cli.import.workflow-keys", priority="P2", references=WORKFLOW_KEYS_REFERENCES)
+def test_import_reads_only_the_workflow_settings_of_the_template(
+    e2e: E2EContext, sut: InstalledCli, template_ref: TemplateRef
+) -> None:
+    """``import -f -n`` with the standard template reads the cache size of the organization and of the repositories
+    (the template sets max_cache_size_gb at both levels); with a local copy of that template whose max_cache_size_gb
+    is null at both levels, it sends none of these requests and writes no max_cache_size_gb, while the other
+    repository Actions settings are still read."""
+    if predates(sut.sut.version, WORKFLOW_KEYS_SINCE):
+        pytest.skip(f"SUT {sut.sut.version} predates otterdog {WORKFLOW_KEYS_SINCE} (#917 local base template, #919)")
+    standard = e2e.workspace(e2e.unique_name("import-workflow-keys"), template_ref)
+    usage = imported_usage(e2e.cli(sut, standard, name=f"ws-{standard.root.name}"))
+    assert usage.count(ORG_CACHE_SIZE) >= 1 and usage.count(REPO_CACHE_SIZE) >= 1, (
+        f"the standard template sets max_cache_size_gb: import must read the cache sizes ({cache_size_requests(usage)})"
+    )
+
+    workspace = e2e.workspace(e2e.unique_name("import-workflow-keys-null"), template_ref)
+    template_dir = workspace.root / LOCAL_TEMPLATE_DIR
+    copy_template(template_source_dir(sut.sut.source_dir), template_dir, root=workspace.root)
+    template_file = template_dir / PUBLISHED_TEMPLATE_FILE
+    text = read_untrusted_text(template_file, within=workspace.root)
+    assert text is not None, f"{PUBLISHED_TEMPLATE_FILE} was not copied"
+    text, count = CACHE_SIZE_RE.subn(r"\g<indent>max_cache_size_gb: null,", text)
+    assert count == 2, f"the template sets max_cache_size_gb {count} time(s), expected the org and repository defaults"
+    write_private_text(template_file, text, within=workspace.root)
+    workspace.use_layout(
+        WorkspaceLayout(
+            vendor=False,
+            local_template=LOCAL_TEMPLATE_DIR,
+            defaults_override={"jsonnet": {"base_template": f"{LOCAL_TEMPLATE_DIR}/{PUBLISHED_TEMPLATE_FILE}"}},
+        )
+    )
+    usage = imported_usage(e2e.cli(sut, workspace, name=f"ws-{workspace.root.name}"))
+    assert usage.count(ORG_CACHE_SIZE) == 0 and usage.count(REPO_CACHE_SIZE) == 0, (
+        f"max_cache_size_gb is null in the template: import must not read cache sizes ({cache_size_requests(usage)})"
+    )
+    assert usage.count(REPO_ACTIONS) >= 1, f"the other workflow settings are still read ({cache_size_requests(usage)})"
+    assert "max_cache_size_gb" not in workspace.read_org_config(), "import wrote max_cache_size_gb"

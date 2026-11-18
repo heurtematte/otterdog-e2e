@@ -9,7 +9,10 @@ description: >-
   prints a Python set whose order changes between runs (KB-038), so only its stable parts are asserted. An invalid
   allowed_actions crashes validation as soon as a repository exists (KB-029). Since #878 (v1.7.0) the schema refuses
   every invalid enum value at load ("'some' is not one of [...]", exit 1), which makes both defects unreachable: the
-  outcome of the enum steps per SUT is asserted by ENUM_SCHEMA_STEPS of tests/offline/test_scenarios.py.
+  outcome of the enum steps per SUT is asserted by ENUM_SCHEMA_STEPS of tests/offline/test_scenarios.py. Since #946
+  (main after v1.8.0, 1.9.0) sha_pinning_required (actions pinned to a full-length commit SHA) is a boolean of the
+  workflow settings, false in the template; older SUTs refuse the key at load, so its steps record only and
+  SUT_EXPECTATIONS of tests/offline/test_scenarios.py asserts their outcome per SUT.
 priority: P1
 tags: [offline, workflows, org-settings]
 observe: true
@@ -32,6 +35,34 @@ references:
       - {step: fork-pr-approval-policy, kind: cli, key: show}
       - {step: enabled-repositories, kind: cli, key: validate}
       - {step: enabled-repositories, kind: cli, key: show}
+  - pr: 946
+    note: >-
+      "feat: support sha_pinning_required in the workflow settings" (head ddc6fdd, squash 44f2b7b after v1.8.0, 1.9.0): the
+      organization workflow settings accept the boolean sha_pinning_required (schema, model, PUT
+      /orgs/{org}/actions/permissions); base refuses the key at load ("Unevaluated properties are not allowed
+      ('sha_pinning_required' was unexpected)", exit 1). The template adds sha_pinning_required: false to the
+      organization and to every repository, so every show of every scenario would print one more line: template base
+      (both sides vendor the base template) keeps the comparison to the code; the template default is asserted per
+      SUT on O-SHOW-DEFAULT. The other steps must not change.
+    template: base
+    expected_deltas:
+      - step: sha-pinning-required
+        kind: cli
+        key: validate
+        note: head validates it (exit 0); base load error on the unknown key (exit 1)
+      - step: sha-pinning-required
+        kind: cli
+        key: show
+        note: head shows sha_pinning_required = true in settings.workflows; base load error (exit 1)
+      - step: sha-pinning-not-boolean
+        kind: cli
+        key: validate
+        note: >-
+          head load error "'yes' is not of type 'boolean'" (exit 1); base load error on the unknown key (exit 1)
+      - step: sha-pinning-not-boolean
+        kind: cli
+        key: show
+        note: both sides fail to load the configuration, with the messages of validate
 steps:
   - name: allowed-actions
     fragments:
@@ -99,3 +130,13 @@ steps:
       repositories:
         - "orgs.newRepo('{{ p }}-wf')"
     validate: {ok: false}  # outcome per SUT (#878): ENUM_SCHEMA_STEPS of tests/offline/test_scenarios.py
+  - name: sha-pinning-required
+    # outcome per SUT (#946): SUT_EXPECTATIONS of tests/offline/test_scenarios.py
+    commands: {show: {exit_code: null}}  # before #946, show cannot load the key either
+    fragments:
+      settings: ["workflows+: { sha_pinning_required: true }"]
+  - name: sha-pinning-not-boolean
+    # outcome per SUT (#946): SUT_EXPECTATIONS of tests/offline/test_scenarios.py
+    commands: {show: {exit_code: null}}  # before #946, show cannot load the key either
+    fragments:
+      settings: ["workflows+: { sha_pinning_required: 'yes' }"]

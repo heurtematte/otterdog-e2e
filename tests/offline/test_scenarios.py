@@ -17,6 +17,7 @@ once it is fixed.
 from __future__ import annotations
 
 import functools
+import re
 import warnings
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -711,8 +712,137 @@ def expect_canonical_list_replacement(field: str, needs_892: bool, step: StepOut
     )
 
 
+# eclipse-csi/otterdog#946 "feat: support sha_pinning_required in the workflow settings": squash commit on main and head
+# of the pull request (after v1.8.0: 1.9.0); before, the schema refuses the key at load (exit 1) and the template has
+# no such key
+FIX_946 = ("44f2b7bd8e6d5956c0120a7399f7d6a3fd91fb7f", "ddc6fdd8d2d3db48d97d30287cd9eb3151072996")
+UNKNOWN_SHA_PINNING = "Unevaluated properties are not allowed ('sha_pinning_required' was unexpected)"
+SHA_PINNING_IGNORED = (
+    "Info: repository[name=\"{{ p }}-wf\"] has 'sha_pinning_required' disabled, while on organization level it is "
+    "required, setting will be ignored."
+)
+SHA_PINNING_DEFAULT_RE = re.compile(r"^\s*sha_pinning_required\s*:\s*false,$", re.MULTILINE)  # aligned columns
+
+
+def has_946(step: StepOutcome, history: History, before_text: str) -> bool:
+    """Whether the SUT contains #946; when the mirror cannot tell, ``before_text`` in validate decides (it is not)."""
+    has_fix = has_any_commit(history, FIX_946, "#946")
+    if has_fix is None:
+        has_fix = before_text not in normalize_text(result_of(step, "validate").output)
+    return has_fix
+
+
+def expect_sha_pinning(check: Callable[[StepOutcome], None], step: StepOutcome, history: History) -> None:
+    """A step that sets sha_pinning_required: since #946 ``check`` holds; before, the schema refuses the unknown key
+    at load (exit 1) and the step's other commands cannot load the configuration either."""
+    if has_946(step, history, UNKNOWN_SHA_PINNING):
+        check(step)
+        return
+    validate = result_of(step, "validate")
+    text = normalize_text(validate.output)
+    assert validate.exit_code == 1, (
+        f"step {step.name!r}: before #946 exit 1, got {validate.exit_code}\n{tail(validate)}"
+    )
+    assert "Validation failed" in text and SCHEMA_LOAD_ERROR in text and UNKNOWN_SHA_PINNING in text, (
+        f"step {step.name!r}: before #946 sha_pinning_required is an unknown key\n{tail(validate)}"
+    )
+    show = result_of(step, "show")
+    assert show.exit_code != 0 and UNKNOWN_SHA_PINNING in normalize_text(show.output), (
+        f"step {step.name!r}: before #946 show cannot load the key either\n{tail(show)}"
+    )
+
+
+def sha_pinning_validates(step: StepOutcome) -> None:
+    """validate accepts the configuration: exit 0, no error nor warning (infos are allowed); show prints it."""
+    validate = result_of(step, "validate")
+    text, validation = normalize_text(validate.output), validate.validation()
+    assert validate.exit_code == 0 and validation.ok and validation.errors == 0, (
+        f"step {step.name!r}: since #946 sha_pinning_required validates\n{tail(validate)}"
+    )
+    assert "Error:" not in text and "Warning:" not in text, f"step {step.name!r}\n{tail(validate)}"
+    show = result_of(step, "show")
+    assert show.exit_code == 0 and "sha_pinning_required" in normalize_text(show.output), (
+        f"step {step.name!r}: since #946 show prints sha_pinning_required\n{tail(show)}"
+    )
+
+
+def sha_pinning_not_boolean(step: StepOutcome) -> None:
+    """A string is refused at load by the boolean of the schema (exit 1)."""
+    validate = result_of(step, "validate")
+    text = normalize_text(validate.output)
+    expected = f"{SCHEMA_LOAD_ERROR}settings.workflows.sha_pinning_required': 'yes' is not of type 'boolean'"
+    assert validate.exit_code == 1 and "Validation failed" in text and expected in text, (
+        f"step {step.name!r}: since #946 {expected!r} (exit 1)\n{tail(validate)}"
+    )
+    show = result_of(step, "show")
+    assert show.exit_code != 0 and "is not of type 'boolean'" in normalize_text(show.output), tail(show)
+
+
+def sha_pinning_ignored_info(step: StepOutcome) -> None:
+    """A repository that does not require SHA pinning under an organization that does: one validation info (shown by
+    local-plan -v), the configuration validates and plans."""
+    sha_pinning_validates(step)
+    validate = result_of(step, "validate")
+    assert "enable printing info messages by adding '-v' flag" in normalize_text(validate.output), tail(validate)
+    local_plan = result_of(step, "local-plan")
+    text, plan = normalize_text(local_plan.output), local_plan.plan()
+    assert offline_names(SHA_PINNING_IGNORED) in text, f"the info of the ignored setting is missing\n{tail(local_plan)}"
+    assert local_plan.exit_code == 0 and not plan.aborted, tail(local_plan)
+
+
+def sha_pinning_plan(change: int, needles: tuple[str, ...], step: StepOutcome) -> None:
+    """local-plan of a sha_pinning_required change: ``change`` changed objects (nothing added or deleted) printing
+    ``needles``."""
+    sha_pinning_validates(step)
+    local_plan = result_of(step, "local-plan")
+    text, plan = normalize_text(local_plan.output), local_plan.plan()
+    assert local_plan.exit_code == 0 and not plan.aborted, tail(local_plan)
+    assert (plan.add, plan.change, plan.delete) == (0, change, 0), (
+        f"step {step.name!r}: expected 0/{change}/0, got {plan.add}/{plan.change}/{plan.delete}\n{tail(local_plan)}"
+    )
+    missing = [needle for needle in map(offline_names, needles) if needle not in text]
+    assert not missing, f"step {step.name!r}: {missing!r} missing\n{tail(local_plan)}"
+
+
+def expect_sha_pinning_default(step: StepOutcome, history: History) -> None:
+    """O-SHOW-DEFAULT: since #946 the template gives the organization and every repository sha_pinning_required:
+    false (show-default prints both); before, no such key."""
+    show_default = result_of(step, "show-default")
+    text = normalize_text(show_default.output)
+    count = len(SHA_PINNING_DEFAULT_RE.findall(text))
+    has_fix = has_any_commit(history, FIX_946, "#946")
+    if has_fix is None:
+        has_fix = count > 0
+    if has_fix:
+        assert count == 2, f"since #946 the org and repository defaults set sha_pinning_required false: {count}x"
+        return
+    assert "sha_pinning_required" not in text, f"{history.label} predates #946\n{tail(show_default)}"
+
+
 # (scenario id, step) -> the check of that step's outcome
 SUT_EXPECTATIONS: dict[tuple[str, str], Callable[[StepOutcome, History], None]] = {
+    ("O-VAL-ORG-WORKFLOWS", "sha-pinning-required"): functools.partial(expect_sha_pinning, sha_pinning_validates),
+    ("O-VAL-ORG-WORKFLOWS", "sha-pinning-not-boolean"): functools.partial(expect_sha_pinning, sha_pinning_not_boolean),
+    ("O-VAL-REPO-WORKFLOWS", "sha-pinning-ignored-while-organization-requires"): functools.partial(
+        expect_sha_pinning, sha_pinning_ignored_info
+    ),
+    ("O-VAL-REPO-WORKFLOWS", "sha-pinning-required-by-repository"): functools.partial(
+        expect_sha_pinning, sha_pinning_validates
+    ),
+    ("O-LPLAN-IGNORED-FIELDS", "repository-sha-pinning-ignored"): functools.partial(
+        expect_sha_pinning, functools.partial(sha_pinning_plan, 0, ())
+    ),
+    ("O-LPLAN-IGNORED-FIELDS", "repository-sha-pinning-managed"): functools.partial(
+        expect_sha_pinning,
+        functools.partial(
+            sha_pinning_plan, 1, ('~ repository[name="{{ p }}-pin"] {', "~ workflows", "~ sha_pinning_required")
+        ),
+    ),
+    ("O-LPLAN-IGNORED-FIELDS", "organization-sha-pinning-managed"): functools.partial(
+        expect_sha_pinning,
+        functools.partial(sha_pinning_plan, 1, ("~ settings {", "~ workflows", "~ sha_pinning_required")),
+    ),
+    ("O-SHOW-DEFAULT", "defaults"): expect_sha_pinning_default,
     ("O-VAL-RULESET-STRICT", "no-strict"): expect_ruleset_strict,
     ("O-VAL-ORG-RULESET-STRICT", "org-no-strict"): expect_org_ruleset_strict,
     ("O-VAL-SECRETS", "lowercase-name"): expect_secret_name_case,

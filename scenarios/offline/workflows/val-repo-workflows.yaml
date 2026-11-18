@@ -9,7 +9,10 @@ description: >-
   actions, read-only workflow permissions, no pull request approvals). The enums of the shared workflow settings
   apply with the repository header (the fork policy set order varies: KB-038). An invalid repository allowed_actions
   crashes validation with a KeyError (KB-029). Since #878 (v1.7.0) the schema refuses these values at load, before
-  the model: ENUM_SCHEMA_STEPS of tests/offline/test_scenarios.py asserts the outcome of the enum steps per SUT.
+  the model: ENUM_SCHEMA_STEPS of tests/offline/test_scenarios.py asserts the outcome of the enum steps per SUT. Since
+  #946 (1.9.0) a repository may require actions pinned to a full-length commit SHA (sha_pinning_required) whatever
+  the organization says, while a repository that does not require it under an organization that does is informed
+  that its setting is ignored; older SUTs refuse the key at load, so these steps record only (SUT_EXPECTATIONS).
 priority: P2
 tags: [offline, workflows, repo]
 observe: true
@@ -26,6 +29,38 @@ references:
       - {step: workflow-enums, kind: cli, key: show}
       - {step: unknown-allowed-actions, kind: cli, key: validate}
       - {step: unknown-allowed-actions, kind: cli, key: show}
+  - pr: 946
+    note: >-
+      "feat: support sha_pinning_required in the workflow settings" (head ddc6fdd, squash 44f2b7b after v1.8.0, 1.9.0): the
+      repository workflow settings accept sha_pinning_required; RepositoryWorkflowSettings.validate informs that a
+      repository not requiring it is ignored while the organization requires it, and coerce_from_org_settings drops the
+      repository value then (PUT /repos/{owner}/{repo}/actions/permissions). Base refuses the key at load (exit 1).
+      Template base, as on O-VAL-ORG-WORKFLOWS (the template default false would add a line to every show). The
+      other steps must not change.
+    template: base
+    expected_deltas:
+      - step: sha-pinning-ignored-while-organization-requires
+        kind: cli
+        key: validate
+        note: head validates with one validation info (exit 0); base load error on the unknown key (exit 1)
+      - step: sha-pinning-ignored-while-organization-requires
+        kind: cli
+        key: local-plan
+        note: >-
+          head plans the repository and the organization setting and prints the info "has 'sha_pinning_required'
+          disabled, while on organization level it is required, setting will be ignored." (-v); base load error
+      - step: sha-pinning-ignored-while-organization-requires
+        kind: cli
+        key: show
+        note: head shows the configuration; base load error
+      - step: sha-pinning-required-by-repository
+        kind: cli
+        key: validate
+        note: head validates it without notice (exit 0); base load error on the unknown key (exit 1)
+      - step: sha-pinning-required-by-repository
+        kind: cli
+        key: show
+        note: head shows sha_pinning_required = true in the repository workflows; base load error
 steps:
   - name: code-scanning-without-actions
     fragments:
@@ -134,3 +169,18 @@ steps:
     fragments:
       repositories: ["orgs.newRepo('{{ p }}-wf') { workflows+: { allowed_actions: 'some' } }"]
     validate: {ok: false}  # outcome per SUT (#878): ENUM_SCHEMA_STEPS of tests/offline/test_scenarios.py
+  - name: sha-pinning-ignored-while-organization-requires
+    # outcome per SUT (#946): SUT_EXPECTATIONS of tests/offline/test_scenarios.py (the info of local-plan -v)
+    commands: {show: {exit_code: null}}  # before #946, show cannot load the key either
+    base_fragments:
+      settings: ["workflows+: { sha_pinning_required: false }"]
+    fragments:
+      settings: ["workflows+: { sha_pinning_required: true }"]
+      repositories: ["orgs.newRepo('{{ p }}-wf') { workflows+: { sha_pinning_required: false } }"]
+    plan: {expect: any, verbose: true}
+  - name: sha-pinning-required-by-repository
+    # outcome per SUT (#946): SUT_EXPECTATIONS of tests/offline/test_scenarios.py
+    commands: {show: {exit_code: null}}  # before #946, show cannot load the key either
+    fragments:
+      settings: ["workflows+: { sha_pinning_required: false }"]
+      repositories: ["orgs.newRepo('{{ p }}-wf') { workflows+: { sha_pinning_required: true } }"]

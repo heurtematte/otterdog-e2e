@@ -1,0 +1,94 @@
+# repo-workflows.sha-pinning (P2): a repository requires its actions pinned to a full-length commit SHA (#946).
+id: cli.repo.actions.sha-pinning
+tier: cli
+title: Repository Actions require SHA-pinned actions, then no longer do
+description: |
+  Since eclipse-csi/otterdog#946 (squash 44f2b7b, after v1.8.0) the workflows settings of a repository hold
+  sha_pinning_required (template default false, otterdog/models/workflow_settings.py), sent with enabled and
+  allowed_actions in the body of PUT /repos/{owner}/{repo}/actions/permissions (repo_client.update_workflow_settings)
+  and read back from GET .../actions/permissions. The journey creates a public run repository requiring SHA pinning
+  (the creation applies the workflows settings with the PUT), turns the requirement off again (the template default:
+  the PUT again, no repository PATCH since only the workflows block changes) and removes the repository with the SUT
+  (DELETE /repos/{owner}/{repo}). The oracle reads sha_pinning_required after each apply and the plan converges.
+  The organization keeps the template's false, so the repository value is managed (coerce_from_org_settings drops it
+  only while the organization requires pinning: O-LPLAN-IGNORED-FIELDS and O-VAL-REPO-WORKFLOWS pin that offline).
+  Object states: the code path of the key is the one of enabled and allowed_actions (cli.repo.actions), whatever the
+  visibility; an archived repository refuses every settings write alike, so no state of its own. The organization
+  level (PUT /orgs/{org}/actions/permissions) has no live journey: the baseline reset runs a release that predates
+  #946, so it could not restore an organization left requiring SHA-pinned actions, which would stop the unpinned
+  workflows of the test organization. Released in the first release after v1.8.0 (1.9.0): fixed_in skips older SUTs.
+priority: P2
+min_plan: free
+fixed_in: "1.9.0"
+tags: [repo, workflows]
+references:
+  - pr: 946
+    note: >-
+      "feat: support sha_pinning_required in the workflow settings" (head ddc6fdd, squash 44f2b7b): the key is new in
+      the schema, the model and the body of PUT /repos/{owner}/{repo}/actions/permissions; older SUTs refuse it at
+      load. Enabled and allowed_actions keep their request.
+steps:
+  - name: required
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-sha-pin') {
+            description: "otterdog e2e: SHA-pinned actions",
+            workflows+: {
+              sha_pinning_required: true,
+            },
+          }
+    plan:
+      expect: changes
+      contains:
+        - '+ add repository[name="{{ p }}-sha-pin"]'
+      counts: {add: 1, change: 0, delete: 0}
+    apply:
+      api:
+        sent:
+          - 'POST /orgs/{org}/repos'
+          - 'PUT /repos/{owner}/{repo}/actions/permissions'
+    state:
+      - kind: repo_actions
+        name: "{{ p }}-sha-pin"
+        match: {enabled: true, allowed_actions: all, sha_pinning_required: true}
+
+  - name: not-required
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-sha-pin') {
+            description: "otterdog e2e: SHA-pinned actions",
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ repository[name="{{ p }}-sha-pin"]'
+        - "~ workflows"
+        - "~ sha_pinning_required"
+      counts: {add: 0, change: 1, delete: 0}
+    apply:
+      api:
+        sent:
+          - 'PUT /repos/{owner}/{repo}/actions/permissions'
+        not_sent:
+          - 'PATCH /repos/{owner}/{repo}'
+    state:
+      - kind: repo_actions
+        name: "{{ p }}-sha-pin"
+        match: {enabled: true, sha_pinning_required: false}
+
+  - name: remove
+    fragments: {}
+    plan:
+      expect: changes
+      contains:
+        - '- remove repository[name="{{ p }}-sha-pin"]'
+      counts: {add: 0, change: 0, delete: 1}
+    apply:
+      delete: true
+      api:
+        sent:
+          - 'DELETE /repos/{owner}/{repo}'
+    state:
+      - {kind: repo, name: "{{ p }}-sha-pin", absent: true}

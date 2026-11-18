@@ -55,7 +55,7 @@ endpoints:
   # --- organization Actions settings --------------------------------------------------------------------------------
   - endpoint: PUT /orgs/{org}/actions/permissions
     source: otterdog/providers/github/rest/org_client.py:754
-    trigger: workflows.enabled_repositories or workflows.allowed_actions changes
+    trigger: workflows.enabled_repositories or workflows.allowed_actions changes (or sha_pinning_required, since #946)
     feature: org-workflows.enabled-repositories
   - endpoint: PUT /orgs/{org}/actions/permissions/repositories
     source: otterdog/providers/github/rest/org_client.py:834
@@ -347,7 +347,9 @@ endpoints:
   # --- repository Actions settings ----------------------------------------------------------------------------------
   - endpoint: PUT /repos/{owner}/{repo}/actions/permissions
     source: otterdog/providers/github/rest/repo_client.py:1215
-    trigger: workflows.enabled or workflows.allowed_actions of a repository changes
+    trigger: >-
+      workflows.enabled, workflows.allowed_actions or (since #946) workflows.sha_pinning_required of a repository
+      changes, and the creation of a repository
     feature: repo-workflows.enabled
   - endpoint: PUT /repos/{owner}/{repo}/actions/permissions/selected-actions
     source: otterdog/providers/github/rest/repo_client.py:1297

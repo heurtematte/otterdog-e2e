@@ -9,18 +9,18 @@ otterdog feature coverage of the e2e battery
 
 Inventory of otterdog main @d9dac78 (after v1.7.1; release:latest is v1.7.1), first built at main 9bdeb75 (after v1.6.1): every CLI command and its flags, every property of the configuration model grouped by feature, validation rules, diff semantics, the webapp (webhook events, comment commands, tasks, auto-merge, apply, blueprints, policies, /api and /internal), the webhook receiver contract and notable CHANGELOG fixes, mapped to the existing scenarios and tests of this repository. Gaps and partial coverage carry the outline of the missing test.
 
-**368 features** in 27 areas: 314 covered, 43 partial, 11 gaps; covered 85%, weighted 91% (a partial feature counts half). *Offline-verified* counts the covered or partial features with at least one covering item in the offline tier; *live-verified* those with a recorded green live run of their covering items (`verified_on`: target, SUT, run id, date); *unverified* the others: their coverage is implemented but has never run, so it is a claim, not evidence. A covered feature needs at least one covering item that runs strictly on the default SUT (not only known-bug xfails or scenarios skipped by `fixed_in`).
+**371 features** in 27 areas: 316 covered, 44 partial, 11 gaps; covered 85%, weighted 91% (a partial feature counts half). *Offline-verified* counts the covered or partial features with at least one covering item in the offline tier; *live-verified* those with a recorded green live run of their covering items (`verified_on`: target, SUT, run id, date); *unverified* the others: their coverage is implemented but has never run, so it is a claim, not evidence. A covered feature needs at least one covering item that runs strictly on the default SUT (not only known-bug xfails or scenarios skipped by `fixed_in`).
 
 ## Summary by area
 
 | Area | Features | Covered | Partial | Gap | Covered % | Weighted % | Offline-verified | Live-verified | Unverified |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| [CLI commands and global options](#cli) | 62 | 55 | 7 | 0 | 89% | 94% | 33 | 0 | 29 |
+| [CLI commands and global options](#cli) | 63 | 56 | 7 | 0 | 89% | 94% | 33 | 0 | 30 |
 | [otterdog.json, base template and credentials](#config) | 27 | 14 | 7 | 6 | 52% | 65% | 16 | 0 | 5 |
 | [Validation rules](#validation) | 38 | 37 | 1 | 0 | 97% | 99% | 37 | 0 | 1 |
 | [Diff engine and plan semantics](#plan-semantics) | 18 | 17 | 1 | 0 | 94% | 97% | 16 | 0 | 2 |
 | [Organization settings](#org-settings) | 14 | 10 | 4 | 0 | 71% | 86% | 3 | 0 | 11 |
-| [Organization Actions settings](#org-workflows) | 5 | 4 | 1 | 0 | 80% | 90% | 0 | 0 | 5 |
+| [Organization Actions settings](#org-workflows) | 6 | 4 | 2 | 0 | 67% | 83% | 1 | 0 | 5 |
 | [Organization custom properties](#custom-properties) | 6 | 6 | 0 | 0 | 100% | 100% | 2 | 0 | 4 |
 | [Custom organization roles](#org-roles) | 2 | 2 | 0 | 0 | 100% | 100% | 1 | 0 | 1 |
 | [Code security configurations (organization) and their repositories](#code-security) | 3 | 0 | 3 | 0 | 0% | 50% | 3 | 0 | 0 |
@@ -28,7 +28,7 @@ Inventory of otterdog main @d9dac78 (after v1.7.1; release:latest is v1.7.1), fi
 | [Managed organization and repository webhooks](#webhooks) | 8 | 6 | 2 | 0 | 75% | 88% | 4 | 0 | 4 |
 | [Secrets and variables (organization, repository, environment)](#secrets-variables) | 12 | 10 | 2 | 0 | 83% | 92% | 6 | 0 | 6 |
 | [Repositories](#repositories) | 18 | 16 | 2 | 0 | 89% | 94% | 6 | 0 | 12 |
-| [Repository Actions settings](#repo-workflows) | 5 | 4 | 1 | 0 | 80% | 90% | 0 | 0 | 5 |
+| [Repository Actions settings](#repo-workflows) | 6 | 5 | 1 | 0 | 83% | 92% | 1 | 0 | 5 |
 | [Branch protection rules](#branch-protection) | 10 | 10 | 0 | 0 | 100% | 100% | 2 | 0 | 8 |
 | [Repository and organization rulesets](#rulesets) | 11 | 9 | 2 | 0 | 82% | 91% | 3 | 0 | 8 |
 | [Deployment environments](#environments) | 4 | 4 | 0 | 0 | 100% | 100% | 3 | 0 | 1 |
@@ -42,14 +42,14 @@ Inventory of otterdog main @d9dac78 (after v1.7.1; release:latest is v1.7.1), fi
 | [Policies](#policies) | 3 | 3 | 0 | 0 | 100% | 100% | 0 | 0 | 3 |
 | [CHANGELOG fixes (regression guards)](#regressions) | 36 | 33 | 1 | 2 | 92% | 93% | 10 | 0 | 24 |
 | [Unmerged otterdog changes (pull requests and local branches)](#pending) | 5 | 4 | 1 | 0 | 80% | 90% | 0 | 0 | 5 |
-| **Total** | 368 | 314 | 43 | 11 | 85% | 91% | 165 | 0 | 192 |
+| **Total** | 371 | 316 | 44 | 11 | 85% | 91% | 167 | 0 | 193 |
 
 ## Summary by tier
 
 | Tier | Features | Covered | Partial | Gap | Covered % | Weighted % | Offline-verified | Live-verified | Unverified |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
 | `offline` | 122 | 111 | 11 | 0 | 91% | 95% | 122 | 0 | 0 |
-| `cli` | 145 | 122 | 18 | 5 | 84% | 90% | 37 | 0 | 103 |
+| `cli` | 148 | 124 | 19 | 5 | 84% | 90% | 39 | 0 | 104 |
 | `webhooks` | 4 | 3 | 1 | 0 | 75% | 88% | 2 | 0 | 2 |
 | `webapp` | 81 | 69 | 8 | 4 | 85% | 90% | 3 | 0 | 74 |
 | `web_ui` | 14 | 7 | 5 | 2 | 50% | 68% | 1 | 0 | 11 |
@@ -61,7 +61,7 @@ Inventory of otterdog main @d9dac78 (after v1.7.1; release:latest is v1.7.1), fi
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
 | P0 | 62 | 62 | 0 | 0 | 100% | 100% | 31 | 0 | 31 |
 | P1 | 144 | 123 | 19 | 2 | 85% | 92% | 67 | 0 | 75 |
-| P2 | 162 | 129 | 24 | 9 | 80% | 87% | 67 | 0 | 86 |
+| P2 | 165 | 131 | 25 | 9 | 79% | 87% | 69 | 0 | 87 |
 
 Tiers:
 
@@ -124,7 +124,7 @@ Defects found while building the inventory (not yet in `scenarios/known_bugs.yam
 
 ## CLI commands and global options
 
-`cli`: 62 features, 55 covered, 7 partial, 0 gaps (weighted 94%).
+`cli`: 63 features, 56 covered, 7 partial, 0 gaps (weighted 94%).
 
 | Id | Feature | Tier | Plan | Prio | Status | Verified | Covered by |
 |---|---|---|---|---|---|---|---|
@@ -156,6 +156,7 @@ Defects found while building the inventory (not yet in `scenarios/known_bugs.yam
 | `cli.import` | import -f -n: writes orgs/&lt;org&gt;/&lt;org&gt;.jsonnet from the live org (patches against the template defaults, sorted teams and repos) | cli | free | P0 | covered | **unverified** | `tests/cli/test_import.py::test_import_writes_config`, `tests/cli/test_import.py::test_import_validates`, `tests/cli/test_import.py::test_import_plans_no_change` |
 | `cli.import.overwrite-backup-secrets` | import over an existing file: prompt without -f, '&lt;file&gt;.bak' backup, 'Copying secrets from previous configuration.', webhook URL masking ('&lt;n&gt; URLs have been masked.') | cli | free | P1 | covered | **unverified** | `tests/cli/test_commands_import.py::test_reimport_backs_up_copies_secrets_and_masks_urls`, `tests/cli/test_commands_import.py::test_import_without_force_asks_before_overwriting`, `tests/cli/test_commands_import.py::test_reimport_keeps_the_secret_of_a_masked_webhook` |
 | `cli.import.web-ui` | import without -n reads the web-UI settings (full credentials); with -n the warning 'the Web UI will not be queried ...' is printed (UI only) | web_ui | free | P2 | covered | **unverified** | `tests/web_ui/test_web_settings.py::test_import_reads_web_settings`, `tests/cli/test_commands_import.py::test_import_without_web_ui_warns_and_skips_web_settings` |
+| `cli.import.workflow-keys` | import reads only the workflow settings the default configuration defines (absent or null keys are never requested; #919, 1.8.0) | cli | free | P2 | covered | **unverified** | `tests/cli/test_import.py::test_import_reads_only_the_workflow_settings_of_the_template` |
 | `cli.fetch-config` | fetch-config [-f] [-p PR] [-r REF] [-s SUFFIX]: reads otterdog/&lt;org&gt;.jsonnet from the config repo default branch, a ref or a PR head | cli | free | P0 | covered | **unverified** | `tests/cli/test_config_repo_cli.py::test_push_fetch_round_trip`, `tests/cli/test_commands_config_repo.py::test_fetch_config_from_a_pull_request_and_a_ref`, `tests/cli/test_commands_config_repo.py::test_fetch_config_asks_before_overwriting`, `tests/cli/test_commands_config_repo.py::test_fetch_config_names_the_ref`, `tests/cli/test_commands_config_repo.py::test_config_repo_commands_report_a_missing_repository` |
 | `cli.push-config` | push-config [-m MSG] [-n] [-f]: PUTs otterdog/&lt;org&gt;.jsonnet on the default branch after a local-plan diff and a prompt | cli | free | P0 | covered | **unverified** | `tests/cli/test_config_repo_cli.py::test_push_fetch_round_trip`, `tests/cli/test_commands_config_repo.py::test_push_config_shows_the_diff_and_asks`, `tests/cli/test_commands_config_repo.py::test_push_config_without_diff_uses_the_default_message`, `tests/cli/test_commands_config_repo.py::test_push_config_refuses_an_invalid_configuration`, `tests/cli/test_commands_config_repo.py::test_push_config_of_an_invalid_configuration_fails`, `tests/cli/test_commands_config_repo.py::test_push_config_to_a_repository_without_definition`, `tests/cli/test_commands_config_repo.py::test_config_repo_commands_report_a_missing_repository` |
 | `cli.open-pr` | open-pr -b BRANCH -t TITLE -a AUTHOR: branch otterdog/&lt;branch&gt;, the local file, a PR with the fixed body (always prompts) | cli | free | P1 | covered | **unverified** | `tests/cli/test_config_repo_cli.py::test_open_pr`, `tests/cli/test_commands_config_repo.py::test_open_pr_opens_nothing_when_it_must_not`, `tests/cli/test_commands_config_repo.py::test_open_pr_title_and_body`, `tests/cli/test_commands_config_repo.py::test_config_repo_commands_report_a_missing_repository` |
@@ -305,6 +306,10 @@ Details:
     - Source: `otterdog/operations/import_configuration.py:76-91`, `otterdog/providers/github/web.py:57-165`
     - Operations: import
     - Notes: import -n: the warning, no web-only key written (template defaults), secrets read as \*\*\*\*\*\*\*\*; web import: no warning (assertion added inside the existing login).
+- **`cli.import.workflow-keys`** (covered, P2, `cli`): import reads only the workflow settings the default configuration defines (absent or null keys are never requested; #919, 1.8.0)
+    - Source: `otterdog/models/github_organization.py:1216-1223`, `otterdog/models/github_organization.py:1664-1671`
+    - Operations: import
+    - Notes: request statistics of import -f -n: the standard template reads the org and repository cache sizes; a local copy of it (#917) with max_cache_size_gb null at both levels reads neither and writes no max_cache_size_gb, repository Actions settings still read. Skipped on SUTs before 1.8.0.
 - **`cli.fetch-config`** (covered, P0, `cli`): fetch-config [-f] [-p PR] [-r REF] [-s SUFFIX]: reads otterdog/&lt;org&gt;.jsonnet from the config repo default branch, a ref or a PR head
     - Source: `otterdog/cli.py:267-301`, `otterdog/operations/fetch_config.py:54-113`
     - Operations: run, prompt, config
@@ -1215,7 +1220,7 @@ Details:
 
 ## Organization Actions settings
 
-`org-workflows`: 5 features, 4 covered, 1 partial, 0 gaps (weighted 90%).
+`org-workflows`: 6 features, 4 covered, 2 partial, 0 gaps (weighted 83%).
 
 | Id | Feature | Tier | Plan | Prio | Status | Verified | Covered by |
 |---|---|---|---|---|---|---|---|
@@ -1223,6 +1228,7 @@ Details:
 | `org-workflows.allowed-actions` | org allowed actions: allowed_actions all \| local_only \| selected with allow_github_owned_actions, allow_verified_creator_actions, allow_action_patterns (selected-actions endpoint) | cli | free | P1 | covered | **unverified** | `cli.org.actions-allowed` |
 | `org-workflows.default-permissions` | org workflow permissions: default_workflow_permissions read \| write, actions_can_approve_pull_request_reviews (243 Eclipse orgs set it false) | cli | free | P0 | covered | **unverified** | `cli.org.workflow-permissions` |
 | `org-workflows.fork-pr-approval` | org fork_pr_approval_policy (fork-pr-contributor-approval endpoint; not in the example template's org defaults: unmanaged unless set) | cli | free | P2 | covered | **unverified** | `cli.org.actions-allowed` |
+| `org-workflows.sha-pinning` | org sha_pinning_required (actions must be pinned to a full-length commit SHA; #946, 1.9.0) | cli | free | P2 | **partial** | offline | `O-VAL-ORG-WORKFLOWS`, `O-LPLAN-IGNORED-FIELDS` |
 | `org-workflows.cache-size` | org max_cache_size_gb (Actions cache storage limit; changes are cost-related in the webapp) | cli | free | P2 | **partial** | **unverified** | `cli.org.cache-size` |
 
 Details:
@@ -1251,6 +1257,21 @@ Details:
     - Known bugs: KB-038
     - New findings: F-11
     - Notes: all_external_contributors then first_time_contributors (oracle org_fork_pr_approval, converge); invalid value refused at validation (stable prefix only, KB-038). The template has no org-level key, so the baseline never restores it: the scenario ends on GitHub's default first_time_contributors.
+- **`org-workflows.sha-pinning`** (partial, P2, `cli`): org sha_pinning_required (actions must be pinned to a full-length commit SHA; #946, 1.9.0)
+    - Source: `otterdog/models/workflow_settings.py:69-75`, `otterdog/providers/github/rest/org_client.py:748-762`
+    - Properties (`org-workflows`): `sha_pinning_required`
+    - Operations: validate, modify
+    - Notes: offline only: the boolean is validated (a string is a load error) and local-plan diffs false -&gt; true; older SUTs refuse the key at load (steps record, SUT_EXPECTATIONS asserts per SUT). No live apply: PUT /orgs/{org}/actions/permissions with the key is unasserted.
+    - Suggested: `cli.org.actions.sha-pinning` in `scenarios/cli/workflows/org-actions-sha-pinning.yaml`
+    - Steps:
+        - org_level: settings.workflows.sha_pinning_required true, a run repository keeping false (validate -v Info: the repository setting is ignored)
+        - back to the template's false
+    - Assert:
+        - apply.api sent PUT /orgs/{org}/actions/permissions, not_sent PUT /repos/{owner}/{repo}/actions/permissions for the coerced repository; oracle org_actions sha_pinning_required true then false; converge
+    - Needs:
+        - target
+        - org_level
+        - a reset SUT &gt;= 1.9.0 (--reset-sut): the release:latest reset cannot restore an organization left requiring SHA-pinned actions, which stops its unpinned workflows
 - **`org-workflows.cache-size`** (partial, P2, `cli`): org max_cache_size_gb (Actions cache storage limit; changes are cost-related in the webapp)
     - Source: `otterdog/models/workflow_settings.py:60-92`, `otterdog/providers/github/rest/org_client.py:562-593`
     - Properties (`org-workflows`): `max_cache_size_gb`
@@ -1765,7 +1786,7 @@ Details:
 
 ## Repository Actions settings
 
-`repo-workflows`: 5 features, 4 covered, 1 partial, 0 gaps (weighted 90%).
+`repo-workflows`: 6 features, 5 covered, 1 partial, 0 gaps (weighted 92%).
 
 | Id | Feature | Tier | Plan | Prio | Status | Verified | Covered by |
 |---|---|---|---|---|---|---|---|
@@ -1773,6 +1794,7 @@ Details:
 | `repo-workflows.allowed-actions` | repository allowed_actions local_only \| selected with the selected-actions properties (managed only when stricter than the org) | cli | free | P2 | covered | **unverified** | `cli.repo.actions`, `cli.org.actions-allowed` |
 | `repo-workflows.default-permissions` | repository default_workflow_permissions and actions_can_approve_pull_request_reviews (1354 Eclipse repos set write; unmanaged while the org is 'read' / approvals false) | cli | free | P0 | covered | **unverified** | `cli.repo.org-coerced`, `cli.repo.actions`, `cli.org.workflow-permissions` |
 | `repo-workflows.fork-pr-approval` | repository fork_pr_approval_policy (skipped for private repositories: GitHub answers 422, #635) | cli | free | P2 | covered | **unverified** | `regression.private-repo-template-defaults`, `cli.repo.actions` |
+| `repo-workflows.sha-pinning` | repository sha_pinning_required (actions pinned to a full-length commit SHA; ignored while the org requires it; #946, 1.9.0) | cli | free | P2 | covered | offline | `cli.repo.actions.sha-pinning`, `O-VAL-REPO-WORKFLOWS`, `O-LPLAN-IGNORED-FIELDS` |
 | `repo-workflows.cache-size` | repository max_cache_size_gb (cache storage limit; cost-related above defaults.cost_policy.free_max_cache_size_gb) | cli | free | P2 | **partial** | **unverified** | `cli.repo.cache-limit` |
 
 Details:
@@ -1799,6 +1821,11 @@ Details:
     - Properties (`repo-workflows`): `fork_pr_approval_policy`
     - Operations: modify, converge
     - Notes: all_external_contributors on a public repository, read through repo_fork_pr_approval.
+- **`repo-workflows.sha-pinning`** (covered, P2, `cli`): repository sha_pinning_required (actions pinned to a full-length commit SHA; ignored while the org requires it; #946, 1.9.0)
+    - Source: `otterdog/models/repo_workflow_settings.py:67-68`, `otterdog/models/repo_workflow_settings.py:131-137`, `otterdog/providers/github/rest/repo_client.py:1240-1256`
+    - Properties (`repo-workflows`): `sha_pinning_required`
+    - Operations: add, modify, validate, coerce, converge
+    - Notes: live (fixed_in 1.9.0): created requiring it, then false, then removed, PUT .../actions/permissions and repo_actions read back. Offline: the Info of a repository not requiring it under an org that does, the coerced (noop) and managed plans; older SUTs refuse the key at load (SUT_EXPECTATIONS asserts per SUT).
 - **`repo-workflows.cache-size`** (partial, P2, `cli`): repository max_cache_size_gb (cache storage limit; cost-related above defaults.cost_policy.free_max_cache_size_gb)
     - Source: `otterdog/models/workflow_settings.py:60-92`, `otterdog/providers/github/rest/repo_client.py:1232-1264`
     - Properties (`repo-workflows`): `max_cache_size_gb`
