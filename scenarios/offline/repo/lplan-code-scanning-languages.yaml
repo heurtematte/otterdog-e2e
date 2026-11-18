@@ -1,0 +1,101 @@
+# Offline tier (battery, plan semantics): the diff of the code scanning default setup languages (local-plan).
+id: O-LPLAN-CODE-SCANNING-LANGUAGES
+tier: offline
+title: Code scanning languages left to GitHub are not compared
+description: >-
+  local-plan compares code_scanning_default_languages of a repository whose default setup is enabled with the -BASE
+  configuration, which plays the live settings. Since eclipse-csi/otterdog#941 (main after v1.8.0) the configured
+  languages are the minimum set of languages to analyze: an empty list (the template default) leaves them to GitHub
+  and is never compared, so the languages GitHub analyzes are no longer a change; older SUTs compare the two lists
+  exactly. Only the -BASE configuration sets languages while the setup is enabled: local-plan loads it without
+  validating it, while validating languages of an enabled setup reads the repository languages from GitHub (offline
+  rule). The steps whose outcome #941 changes only record it (the reference below declares the deltas); the control
+  steps must plan the same on every SUT: enabling and disabling the setup, and the languages of a disabled setup
+  (ignored).
+priority: P1
+tags: [offline, repo]
+observe: true
+variables: {plan: free}
+references:
+  - pr: 941
+    note: >-
+      "fix(repo): stop reporting code scanning languages added by GitHub" (head 943a45ae, merged as 4c983816a after
+      v1.8.0): Repository.get_difference_from keeps a code_scanning_default_languages change only for configured
+      languages that are not analyzed yet, and never compares an empty configured list; get_mapping_to_provider no
+      longer sends an empty list, and the update reads the analyzed languages first and keeps them
+      (RepoClient._update_code_scanning_config): live only, cli.repo.code-scanning-languages. The control steps
+      (enable, disable, setup-disabled) and every other offline scenario are expected unchanged.
+    expected_deltas:
+      - step: languages-left-to-github
+        kind: cli
+        key: local-plan
+        note: >-
+          head plans nothing (an empty list leaves the languages to GitHub); base plans the removal of actions and
+          python (change 1)
+      - step: suite-change-only
+        kind: cli
+        key: local-plan
+        note: >-
+          head shows the query suite change only (1 to change); base shows the query suite and the removal of the
+          analyzed languages javascript, python and typescript (2 to change)
+steps:
+  - name: languages-left-to-github
+    base_fragments:
+      repositories:
+        - >-
+          orgs.newRepo('{{ p }}-scan') { code_scanning_default_setup_enabled: true, code_scanning_default_languages:
+          ['actions', 'python'] }
+    fragments:
+      repositories: ["orgs.newRepo('{{ p }}-scan') { code_scanning_default_setup_enabled: true }"]
+    plan: {expect: any}
+  - name: suite-change-only
+    base_fragments:
+      repositories:
+        - >-
+          orgs.newRepo('{{ p }}-scan') { code_scanning_default_setup_enabled: true, code_scanning_default_query_suite:
+          'default', code_scanning_default_languages: ['javascript-typescript', 'python'] }
+    fragments:
+      repositories:
+        - >-
+          orgs.newRepo('{{ p }}-scan') { code_scanning_default_setup_enabled: true, code_scanning_default_query_suite:
+          'extended' }
+    plan: {expect: any}
+  - name: enable
+    base_fragments:
+      repositories: ["orgs.newRepo('{{ p }}-scan') { code_scanning_default_setup_enabled: false }"]
+    fragments:
+      repositories: ["orgs.newRepo('{{ p }}-scan') { code_scanning_default_setup_enabled: true }"]
+    validate: {ok: true, errors: 0}
+    plan:
+      expect: changes
+      counts: {add: 0, change: 1, delete: 0}
+      contains: ['repository[name="{{ p }}-scan"]', '~ code_scanning_default_setup_enabled = false -> true']
+      not_contains: [code_scanning_default_languages]
+  - name: disable
+    base_fragments:
+      repositories:
+        - >-
+          orgs.newRepo('{{ p }}-scan') { code_scanning_default_setup_enabled: true, code_scanning_default_languages:
+          ['python'] }
+    fragments:
+      repositories: ["orgs.newRepo('{{ p }}-scan') { code_scanning_default_setup_enabled: false }"]
+    validate: {ok: true, errors: 0}
+    plan:
+      expect: changes
+      counts: {add: 0, change: 1, delete: 0}
+      contains: ['repository[name="{{ p }}-scan"]', '~ code_scanning_default_setup_enabled = true -> false']
+  - name: setup-disabled
+    base_fragments:
+      repositories:
+        - >-
+          orgs.newRepo('{{ p }}-scan') { code_scanning_default_setup_enabled: false, code_scanning_default_languages:
+          ['python'] }
+    fragments:
+      repositories:
+        - >-
+          orgs.newRepo('{{ p }}-scan') { code_scanning_default_setup_enabled: false, code_scanning_default_languages:
+          ['go'] }
+    validate: {ok: true, errors: 0}
+    plan:
+      expect: noop
+      counts: {add: 0, change: 0, delete: 0}

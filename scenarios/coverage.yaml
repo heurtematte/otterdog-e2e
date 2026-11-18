@@ -2320,7 +2320,7 @@ features:
     status: partial
     covered_by: [cli.org.member-privileges]
     known_bugs: [KB-024]
-    notes: "members_can_create_public_pages false then back to the template's true (oracle, converge)."
+    notes: "members_can_create_public_pages false then back to the template's true (oracle, converge). Since #925 (1.8.0) the members_can_create_private_pages value GitHub reports for a plan other than enterprise is left unset: never compared, never imported (KB-024 fixed, cli.import.validate strict from 1.8.0)."
     gap_outline:
       scenario: enterprise.org.private-pages
       file: scenarios/enterprise/org-settings/org-private-pages.yaml
@@ -3237,8 +3237,8 @@ features:
     ui_only: false
     priority: P1
     status: covered
-    covered_by: [regression.code-scanning-new-repo, regression.private-repo-template-defaults, cli.repo.code-scanning]
-    notes: "An existing repository; a probe commits a Python file and a dispatch-only workflow and waits until Python is detected. The setup is then configured with the extended suite for languages [actions, python] (state check timeout 600 s before converge) and disabled."
+    covered_by: [regression.code-scanning-new-repo, regression.private-repo-template-defaults, cli.repo.code-scanning, cli.repo.code-scanning-languages, O-LPLAN-CODE-SCANNING-LANGUAGES]
+    notes: "An existing repository; a probe commits a Python file and a dispatch-only workflow and waits until Python is detected. The setup is then configured with the extended suite for languages [actions, python] (state check timeout 600 s before converge) and disabled. cli.repo.code-scanning-languages (fixed_in 1.9.0): a TypeScript repository enabled for 'javascript-typescript' (#922: sent as the combined value), 'actions' added (#941: the change shows the missing language only, analyzed ones kept), [] and a dropped analyzed language plan nothing (#941: minimum set), disabled, enabled again without languages (none sent). O-LPLAN-CODE-SCANNING-LANGUAGES: offline, [] is never compared (#941), enable/disable and a disabled setup's languages plan the same on every SUT."
 
   - id: repositories.pages
     area: repositories

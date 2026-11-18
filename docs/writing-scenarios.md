@@ -817,7 +817,8 @@ Offline scenarios cannot use `apply`, `state`, `requires`, `expect_failure_witho
 `logins.*` or a `min_plan` other than free; `teams`, `newTeam` and `code_scanning_default_languages` are refused
 because their validation calls GitHub even with `--local` (languages are allowed in an object that also sets
 `code_scanning_default_setup_enabled: false`: the language detection only reads GitHub for an enabled setup, the
-language enum is then validated offline). A `plan` mapping needs a BASE configuration
+language enum is then validated offline; and in `base_fragments` and `base_config`: `local-plan` only loads the BASE
+configuration, it never validates it). A `plan` mapping needs a BASE configuration
 (`base_fragments: {}` is the bare organization): `local-plan` never runs without one, so its expectations would be
 ignored.
 
@@ -1041,7 +1042,7 @@ stays the first release that contains it.
   fragments without `org_level`;
 - secret values that are no dummy nor reference ([Secrets](#secrets); the KB-025 literal offline only), offline
   `teams`/`newTeam`/`code_scanning_default_languages` (languages beside `code_scanning_default_setup_enabled: false`
-  are allowed);
+  or in the BASE configuration are allowed);
 - `infos`/`infos_min` without `validate.verbose`, an `update_filter` without `update_secrets` or `update_webhooks`, a
   live `repo_filter` that does not start with `{{ p }}-` (unless `org_level`), an apply with `delete: true` and a
   `repo_filter` other than its plan's, an offline `plan` without `base_fragments`/`base_config`;

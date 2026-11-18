@@ -6,10 +6,12 @@ declare the org and the baseline repositories, validate, and plan no change agai
 without -n would leave web settings at template defaults (FACTS cli R 13).
 
 Known quirks are marked with their known bug: below Enterprise the API may report members_can_create_private_pages
-true, which otterdog's validation accepts on Enterprise only (KB-024). test_import_validates xfails (raises=
-PrivatePagesNotAllowedError) only when that error is the only one and the plan is not enterprise; any other validation
-error fails (BAT-07). The plan test then leaves that one key unmanaged (``members_can_create_private_pages:: null``,
-the baseline's own way) in a copy of the import and still checks the round trip; other validation errors fail it.
+true, which otterdog's validation accepts on Enterprise only (KB-024, fixed in 1.8.0 by #925: the value reported for
+another plan is no longer read, so it is neither imported nor compared). On SUTs older than 1.8.0 test_import_validates
+xfails (raises=PrivatePagesNotAllowedError) only when that error is the only one and the plan is not enterprise; any
+other validation error fails (BAT-07), and from 1.8.0 it runs strict. The plan test then leaves that one key unmanaged
+(``members_can_create_private_pages:: null``, the baseline's own way) in a copy of the import and still checks the
+round trip; other validation errors fail it.
 """
 
 from __future__ import annotations
@@ -35,6 +37,20 @@ pytestmark = [pytest.mark.tags("cli", "repo", "teams", "org-settings")]
 MAX_LISTED = 15
 PRIVATE_PAGES_ERROR = "enabling 'members_can_create_private_pages' requires an 'enterprise' plan."  # KB-024
 PRIVATE_PAGES_RE = re.compile(r"\bmembers_can_create_private_pages\s*:\s*true\b")
+
+
+PRIVATE_PAGES_REFERENCES = [
+    {
+        "pr": 925,
+        "note": (
+            "fix: ignore the private pages setting reported for non-enterprise plans (c0d9203, in v1.8.0):"
+            " OrganizationSettings.get_mapping_from_provider leaves members_can_create_private_pages unset when the"
+            " organization's plan is not enterprise, so import no longer writes the 'true' GitHub reports for a Free or"
+            " Team organization (KB-024 fixed: the import validates) and plan no longer compares it; an enterprise"
+            " organization, or an unknown plan, keeps the value. Live only (provider data): no offline delta."
+        ),
+    }
+]
 
 
 class PrivatePagesNotAllowedError(AssertionError):
@@ -73,7 +89,7 @@ def test_import_writes_config(imported: tuple[ConfigWorkspace, OtterdogCli], tar
     assert not missing, f"the import lacks the baseline repositories {missing}"
 
 
-@pytest.mark.scenario("cli.import.validate")
+@pytest.mark.scenario("cli.import.validate", references=PRIVATE_PAGES_REFERENCES)
 @pytest.mark.known_bug("KB-024", raises=PrivatePagesNotAllowedError)
 def test_import_validates(imported: tuple[ConfigWorkspace, OtterdogCli], verified_org: VerifiedOrg) -> None:
     """``validate`` accepts the imported configuration (no error); KB-024 alone (not on enterprise) is the only
@@ -89,7 +105,7 @@ def test_import_validates(imported: tuple[ConfigWorkspace, OtterdogCli], verifie
     raise AssertionError(message)
 
 
-@pytest.mark.scenario("cli.import.plan")
+@pytest.mark.scenario("cli.import.plan", references=PRIVATE_PAGES_REFERENCES)
 def test_import_plans_no_change(
     imported: tuple[ConfigWorkspace, OtterdogCli],
     e2e: E2EContext,

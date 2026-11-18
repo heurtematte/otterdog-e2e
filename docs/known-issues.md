@@ -103,7 +103,7 @@ shortened to the relevant lines.
 | KB-021 | ruleset with the default empty newStatusChecks() never converges | confirmed | model | `cli.kb.ruleset-default-status-checks` |
 | KB-022 | org variable selecting a repo created by the same apply fails | suspected | apply order | `cli.kb.org-variable-same-apply` |
 | KB-023 | org ruleset repo-name patterns after the first warn spuriously | confirmed | model | `enterprise.kb.org-ruleset-repo-patterns` |
-| KB-024 | imported Free org fails validation (members_can_create_private_pages) | suspected | import | `cli.import.validate` |
+| KB-024 | imported Free org fails validation (members_can_create_private_pages) | fixed (#925, 1.8.0) | import | `cli.import.validate` |
 | KB-025 | secret value with two or more `:` crashes (ValueError) | fixed (#923, 1.8.0) | model | `O-KB-SECRET-WITH-COLONS` |
 | KB-026 | plain secret values echoed in output and PR comments | confirmed | model, webapp | - |
 | KB-027 | auto-merge eligibility compares team names with slugs | suspected | webapp | - |
@@ -809,9 +809,18 @@ warning to `repo-a`.
 
 ### KB-024 — an imported Free organization can fail validation (members_can_create_private_pages)
 
-Status: **suspected** · Upstream: none · Scenarios: `cli.import.validate` (tests/cli/test_import.py)
+Status: **fixed** (1.8.0) · Upstream: https://github.com/eclipse-csi/otterdog/pull/925 · Scenarios: `cli.import.validate`
+(tests/cli/test_import.py)
 
 Evidence: `otterdog/models/organization_settings.py:126-130`, `otterdog/resources/schemas/settings.json:74-77`.
+
+Fixed by #925 (c0d9203, in v1.8.0; "ignore the private pages setting reported for non-enterprise plans"):
+`OrganizationSettings.get_mapping_from_provider` leaves `members_can_create_private_pages` unset when GitHub names a
+plan other than `enterprise`, so the reported value is neither compared nor imported; enterprise organizations, and
+an unknown plan (only owners read it), keep the value. The validation that refuses `true` below Enterprise is kept.
+`cli.import.validate` runs strict on SUTs from 1.8.0 and stays an expected failure on older ones; the template's
+`false` no longer differs from a Free or Team organization, so the baseline needs no hidden key for it. The text below
+describes the defect as it was.
 
 The validation accepts `members_can_create_private_pages: true` only with plan `enterprise`. The GitHub API was seen
 to report `true` for a Free org (the maintainer's imported config, FACTS cli R 19), so `import` then writes a

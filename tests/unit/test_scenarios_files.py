@@ -319,6 +319,26 @@ def test_offline_rules_apply_to_files(project: Path) -> None:
     assert_error(project, r"cs\.jsonnet:2\): offline scenarios cannot use code_scanning", body, tier_dir="offline")
 
 
+def test_offline_base_config_may_set_code_scanning_languages(project: Path) -> None:
+    """local-plan only loads the -BASE config, never validates it: its code scanning languages (setup enabled) call no
+    GitHub API, so base_fragments may set them offline; the step's own configuration still may not."""
+    enabled = (
+        "orgs.newRepo('{{ p }}-a') "
+        "{ code_scanning_default_setup_enabled: true, code_scanning_default_languages: ['go'] }"
+    )
+    plain = "orgs.newRepo('{{ p }}-a') { code_scanning_default_setup_enabled: true }"
+    loaded = scenario(
+        project,
+        f'- base_fragments: {{repositories: ["{enabled}"]}}\n  fragments: {{repositories: ["{plain}"]}}',
+        tier_dir="offline",
+    )
+    assert loaded.steps[0].base_fragments is not None
+    body = f'- base_fragments: {{repositories: ["{plain}"]}}\n  fragments: {{repositories: ["{enabled}"]}}'
+    assert_error(project, r"fragments\.repositories\[0\] .*cannot use code_scanning", body, tier_dir="offline")
+    team = "- base_fragments: {repositories: [\"orgs.newRepo('{{ p }}-a')\"], teams: [\"orgs.newTeam('{{ p }}-t')\"]}"
+    assert_error(project, "offline scenarios cannot define teams", team, tier_dir="offline")
+
+
 def test_offline_logins_in_files_are_refused(project: Path) -> None:
     """Offline scenarios have no logins, in files and their vars too."""
     write(project / "scenarios" / "fragments" / "l.jsonnet", "orgs.newRepo('{{ p }}-{{ who }}')\n")

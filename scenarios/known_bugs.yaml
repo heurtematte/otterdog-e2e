@@ -290,12 +290,12 @@
 
 - id: KB-024
   title: an imported Free organization can fail validation (members_can_create_private_pages true is enterprise-only)
-  status: suspected
+  status: fixed
   evidence:
     - otterdog/models/organization_settings.py:126-130
     - otterdog/resources/schemas/settings.json:74-77
-  upstream: null
-  fixed_in: null
+  upstream: https://github.com/eclipse-csi/otterdog/pull/925
+  fixed_in: 1.8.0
   scenarios: [cli.import.validate]
 
 - id: KB-025

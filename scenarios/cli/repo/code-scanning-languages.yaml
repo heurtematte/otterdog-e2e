@@ -1,0 +1,218 @@
+# repositories.code-scanning (P1): the languages of the code scanning default setup, JavaScript/TypeScript included
+# (#922) and the languages GitHub analyzes on its own (#941).
+id: cli.repo.code-scanning-languages
+title: Code scanning default setup languages of a TypeScript repository
+tier: cli
+description: |
+  The languages of the code scanning default setup (code_scanning_default_languages) of a repository whose sources
+  are TypeScript. GitHub reports JavaScript and TypeScript as 'javascript' and 'typescript' (#888 loads the deprecated
+  'javascript-typescript' as both), but PATCH /repos/{owner}/{repo}/code-scanning/default-setup only accepts the
+  combined 'javascript-typescript': since #922 otterdog sends that value (before it, every apply that enabled or
+  changed the setup with JavaScript/TypeScript failed with 422 "failed to update code scanning config"). Since #941 the
+  configured languages are the minimum set to analyze: an update first reads the analyzed languages
+  (GET .../code-scanning/default-setup) and keeps them, an empty list is not sent (only state and query suite) and is
+  never compared, and a language analyzed in addition to the configured ones is no longer a change.
+  The repository is created first (a repository that does not exist cannot validate languages, #767); the probe of
+  tests/cli/conftest.py (PROBES) commits a TypeScript file and a dispatch-only workflow and waits until GitHub's
+  language detection lists TypeScript. Then: enable the setup for 'javascript-typescript' (#922: apply succeeds,
+  converges), add 'actions' (#941: the change only shows the missing language, JavaScript/TypeScript are kept), leave
+  the languages to GitHub (#941: [] plans nothing), drop 'actions' from the configuration (#941: the analyzed
+  language is kept, nothing planned), disable the setup, enable it again without languages (#941: no languages
+  sent) and remove the repository (apply -d). Every write is pinned by apply.api; the state checks wait for GitHub's
+  asynchronous default setup. Left out: a private repository (the default setup needs Code Security there) and an
+  archived one (cli.repo.archive-side-requests).
+  #922 is in v1.8.0, #941 merged after it: fixed_in skips the scenario on SUTs older than the next minor release.
+priority: P1
+min_plan: free
+fixed_in: "1.9.0"
+# tier timeout 600 s + the probe (300 s for the language detection) + 4 waits for the asynchronous default setup
+timeout: 3000
+tags: [repo, workflows]
+references:
+  - pr: 922
+    note: >-
+      "fix: send javascript-typescript when updating the code scanning default setup" (head b263e6e, in v1.8.0):
+      RepoClient._update_code_scanning_config turns 'javascript' and 'typescript' into 'javascript-typescript' in the
+      body of PATCH .../code-scanning/default-setup (GitHub refused them with 422); steps enable-javascript-typescript
+      and add-language. The request itself and the payload without languages must not change.
+  - pr: 941
+    note: >-
+      "fix(repo): stop reporting code scanning languages added by GitHub" (head 943a45ae, merged as 4c983816a after
+      v1.8.0): the configured languages are a minimum. The update reads the analyzed languages first and keeps them
+      (add-language), an empty list is neither compared (languages-left-to-github) nor sent (enable-without-languages),
+      an analyzed language missing from the configuration is no change (analyzed-language-kept). Offline:
+      O-LPLAN-CODE-SCANNING-LANGUAGES.
+steps:
+  - name: create
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-code-lang') {
+            description: "otterdog e2e: code scanning languages",
+          }
+    plan:
+      expect: changes
+      contains: ['+ add repository[name="{{ p }}-code-lang"]']
+      counts: {add: 1, change: 0, delete: 0}
+    apply:
+      api:
+        sent:
+          - 'POST /orgs/{org}/repos'
+        not_sent:
+          - 'PATCH /repos/{owner}/{repo}/code-scanning/default-setup'
+    state:
+      - {kind: repo_code_scanning_default_setup, repo: "{{ p }}-code-lang", match: {state: not-configured}}
+
+  - name: enable-javascript-typescript
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-code-lang') {
+            description: "otterdog e2e: code scanning languages",
+            code_scanning_default_setup_enabled: true,
+            code_scanning_default_languages: ["javascript-typescript"],
+          }
+    validate:
+      ok: true
+      not_contains: ["is not detected in the repository", "could not validate 'code_scanning_default_languages'"]
+    plan:
+      expect: changes
+      contains: ['~ repository[name="{{ p }}-code-lang"]']
+      counts: {add: 0, delete: 0}
+    apply:
+      expect: ok
+      not_contains: ["failed to update code scanning config", "is not a possible value"]
+      api:
+        sent:
+          - 'PATCH /repos/{owner}/{repo}/code-scanning/default-setup'
+        not_sent:
+          - 'PATCH /repos/{owner}/{repo}'
+    state:
+      - kind: repo_code_scanning_default_setup
+        repo: "{{ p }}-code-lang"
+        match: {state: configured}
+        timeout: 600
+
+  - name: add-language
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-code-lang') {
+            description: "otterdog e2e: code scanning languages",
+            code_scanning_default_setup_enabled: true,
+            code_scanning_default_languages: ["javascript-typescript", "actions"],
+          }
+    validate:
+      ok: true
+      not_contains: ["is not detected in the repository", "could not validate 'code_scanning_default_languages'"]
+    plan:
+      expect: changes
+      contains: ['~ repository[name="{{ p }}-code-lang"]', '"actions"']
+      counts: {add: 0, change: 1, delete: 0}
+    apply:
+      expect: ok
+      not_contains: ["failed to update code scanning config", "failed to retrieve the code scanning config"]
+      api:
+        sent:
+          - 'PATCH /repos/{owner}/{repo}/code-scanning/default-setup'
+        not_sent:
+          - 'PATCH /repos/{owner}/{repo}'
+    state:
+      - kind: repo_code_scanning_default_setup
+        repo: "{{ p }}-code-lang"
+        match: {state: configured}
+        timeout: 600
+
+  - name: languages-left-to-github
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-code-lang') {
+            description: "otterdog e2e: code scanning languages",
+            code_scanning_default_setup_enabled: true,
+          }
+    plan:
+      expect: noop
+      not_contains: [code_scanning_default_languages]
+      counts: {add: 0, change: 0, delete: 0}
+
+  - name: analyzed-language-kept
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-code-lang') {
+            description: "otterdog e2e: code scanning languages",
+            code_scanning_default_setup_enabled: true,
+            code_scanning_default_languages: ["javascript-typescript"],
+          }
+    plan:
+      expect: noop
+      not_contains: [code_scanning_default_languages]
+      counts: {add: 0, change: 0, delete: 0}
+
+  - name: disable
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-code-lang') {
+            description: "otterdog e2e: code scanning languages",
+            code_scanning_default_setup_enabled: false,
+          }
+    plan:
+      expect: changes
+      contains: ['~ repository[name="{{ p }}-code-lang"]']
+      counts: {add: 0, change: 1, delete: 0}
+    apply:
+      api:
+        sent:
+          - 'PATCH /repos/{owner}/{repo}/code-scanning/default-setup'
+        not_sent:
+          - 'PATCH /repos/{owner}/{repo}'
+    state:
+      - kind: repo_code_scanning_default_setup
+        repo: "{{ p }}-code-lang"
+        match: {state: not-configured}
+        timeout: 300
+
+  - name: enable-without-languages
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-code-lang') {
+            description: "otterdog e2e: code scanning languages",
+            code_scanning_default_setup_enabled: true,
+          }
+    plan:
+      expect: changes
+      contains: ['~ repository[name="{{ p }}-code-lang"]']
+      not_contains: [code_scanning_default_languages]
+      counts: {add: 0, change: 1, delete: 0}
+    apply:
+      expect: ok
+      not_contains: ["failed to update code scanning config"]
+      api:
+        sent:
+          - 'PATCH /repos/{owner}/{repo}/code-scanning/default-setup'
+        not_sent:
+          - 'PATCH /repos/{owner}/{repo}'
+    state:
+      - kind: repo_code_scanning_default_setup
+        repo: "{{ p }}-code-lang"
+        match: {state: configured}
+        timeout: 600
+
+  - name: remove
+    fragments: {}
+    plan:
+      expect: changes
+      contains: ['- remove repository[name="{{ p }}-code-lang"]']
+      counts: {add: 0, change: 0, delete: 1}
+    apply:
+      delete: true
+      api:
+        sent:
+          - 'DELETE /repos/{owner}/{repo}'
+        not_sent:
+          - 'PATCH /repos/{owner}/{repo}/code-scanning/default-setup'
+    state:
+      - {kind: repo, name: "{{ p }}-code-lang", absent: true}

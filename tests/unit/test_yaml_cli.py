@@ -409,14 +409,15 @@ UNRELEASED_FIXES = {  # scenario -> first otterdog release with the change it as
     "cli.ruleset.copilot-code-scanning": "1.8.0",  # #900 not merged: the release its head leads to, until the merge
     "regression.archived-repo-team-permissions": "1.8.0",  # #924, main e6ab19e after v1.7.1
     "cli.apply.delete-filter": "1.9.0",  # #939, main 61faaff after v1.8.0
+    "cli.repo.code-scanning-languages": "1.9.0",  # #941 (4c98381 after v1.8.0); #922 is in v1.8.0
 }
-LATEST_RELEASE = "1.7.1"  # release:latest; its fixed_in scenarios run there, the later ones skip
+LATEST_RELEASE = "1.8.0"  # release:latest (v1.8.0, 2026-11-10); its fixed_in scenarios run there, the 1.9.0 ones skip
 LATER_RELEASE = "9.0.0"  # a release after every fixed_in: each scenario runs there
 
 
 def test_unreleased_regressions_skip_on_older_suts() -> None:
-    """Live scenarios with fixed_in skip on SUTs older than it (v1.6.1, and release:latest 1.7.1 for changes merged
-    after it) and run on the version itself, later builds and unknown versions; no other live scenario declares
+    """Live scenarios with fixed_in skip on SUTs older than it (v1.6.1, and release:latest for changes merged after
+    it) and run on the version itself, later builds and unknown versions; no other live scenario declares
     fixed_in."""
     by_id = scenarios_by_id()
     for scenario_id, version in UNRELEASED_FIXES.items():

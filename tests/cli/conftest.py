@@ -23,6 +23,8 @@ Probes:
   of the ``switch`` step) with the admin Mutator and waits until GitHub lists it.
 - ``cli.repo.code-scanning`` after ``create``: commits a Python file and a dispatch-only workflow to the default branch
   and waits (up to 300 s) until GitHub's language detection lists Python, which the ``enable`` step's languages need.
+- ``cli.repo.code-scanning-languages`` after ``create``: the same with a TypeScript file instead of the Python one,
+  until GitHub lists TypeScript ('javascript-typescript' of the ``enable-javascript-typescript`` step).
 
 Helpers of the command tests (tests/cli/test_commands_*.py), all bound to run objects only:
 - ``live_config`` (LiveConfig): renders baseline + fragments, applies them with the SUT under test
@@ -140,13 +142,7 @@ DEVELOP_BRANCH_SLUG = "develop"
 CODE_SCAN_REPO_SLUG = "code-scan"
 LANGUAGE_TIMEOUT = 300.0  # GitHub's language detection runs after the push
 LANGUAGE_INTERVAL = 10.0
-CODE_SCAN_FILES = {
-    "src/e2e_probe.py": (
-        '"""otterdog-acceptance code scanning probe (never imported)."""\n\n\n'
-        "def answer() -> int:\n"
-        '    """Return the answer."""\n'
-        "    return 42\n"
-    ),
+CODE_SCAN_WORKFLOW = {
     ".github/workflows/e2e-probe.yml": (
         "# otterdog-acceptance code scanning probe: dispatch only, never triggered by a push\n"
         "name: e2e-probe\n"
@@ -158,6 +154,25 @@ CODE_SCAN_FILES = {
         "    steps:\n"
         "      - run: echo otterdog-acceptance\n"
     ),
+}
+CODE_SCAN_FILES = {
+    "src/e2e_probe.py": (
+        '"""otterdog-acceptance code scanning probe (never imported)."""\n\n\n'
+        "def answer() -> int:\n"
+        '    """Return the answer."""\n'
+        "    return 42\n"
+    ),
+    **CODE_SCAN_WORKFLOW,
+}
+CODE_LANG_REPO_SLUG = "code-lang"
+CODE_LANG_FILES = {
+    "src/e2e_probe.ts": (
+        "// otterdog-acceptance code scanning probe (never imported)\n"
+        "export function answer(): number {\n"
+        "  return 42;\n"
+        "}\n"
+    ),
+    **CODE_SCAN_WORKFLOW,
 }
 
 
@@ -180,35 +195,47 @@ def develop_branch_probe(env: ProbeEnv) -> None:
     )
 
 
-def python_detected(oracle: Oracle, repo: str) -> dict[str, Any] | None:
-    """The detected languages of ``repo`` once they include Python, else None."""
+def language_detected(oracle: Oracle, repo: str, language: str) -> dict[str, Any] | None:
+    """The detected languages of ``repo`` once they include ``language`` (GitHub's name, e.g. Python), else None."""
     languages = oracle.repo_languages(repo) or {}
-    return dict(languages) if "Python" in languages else None
+    return dict(languages) if language in languages else None
 
 
-def code_scanning_sources_probe(env: ProbeEnv) -> None:
-    """Commit a Python file and a dispatch-only workflow, then wait until GitHub detects Python."""
-    repo = env.run_ctx.name(CODE_SCAN_REPO_SLUG)
+def commit_sources_until_detected(env: ProbeEnv, slug: str, files: Mapping[str, str], language: str) -> None:
+    """Commit ``files`` to the default branch of the run repository ``slug``, then wait until GitHub's language
+    detection lists ``language``."""
+    repo = env.run_ctx.name(slug)
     branch = waiting.wait_until(
         lambda: env.oracle.default_branch(repo),
         timeout=BRANCH_TIMEOUT,
         interval=BRANCH_INTERVAL,
         what=f"default branch of {repo}",
     )
-    env.mutator.commit_files(repo, branch, CODE_SCAN_FILES, "otterdog-acceptance: code scanning probe sources")
+    env.mutator.commit_files(repo, branch, files, "otterdog-acceptance: code scanning probe sources")
     languages = waiting.wait_until(
-        lambda: python_detected(env.oracle, repo),
+        lambda: language_detected(env.oracle, repo, language),
         timeout=LANGUAGE_TIMEOUT,
         interval=LANGUAGE_INTERVAL,
-        what=f"Python among the detected languages of {repo}",
+        what=f"{language} among the detected languages of {repo}",
     )
-    assert "Python" in languages, languages
+    assert language in languages, languages
+
+
+def code_scanning_sources_probe(env: ProbeEnv) -> None:
+    """Commit a Python file and a dispatch-only workflow, then wait until GitHub detects Python."""
+    commit_sources_until_detected(env, CODE_SCAN_REPO_SLUG, CODE_SCAN_FILES, "Python")
+
+
+def typescript_sources_probe(env: ProbeEnv) -> None:
+    """Commit a TypeScript file and a dispatch-only workflow, then wait until GitHub detects TypeScript."""
+    commit_sources_until_detected(env, CODE_LANG_REPO_SLUG, CODE_LANG_FILES, "TypeScript")
 
 
 PROBES: Mapping[str, Probe] = {
     "cli.repo.webhook": Probe(after="update", check=webhook_ping_probe),
     "cli.repo.default-branch": Probe(after="rename", check=develop_branch_probe),
     "cli.repo.code-scanning": Probe(after="create", check=code_scanning_sources_probe),
+    "cli.repo.code-scanning-languages": Probe(after="create", check=typescript_sources_probe),
 }
 
 

@@ -79,7 +79,8 @@ missing or ambiguous (which behaviour, which otterdog version, offline or live).
    - secret values are dummies only: `'********'`, `'e2e-dummy-{{ run }}'`, `pass:<path>` (never applied live) or
      `<provider>:e2e/<path>`;
    - offline steps: no `apply`, `state`, `requires`, `expect_failure_without`, `identities`, `org_level`,
-     `logins.*`; no `teams`, `newTeam`, `code_scanning_default_languages` (their validation calls GitHub); a `plan`
+     `logins.*`; no `teams`, `newTeam`, `code_scanning_default_languages` (their validation calls GitHub; languages
+     are allowed beside `code_scanning_default_setup_enabled: false` and in `base_fragments`); a `plan`
      mapping needs `base_fragments` (`{}` is the bare organization); Info messages need `validate: {verbose: true}`;
      plan gates through `variables: {plan: team}`, never a `plan` setting;
    - live steps: settings fragments need `org_level: true` and never set `plan`, `description`, `billing_email`;

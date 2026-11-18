@@ -26,6 +26,13 @@ min_plan: free
 # tier timeout 600 s + the probe (300 s for the language detection) + up to 900 s for the asynchronous default setup
 timeout: 1800
 tags: [repo, workflows]
+references:
+  - pr: 941
+    note: >-
+      "fix(repo): stop reporting code scanning languages added by GitHub" (head 943a45ae, after v1.8.0): must not
+      change this journey. Enabling from 'not-configured' reads no analyzed language and sends [actions, python] as
+      before, the state still matches exactly these two languages, the disable payload carries no languages; the
+      new semantics (minimum set) are asserted by cli.repo.code-scanning-languages.
 steps:
   - name: create
     fragments:

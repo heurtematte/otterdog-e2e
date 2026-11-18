@@ -163,7 +163,8 @@ step, named after the case, and a control step at the limits. Useful keys:
 - offline settings fragments may set the profile (`description`, `name`, `billing_email`, ...), never `plan`;
 - `teams`, `newTeam` and `code_scanning_default_languages` are refused offline (their validation calls GitHub): test
   those rules live (3.5); languages set beside `code_scanning_default_setup_enabled: false` are validated offline (the
-  language enum, `O-VAL-REPO`);
+  language enum, `O-VAL-REPO`), and the BASE configuration of `local-plan` may set them (it is loaded, never
+  validated: `O-LPLAN-CODE-SCANNING-LANGUAGES`);
 - a rule otterdog does not enforce yet (a registered bug): give the step `known_bug: KB-nnn`.
 
 ```yaml

@@ -1438,33 +1438,38 @@ _GITHUB_CONSTRUCTS = {
     "newTeam": "team validation calls GitHub",
     "code_scanning_default_languages": "validation calls GitHub",
 }
+# constructs a -BASE config may use offline: local-plan only loads it (LocalPlanOperation.load_current_org, no
+# validation), so its code scanning languages never make otterdog read the repository languages from GitHub
+_BASE_ONLY_CONSTRUCTS = frozenset({"code_scanning_default_languages"})
 
 
-def fragment_problems(fragments: ConfigFragments, *, offline: bool) -> list[str]:
+def fragment_problems(fragments: ConfigFragments, *, offline: bool, base: bool = False) -> list[str]:
     """Rule violations of rendered fragments, libraries and overlays: protected settings (offline: the plan only),
     non-dummy secrets (offline: the KB-025 literal is a dummy too), import statements, trailing line comments
     (fragments), overlays replacing settings or setting protected keys, and (offline)
-    teams/newTeam/code_scanning_default_languages. Secret problems never quote the snippet; problems of file content
-    name ``<file>:<line>``."""
+    teams/newTeam/code_scanning_default_languages (``base``: the -BASE config of local-plan, whose
+    code_scanning_default_languages are allowed, _BASE_ONLY_CONSTRUCTS). Secret problems never quote the snippet;
+    problems of file content name ``<file>:<line>``."""
     problems = []
     if offline and fragments.teams:
         problems.append("offline scenarios cannot define teams (validation would call GitHub)")
     for key, snippets in fragments.to_mapping().items():
         for index, snippet in enumerate(snippets):
-            problems += _snippet_problems(snippet, f"fragments.{key}[{index}]", kind=key, offline=offline)
+            problems += _snippet_problems(snippet, f"fragments.{key}[{index}]", kind=key, offline=offline, base=base)
     for name, text in fragments.libraries.items():
-        problems += _snippet_problems(text, f"libraries.{name}", kind="library", offline=offline)
+        problems += _snippet_problems(text, f"libraries.{name}", kind="library", offline=offline, base=base)
     for index, text in enumerate(fragments.overlays):
-        problems += _snippet_problems(text, f"overlay[{index}]", kind="overlay", offline=offline)
+        problems += _snippet_problems(text, f"overlay[{index}]", kind="overlay", offline=offline, base=base)
     return problems
 
 
 def config_problems(
-    text: str, *, label: str = "config", offline: bool = True, import_path: str | None = None
+    text: str, *, label: str = "config", offline: bool = True, import_path: str | None = None, base: bool = False
 ) -> list[str]:
     """Rule violations of a complete offline configuration: import statements other than the template import
-    (``import '<import_path>'``), non-dummy secrets and the offline restrictions."""
-    return _snippet_problems(text, label, kind="config", offline=offline, import_path=import_path)
+    (``import '<import_path>'``), non-dummy secrets and the offline restrictions (``base``: a -BASE config,
+    fragment_problems)."""
+    return _snippet_problems(text, label, kind="config", offline=offline, import_path=import_path, base=base)
 
 
 def step_problems(step: StepSpec, *, offline: bool, import_path: str | None = None) -> list[str]:
@@ -1472,10 +1477,11 @@ def step_problems(step: StepSpec, *, offline: bool, import_path: str | None = No
     the libraries are part of both fragment sets)."""
     problems = fragment_problems(step.fragments, offline=offline)
     if step.base_fragments is not None:
-        problems += fragment_problems(step.base_fragments, offline=offline)
+        problems += fragment_problems(step.base_fragments, offline=offline, base=True)
     for label, text in (("config", step.config), ("base_config", step.base_config)):
         if text is not None:
-            problems += config_problems(text, label=label, offline=offline, import_path=import_path)
+            base = label == "base_config"
+            problems += config_problems(text, label=label, offline=offline, import_path=import_path, base=base)
     return list(dict.fromkeys(problems))
 
 
@@ -1495,9 +1501,10 @@ def overlay_changes_settings(text: str) -> bool:
 
 
 def _snippet_problems(
-    snippet: str, label: str, *, kind: str, offline: bool, import_path: str | None = None
+    snippet: str, label: str, *, kind: str, offline: bool, import_path: str | None = None, base: bool = False
 ) -> list[str]:
-    """Problems of one rendered snippet; ``kind`` is a FRAGMENT_KEYS key, ``library``, ``overlay`` or ``config``."""
+    """Problems of one rendered snippet; ``kind`` is a FRAGMENT_KEYS key, ``library``, ``overlay`` or ``config``;
+    ``base``: a snippet of the -BASE config (_BASE_ONLY_CONSTRUCTS allowed offline)."""
     tokens, trailing_comment = _tokens(snippet)
     found: list[tuple[int | None, str, bool]] = []  # (line, message, the location may quote the snippet)
     forbidden = OFFLINE_FORBIDDEN_SETTINGS if offline else FORBIDDEN_SETTINGS
@@ -1517,6 +1524,7 @@ def _snippet_problems(
         found += [
             (line, f"offline scenarios cannot use {construct} ({_GITHUB_CONSTRUCTS[construct]})", True)
             for line, construct in _github_constructs(tokens)
+            if not (base and construct in _BASE_ONLY_CONSTRUCTS)
         ]
     if isinstance(snippet, SourceText):  # file content: in the order of the file
         found.sort(key=lambda item: item[0] or 0)

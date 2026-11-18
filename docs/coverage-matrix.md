@@ -27,7 +27,7 @@ Inventory of otterdog main @d9dac78 (after v1.7.1; release:latest is v1.7.1), fi
 | [Teams](#teams) | 5 | 5 | 0 | 0 | 100% | 100% | 0 | 0 | 5 |
 | [Managed organization and repository webhooks](#webhooks) | 8 | 6 | 2 | 0 | 75% | 88% | 4 | 0 | 4 |
 | [Secrets and variables (organization, repository, environment)](#secrets-variables) | 12 | 10 | 2 | 0 | 83% | 92% | 6 | 0 | 6 |
-| [Repositories](#repositories) | 18 | 16 | 2 | 0 | 89% | 94% | 5 | 0 | 13 |
+| [Repositories](#repositories) | 18 | 16 | 2 | 0 | 89% | 94% | 6 | 0 | 12 |
 | [Repository Actions settings](#repo-workflows) | 5 | 4 | 1 | 0 | 80% | 90% | 0 | 0 | 5 |
 | [Branch protection rules](#branch-protection) | 10 | 10 | 0 | 0 | 100% | 100% | 2 | 0 | 8 |
 | [Repository and organization rulesets](#rulesets) | 11 | 9 | 2 | 0 | 82% | 91% | 3 | 0 | 8 |
@@ -42,14 +42,14 @@ Inventory of otterdog main @d9dac78 (after v1.7.1; release:latest is v1.7.1), fi
 | [Policies](#policies) | 3 | 3 | 0 | 0 | 100% | 100% | 0 | 0 | 3 |
 | [CHANGELOG fixes (regression guards)](#regressions) | 36 | 33 | 1 | 2 | 92% | 93% | 10 | 0 | 24 |
 | [Unmerged otterdog changes (pull requests and local branches)](#pending) | 5 | 4 | 1 | 0 | 80% | 90% | 0 | 0 | 5 |
-| **Total** | 368 | 314 | 43 | 11 | 85% | 91% | 164 | 0 | 193 |
+| **Total** | 368 | 314 | 43 | 11 | 85% | 91% | 165 | 0 | 192 |
 
 ## Summary by tier
 
 | Tier | Features | Covered | Partial | Gap | Covered % | Weighted % | Offline-verified | Live-verified | Unverified |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
 | `offline` | 122 | 111 | 11 | 0 | 91% | 95% | 122 | 0 | 0 |
-| `cli` | 145 | 122 | 18 | 5 | 84% | 90% | 36 | 0 | 104 |
+| `cli` | 145 | 122 | 18 | 5 | 84% | 90% | 37 | 0 | 103 |
 | `webhooks` | 4 | 3 | 1 | 0 | 75% | 88% | 2 | 0 | 2 |
 | `webapp` | 81 | 69 | 8 | 4 | 85% | 90% | 3 | 0 | 74 |
 | `web_ui` | 14 | 7 | 5 | 2 | 50% | 68% | 1 | 0 | 11 |
@@ -60,7 +60,7 @@ Inventory of otterdog main @d9dac78 (after v1.7.1; release:latest is v1.7.1), fi
 | Priority | Features | Covered | Partial | Gap | Covered % | Weighted % | Offline-verified | Live-verified | Unverified |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
 | P0 | 62 | 62 | 0 | 0 | 100% | 100% | 31 | 0 | 31 |
-| P1 | 144 | 123 | 19 | 2 | 85% | 92% | 66 | 0 | 76 |
+| P1 | 144 | 123 | 19 | 2 | 85% | 92% | 67 | 0 | 75 |
 | P2 | 162 | 129 | 24 | 9 | 80% | 87% | 67 | 0 | 86 |
 
 Tiers:
@@ -1136,7 +1136,7 @@ Details:
     - Properties (`org-settings`): `members_can_create_public_pages`, `members_can_create_private_pages`
     - Operations: modify, validate, converge
     - Known bugs: KB-024
-    - Notes: members_can_create_public_pages false then back to the template's true (oracle, converge).
+    - Notes: members_can_create_public_pages false then back to the template's true (oracle, converge). Since #925 (1.8.0) the members_can_create_private_pages value GitHub reports for a plan other than enterprise is left unset: never compared, never imported (KB-024 fixed, cli.import.validate strict from 1.8.0).
     - Suggested: `enterprise.org.private-pages` in `scenarios/enterprise/org-settings/org-private-pages.yaml`
     - Steps:
         - org_level on an Enterprise Cloud target: settings members_can_create_private_pages true, then false
@@ -1641,7 +1641,7 @@ Details:
 | `repositories.default-branch` | default_branch: switch to an existing branch, otherwise rename the current default branch; skipped for empty repositories (1007 Eclipse overrides, 817 'master') | cli | free | P0 | covered | **unverified** | `cli.repo.default-branch` |
 | `repositories.archive` | archived: archive (last, after the other changes), changes to archived repositories are ignored, unarchive (304 archived Eclipse repositories) | cli | free | P0 | covered | **unverified** | `cli.repo.archive` |
 | `repositories.security` | security analysis: secret_scanning, secret_scanning_push_protection, dependabot_alerts_enabled (vulnerability alerts), dependabot_security_updates_enabled, private_vulnerability_reporting_enabled (ignored on private repositories) | cli | free | P1 | covered | **unverified** | `cli.repo.security` |
-| `repositories.code-scanning` | code scanning default setup: code_scanning_default_setup_enabled, query suite, languages (only disabled on new repositories when configured, #791) | cli | free | P1 | covered | **unverified** | `regression.code-scanning-new-repo`, `regression.private-repo-template-defaults`, `cli.repo.code-scanning` |
+| `repositories.code-scanning` | code scanning default setup: code_scanning_default_setup_enabled, query suite, languages (only disabled on new repositories when configured, #791) | cli | free | P1 | covered | offline | `regression.code-scanning-new-repo`, `regression.private-repo-template-defaults`, `cli.repo.code-scanning`, `cli.repo.code-scanning-languages`, `O-LPLAN-CODE-SCANNING-LANGUAGES` |
 | `repositories.pages` | GitHub Pages: gh_pages_build_type disabled \| legacy (source branch/path) \| workflow, gh_pages_visibility (enterprise) | cli | free | P1 | **partial** | **unverified** | `cli.repo.pages` |
 | `repositories.template-repositories` | is_template, template_repository (create from a template, read-only afterwards), post_process_template_content (mustache-rendered files), auto_init | cli | free | P2 | covered | **unverified** | `tests/cli/test_repo_template.py::test_repository_from_template` |
 | `repositories.fork` | forked_repository '&lt;owner&gt;/&lt;repo&gt;' and fork_default_branch_only: create the repository as a fork (13 repos in 7 orgs) | cli | free | P2 | covered | **unverified** | `cli.repo.fork` |
@@ -1702,7 +1702,7 @@ Details:
     - Source: `otterdog/models/repository.py:95-97`, `otterdog/providers/github/rest/repo_client.py:464-486`, `otterdog/providers/github/rest/repo_client.py:568-590`, `otterdog/models/repository.py:318-378`
     - Properties (`repository`): `code_scanning_default_setup_enabled`, `code_scanning_default_query_suite`, `code_scanning_default_languages`
     - Operations: add, modify, converge, validate
-    - Notes: An existing repository; a probe commits a Python file and a dispatch-only workflow and waits until Python is detected. The setup is then configured with the extended suite for languages [actions, python] (state check timeout 600 s before converge) and disabled.
+    - Notes: An existing repository; a probe commits a Python file and a dispatch-only workflow and waits until Python is detected. The setup is then configured with the extended suite for languages [actions, python] (state check timeout 600 s before converge) and disabled. cli.repo.code-scanning-languages (fixed_in 1.9.0): a TypeScript repository enabled for 'javascript-typescript' (#922: sent as the combined value), 'actions' added (#941: the change shows the missing language only, analyzed ones kept), [] and a dropped analyzed language plan nothing (#941: minimum set), disabled, enabled again without languages (none sent). O-LPLAN-CODE-SCANNING-LANGUAGES: offline, [] is never compared (#941), enable/disable and a disabled setup's languages plan the same on every SUT.
 - **`repositories.pages`** (partial, P1, `cli`): GitHub Pages: gh_pages_build_type disabled | legacy (source branch/path) | workflow, gh_pages_visibility (enterprise)
     - Source: `otterdog/models/repository.py:99-102`, `otterdog/providers/github/rest/repo_client.py:487-566`, `otterdog/models/environment.py:161-173`
     - Properties (`repository`): `gh_pages_build_type`, `gh_pages_source_branch`, `gh_pages_source_path`, `gh_pages_visibility`

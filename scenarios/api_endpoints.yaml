@@ -314,6 +314,11 @@ endpoints:
     source: otterdog/providers/github/rest/repo_client.py:721
     trigger: code_scanning_default_setup_enabled, _query_suite or _languages change
     feature: repositories.code-scanning
+    notes: >-
+      The body carries 'javascript-typescript' for the 'javascript' and 'typescript' otterdog loads and reads (#922,
+      v1.8.0; GitHub refuses them with 422, cli.repo.code-scanning-languages). Since #941 (after v1.8.0) an empty
+      language list is not sent (only state and query_suite), and a language update first reads the analyzed
+      languages (GET of the same path) and sends them with the configured ones.
   - endpoint: PUT /repos/{owner}/{repo}/vulnerability-alerts
     source: otterdog/providers/github/rest/repo_client.py:760
     trigger: dependabot_alerts_enabled becomes true
