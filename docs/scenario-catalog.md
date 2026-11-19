@@ -168,7 +168,7 @@ logins (they could lock the bot out).
 | bootstrap of configs/defaults repositories, baseline, App checks | CFG-01, MOD-INFRA-01 | harness | `otterdog-acceptance bootstrap` |
 | base template resolution and publishing (pinned to a commit) | CFG-02 (template part) | harness | `sut/template.py` |
 | pull relay of App deliveries | DEP-WH-03, WH-RELAY-001 | harness | `webhooks/relay.py` |
-| rate budget gating | PRV-RL-01 | harness | `E2E_MIN_RATE_REMAINING` |
+| rate budget gating, pauses until the reset of the rate limit | PRV-RL-01 | harness | `E2E_MIN_RATE_REMAINING`, `E2E_RATE_WAIT_MAX`, `ratewait.py` |
 | SUTs installed and images built before the first item (no cold install inside an item timeout) | DEP-BUILD-01 | harness (verified) | `pytest_plugin.pytest_runtestloop` |
 | `fixed_in` gating of regressions of unreleased fixes; fixed known bugs xfail only on older SUTs | REG-* | harness | `scenarios/engine.py`, `known_bugs.py`, plugin |
 | untrusted SUT CLI in its own image (`--network none`, read-only, no capabilities) | DEP-BUILD-01, SEC-03 | harness (verified offline with `sha:d0d3b08`) | `otterdog/runtime.py` |

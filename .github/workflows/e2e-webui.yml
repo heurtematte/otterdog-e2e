@@ -241,6 +241,7 @@ jobs:
           E2E_APPROVAL_TEAM: ${{ vars.E2E_APPROVAL_TEAM }}
           E2E_CONTRIBUTORS_TEAM: ${{ vars.E2E_CONTRIBUTORS_TEAM }}
           E2E_MIN_RATE_REMAINING: ${{ vars.E2E_MIN_RATE_REMAINING }}
+          E2E_RATE_WAIT_MAX: ${{ vars.E2E_RATE_WAIT_MAX }}
           E2E_WEB_LOGIN_SPACING: ${{ vars.E2E_WEB_LOGIN_SPACING }}
           # per-instance values of the profile (targets/<profile>.yaml)
           E2E_SAML_SSO: ${{ vars.E2E_SAML_SSO }}

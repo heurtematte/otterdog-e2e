@@ -799,3 +799,72 @@ def test_process_path_and_search_path(env: Env, monkeypatch: pytest.MonkeyPatch)
     assert docker.process_path(stubs) == "/ws/stubs" and docker.process_path(env.workspace.root) == "/ws"
     assert docker.process_path(env.scratch / "elsewhere") == str((env.scratch / "elsewhere").resolve())
     assert docker.search_path(stubs) == f"/ws/stubs{os.pathsep}{CONTAINER_PATH}"
+
+
+# --- rate limits: a pause, then the command once more when it sends no write -----------------------------------------
+RATE_LIMITED = "Error: failed retrieving settings: API rate limit exceeded for user ID 1.\n"
+READS_ONLY = {**API_REPORT, "apis": {"rest": {"errors": {"403": 1}, "endpoints": {"GET /orgs/{org}": {"requests": 1}}}}}
+
+
+def rate_cli(env: Env, command: str, *, reason: str | None = None) -> tuple[OtterdogCli, list[str]]:
+    """A live CLI whose ``command`` hits a rate limit until rate_pause runs."""
+    env.output(command, RATE_LIMITED, exit_code=1)
+    calls: list[str] = []
+
+    def pause(what: str) -> str | None:
+        """The budget resets during the pause."""
+        calls.append(what)
+        env.output(command, "ok\n", exit_code=0)
+        return reason
+
+    cli = env.cli()
+    cli.rate_pause = pause
+    return cli, calls
+
+
+def test_a_rate_limited_read_only_command_runs_again_after_the_pause(env: Env) -> None:
+    """plan hit the rate limit: rate_pause waits, then the plan runs once more in a new cwd (the first attempt keeps its
+    artifacts); the result is the second run, with a note naming the first."""
+    cli, pauses = rate_cli(env, "plan")
+    result = cli.plan()
+    assert pauses == ["otterdog plan"] and len(env.calls()) == 2
+    assert result.exit_code == 0 and result.infra_error is None
+    first = env.calls()[0]["cwd"].rsplit("/", 1)[-1]
+    assert result.notes[-1] == f"run again after a pause for a GitHub rate limit (first attempt: {first})"
+    assert first != result.cwd.name and (env.artifacts / "cli" / first / "stdout.txt").read_text() == RATE_LIMITED
+    assert "run again after a pause" in (env.artifacts / "cli" / result.cwd.name / "cmd.txt").read_text()
+
+
+def test_a_command_with_writes_or_without_report_never_runs_again(env: Env) -> None:
+    """apply may have sent writes before the limit: without a report of its requests, or with a write in it, it keeps
+    its failure and rate_pause is not called; with reads only it runs again."""
+    cli, pauses = rate_cli(env, "apply")
+    result = cli.run("apply")
+    assert pauses == [] and len(env.calls()) == 1 and result.infra_error is not None
+    assert result.notes[-1] == "not run again after the rate limit: it may have sent writes before the limit"
+    (env.outputs / "api-usage.json").write_text(json.dumps(API_REPORT))  # a PUT
+    assert cli.run("apply").infra_error is not None and pauses == []
+    (env.outputs / "api-usage.json").write_text(json.dumps(READS_ONLY))
+    assert cli.run("apply").exit_code == 0 and pauses == ["otterdog apply"]
+
+
+def test_a_pause_that_gives_up_keeps_the_failure(env: Env) -> None:
+    """rate_pause returns why it gave up (E2E_RATE_WAIT_MAX): the command is not run again and the reason is noted."""
+    cli, pauses = rate_cli(env, "validate", reason="github rate budget: core remaining admin 0 < 800 (a pause ...)")
+    result = cli.validate()
+    assert pauses == ["otterdog validate"] and len(env.calls()) == 1 and result.infra_error is not None
+    assert result.notes[-1].startswith("not run again after the rate limit: github rate budget")
+
+
+def test_offline_commands_and_other_infra_errors_never_pause(env: Env) -> None:
+    """Offline CLIs and connection errors (not a rate limit) never call rate_pause; neither does a CLI without one."""
+    cli, pauses = rate_cli(env, "plan")
+    offline = env.cli(offline=True)
+    offline.rate_pause = cli.rate_pause
+    assert offline.plan(local=True).infra_error is not None
+    env.output("validate", (DATA / "plan-network.txt").read_text(), exit_code=2)
+    assert cli.validate().infra_error is not None
+    assert pauses == [] and len(env.calls()) == 2
+    plain = env.cli()
+    env.output("plan", RATE_LIMITED, exit_code=1)
+    assert plain.plan().infra_error is not None and len(env.calls()) == 3

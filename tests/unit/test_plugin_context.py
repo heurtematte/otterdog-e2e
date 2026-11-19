@@ -33,8 +33,10 @@ from otterdog_acceptance.context import (
 from otterdog_acceptance.context import core as context_core
 from otterdog_acceptance.context import helpers as context_helpers
 from otterdog_acceptance.context import sut as context_sut
+from otterdog_acceptance.github.http import GitHubError
 from otterdog_acceptance.naming import new_run_context
 from otterdog_acceptance.otterdog import runtime as runtime_module
+from otterdog_acceptance.ratewait import CoreBudget
 from otterdog_acceptance.redact import REDACTOR
 from otterdog_acceptance.safety import SafetyError
 from otterdog_acceptance.settings import AppCredentials
@@ -1233,6 +1235,33 @@ def test_rate_remaining_lowest_per_identity(tmp_path: Path, live: LiveFakes) -> 
     context.http("author").rate_remaining = 4000  # type: ignore[attr-defined]
     assert context.rate_remaining() == {"admin": 700, "author": 4000}
     assert context.min_rate_threshold() == 800
+
+
+def test_rate_budgets_read_github_and_reuse_a_recent_read(tmp_path: Path, live: LiveFakes) -> None:
+    """GET /rate_limit per identity (its reset kept); a read younger than max_age serves the next gate; an
+    unreadable budget falls back on the last headers seen."""
+    context = new_context(tmp_path, target="free")
+    context.load_target()
+    admin = context.http("admin")
+    admin.rate_remaining, admin.rate_reset = 120, 1_800_000_000  # type: ignore[attr-defined]
+    budgets = context.rate_budgets()
+    assert budgets == {"admin": CoreBudget(120, 1_800_000_000.0)}
+    admin.rate_remaining = 4000  # type: ignore[attr-defined]
+    assert context.rate_budgets(max_age=30.0) == budgets
+    assert context.rate_budgets()["admin"].remaining == 4000
+
+    def unreadable() -> dict:
+        """GET /rate_limit failed."""
+        raise GitHubError(500, "GET", "https://api.github.com/rate_limit", "boom")
+
+    admin.rate_limit = unreadable  # type: ignore[method-assign]
+    assert context.rate_budgets() == {"admin": CoreBudget(4000, 1_800_000_000.0)}
+    assert context.rate_wait_max() == 3600.0
+    context.environ["E2E_RATE_WAIT_MAX"] = "0"
+    assert context.rate_wait_max() == 0.0
+    context.environ["E2E_RATE_WAIT_MAX"] = "an hour"
+    with pytest.raises(ContextError, match="E2E_RATE_WAIT_MAX must be a number"):
+        context.rate_wait_max()
 
 
 def test_run_info_and_results_are_redacted(tmp_path: Path) -> None:

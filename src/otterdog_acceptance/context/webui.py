@@ -134,6 +134,7 @@ class WebUiFacet(SutFacet):
                 http_cache_root=self.scratch / HTTP_CACHE_DIR,
             )
             cli.live_check = self.check_lease_not_lost
+            cli.rate_pause = self.rate_pause_after_limit
             return cli
 
         return self._memo(f"web_cli:{role}:{name}", build)

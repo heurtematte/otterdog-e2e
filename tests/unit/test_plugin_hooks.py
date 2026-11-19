@@ -6,6 +6,7 @@ from __future__ import annotations
 import contextlib
 import json
 import secrets
+import time
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -43,6 +44,7 @@ CLEARED_ENV = (
     "E2E_CHANGE",
     "E2E_WEBAPP_IMAGE",
     "E2E_MIN_RATE_REMAINING",
+    "E2E_RATE_WAIT_MAX",
     "GITHUB_STEP_SUMMARY",
     "GITHUB_ACTIONS",
     "CI",
@@ -87,6 +89,11 @@ class Inner:
         """Artifacts dir of the inner run."""
         return self.settings.artifacts_root / FAKE_RUN_ID
 
+    def run_info(self) -> dict[str, Any]:
+        """run.json of the inner run."""
+        data: dict[str, Any] = json.loads((self.artifacts / "run.json").read_text())
+        return data
+
     def results(self) -> list[dict[str, Any]]:
         """results.jsonl lines of the inner run."""
         path = self.artifacts / "results.jsonl"
@@ -105,6 +112,7 @@ class Inner:
         app_ok: bool = False,
         docker_ok: bool = True,
         rate: int | None = None,
+        rate_reset: int | None = None,
         app_unsafe: bool = False,
     ) -> list[str]:
         """Replace E2EContext.ensure_live by a fake live session; returns the list of calls."""
@@ -132,8 +140,9 @@ class Inner:
                 context.extras["app_reason"] = "unsafe GitHub App: SafetyError: the GitHub App 'x' is owned by 'dev'"
             if rate is not None:
                 http = FakeGitHubHttp(identity="admin")
-                http.rate_remaining = rate
+                http.rate_remaining, http.rate_reset = rate, rate_reset
                 context._http[("admin", "read")] = http  # type: ignore[assignment]
+                self.admin_http = http
 
         self.monkeypatch.setattr(E2EContext, "ensure_live", ensure_live)
         self.monkeypatch.setenv("E2E_TARGET", "fake")
@@ -352,7 +361,55 @@ def test_low_rate_budget_skips(inner: Inner) -> None:
     )
     result = inner.run("-rs")
     result.assert_outcomes(skipped=1)
-    result.stdout.fnmatch_lines(["*github rate budget: core remaining admin 120 < 800*"])
+    result.stdout.fnmatch_lines(["*github rate budget: core remaining admin 120 < 800 (no reset time)*"])
+
+
+def test_low_rate_budget_pauses_until_the_reset(inner: Inner, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Below E2E_MIN_RATE_REMAINING with a known reset: the item pauses until the reset (announced on the terminal,
+    recorded in run.json), then runs."""
+    inner.live(rate=120, rate_reset=int(time.time()) + 600)
+    slept: list[float] = []
+
+    def sleep(seconds: float) -> None:
+        """The budget resets during the pause."""
+        slept.append(seconds)
+        inner.admin_http.rate_remaining = 5000
+
+    monkeypatch.setattr("otterdog_acceptance.ratewait.pause_sleep", sleep)
+    inner.pytester.makepyfile(
+        test_rate="""
+        import pytest
+
+        @pytest.mark.live
+        def test_live():
+            pass
+        """
+    )
+    result = inner.run("-rs")
+    result.assert_outcomes(passed=1)
+    assert len(slept) == 1 and 590 < slept[0] <= 605
+    result.stdout.fnmatch_lines(["*rate limit: core remaining admin 120, test_rate.py::test_live pauses 60? s*"])
+    (pause,) = inner.run_info()["rate_pauses"]
+    assert pause["what"] == "test_rate.py::test_live" and pause["low"] == {"admin": 120}
+
+
+def test_a_reset_beyond_the_rate_wait_max_skips(inner: Inner, monkeypatch: pytest.MonkeyPatch) -> None:
+    """E2E_RATE_WAIT_MAX shorter than the wait for the reset: the item is skipped, nothing sleeps."""
+    inner.live(rate=120, rate_reset=int(time.time()) + 600)
+    monkeypatch.setenv("E2E_RATE_WAIT_MAX", "300")
+    monkeypatch.setattr("otterdog_acceptance.ratewait.pause_sleep", lambda seconds: pytest.fail("must not pause"))
+    inner.pytester.makepyfile(
+        test_rate="""
+        import pytest
+
+        @pytest.mark.live
+        def test_live():
+            pass
+        """
+    )
+    result = inner.run("-rs")
+    result.assert_outcomes(skipped=1)
+    result.stdout.fnmatch_lines(["*github rate budget: core remaining admin 120 < 800 (a pause of * s exceeds*"])
 
 
 def test_known_bugs_become_non_strict_xfails(inner: Inner, monkeypatch: pytest.MonkeyPatch) -> None:

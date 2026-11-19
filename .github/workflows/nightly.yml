@@ -27,6 +27,9 @@ jobs:
       id-token: write
     strategy:
       fail-fast: false
+      # two instances at a time: the instances share accounts, so their sessions share the 5000 requests per hour of
+      # the admin; a session that runs dry pauses until the reset (E2E_RATE_WAIT_MAX)
+      max-parallel: 2
       matrix:
         target: ${{ fromJSON(vars.E2E_TARGETS || '["free"]') }}
     uses: ./.github/workflows/e2e.yml
@@ -48,6 +51,9 @@ jobs:
       id-token: write
     strategy:
       fail-fast: false
+      # two instances at a time: the instances share accounts, so their sessions share the 5000 requests per hour of
+      # the admin; a session that runs dry pauses until the reset (E2E_RATE_WAIT_MAX)
+      max-parallel: 2
       matrix:
         target: ${{ fromJSON(vars.E2E_TARGETS || '["free"]') }}
     uses: ./.github/workflows/e2e.yml

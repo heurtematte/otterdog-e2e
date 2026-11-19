@@ -620,10 +620,10 @@ def test_e2e_workflow_contract() -> None:
         if "TARGET" in (step.get("env") or {}):
             assert step["env"]["TARGET"] == "${{ matrix.target }}", step.get("name")
     assert_checks_the_instance("e2e", "e2e")
-    assert e2e["timeout-minutes"] == 150
+    assert e2e["timeout-minutes"] == 300  # the session and its rate-limit pauses, under the 360 min of a job
     assert e2e["env"]["E2E_LANE"] == "${{ inputs.lane }}"
     run_index, run = step_by_id(e2e, "run")
-    assert run["timeout-minutes"] == 120
+    assert run["timeout-minutes"] == 270
     assert "otterdog-acceptance" in run["run"]
     janitor_index, janitor = step_by_id(e2e, "janitor")
     assert janitor_index > run_index
@@ -691,6 +691,8 @@ def test_nightly_runs_release_then_main() -> None:
     assert release["with"]["sut"] == "release:latest"
     assert main["with"]["sut"] == "branch:main" and main["with"]["base_sut"] == "release:latest"
     assert main["needs"] == "release"
+    for job in (release, main):  # the instances share the admin's rate budget: two sessions at a time
+        assert job["strategy"]["max-parallel"] == 2 and job["strategy"]["fail-fast"] is False
 
 
 def test_janitor_workflow_contract() -> None:

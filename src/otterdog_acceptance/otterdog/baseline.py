@@ -284,6 +284,7 @@ class BaselineManager:
                 http_cache_root=getattr(reset, "http_cache_root", None),
             )
             self._guard_cli.live_check = getattr(reset, "live_check", None)
+            self._guard_cli.rate_pause = getattr(reset, "rate_pause", None)
         return self._guard_cli
 
     # --- reset ------------------------------------------------------------------------------------------------------

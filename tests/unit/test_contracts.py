@@ -97,6 +97,15 @@ PUBLIC_NAMES: dict[str, list[str]] = {
         "from_plan",
         "probe_capabilities",
     ],
+    "otterdog_acceptance.ratewait": [
+        "CoreBudget",
+        "RatePause",
+        "core_budget",
+        "rate_limited",
+        "alarm_suspended",
+        "pause_for_rate_limit",
+        "pause_sleep",
+    ],
     "otterdog_acceptance.redact": [
         "Redactor",
         "REDACTOR",

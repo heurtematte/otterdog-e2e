@@ -9,8 +9,10 @@ runs.
 
 from __future__ import annotations
 
+import itertools
 import logging
-from collections.abc import Callable
+import time
+from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -30,12 +32,16 @@ if TYPE_CHECKING:
     from otterdog_acceptance.github.lease import OrgLease
     from otterdog_acceptance.github.mutate import Mutator
     from otterdog_acceptance.github.oracle import Oracle
+    from otterdog_acceptance.ratewait import CoreBudget
     from otterdog_acceptance.safety import AppIsolation, VerifiedOrg
     from otterdog_acceptance.settings import AppCredentials, Target
 
 logger = logging.getLogger(__name__)
 
 LEASE_WAIT_ENV = "E2E_LEASE_WAIT"  # seconds to wait for a busy org lease (default 0: fail fast)
+MIN_RATE_REMAINING = 800  # E2E_MIN_RATE_REMAINING: live items pause (or are skipped) below this core budget
+MIN_RATE_ENV = "E2E_MIN_RATE_REMAINING"
+RATE_READ_MAX_AGE = 30.0  # seconds a GET /rate_limit serves the gates of the next live items
 MUTATOR_IDENTITIES = ("admin", "author", "approver", "outsider")
 
 
@@ -150,6 +156,103 @@ class LiveFacet(ContextState):
             raise SafetyError(
                 f"the org lease of run {self.run_ctx.run_id} was lost (taken over or deleted): refusing further writes"
             )
+
+    # --- rate budgets ----------------------------------------------------------------------------------------------
+    def rate_remaining(self) -> dict[str, int]:
+        """Lowest core x-ratelimit-remaining seen per identity (from the clients' last responses)."""
+        rates: dict[str, int] = {}
+        for (name, _mode), http in self._http.items():
+            core = (http.rate_snapshot() or {}).get("core") or {}
+            remaining = core.get("remaining") if isinstance(core, Mapping) else None
+            if remaining is None:
+                continue
+            rates[name] = min(int(remaining), rates.get(name, int(remaining)))
+        return rates
+
+    def min_rate_threshold(self) -> int:
+        """E2E_MIN_RATE_REMAINING (default MIN_RATE_REMAINING)."""
+        return int(self.environ.get(MIN_RATE_ENV) or MIN_RATE_REMAINING)
+
+    def rate_wait_max(self) -> float:
+        """E2E_RATE_WAIT_MAX (default 3600 s): the longest pause for the rate limit of one item or command; 0 disables
+        the pauses (ContextError when it is not a number)."""
+        from otterdog_acceptance.ratewait import DEFAULT_RATE_WAIT_MAX, RATE_WAIT_ENV
+
+        raw = (self.environ.get(RATE_WAIT_ENV) or "").strip()
+        try:
+            return max(float(raw), 0.0) if raw else DEFAULT_RATE_WAIT_MAX
+        except ValueError:
+            raise ContextError(f"{RATE_WAIT_ENV} must be a number of seconds, got {raw!r}") from None
+
+    def rate_budgets(self, *, max_age: float = 0.0) -> dict[str, CoreBudget]:
+        """Core budgets of the identities this session talks to: GET /rate_limit (free), else the last headers seen;
+        a read younger than ``max_age`` seconds is reused (the gates of consecutive items)."""
+        from otterdog_acceptance.ratewait import CoreBudget, core_budget
+
+        cached = self.extras.get("rate_budgets")
+        if max_age > 0 and cached is not None and time.monotonic() - cached[0] < max_age:
+            return dict(cached[1])
+        budgets: dict[str, CoreBudget] = {}
+        for name in sorted({name for name, _mode in self._http}):
+            http = self.http(name)
+            budget = None
+            try:
+                budget = core_budget(http.rate_limit())
+            except Exception as exc:  # noqa: BLE001 - the last headers seen stand in for an unreadable budget
+                logger.warning("GET /rate_limit (%s) failed: %s", name, describe_error(exc))
+            if budget is None:
+                core = (http.rate_snapshot() or {}).get("core") or {}
+                remaining, reset = core.get("remaining"), core.get("reset")
+                if isinstance(remaining, int):
+                    budget = CoreBudget(remaining, float(reset) if isinstance(reset, int) else None)
+            if budget is not None:
+                budgets[name] = budget
+        self.extras["rate_budgets"] = (time.monotonic(), dict(budgets))
+        return budgets
+
+    def pause_for_rate_limit(self, what: str, *, after_limit: bool = False) -> str | None:
+        """Pause while an identity's core budget is below E2E_MIN_RATE_REMAINING, until its reset
+        (ratewait.pause_for_rate_limit, at most E2E_RATE_WAIT_MAX seconds); None when ``what`` (an item, a command)
+        may go on, else the reason it gave up. ``after_limit``: a command just hit a limit (OtterdogCli.rate_pause).
+        Every pause is logged, written to the terminal (extras["notify"]) and recorded in run.json (rate_pauses)."""
+        from otterdog_acceptance import ratewait
+
+        def announce(pause: ratewait.RatePause) -> None:
+            """Log, terminal line and run.json record of one pause."""
+            line = pause.describe()
+            logger.warning("%s", line)
+            notify = self.extras.get("notify")
+            if callable(notify):
+                notify(f"otterdog-acceptance: {line}")
+            record = {
+                "what": pause.what,
+                "seconds": round(pause.seconds),
+                "low": dict(pause.low),
+                "at": datetime.now(UTC).isoformat(timespec="seconds"),
+            }
+            self.write_run_info(rate_pauses=[*(self.run_info.get("rate_pauses") or []), record])
+
+        reads = itertools.count()
+
+        def read() -> dict[str, CoreBudget]:
+            """The first read of an item's gate may reuse a recent one; a command that hit a limit and every read
+            after a pause read GitHub again."""
+            first = next(reads) == 0
+            return self.rate_budgets(max_age=RATE_READ_MAX_AGE if first and not after_limit else 0.0)
+
+        return ratewait.pause_for_rate_limit(
+            what,
+            read,
+            threshold=self.min_rate_threshold(),
+            max_wait=self.rate_wait_max(),
+            after_limit=after_limit,
+            on_pause=announce,
+            sleep=lambda seconds: ratewait.pause_sleep(seconds),
+        )
+
+    def rate_pause_after_limit(self, what: str) -> str | None:
+        """OtterdogCli.rate_pause: the pause of a live command that hit a rate limit, before it runs again."""
+        return self.pause_for_rate_limit(what, after_limit=True)
 
     def public_http(self) -> GitHubHttp:
         """Anonymous read-only client for public upstream reads (SUT resolution)."""

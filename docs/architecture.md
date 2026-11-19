@@ -15,8 +15,8 @@ root:
 Both build an `E2EContext` (the `context/` package): the settings, the run context, the target, the verified
 organization, the capabilities, the org lease, the [SUTs](glossary.md#systems-under-test) and every client and driver of a session. `context/core.py`
 assembles it from one class per facet over the shared state of `context/state.py`: `live` (target, verification,
-GitHub clients, App, org lease), `sut` (SUTs, otterdog drivers, differential sides), `webui`, `webapp` and `rundata`
-(scenario variables, rate budget, known bugs, change under test).
+GitHub clients, rate budgets and the pauses for the rate limit, App, org lease), `sut` (SUTs, otterdog drivers,
+differential sides), `webui`, `webapp` and `rundata` (scenario variables, known bugs, change under test).
 
 **Instances and profiles.** A target file `targets/<profile>.yaml` is a profile (`free`, `team`, `enterprise`) and
 holds no org-specific value; an instance is one test organization, named by `--target <instance>`, whose env file
@@ -109,7 +109,7 @@ flowchart LR
 
 | Area | Modules | Role |
 |---|---|---|
-| core | `settings`, `safety`, `naming`, `capabilities`, `procs`, `redact`, `waiting`, `batch` | target files (profiles), instances and env files, the verified-org capability object, run ids and resource names, plan/probe capabilities, sanitized subprocesses (and the harness children of a batch), secret redaction, polling helpers, target lists and batch runs |
+| core | `settings`, `safety`, `naming`, `capabilities`, `procs`, `redact`, `waiting`, `ratewait`, `batch` | target files (profiles), instances and env files, the verified-org capability object, run ids and resource names, plan/probe capabilities, sanitized subprocesses (and the harness children of a batch), secret redaction, polling helpers, the pauses for GitHub's rate limits, target lists and batch runs |
 | onboarding | `onboard/envfile`, `onboard/tokens`, `onboard/wizard`, `onboard/cisync` | the only writer of env files (atomic, 0600), the token requirements and prefilled creation URLs per role, the interactive `setup` of an instance, the CI environments, variables and secrets of `ci-sync` |
 | SUT | `sut/spec`, `sut/source`, `sut/version`, `sut/cli_install`, `sut/image`, `sut/template` | resolve a spec to a commit, export it from a blob-less mirror, compute its version, install its CLI (trusted only) or build its docker image, choose its base template |
 | otterdog driver | `otterdog/runtime`, `runner`, `workspace`, `render`, `output`, `baseline` | run the CLI on the host or in a container, prepare workspaces (`otterdog.json`, org config), render the two-layer org config, parse validate/plan/apply output, guard deletions and reset the org |

@@ -96,8 +96,9 @@ tests. `github.capabilities.add: [web_ui]` is refused, `remove: [web_ui]` turns 
 [web-ui-testing.md](web-ui-testing.md).
 
 Webapp items are additionally gated on the transport (`relay` needs docker; `external` needs a URL), on the App and,
-for untrusted SUTs, on a `config_reader` identity. Live items are skipped with "github rate budget" when an identity
-has less than `E2E_MIN_RATE_REMAINING` (default 800) core requests left.
+for untrusted SUTs, on a `config_reader` identity. When an identity has less than `E2E_MIN_RATE_REMAINING` (default
+800) core requests left, a live item pauses until that budget resets; it is skipped with "github rate budget" only when
+the pause would exceed `E2E_RATE_WAIT_MAX` (default 3600 s) or GitHub gave no reset time.
 
 ## Plans of the targets
 

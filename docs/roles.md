@@ -373,8 +373,9 @@ flowchart TD
   refuses the whole session.
 - **Org lease and ledger tag**: `refs/heads/e2e-lease` and `refs/tags/e2e-run/<run>` in the configs repository,
   renewed by a heartbeat; a busy lease fails the live items after `E2E_LEASE_WAIT` seconds.
-- **Gate of each live item**: capabilities, plan, identities, docker, App, web UI, rate budget. A missing role never
-  fails the session: only the items that need it are skipped, before any fixture runs.
+- **Gate of each live item**: capabilities, plan, identities, docker, App, web UI, rate budget (a low budget pauses
+  the item until its reset, `E2E_RATE_WAIT_MAX`). A missing role never fails the session: only the items that need it
+  are skipped, before any fixture runs.
 - **Baseline reset** with the trusted reset CLI at the first item that uses the baseline: the teams with their
   declared members, the baseline repositories, the organization settings.
 - **Sweep this run** (unless `--e2e-keep`), then release the lease and scrub the artifacts.

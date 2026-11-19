@@ -390,6 +390,7 @@ class SutFacet(LiveFacet):
         )
         if not offline:
             cli.live_check = self.check_lease_not_lost
+            cli.rate_pause = self.rate_pause_after_limit
         return cli
 
     # --- differential ---------------------------------------------------------------------------------------------

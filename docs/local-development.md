@@ -502,7 +502,8 @@ The workflow installs `docs/requirements.txt`: the docs group of `poetry.lock` w
 | `--parallel: ... test the same organization` | two instances pin one organization, which serves one session at a time: drop `--parallel` |
 | `E2E_ORG is set in the environment: the env files never override the environment ...` (or `the environment overrides what the env files of the batch set differently: ...`) | a batch of several targets with an exported per-instance value, login or secret: unset the named variables (each env file keeps its own), or give one target |
 | `SafetyError` during a reset | an unmanaged org-level object (team, org secret/variable, ruleset, custom property) without a run id: delete it or declare it in the baseline |
-| skipped: `github rate budget` | an identity has less than `E2E_MIN_RATE_REMAINING` (default 800) core requests left; wait for the reset |
+| skipped: `github rate budget` | an identity has less than `E2E_MIN_RATE_REMAINING` (default 800) core requests left and its reset is further than `E2E_RATE_WAIT_MAX` (default 3600 s); wait for the reset |
+| `rate limit: core remaining ..., <item> pauses N s` | not an error: the session waits for the reset of the rate limit before the item, or before running a rate-limited otterdog command once more (`E2E_RATE_WAIT_MAX=0` skips instead) |
 | skipped: `GitHub App not ready` | App env missing, not installed on All repositories, or suspended: `doctor` shows which |
 | `otterdog ignored unknown properties` | a fragment is in the wrong place (e.g. a repository field at org level) |
 | `did not converge` | an applied change keeps appearing in the plan (drift, plan limitation, a removal without `delete: true`) |

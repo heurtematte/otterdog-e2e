@@ -244,7 +244,8 @@ jobs:
     name: e2e ${{ matrix.target }} (${{ needs.classify.outputs.sut }}, ${{ needs.classify.outputs.trust }})
     needs: classify
     runs-on: ubuntu-24.04
-    timeout-minutes: 150
+    # the session (270 min) plus setup, sweep and upload, under the 360 min of a GitHub-hosted job
+    timeout-minutes: 300
     permissions:
       contents: read
       # the OIDC token logs in to HashiCorp Vault when E2E_VAULT_ROLE is set (secrets kept as vault: references)
@@ -334,6 +335,7 @@ jobs:
           E2E_WEBAPP_WORKERS: ${{ vars.E2E_WEBAPP_WORKERS }}
           E2E_WEBAPP_PORT: ${{ vars.E2E_WEBAPP_PORT }}
           E2E_MIN_RATE_REMAINING: ${{ vars.E2E_MIN_RATE_REMAINING }}
+          E2E_RATE_WAIT_MAX: ${{ vars.E2E_RATE_WAIT_MAX }}
           # per-instance values of the profile (targets/<profile>.yaml)
           E2E_SAML_SSO: ${{ vars.E2E_SAML_SSO }}
           E2E_CAPABILITIES_ADD: ${{ vars.E2E_CAPABILITIES_ADD }}
@@ -383,7 +385,8 @@ jobs:
           echo "instance $TARGET: profile $profile, organization $E2E_ORG ($E2E_ORG_ID)"
       - name: Run the e2e session
         id: run
-        timeout-minutes: 120
+        # about an hour of tests, plus the pauses for the GitHub rate limit (E2E_RATE_WAIT_MAX each, see ratewait.py)
+        timeout-minutes: 270
         env:
           TARGET: ${{ matrix.target }}
           SUT: ${{ needs.classify.outputs.sut }}

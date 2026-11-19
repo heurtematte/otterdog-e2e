@@ -79,6 +79,7 @@ from otterdog_acceptance.otterdog.workspace import (
     web_credentials_env,
     write_private_text,
 )
+from otterdog_acceptance.ratewait import rate_limited
 from otterdog_acceptance.redact import REDACTOR
 from otterdog_acceptance.safety import SafetyError
 
@@ -96,6 +97,25 @@ INFRA_ERROR_RE = re.compile(
 )
 # commands that take no organization positional
 NO_ORG_COMMANDS = frozenset({"--version", "list-projects"})
+# commands that write nothing to GitHub: run again after a pause when they hit a rate limit (import and fetch-config
+# only write the local workspace); any other command runs again only when its recorded requests contain no write
+RATE_RETRY_COMMANDS = frozenset(
+    {
+        "validate",
+        "plan",
+        "local-plan",
+        "show",
+        "show-default",
+        "show-live",
+        "canonical-diff",
+        "import",
+        "fetch-config",
+        "check-status",
+        "list-members",
+        "list-projects",
+        "check-token-permissions",
+    }
+)
 TAIL_LINES = 40
 HTTP_CACHE_LINK = Path(".cache") / "async_http"
 CONTAINER_HTTP_CACHE = ".http-cache"
@@ -333,6 +353,9 @@ class OtterdogCli:
         self._web: WebMode | None = None  # set by WebOtterdogCli only
         # precondition of every live command (E2EContext.check_lease_not_lost: refused once the org lease was lost)
         self.live_check: Callable[[], None] | None = None
+        # pause after a GitHub rate limit (E2EContext.rate_pause_after_limit): None to run the command again, else why
+        # not; unset, a rate-limited command keeps its failure
+        self.rate_pause: Callable[[str], str | None] | None = None
         if identity is not None:
             REDACTOR.add(identity.token)
 
@@ -443,7 +466,47 @@ class OtterdogCli:
         extra_env: Mapping[str, str] | None = None,
     ) -> tuple[str, CliResult]:
         """Run otterdog with the logical argv ``logical`` in a fresh cwd named after ``label``; returns the sequence
-        name (cwd/artifacts dir name) and the result."""
+        name (cwd/artifacts dir name) and the result. A live command that hit a GitHub rate limit runs once more, in
+        a new cwd, after a pause for the limit, when that is safe (_rate_retry)."""
+        name, result = self._run_once(label, logical, input=input, timeout=timeout, extra_env=extra_env)
+        if self._rate_retry(label, logical, result):
+            note = f"run again after a pause for a GitHub rate limit (first attempt: {name})"
+            name, result = self._run_once(label, logical, input=input, timeout=timeout, extra_env=extra_env, note=note)
+        return name, result
+
+    def _rate_retry(self, label: str, logical: Sequence[str], result: CliResult) -> bool:
+        """True when ``result`` hit a GitHub rate limit, the command may run again and the pause for the limit ended
+        (rate_pause returned None). A command may run again when it sends no write: a read-only command
+        (RATE_RETRY_COMMANDS), or one whose recorded requests (api_usage) contain no write; never a command that logs in
+        to the web UI (the logins are rationed). The reason not to is noted in the result."""
+        if self.offline or self.rate_pause is None or not rate_limited(result.infra_error):
+            return False
+        command = logical[0] if logical else ""
+        reason: str | None
+        if self._logs_in(logical):
+            reason = "it logs in to the GitHub web UI"
+        elif command in RATE_RETRY_COMMANDS or (result.api_usage is not None and not result.api_usage.writes()):
+            reason = self.rate_pause(f"otterdog {label}")
+        else:
+            reason = "it may have sent writes before the limit"
+        if reason is not None:
+            result.notes.append(f"not run again after the rate limit: {reason}")
+            log.warning("otterdog %s hit a GitHub rate limit and is not run again: %s", label, reason)
+            return False
+        return True
+
+    def _run_once(
+        self,
+        label: str,
+        logical: list[str],
+        *,
+        input: str | None = None,
+        timeout: float | None = None,
+        extra_env: Mapping[str, str] | None = None,
+        note: str | None = None,
+    ) -> tuple[str, CliResult]:
+        """One run of ``logical`` in a fresh cwd (``note`` goes into its cmd.txt); returns the sequence name and the
+        result."""
         if not self.offline and _verbosity(logical) > 1:
             raise SafetyError("live otterdog commands never get more than -v (higher levels trace secrets)")
         if not self.offline and self.live_check is not None:
@@ -467,6 +530,8 @@ class OtterdogCli:
             result.notes.append(
                 f"untrusted workspace: removed {len(removed)} planted link(s): {', '.join(removed[:20])}"
             )
+        if note:
+            result.notes.append(note)
         self._export(name, result, process)
         return name, result
 

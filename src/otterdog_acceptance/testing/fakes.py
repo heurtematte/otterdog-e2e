@@ -190,6 +190,7 @@ class FakeGitHubHttp:
         self.calls: list[HttpCall] = []
         self.unavailable: dict[str, int] = {}
         self.rate_remaining = 5000
+        self.rate_reset: int | None = None  # epoch seconds of the next reset (None: GitHub gave none)
 
     def add(
         self,
@@ -340,13 +341,20 @@ class FakeGitHubHttp:
         header = None if self.expires_at is None else self.expires_at.strftime("%Y-%m-%d %H:%M:%S UTC")
         return TokenInfo(kind, scopes, self.expires_at, header)
 
+    def _core(self) -> dict[str, Any]:
+        """The core budget (with its reset when one is set)."""
+        core: dict[str, Any] = {"remaining": self.rate_remaining, "limit": 5000}
+        if self.rate_reset is not None:
+            core["reset"] = self.rate_reset
+        return core
+
     def rate_snapshot(self) -> dict[str, Any]:
         """A static core budget."""
-        return {"core": {"remaining": self.rate_remaining, "limit": 5000}}
+        return {"core": self._core()}
 
     def rate_limit(self) -> dict:
         """GET /rate_limit equivalent."""
-        return {"resources": {"core": {"remaining": self.rate_remaining, "limit": 5000}}}
+        return {"resources": {"core": self._core()}}
 
 
 def json_dumps(body: Any) -> bytes:

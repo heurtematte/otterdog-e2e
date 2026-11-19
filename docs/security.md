@@ -544,9 +544,9 @@ the instance is named after its profile), `E2E_ORG`, `E2E_ORG_ID`, `E2E_ALLOWED_
 `E2E_ORACLE_LOGIN`, `E2E_AUTHOR_LOGIN`, `E2E_APPROVER_LOGIN`, `E2E_OUTSIDER_LOGIN`, `E2E_CONFIG_READER_LOGIN`,
 `E2E_APP_ID`, `E2E_APP_SLUG`, and optionally `E2E_CONFIGS_REPO`, `E2E_ORG_CONFIG_REPO`, `E2E_DEFAULTS_REPO`,
 `E2E_TEMPLATE_MODE`, `E2E_TEMPLATE_URL`, `E2E_ADMIN_TEAM`, `E2E_APPROVAL_TEAM`, `E2E_CONTRIBUTORS_TEAM`,
-`E2E_VALIDATION_CONTEXT`, `E2E_SYNC_CONTEXT`, `E2E_WEBAPP_WORKERS`, `E2E_WEBAPP_PORT`, `E2E_MIN_RATE_REMAINING`, the
-per-instance values of the profile `E2E_SAML_SSO` (`true` when the organization enforces SAML SSO),
-`E2E_CAPABILITIES_ADD`, `E2E_CAPABILITIES_REMOVE` (comma separated capability names) and `E2E_WEB_PROBE_APP_SLUG`,
+`E2E_VALIDATION_CONTEXT`, `E2E_SYNC_CONTEXT`, `E2E_WEBAPP_WORKERS`, `E2E_WEBAPP_PORT`, `E2E_MIN_RATE_REMAINING`,
+`E2E_RATE_WAIT_MAX`, the per-instance values of the profile `E2E_SAML_SSO` (`true` when the organization enforces SAML
+SSO), `E2E_CAPABILITIES_ADD`, `E2E_CAPABILITIES_REMOVE` (comma separated capability names) and `E2E_WEB_PROBE_APP_SLUG`,
 and the declared token kinds `E2E_ADMIN_TOKEN_TYPE`, `E2E_ORACLE_TOKEN_TYPE`, `E2E_AUTHOR_TOKEN_TYPE`,
 `E2E_APPROVER_TOKEN_TYPE`, `E2E_OUTSIDER_TOKEN_TYPE`, `E2E_CONFIG_READER_TOKEN_TYPE` (`auto`, `classic` or
 `fine-grained`). Keep every `E2E_*` secret and variable of an instance in its environments: never at repository or

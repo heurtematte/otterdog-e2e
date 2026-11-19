@@ -30,6 +30,7 @@ items, and their expected deltas feed the session's differential report.
 from __future__ import annotations
 
 import contextlib
+import functools
 import json
 import logging
 import os
@@ -806,14 +807,10 @@ def _web_ui_gate(item: pytest.Item, context: E2EContext) -> str | None:
 
 
 def _rate_gate(item: pytest.Item, context: E2EContext) -> str | None:
-    """Skip live items when an identity's core budget is below E2E_MIN_RATE_REMAINING."""
-    rates = context.rate_remaining()
-    threshold = context.min_rate_threshold()
-    low = {name: remaining for name, remaining in rates.items() if remaining < threshold}
-    if not low:
-        return None
-    details = ", ".join(f"{name} {remaining}" for name, remaining in sorted(low.items()))
-    return f"github rate budget: core remaining {details} < {threshold}"
+    """Pause while an identity's core budget is below E2E_MIN_RATE_REMAINING, until it resets (the item's timer
+    suspended, at most E2E_RATE_WAIT_MAX seconds: context.pause_for_rate_limit); skip the item when the pause would be
+    longer or the reset time is unknown."""
+    return context.pause_for_rate_limit(item.nodeid)
 
 
 # --- SUT preparation ------------------------------------------------------------------------------------------------
@@ -860,6 +857,7 @@ def pytest_runtestloop(session: pytest.Session) -> None:
     context = peek_context(session.config)
     if context is None:
         return
+    context.extras["notify"] = functools.partial(_terminal_line, session)  # rate-limit pauses (pause_for_rate_limit)
     if needs_dtrack_mock(session.items):
         context.extras["dtrack_mock"] = True  # E2EContext.webapp_deployment starts the stack with the mock
     roles, images = suts_to_prepare(session.items)

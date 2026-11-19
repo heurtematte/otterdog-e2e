@@ -116,7 +116,8 @@ Three runs, cheapest first; each one proves what the previous one cannot.
    (`--no-reset` skips the baseline reset); like every live session it takes the org lease (the branch `e2e-lease`)
    and tags the run ledger (`e2e-run/<run id>`) in the configs repository. Every target should pass with no skipped
    item. A skip states its reason; `github rate budget: core remaining ...` means an identity has fewer requests left
-   than `E2E_MIN_RATE_REMAINING`, and the live items of the session are skipped until its budget recovers.
+   than `E2E_MIN_RATE_REMAINING` and its reset is further than `E2E_RATE_WAIT_MAX` (otherwise the item pauses until
+   the reset: `rate limit: core remaining ..., <item> pauses N s` on the terminal).
 
 2. **A web login** on the instance with the web credentials (`org-level`): it installs the SUT's Playwright Firefox,
    then logs in as the admin with its password and a TOTP code, which proves the `web:browser` and `web:2fa` rows. It
@@ -189,7 +190,9 @@ share the concurrency group `e2e-<instance>` with the nightly runs and the janit
 
 - **Everything, as at night**: `nightly.yml` has no input. On each instance of `E2E_TARGETS`, `release:latest` (the
   offline and live tiers), then `branch:main` against `release:latest` (the differential tier added), then the web-UI
-  tier on the instances of `E2E_WEB_UI_TARGETS` when `E2E_WEB_UI_ENABLED` is `true`:
+  tier on the instances of `E2E_WEB_UI_TARGETS` when `E2E_WEB_UI_ENABLED` is `true`. Two instances run at a time
+  (`max-parallel: 2`): their sessions share the 5000 requests per hour of the accounts they have in common, and a
+  session that runs dry pauses until the reset (`E2E_RATE_WAIT_MAX`, the job allows 300 minutes):
 
   ```bash
   gh workflow run nightly.yml

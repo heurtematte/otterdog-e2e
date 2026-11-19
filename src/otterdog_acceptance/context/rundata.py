@@ -1,8 +1,8 @@
 """Run-data facet of the session context: what scenarios and reports read about the run.
 
 RunDataFacet provides the Jinja variables of live scenarios (SPEC 12.1 (8); logins are the DECLARED ones, F8; ``app_id``
-is the e2e App id, "" without an App, next to ``app_slug``) and of offline ones, the lowest GitHub rate budget seen per
-identity, scenarios/known_bugs.yaml and the change under test (--e2e-change) with the references of the scenarios.
+is the e2e App id, "" without an App, next to ``app_slug``) and of offline ones, scenarios/known_bugs.yaml and the
+change under test (--e2e-change) with the references of the scenarios. The rate budgets and pauses are on LiveFacet.
 """
 
 from __future__ import annotations
@@ -20,8 +20,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-MIN_RATE_REMAINING = 800  # E2E_MIN_RATE_REMAINING: live items are skipped below this core budget
-MIN_RATE_ENV = "E2E_MIN_RATE_REMAINING"
 KNOWN_BUGS_FILE = "known_bugs.yaml"
 DEFAULT_TEAMS: Mapping[str, str] = {
     "admin": "otterdog-admins",
@@ -86,22 +84,6 @@ class RunDataFacet(LiveFacet):
             "app_id": "",
             "teams": dict(DEFAULT_TEAMS),
         }
-
-    # --- reporting --------------------------------------------------------------------------------------------------
-    def rate_remaining(self) -> dict[str, int]:
-        """Lowest core x-ratelimit-remaining seen per identity (from the clients' last responses)."""
-        rates: dict[str, int] = {}
-        for (name, _mode), http in self._http.items():
-            core = (http.rate_snapshot() or {}).get("core") or {}
-            remaining = core.get("remaining") if isinstance(core, Mapping) else None
-            if remaining is None:
-                continue
-            rates[name] = min(int(remaining), rates.get(name, int(remaining)))
-        return rates
-
-    def min_rate_threshold(self) -> int:
-        """E2E_MIN_RATE_REMAINING (default MIN_RATE_REMAINING)."""
-        return int(self.environ.get(MIN_RATE_ENV) or MIN_RATE_REMAINING)
 
     def known_bugs(self) -> dict[str, KnownBug]:
         """scenarios/known_bugs.yaml keyed by id (empty when the file does not exist)."""
