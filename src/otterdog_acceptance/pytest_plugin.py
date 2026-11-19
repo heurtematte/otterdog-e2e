@@ -141,7 +141,8 @@ OPTIONS: tuple[OptionSpec, ...] = (
     OptionSpec("--e2e-base-sut", "base SUT for differential runs; 'auto' = merge base of the SUT [E2E_BASE_SUT]"),
     OptionSpec(
         "--e2e-reset-sut",
-        f"trusted SUT used for resets [E2E_RESET_SUT, default {DEFAULT_RESET_SUT}]",
+        "trusted SUT used for resets; 'auto' = the SUT under test when trusted, else its merge base when trusted, else"
+        f" release:latest [E2E_RESET_SUT, default {DEFAULT_RESET_SUT}]",
         DEFAULT_RESET_SUT,
     ),
     OptionSpec(

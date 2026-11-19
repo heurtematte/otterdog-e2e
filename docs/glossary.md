@@ -17,8 +17,9 @@ The words of the harness and of this documentation. On the documentation site, t
   ([architecture](architecture.md#systems-under-test-and-trust), [security](security.md#untrusted-suts-t1-t3)).
 - **head and base SUT**: a differential run compares two SUTs, the head (`--sut`) and the base (`--base-sut`; `auto`
   is the merge base of the head with upstream `main`).
-- **reset SUT**: the trusted SUT that resets the test organization to its baseline (`--e2e-reset-sut`,
-  `release:latest` by default), never the SUT under test.
+- **reset SUT**: the trusted SUT that resets the test organization to its baseline (`--e2e-reset-sut`). The default
+  `auto` is the SUT under test when it is trusted, else its merge base when trusted, else `release:latest`; never
+  untrusted code.
 - **pin**: the full 40-hex commit a pull request SUT is built from (`pr:900@<sha>`): a later push changes nothing in
   the run.
 

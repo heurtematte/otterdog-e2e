@@ -1168,7 +1168,7 @@ Details:
     - Notes: 44 orgs set packages_containers_internal (42 false), 34 packages_containers_public; the round trip toggles internal only on an enterprise target
     - Suggested: `webui.settings.round-trip` in `tests/web_ui/test_web_settings.py`
     - Steps:
-        - the round trip toggles these keys with the SUT and reads them back with the trusted reader; REST cannot read them, and with the default reset SUT (release:latest, also the default SUT) the reader runs the SUT's own web code, so a symmetric bug of otterdog's web reader and writer passes (the report lists them as self_checked)
+        - the round trip toggles these keys with the SUT and reads them back with the trusted reader; REST cannot read them, and with the default reset SUT (auto: the SUT under test, trusted for this tier) the reader runs the SUT's own web code, so a symmetric bug of otterdog's web reader and writer passes (the report lists them as self_checked)
     - Assert:
         - an independent read of the organization settings pages (a Playwright DOM read of the checkbox and select states, harness-side) agrees with the toggled and the restored values
     - Needs:
@@ -1179,7 +1179,7 @@ Details:
     - Operations: modify, coerce, converge
     - Suggested: `webui.settings.round-trip` in `tests/web_ui/test_web_settings.py`
     - Steps:
-        - the round trip toggles these keys with the SUT and reads them back with the trusted reader; REST cannot read them, and with the default reset SUT (release:latest, also the default SUT) the reader runs the SUT's own web code, so a symmetric bug of otterdog's web reader and writer passes (the report lists them as self_checked)
+        - the round trip toggles these keys with the SUT and reads them back with the trusted reader; REST cannot read them, and with the default reset SUT (auto: the SUT under test, trusted for this tier) the reader runs the SUT's own web code, so a symmetric bug of otterdog's web reader and writer passes (the report lists them as self_checked)
     - Assert:
         - an independent read of the organization settings pages (a Playwright DOM read of the checkbox and select states, harness-side) agrees with the toggled and the restored values
     - Needs:
@@ -1263,7 +1263,7 @@ Details:
     - Needs:
         - target
         - org_level
-        - a reset SUT &gt;= 1.9.0 (--reset-sut): the release:latest reset cannot restore an organization left requiring SHA-pinned actions, which stops its unpinned workflows
+        - a reset SUT &gt;= 1.9.0 (the default auto reset SUT of a trusted SUT &gt;= 1.9.0, or --reset-sut): a 1.8.0 reset cannot restore an organization left requiring SHA-pinned actions, which stops its unpinned workflows
 - **`org-workflows.cache-size`** (partial, P2, `cli`): org max_cache_size_gb (Actions cache storage limit; changes are cost-related in the webapp)
     - Source: `otterdog/models/workflow_settings.py:60-92`, `otterdog/providers/github/rest/org_client.py:562-593`
     - Properties (`org-workflows`): `max_cache_size_gb`

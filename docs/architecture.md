@@ -327,7 +327,9 @@ flowchart TD
   (`*.pem`, `.env*`, `values*.yaml`, `otterdog.json`, ...). The local repository is never modified.
 - Versions follow upstream's dynamic versioning (`X.Y.Z`, `X.(Y+1).0.dev<d>+e2e.g<sha7>[.dirty.<hash8>]`), so the
   webapp shows the expected version.
-- Destructive resets always use a trusted reset SUT (`--e2e-reset-sut`, default `release:latest`).
+- Destructive resets always use a trusted reset SUT (`--e2e-reset-sut`). The default `auto` is the SUT under test
+  when it is trusted, else its merge base when trusted (a pull request), else `release:latest`: the reset loads the
+  SUT's template, whose newest keys an older release refuses.
 
 ## Differential testing
 

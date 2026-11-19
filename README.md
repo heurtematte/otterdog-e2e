@@ -154,7 +154,8 @@ SUT (`--base-sut`), and the [glossary](docs/glossary.md) defines the other terms
 Every SUT runs inside its own docker image (no network for offline commands, read-only root, no capabilities,
 credentials in a 0600 env-file). Trusted SUTs may run in a host virtualenv instead with `E2E_CLI_RUNTIME=host`, and
 the web mode of the web-UI tier always does (its login never reaches a container); untrusted SUTs never do.
-Destructive resets always use a trusted reset SUT (`--e2e-reset-sut`, default `release:latest`).
+Destructive resets always use a trusted reset SUT (`--e2e-reset-sut`, default `auto`: the SUT under test when it is
+trusted, else its merge base, else `release:latest`).
 `otterdog-acceptance sut classify SPEC` prints the trust decision.
 
 ## Commands

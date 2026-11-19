@@ -2432,7 +2432,7 @@ features:
       scenario: webui.settings.round-trip
       file: tests/web_ui/test_web_settings.py
       steps:
-        - "the round trip toggles these keys with the SUT and reads them back with the trusted reader; REST cannot read them, and with the default reset SUT (release:latest, also the default SUT) the reader runs the SUT's own web code, so a symmetric bug of otterdog's web reader and writer passes (the report lists them as self_checked)"
+        - "the round trip toggles these keys with the SUT and reads them back with the trusted reader; REST cannot read them, and with the default reset SUT (auto: the SUT under test, trusted for this tier) the reader runs the SUT's own web code, so a symmetric bug of otterdog's web reader and writer passes (the report lists them as self_checked)"
       assertions:
         - "an independent read of the organization settings pages (a Playwright DOM read of the checkbox and select states, harness-side) agrees with the toggled and the restored values"
       needs:
@@ -2455,7 +2455,7 @@ features:
       scenario: webui.settings.round-trip
       file: tests/web_ui/test_web_settings.py
       steps:
-        - "the round trip toggles these keys with the SUT and reads them back with the trusted reader; REST cannot read them, and with the default reset SUT (release:latest, also the default SUT) the reader runs the SUT's own web code, so a symmetric bug of otterdog's web reader and writer passes (the report lists them as self_checked)"
+        - "the round trip toggles these keys with the SUT and reads them back with the trusted reader; REST cannot read them, and with the default reset SUT (auto: the SUT under test, trusted for this tier) the reader runs the SUT's own web code, so a symmetric bug of otterdog's web reader and writer passes (the report lists them as self_checked)"
       assertions:
         - "an independent read of the organization settings pages (a Playwright DOM read of the checkbox and select states, harness-side) agrees with the toggled and the restored values"
       needs:
@@ -2582,7 +2582,7 @@ features:
       needs:
         - "target"
         - "org_level"
-        - "a reset SUT >= 1.9.0 (--reset-sut): the release:latest reset cannot restore an organization left requiring SHA-pinned actions, which stops its unpinned workflows"
+        - "a reset SUT >= 1.9.0 (the default auto reset SUT of a trusted SUT >= 1.9.0, or --reset-sut): a 1.8.0 reset cannot restore an organization left requiring SHA-pinned actions, which stops its unpinned workflows"
 
   - id: org-workflows.cache-size
     area: org-workflows

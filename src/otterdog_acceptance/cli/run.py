@@ -315,7 +315,7 @@ def run_targets(
 @click.option("--fail-fast", is_flag=True, help=FAIL_FAST_HELP)
 @click.option("--sut", "sut_spec", default=None, help="SUT spec")
 @click.option("--base-sut", default=None, help="base SUT spec (differential)")
-@click.option("--reset-sut", default=None, help="trusted reset SUT spec")
+@click.option("--reset-sut", default=None, help="trusted reset SUT spec (default auto: the SUT when trusted)")
 @click.option(
     "--suite", "suites", multiple=True, callback=lambda ctx, param, value: parse_suites(value), help=SUITE_HELP
 )

@@ -45,8 +45,13 @@ OPTION_ENV: Mapping[str, str] = {
     "e2e_allow_web_ui": "E2E_ALLOW_WEB_UI",  # a flag: true/1/yes enables it
 }
 DEFAULT_SUT = "release:latest"
-DEFAULT_RESET_SUT = "release:latest"
 AUTO_BASE = "auto"  # --e2e-base-sut auto = the merge base of the SUT (ResolvedSut.base_sha)
+# --e2e-reset-sut auto = the SUT under test when it is trusted, else its merge base when trusted, else
+# FALLBACK_RESET_SUT (SutFacet.spec_for): the reset loads the SUT's template, which an older release may refuse (main's
+# template gained sha_pinning_required and actions_policies after 1.8.0, and the 1.8.0 reset could not plan it)
+AUTO_RESET = "auto"
+FALLBACK_RESET_SUT = "release:latest"
+DEFAULT_RESET_SUT = AUTO_RESET
 RUN_FILE = "run.json"
 RESULTS_FILE = "results.jsonl"
 HTTP_CACHE_DIR = "http-cache"  # live HTTP caches of the run (scratch) / offline ones of every run (E2E_CACHE_DIR)

@@ -193,7 +193,7 @@ def test_options_from_config(tmp_path: Path) -> None:
     config = SimpleNamespace(getoption=lambda dest, default=None: values.get(dest, default))
     options = E2EOptions.from_config(config)  # type: ignore[arg-type]
     assert options.target == "free"
-    assert options.sut == "release:latest" and options.reset_sut == "release:latest"
+    assert options.sut == "release:latest" and options.reset_sut == "auto"
     assert options.base_sut == "auto"
     assert options.tags == ("smoke", "repo") and options.scenario == ("cli.*",)
     assert options.artifacts == tmp_path / "art"
@@ -239,7 +239,7 @@ def test_start_session_writes_run_json_and_sets_home(tmp_path: Path, monkeypatch
     assert installed and homes == [context.scratch / "home"] and scopes == [FAKE_RUN_ID]
     run = json.loads((context.artifacts_dir / "run.json").read_text())
     assert run["run_id"] == FAKE_RUN_ID and run["target"] == "free" and run["sut"] == "tag:v1.6.1"
-    assert run["reset_sut"] == "release:latest" and run["argv"] == ["-q", "tests/cli"]
+    assert run["reset_sut"] == "auto" and run["argv"] == ["-q", "tests/cli"]
     assert run["command"] is None  # set only by otterdog-acceptance run|pr (E2E_INVOCATION)
     started = new_context(tmp_path / "cmd", run_id=OTHER_RUN)
     started.environ = {"E2E_INVOCATION": "otterdog-acceptance run --suite offline --sut release:latest"}
@@ -725,6 +725,24 @@ def test_reset_sut_must_be_trusted(tmp_path: Path, suts: dict[str, Any]) -> None
     context = new_context(tmp_path, reset_sut="pr:792@" + fake_sha("pr"))
     with pytest.raises(SafetyError, match="reset SUT"):
         context.installed("reset")
+
+
+def test_reset_spec_auto(tmp_path: Path, suts: dict[str, Any]) -> None:
+    """--e2e-reset-sut auto (the default): the SUT under test when trusted, else its trusted merge base, else
+    release:latest; an explicit reset SUT wins."""
+    resolved = suts["resolved"]
+    resolved["tag:v1.9.0"] = FakeResolved("v1.9.0", fake_sha("v1.9.0"), True)
+    trusted_head = new_context(tmp_path, sut="tag:v1.9.0")
+    assert trusted_head.spec_for("reset") == "tag:v1.9.0"
+    assert trusted_head.installed("reset").sut.label == "v1.9.0"
+    pr = "pr:792@" + fake_sha("pr")
+    assert new_context(tmp_path, sut=pr).spec_for("reset") == "sha:" + fake_sha("base")
+    assert new_context(tmp_path, sut=pr, reset_sut="release:latest").spec_for("reset") == "release:latest"
+    resolved["sha:" + fake_sha("base")] = FakeResolved("sha-base", fake_sha("base"), False)  # not on main
+    assert new_context(tmp_path, sut=pr).spec_for("reset") == "release:latest"
+    resolved["pr:1@" + fake_sha("one")] = FakeResolved("pr1", fake_sha("one"), False)  # no merge base
+    assert new_context(tmp_path, sut="pr:1@" + fake_sha("one")).spec_for("reset") == "release:latest"
+    assert new_context(tmp_path, sut="tag:unknown").spec_for("reset") == "release:latest"  # resolution error
 
 
 def test_base_spec_auto_is_the_merge_base(tmp_path: Path, suts: dict[str, Any]) -> None:

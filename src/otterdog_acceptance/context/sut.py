@@ -1,10 +1,11 @@
 """SUT facet of the session context (SPEC 5.5, SPEC 15): the systems under test and the otterdog drivers.
 
 SutFacet resolves the SUT of each role (head: --e2e-sut, base: --e2e-base-sut with ``auto`` = the merge base, reset:
-the trusted --e2e-reset-sut), provides its CLI (the CLI of the SUT image, trusted SUTs included; a host venv for a
-trusted SUT with E2E_CLI_RUNTIME=host or one granted host trust with --e2e-trust-code; host_installed for the web mode,
-whose credentials never reach a container), builds webapp images and templates, and creates the otterdog drivers
-(renderer, baseline manager, workspaces, CLIs) and the base/head sides of the differential (SutPair).
+the trusted --e2e-reset-sut with ``auto`` = the SUT under test when trusted, else its merge base), provides its CLI
+(the CLI of the SUT image, trusted SUTs included; a host venv for a trusted SUT with E2E_CLI_RUNTIME=host or one granted
+host trust with --e2e-trust-code; host_installed for the web mode, whose credentials never reach a container), builds
+webapp images and templates, and creates the otterdog drivers (renderer, baseline manager, workspaces, CLIs) and the
+base/head sides of the differential (SutPair).
 """
 
 from __future__ import annotations
@@ -21,7 +22,7 @@ from otterdog_acceptance.context.helpers import (
     workspace_literals,
 )
 from otterdog_acceptance.context.live import LiveFacet
-from otterdog_acceptance.context.state import AUTO_BASE, HTTP_CACHE_DIR, ContextError
+from otterdog_acceptance.context.state import AUTO_BASE, AUTO_RESET, FALLBACK_RESET_SUT, HTTP_CACHE_DIR, ContextError
 
 if TYPE_CHECKING:
     from otterdog_acceptance.observe import ObservationRecorder
@@ -55,11 +56,14 @@ class SutFacet(LiveFacet):
 
     # --- systems under test ---------------------------------------------------------------------------------------
     def spec_for(self, role: str) -> str:
-        """SUT spec of a role: head (--e2e-sut), base (--e2e-base-sut, ``auto`` = merge base), reset."""
+        """SUT spec of a role: head (--e2e-sut), base (--e2e-base-sut, ``auto`` = merge base), reset (--e2e-reset-sut,
+        ``auto``: auto_reset_spec)."""
         if role == "head":
             return self.options.sut
         if role == "reset":
-            return self.options.reset_sut
+            if self.options.reset_sut != AUTO_RESET:
+                return self.options.reset_sut
+            return self._memo("reset_spec", self.auto_reset_spec)
         if role != "base":
             raise ValueError(f"unknown SUT role {role!r}, expected one of {SUT_ROLES}")
         base = self.options.base_sut
@@ -74,6 +78,33 @@ class SutFacet(LiveFacet):
                 " one); pass the base explicitly, e.g. --e2e-base-sut sha:<parent commit> or tag:v1.6.1"
             )
         return f"sha:{base_sha}"
+
+    def auto_reset_spec(self) -> str:
+        """The reset SUT of ``--e2e-reset-sut auto``. The reset applies the baseline with the SUT's template, so it
+        needs a SUT that knows every key of that template:
+
+        - the SUT under test when it is trusted by its spec or its resolution (release, tag, branch:main, path, dirty,
+          a sha of main or a release tag): the same code and template, and nothing untrusted runs a reset;
+        - otherwise (a pull request) its merge base when that commit is trusted: a pull request branched off main
+          after a template change carries the keys of main, which the latest release may not know;
+        - otherwise FALLBACK_RESET_SUT (release:latest).
+
+        The reset of a pull request whose own template adds a key still fails: no trusted SUT knows that key yet.
+        """
+        head = self.options.sut
+        try:
+            trusted = self.sut_trusted("head")
+            if trusted is None:  # undecided by the spec: the resolution decides (or raises)
+                trusted = bool(self.resolve(head).trusted)
+            if trusted:
+                return head
+            base_sha = self.resolve(head).base_sha
+            if base_sha and self.resolve(f"sha:{base_sha}").trusted:
+                return f"sha:{base_sha}"
+        except Exception as exc:  # noqa: BLE001 - the fallback stays usable; the head's fixtures report its error
+            logger.warning("no reset SUT from %s: %s", head, describe_error(exc))
+        logger.info("reset SUT %s: neither %s nor its merge base is trusted", FALLBACK_RESET_SUT, head)
+        return FALLBACK_RESET_SUT
 
     def resolve(self, spec: str) -> ResolvedSut:
         """resolve_sut of a spec string (once per context)."""

@@ -211,8 +211,11 @@ session wait for a busy lease instead of failing.
 
 ### Trusted reset SUT (T1, T2)
 
-Baseline resets, scenario cleanups and PR guards run with a trusted SUT (`--e2e-reset-sut`, default
-`release:latest`), never with the SUT under test; an untrusted reset SUT is refused.
+Baseline resets, scenario cleanups and PR guards run with a trusted SUT (`--e2e-reset-sut`); an untrusted reset SUT
+is refused. The default `auto` picks the SUT under test only when it is trusted (release, tag, `branch:main`, a sha
+of main or a release tag, `path:`, `dirty:`), since the reset must load the SUT's template; for a pull request it
+picks the merge base when that commit is trusted, else `release:latest`, so a pull request never resets the
+organization. `--e2e-trust-code` does not make a pull request a reset SUT.
 
 ### Untrusted SUTs (T1, T3)
 

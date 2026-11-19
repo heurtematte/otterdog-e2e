@@ -94,7 +94,7 @@ def test_web_cli_refusals(tmp_path: Path) -> None:
     with pytest.raises(ContextError, match="web-UI tier unavailable"):
         ctx.web_cli("head", name="x")
     ok = context(tmp_path, environ=WEB_ENV)
-    ok._memos[f"resolved:{ok.options.reset_sut}"] = type("Resolved", (), {"trusted": False, "label": "pr1-abc"})()
+    ok._memos[f"resolved:{ok.spec_for('reset')}"] = type("Resolved", (), {"trusted": False, "label": "pr1-abc"})()
     with pytest.raises(SafetyError, match="untrusted SUT pr1-abc"):
         ok.web_cli("reset", name="reader")
 

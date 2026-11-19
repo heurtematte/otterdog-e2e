@@ -20,8 +20,8 @@ web-UI tier (`tests/web_ui`, package `otterdog_acceptance.webui`) covers them.
    admin machine account's web login. The harness never automates the browser itself during tests (only the
    onboarding of the machine accounts does: [onboarding.md](onboarding.md#machine-accounts-in-the-browser)).
 2. **Independent oracles check the result.** 7 of the 12 settings are readable through REST (`GET /orgs/{org}` with
-   the owner token, `admin:org`); the 5 others are read by a TRUSTED otterdog release (the reset SUT, never the SUT
-   under test) through its own web reader (`show-live` without `-n`). Before anything changes, both oracles must agree
+   the owner token, `admin:org`); the 5 others are read by a TRUSTED otterdog (the reset SUT, never untrusted
+   code) through its own web reader (`show-live` without `-n`). Before anything changes, both oracles must agree
    on the overlapping keys.
 3. **The webapp never uses the UI.** A config PR touching a web-only setting is flagged ("require accessing the Web
    UI, need to apply these changes manually"), is not auto-mergeable, is applied partially once merged, and the live
@@ -95,8 +95,8 @@ session: the next round trip on the machine restores them first). Evidence: `<ar
 
 The keys REST cannot read (`has_discussions`, `discussion_source_repository`, `members_can_change_project_visibility`,
 `packages_containers_internal`, `packages_containers_public`) are verified by the trusted reader only. When the reset
-SUT runs the same commit as the SUT under test (the default: both `release:latest`), that reader is the code under
-test, so a symmetric bug of otterdog's web reader and writer would pass: the report lists such keys as
+SUT runs the same commit as the SUT under test (the default `auto` reset SUT of a trusted SUT), that reader is the
+code under test, so a symmetric bug of otterdog's web reader and writer would pass: the report lists such keys as
 `self_checked`, and the coverage matrix counts them as partial until an independent read exists. Run the tier with
 another `--reset-sut` (or a SUT that differs from the reset SUT) to cross-check them.
 
@@ -241,7 +241,7 @@ E2E_WEB_LOGIN=1 E2E_ALLOW_WEB_UI=1 .venv/bin/otterdog-acceptance run --target fr
 
 `--suite cli` only provides the scenario ids that `--scenario 'webui.*'` deselects; `tests/web_ui` is not a suite of
 `run` yet. A SUT under test that is not trusted makes every web test skip with the reason. The reset SUT
-(`--reset-sut`, default `release:latest`) is the trusted reader.
+(`--reset-sut`, default `auto`: the SUT under test, which the web tier requires trusted) is the trusted reader.
 
 ## Costs
 
