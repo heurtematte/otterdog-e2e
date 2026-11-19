@@ -695,6 +695,33 @@ def test_nightly_runs_release_then_main() -> None:
         assert job["strategy"]["max-parallel"] == 2 and job["strategy"]["fail-fast"] is False
 
 
+@pytest.mark.parametrize(
+    ("name", "job_id", "step_id"),
+    [("e2e", "e2e", "run"), ("e2e-webui", "webui", "run"), ("janitor", "janitor", "janitor")],
+)
+def test_long_harness_steps_exec_the_harness(name: str, job_id: str, step_id: str) -> None:
+    """The steps holding an org lease exec the harness: the runner's signals (cancel, step timeout) reach the session,
+    not a shell that dies and orphans it with the lease (a cancelled nightly kept the webapp org for hours)."""
+    _, step = step_by_id(jobs(name)[job_id], step_id)
+    commands = [line.strip() for line in str(step["run"]).splitlines() if "otterdog-acceptance" in line]
+    assert commands and all(line.startswith("exec .venv/bin/otterdog-acceptance") for line in commands), commands
+
+
+@pytest.mark.parametrize(("name", "job_id"), INSTANCE_JOBS[:2])
+def test_an_orphaned_session_stops_before_the_sweep(name: str, job_id: str) -> None:
+    """Right after the session step, always: a harness process that outlived it gets SIGINT (it releases its lease),
+    then SIGTERM, then SIGKILL, before the sweep reads run.json."""
+    job = jobs(name)[job_id]
+    run_index, _ = step_by_id(job, "run")
+    stop_index, stop = step_by_id(job, "stop")
+    janitor_index, _ = step_by_id(job, "janitor")
+    assert stop_index == run_index + 1 < janitor_index
+    assert "always()" in str(stop.get("if")) and isinstance(stop.get("timeout-minutes"), int)
+    script = str(stop["run"])
+    assert "pattern='\\.venv/bin/otterdog-acceptance'" in script and "for sig in INT TERM KILL" in script
+    assert not stop.get("env"), "the stop step needs no secret"
+
+
 def test_janitor_workflow_contract() -> None:
     """janitor.yml: an environment-less check job refusing per-instance repository/organization variables, then the
     scheduled matrix over the enabled targets (after it), trusted environment, same concurrency group."""

@@ -181,6 +181,11 @@ session wait for a busy lease instead of failing.
   expired steal (never a delete, so a session that acquired the lease meanwhile keeps it), and only when the run looks
   dead: its last renewal is older than 20 minutes (the heartbeat renews every 10), or the holder is the janitor's own
   CI job; `--force-takeover` is the explicit override for a run you know is dead.
+- In CI the session step `exec`s the harness, so a cancel or a step timeout signals the session itself (SIGINT: it
+  stops and releases its lease) instead of a shell that dies and orphans it. The `always()` step that follows stops a
+  harness process still running (SIGINT, then SIGTERM, then SIGKILL, 30 seconds apart) before the sweep reads
+  `run.json`: an orphaned session could take the lease after the sweep and keep the organization until the lease
+  expires (3 hours), as a cancelled nightly did on 2026-11-19.
 
 ### Guarded destructive operations (T1, T2)
 

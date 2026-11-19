@@ -181,7 +181,8 @@ jobs:
           [[ "$older_than" =~ ^[0-9]+(\.[0-9]+)?[smhd]?$ ]] || { echo "::error::invalid older_than"; exit 1; }
           args=(janitor --target "$TARGET" --older-than "$older_than")
           if [[ "$APPLY" == true ]]; then args+=(--apply); fi
-          .venv/bin/otterdog-acceptance "${args[@]}"
+          # exec: the runner's signals (cancel, step timeout) reach the session itself, which releases the org lease
+          exec .venv/bin/otterdog-acceptance "${args[@]}"
       - name: Locate the run artifacts
         if: always()
         env:

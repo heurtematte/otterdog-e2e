@@ -303,8 +303,28 @@ jobs:
         run: |
           set -euo pipefail
           # tests/web_ui only: the cli suite is collected for its scenario ids, none of which matches webui.*
-          .venv/bin/otterdog-acceptance run --target "$TARGET" --sut "$SUT" --suite cli --scenario 'webui.*' \
+          # exec: the runner's signals (cancel, step timeout) reach the session itself, which releases the org lease
+          exec .venv/bin/otterdog-acceptance run --target "$TARGET" --sut "$SUT" --suite cli --scenario 'webui.*' \
             tests/web_ui
+      - name: Stop a session that outlived its step
+        id: stop
+        # a cancelled or timed-out step may leave its harness process running: the runner signals the step's process,
+        # and a process that does not stop is orphaned. It could still take the org lease after the sweep below has
+        # read run.json, and keep it until it expires (3 hours). SIGINT first: the session then releases its lease.
+        if: always()
+        timeout-minutes: 3
+        run: |
+          set -euo pipefail
+          pattern='\.venv/bin/otterdog-acceptance'
+          for sig in INT TERM KILL; do
+            pgrep -f "$pattern" > /dev/null || exit 0
+            echo "::warning::a harness process outlived its step: SIG$sig"
+            pkill "-$sig" -f "$pattern" || true
+            for _ in {1..30}; do
+              pgrep -f "$pattern" > /dev/null || exit 0
+              sleep 1
+            done
+          done
       - name: Locate the run artifacts
         if: always()
         env:
