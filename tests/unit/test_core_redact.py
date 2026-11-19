@@ -222,7 +222,7 @@ def test_fd_mask_sink_writes_whole_lines_to_a_descriptor() -> None:
         sink("::add-mask::d%0Ae\n")
         os.close(write_fd)
         with os.fdopen(read_fd, "rb") as handle:
-            assert handle.read() == b"::add-mask::abc\n::add-mask::d%0Ae\n"
+            assert handle.read() == b"\n::add-mask::abc\n\n::add-mask::d%0Ae\n"  # each command on a line of its own
     finally:
         for fd in (read_fd, write_fd):
             with contextlib.suppress(OSError):

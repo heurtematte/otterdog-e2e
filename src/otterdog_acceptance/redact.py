@@ -41,12 +41,14 @@ def mask_sink() -> Callable[[str], None] | None:
 
 def fd_mask_sink(fd: int) -> Callable[[str], None]:
     """A thread-safe sink writing whole lines to the file descriptor ``fd`` (the runner's original stdout, which
-    pytest's fd capture does not redirect)."""
+    pytest's fd capture does not redirect). Each line starts on a line of its own: pytest's terminal writes to the same
+    fd and leaves its progress line open (``tests/x.py ..``), and the runner only reads a workflow command at the start
+    of a line, so an ``::add-mask::`` written after it would be printed with its value instead of masking it."""
     lock = threading.Lock()
 
     def write(line: str) -> None:
-        """Write ``line`` completely (workflow commands must not interleave)."""
-        data = line.encode("utf-8", "replace")
+        """Write a newline and ``line`` completely (workflow commands must not interleave)."""
+        data = ("\n" + line).encode("utf-8", "replace")
         with lock:
             while data:
                 data = data[os.write(fd, data) :]
