@@ -174,6 +174,29 @@ def test_health(api: WebappApi) -> None:
 
 
 @responses.activate
+def test_a_get_on_a_closed_connection_is_sent_again_once(api: WebappApi) -> None:
+    """A GET whose connection was closed without an answer (the webapp's 5 s keep-alive) is sent again once; a second
+    failure, a connect timeout and a POST are never sent again."""
+    closed = requests.exceptions.ConnectionError("('Connection aborted.', RemoteDisconnected('Remote end closed'))")
+    url = f"{BASE}/api/organizations"
+    responses.get(url, body=closed)
+    responses.get(url, json=[{"github_id": ORG}])
+    assert api.organizations() == [{"github_id": ORG}] and len(responses.calls) == 2
+    responses.replace(responses.GET, url, body=closed)
+    with pytest.raises(requests.exceptions.ConnectionError):
+        api.organizations()
+    assert len(responses.calls) == 4  # two more calls: the first one and its single resend
+    responses.replace(responses.GET, url, body=requests.exceptions.ConnectTimeout("connect timeout"))
+    with pytest.raises(requests.exceptions.ConnectTimeout):
+        api.organizations()
+    assert len(responses.calls) == 5
+    responses.post(f"{BASE}/api/anything", body=closed)
+    with pytest.raises(requests.exceptions.ConnectionError):
+        api.post("/api/anything", json_body={})
+    assert len(responses.calls) == 6
+
+
+@responses.activate
 def test_organizations_and_organization(api: WebappApi) -> None:
     """/api/organizations is a list; /api/organizations/<id> is None on 404."""
     responses.get(f"{BASE}/api/organizations", json=[{"github_id": ORG, "project_name": ORG}])

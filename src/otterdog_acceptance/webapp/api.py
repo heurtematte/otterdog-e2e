@@ -53,6 +53,11 @@ BUSY_STATUS = 429
 BUSY_BUDGET = 900.0
 BUSY_RETRY_DEFAULT = 60.0  # when Retry-After is missing or not a number of seconds
 BUSY_RETRY_MIN = 5.0
+# A GET sent again once when its connection was closed without an answer: the webapp's server (hypercorn) closes a
+# kept-alive connection idle for 5 s, the polls of the harness come every 5 s, and the next GET then meets a closed
+# connection ("Remote end closed connection without response", nightly of 2026-11-18). Timeouts are not sent again,
+# nor any POST (not idempotent).
+STALE_CONNECTION_RETRIES = 1
 VERSION_RE = re.compile(r"OtterDog - v([^<\s]+)")  # footer of GET /index (templates/includes/footer.html)
 BLUEPRINT_PAGE_SIZE = 100
 STATISTICS_INTERVALS = ("day", "week", "month")
@@ -349,10 +354,18 @@ class WebappApi:
         allow: Sequence[int] = (200,),
         timeout: float | None = None,
     ) -> requests.Response:
-        """GET ``path`` (no redirects); WebappApiError unless the status is in ``allow``."""
-        response = self.session.get(
-            self.url(path), params=params, timeout=timeout or self.timeout, allow_redirects=False
-        )
+        """GET ``path`` (no redirects), sent again once on a connection closed without an answer
+        (STALE_CONNECTION_RETRIES); WebappApiError unless the status is in ``allow``."""
+        for attempt in range(STALE_CONNECTION_RETRIES + 1):
+            try:
+                response = self.session.get(
+                    self.url(path), params=params, timeout=timeout or self.timeout, allow_redirects=False
+                )
+                break
+            except requests.exceptions.ConnectionError as exc:
+                if attempt == STALE_CONNECTION_RETRIES or isinstance(exc, requests.exceptions.Timeout):
+                    raise
+                _logger.info("GET %s: connection closed without an answer (%s), sending it again", path, exc)
         if response.status_code not in allow:
             raise WebappApiError("GET", response.url or self.url(path), response.status_code, response.text)
         return response
