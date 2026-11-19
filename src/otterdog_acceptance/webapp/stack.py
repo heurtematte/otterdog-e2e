@@ -542,7 +542,7 @@ class WebappStack:
 
     def write_files(self) -> None:
         """Write the compose file, an empty env file, hypercorn-cfg.toml, the Dependency-Track mock script and the App
-        key (0600, dir 0700) to scratch."""
+        key (0644 for the container user, in a 0700 dir) to scratch."""
         for directory in (self.scratch, self.run_dir, self.secrets_dir):
             directory.mkdir(mode=0o700, parents=True, exist_ok=True)
             os.chmod(directory, 0o700)
@@ -556,7 +556,9 @@ class WebappStack:
         fd = os.open(self.key_file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         with os.fdopen(fd, "w", encoding="ascii") as handle:
             handle.write(self.settings.app.private_key_pem)
-        os.chmod(self.key_file, 0o600)
+        # read by the container user: compose bind-mounts a file secret with its host owner and mode, and the webapp
+        # image runs as uid 1000 since otterdog #958 (a CI runner is uid 1001); the 0700 dirs keep other host users out
+        os.chmod(self.key_file, 0o644)
 
     def _write_override_file(self) -> None:
         """compose.override.yaml of the environment overrides (values are compose variables: nothing secret or not

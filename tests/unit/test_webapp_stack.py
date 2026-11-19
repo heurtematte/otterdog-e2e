@@ -221,13 +221,14 @@ def test_secrets_are_registered_with_the_redactor(tmp_path: Path) -> None:
 
 
 def test_write_files(tmp_path: Path) -> None:
-    """Compose file copy, empty env file, hypercorn config and a 0600 key in a 0700 dir, all under scratch."""
+    """Compose file copy, empty env file, hypercorn config and a key readable by the container user (any uid: the
+    otterdog image runs as 1000 since #958) in a 0700 dir, all under scratch."""
     stack = make_stack(tmp_path)
     stack.write_files()
     assert stack.run_dir == tmp_path / "scratch" / "webapp"
     assert stack.compose_file.read_text() == read_resource("compose.e2e.yaml")
     assert stack.env_file.read_text() == ""
-    assert stat.S_IMODE(stack.key_file.stat().st_mode) == 0o600 and stack.key_file.read_text() == FAKE_PEM
+    assert stat.S_IMODE(stack.key_file.stat().st_mode) == 0o644 and stack.key_file.read_text() == FAKE_PEM
     assert stat.S_IMODE(stack.secrets_dir.stat().st_mode) == 0o700
     assert stat.S_IMODE(stack.run_dir.stat().st_mode) == 0o700
     config = tomllib.loads(stack.hypercorn_file.read_text())
