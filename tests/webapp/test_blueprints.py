@@ -445,14 +445,20 @@ def test_blueprint_definitions_are_loaded(
     assert card["name"] == loaded.name, f"card title of {loaded.id}: {card}"
     assert card["path"] == _blob_url(s.org, s.repo, "main", loaded_path), f"definition URL of {loaded.id}: {card}"
     assert nomatch in card["config"], f"the config of {loaded.id} lacks its repo selector: {card}"
+    if hasattr(webapp, "logs"):  # compose stack: the skipped file is reported with its path
+        # by the fetch of the second push, which can still be queued once the card of the first one shows
+        failed_reading = FAILED_READING_LOG.format(path=untyped_path)
+        s.reaction(
+            lambda: webapp.logs(tail=LOG_TAIL),
+            until=lambda logs: failed_reading in logs,
+            what=f"the webapp log reports {untyped_path}",
+            timeout=LOAD_TIMEOUT,
+        )
     assert _blueprint_card(_project_page(s, bp), untyped_id) is None, "a definition without 'type' was loaded (SUT)"
     fetches = _tasks_after(s, FETCH_BLUEPRINTS, s.repo, started)
     assert fetches, f"no {FETCH_BLUEPRINTS} ran after the pushes to {s.repo} (SUT)"
     failed = [task for task in fetches if task.get("status") != "finished"]
     assert not failed, f"{FETCH_BLUEPRINTS} failed on a definition without 'type' instead of skipping it: {failed}"
-    if hasattr(webapp, "logs"):  # compose stack: the skipped file is reported with its path
-        logs = webapp.logs(tail=LOG_TAIL)
-        assert FAILED_READING_LOG.format(path=untyped_path) in logs, f"the webapp log does not report {untyped_path}"
 
     # a global definition, loaded by /internal/init, wins over an org definition pushed later with the same id
     dup_id = bp.blueprint_id(f"{s.slug}-dup")

@@ -7,9 +7,10 @@ GitHub detected (GET /repos/{org}/{repo}/languages; 'actions' always counts, Git
 otterdog/models/repository.py:325-378). The test creates a public run repository with the SUT, commits a Python file
 with the admin Mutator and waits until otterdog itself reports Python (GitHub detects languages asynchronously), then
 validates: 'go' is refused naming the detected languages, 'python' and 'actions' validate, an unknown language is
-refused, and the query suite enum is checked. Since #878 (every release since 1.7.0) the schema's language enum
-refuses 'cobol' while loading the configuration (exit 1, nothing else validated); before, the model's enum rule (its
-value list prints a Python set: KB-038, only the stable prefix is asserted) and the detection refuse it (2 errors).
+refused, and the query suite enum is checked. Since #878 (every release since 1.7.0) the schema's enums refuse
+'cobol' and the query suite 'full' while loading the configuration (exit 1, nothing else validated); before, the
+model's enum rule (its value list prints a Python set: KB-038, only the stable prefix is asserted) and the detection
+refuse 'cobol' (2 errors), and the model refuses the query suite (1 error).
 The output decides which of the two holds: O-VAL-REPO pins the behaviour of each SUT offline. Validation only after
 the repository exists: nothing else is applied; the run repository is removed afterwards (guarded apply -d with the
 trusted reset CLI).
@@ -71,7 +72,8 @@ def test_code_scanning_languages_must_be_detected(
 ) -> None:
     """'go' on a Python repository is a validation error naming 'Python'; 'python' and 'actions' validate; 'cobol' is
     a load error of the schema since #878, else refused twice (enum and detection; the exit code is the number of
-    errors, KB-034, so only non-zero is asserted); the query suite must be default | extended."""
+    errors, KB-034, so only non-zero is asserted); the query suite must be default | extended (a load error since
+    #878)."""
     name = run_ctx.name("cs")
     header = f'repository[name="{name}"]'
     otterdog.workspace.write_org_config(renderer.render(ConfigFragments(repositories=[repository(name)])))
@@ -133,12 +135,19 @@ def test_code_scanning_languages_must_be_detected(
 
         suite = repository(name, code_scanning_default_query_suite="full")
         result, text = validate(otterdog, renderer, suite)
-        message = (
-            f"Error: {header} has 'code_scanning_default_query_suite' set to value 'full', while only values "
-            "['default' | 'extended'] are allowed."
-        )
-        assert message in text, f"the query suite is not refused:\n{text[-TAIL:]}"
-        assert result.validation().errors == 1 and result.exit_code == 1, text[-TAIL:]
+        if SCHEMA_LOAD_ERROR in text:  # since #878, as for the languages
+            message = (
+                f"{SCHEMA_LOAD_ERROR}repositories[name=\"{name}\"].code_scanning_default_query_suite': 'full' is not "
+                "one of ['default', 'extended']"
+            )
+            assert message in text and result.exit_code == 1, f"missing {message!r} (exit 1):\n{text[-TAIL:]}"
+        else:
+            message = (
+                f"Error: {header} has 'code_scanning_default_query_suite' set to value 'full', while only values "
+                "['default' | 'extended'] are allowed."
+            )
+            assert message in text, f"the query suite is not refused:\n{text[-TAIL:]}"
+            assert result.validation().errors == 1 and result.exit_code == 1, text[-TAIL:]
     finally:
         if not e2e.options.keep:
             e2e.remove_run_objects(baseline, baseline.reset_cli)
