@@ -40,8 +40,8 @@ Testable endpoints nobody asserts yet are the gaps of this page: a scenario that
 | `DELETE /orgs/{org}/code-security/configurations/{id}` | a code security configuration is removed (apply -d) | `cli.code-security.configuration/delete` |  |
 | `POST /orgs/{org}/code-security/configurations/{id}/attach` | a repository's code_security_configuration changes, or a repository is created with one | `cli.code-security.configuration/attach-new-repository` |  |
 | `PUT /orgs/{org}/properties/schema/{name}` | a custom property definition is added or changes (add_custom_property, update_custom_property:538) | `cli.custom-property/create`, `cli.custom-property/update` |  |
-| `DELETE /orgs/{org}/properties/schema/{name}` | a custom property definition is removed (apply -d) | `cli.custom-property.flag/remove-definition` |  |
-| `PATCH /repos/{owner}/{repo}/properties/values` | a repository's custom_properties change | `cli.custom-property.flag/flag-false`, `cli.custom-property/create`, `cli.custom-property/update` |  |
+| `DELETE /orgs/{org}/properties/schema/{name}` | a custom property definition is removed (apply -d) | `cli.custom-property.flag/remove-definition`, `cli.kb.custom-property-definition-with-value/remove-both` | `cli.custom-property.flag/remove-value` |
+| `PATCH /repos/{owner}/{repo}/properties/values` | a repository's custom_properties change | `cli.custom-property.flag/flag-false`, `cli.custom-property.flag/remove-value`, `cli.custom-property/create`, `cli.custom-property/update` | `cli.custom-property.flag/remove-definition` |
 | `POST /orgs/{org}/teams` | a team is added | `cli.team.members/author`, `cli.team/create`, `regression.archived-repo-team-permissions/create` |  |
 | `PATCH /orgs/{org}/teams/{name}` | a team's description, privacy, notifications or parent changes | `cli.team/update` |  |
 | `DELETE /orgs/{org}/teams/{name}` | a team is removed (apply -d) | `cli.team/remove` |  |

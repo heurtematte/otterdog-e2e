@@ -17,9 +17,12 @@ description: |
   again, otterdog may plan immutable_releases_enabled of the formerly enforced repositories back to the template's
   false (if GitHub reports them enabled), so that step pins the policy request only. 'all' is left out on purpose: it
   would enforce immutable releases on every repository of the organization, the baseline's included. The last step
-  removes the repositories with the SUT (apply -d). Older SUTs skip it (fixed_in). Unverified on a live
-  organization: whether every plan offers the policy (otterdog leaves the setting unset on 402/403, the state
-  checks would then report it unavailable). org_level: unfiltered plans, full baseline reset as cleanup.
+  removes the repositories with the SUT (apply -d). Older SUTs skip it (fixed_in). The Free plan offers the policy
+  (nightly of 2026-11-18 on the Free org-level organization), but GitHub answers PUT
+  /orgs/{org}/settings/immutable-releases with 204 and otterdog fails the apply unless it gets 200 (KB-090): the
+  policy is changed all the same, so the steps that change it (select-one, policy-none) declare the bug for their
+  apply phase, and the steps after them start from the policy GitHub holds. org_level: unfiltered plans, full
+  baseline reset as cleanup.
 priority: P2
 org_level: true
 min_plan: free
@@ -55,6 +58,7 @@ steps:
       - {kind: repo, name: "{{ p }}-imm-b", match: {private: false}}
 
   - name: select-one
+    known_bug: {id: KB-090, phases: [apply]}
     fragments:
       settings:
         - "immutable_releases_enforced_repositories: 'selected'"
@@ -106,6 +110,7 @@ steps:
         match: {$unordered: ["{{ p }}-imm-a", "{{ p }}-imm-b"]}
 
   - name: policy-none
+    known_bug: {id: KB-090, phases: [apply]}
     fragments:
       repositories: *repos
     plan:

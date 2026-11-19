@@ -7,7 +7,9 @@ repository values into the repository's custom_properties. The test creates thre
 string, true_false) and a public run repository with a value for each, imports the organization (``import -f -n``)
 into a fresh workspace, checks that the import declares the three definitions and the three values, cuts the three
 definition blocks and the repository block out of the imported jsonnet (one 'orgs.<function>('<name>') {' ...
-'},' block per object at one indentation level) and plans them with the session's baseline: nothing may change.
+'},' block per object at one indentation level, or the single line 'orgs.<function>('<name>'),' of an object whose
+fields are all at their template default, like the string property) and plans them with the session's baseline:
+nothing may change.
 Planning the blocks with the regular baseline keeps organization-level import issues (KB-024) out of the round trip.
 Property names use '-' (KB-016).
 """
@@ -99,13 +101,20 @@ def inline_scenario(path: Path, document: str | dict) -> Scenario:
 
 
 def object_block(text: str, function: str, name: str) -> str:
-    """The 'orgs.<function>('<name>') { ... }' block of an imported configuration, without its trailing comma."""
+    """The 'orgs.<function>('<name>') { ... }' block of an imported configuration, without its trailing comma. An
+    object equal to its template default is written on one line ('orgs.<function>('<name>'),': otterdog's
+    write_patch_object_as_json prints ',' for an empty patch); its block is that line."""
     lines = text.splitlines()
-    pattern = re.compile(rf"^(\s*)orgs\.{re.escape(function)}\('{re.escape(name)}'\)")
+    pattern = re.compile(rf"^(\s*)orgs\.{re.escape(function)}\('{re.escape(name)}'\)(?P<rest>.*)$")
     for index, line in enumerate(lines):
         match = pattern.match(line)
         if match is None:
             continue
+        rest = match.group("rest").strip()
+        if rest == ",":
+            return line.rstrip()[:-1]
+        if rest != "{":
+            raise AssertionError(f"unexpected declaration of {name} in the import: {line.strip()!r}")
         closing = f"{match.group(1)}}},"
         for end in range(index + 1, len(lines)):
             if lines[end] == closing:

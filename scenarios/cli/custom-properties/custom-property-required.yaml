@@ -10,7 +10,11 @@ description: |
   the baseline repositories (GitHub sets the default on them too). default_value is diffed only for required
   properties (otterdog/models/custom_property.py:145-152). The second step gives the repository the other allowed
   value. A required property applies to every repository of the organization, so the scenario is org_level (full
-  baseline reset as cleanup: the guarded -d of the run's objects removes the property, then the repository).
+  baseline reset as cleanup). The last step removes the property with the SUT (apply -d): otterdog deletes the
+  definition before it removes the values of the repositories, and GitHub refuses those value updates ("Unexpected
+  property", 422) since the definition is gone, together with its values (KB-087). The step declares the bug for its
+  apply; without that step the cleanup's reset met the same 422 and failed the scenario although the next reset plan
+  was empty (nightly of 2026-11-18).
 priority: P2
 org_level: true
 requires: [custom_properties]
@@ -76,3 +80,17 @@ steps:
       - kind: repo_custom_properties
         repo: "{{ p }}-req-repo"
         match: {"{{ p }}-req": b}
+
+  - name: remove
+    known_bug: {id: KB-087, phases: [apply]}
+    fragments:
+      repositories:
+        - "orgs.newRepo('{{ p }}-req-repo') { description: 'otterdog e2e: repository without a value' }"
+    plan:
+      expect: changes
+      contains:
+        - '- remove custom_property[name="{{ p }}-req"]'
+    apply:
+      delete: true
+    state:
+      - {kind: custom_property, name: "{{ p }}-req", absent: true}

@@ -5,11 +5,12 @@ tier: cli
 description: |
   A value_type true_false custom property (otterdog/models/custom_property.py:52-59) holds the strings 'true' and
   'false' on repositories: the run repository gets 'true', then 'false', each read back by the oracle and
-  converging. A second (string) property is then removed from the configuration together with its repository value
-  and applied with -d: the plan removes the definition ('- remove custom_property[...]'), GitHub drops the values of
-  the deleted property, and the repository converges without it. A repository value alone cannot be removed
-  (one-way diff of custom_properties, KB-005), which is why the value goes away with its definition here. Property
-  names use '-' (KB-016). Definitions are org-level objects with the run prefix: the guarded -d cleanup removes them.
+  converging. A second (string) property then goes in two applies, the order a configuration must follow: its value
+  is removed from the repository first (PATCH .../properties/values with the value null; a removal alone is planned
+  since 1.7.0, KB-005), then its definition with -d ('- remove custom_property[...]', DELETE of the schema, no
+  repository request). Removing the definition and the value in the same apply fails (KB-087:
+  cli.kb.custom-property-definition-with-value). Property names use '-' (KB-016). Definitions are org-level objects
+  with the run prefix: the guarded -d cleanup removes them.
 priority: P2
 requires: [custom_properties]
 tags: [custom-properties, repo]
@@ -73,6 +74,38 @@ steps:
         repo: "{{ p }}-flag-repo"
         match: {"{{ p }}-flag": "false"}
 
+  - name: remove-value
+    known_bug: KB-005  # fixed in 1.7.0: strict from that release on, an expected failure before
+    fragments:
+      custom_properties: *properties
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-flag-repo') {
+            description: "otterdog e2e: true_false custom property",
+            custom_properties: {"{{ p }}-flag": "false"},
+          }
+    plan:
+      expect: changes
+      contains:
+        - '~ repository[name="{{ p }}-flag-repo"]'
+        - '- {{ p }}-note'
+      not_contains:
+        - '- remove custom_property[name="{{ p }}-note"]'
+      counts: {add: 0, change: 1, delete: 0}
+    apply:
+      api:
+        sent:
+          - 'PATCH /repos/{owner}/{repo}/properties/values'
+        not_sent:
+          - 'DELETE /orgs/{org}/properties/schema/{name}'
+    state:
+      - kind: custom_property
+        name: "{{ p }}-note"
+        absent: false
+      - kind: repo_custom_properties
+        repo: "{{ p }}-flag-repo"
+        match: {"{{ p }}-flag": "false", "{{ p }}-note": {$exists: false}}
+
   - name: remove-definition
     fragments:
       custom_properties:
@@ -94,12 +127,15 @@ steps:
         - '- remove custom_property[name="{{ p }}-note"]'
       not_contains:
         - '- remove custom_property[name="{{ p }}-flag"]'
-      counts: {add: 0, delete: 1}
+        - '~ repository[name="{{ p }}-flag-repo"]'
+      counts: {add: 0, change: 0, delete: 1}
     apply:
       delete: true
       api:
         sent:
           - 'DELETE /orgs/{org}/properties/schema/{name}'
+        not_sent:
+          - 'PATCH /repos/{owner}/{repo}/properties/values'
     state:
       - kind: custom_property
         name: "{{ p }}-note"

@@ -9,7 +9,7 @@ otterdog feature coverage of the e2e battery
 
 Inventory of otterdog main @d9dac78 (after v1.7.1; release:latest is v1.7.1), first built at main 9bdeb75 (after v1.6.1): every CLI command and its flags, every property of the configuration model grouped by feature, validation rules, diff semantics, the webapp (webhook events, comment commands, tasks, auto-merge, apply, blueprints, policies, /api and /internal), the webhook receiver contract and notable CHANGELOG fixes, mapped to the existing scenarios and tests of this repository. Gaps and partial coverage carry the outline of the missing test.
 
-**373 features** in 27 areas: 317 covered, 45 partial, 11 gaps; covered 85%, weighted 91% (a partial feature counts half). *Offline-verified* counts the covered or partial features with at least one covering item in the offline tier; *live-verified* those with a recorded green live run of their covering items (`verified_on`: target, SUT, run id, date); *unverified* the others: their coverage is implemented but has never run, so it is a claim, not evidence. A covered feature needs at least one covering item that runs strictly on the default SUT (not only known-bug xfails or scenarios skipped by `fixed_in`).
+**373 features** in 27 areas: 316 covered, 46 partial, 11 gaps; covered 85%, weighted 91% (a partial feature counts half). *Offline-verified* counts the covered or partial features with at least one covering item in the offline tier; *live-verified* those with a recorded green live run of their covering items (`verified_on`: target, SUT, run id, date); *unverified* the others: their coverage is implemented but has never run, so it is a claim, not evidence. A covered feature needs at least one covering item that runs strictly on the default SUT (not only known-bug xfails or scenarios skipped by `fixed_in`).
 
 ## Summary by area
 
@@ -19,7 +19,7 @@ Inventory of otterdog main @d9dac78 (after v1.7.1; release:latest is v1.7.1), fi
 | [otterdog.json, base template and credentials](#config) | 27 | 15 | 6 | 6 | 56% | 67% | 17 | 0 | 4 |
 | [Validation rules](#validation) | 38 | 37 | 1 | 0 | 97% | 99% | 37 | 0 | 1 |
 | [Diff engine and plan semantics](#plan-semantics) | 18 | 17 | 1 | 0 | 94% | 97% | 16 | 0 | 2 |
-| [Organization settings](#org-settings) | 14 | 10 | 4 | 0 | 71% | 86% | 3 | 0 | 11 |
+| [Organization settings](#org-settings) | 14 | 9 | 5 | 0 | 64% | 82% | 3 | 0 | 11 |
 | [Organization Actions settings](#org-workflows) | 7 | 4 | 3 | 0 | 57% | 79% | 2 | 0 | 5 |
 | [Organization custom properties](#custom-properties) | 6 | 6 | 0 | 0 | 100% | 100% | 2 | 0 | 4 |
 | [Custom organization roles](#org-roles) | 2 | 2 | 0 | 0 | 100% | 100% | 1 | 0 | 1 |
@@ -42,14 +42,14 @@ Inventory of otterdog main @d9dac78 (after v1.7.1; release:latest is v1.7.1), fi
 | [Policies](#policies) | 3 | 3 | 0 | 0 | 100% | 100% | 0 | 0 | 3 |
 | [CHANGELOG fixes (regression guards)](#regressions) | 36 | 33 | 1 | 2 | 92% | 93% | 10 | 0 | 24 |
 | [Unmerged otterdog changes (pull requests and local branches)](#pending) | 5 | 4 | 1 | 0 | 80% | 90% | 0 | 0 | 5 |
-| **Total** | 373 | 317 | 45 | 11 | 85% | 91% | 170 | 0 | 192 |
+| **Total** | 373 | 316 | 46 | 11 | 85% | 91% | 170 | 0 | 192 |
 
 ## Summary by tier
 
 | Tier | Features | Covered | Partial | Gap | Covered % | Weighted % | Offline-verified | Live-verified | Unverified |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
 | `offline` | 122 | 111 | 11 | 0 | 91% | 95% | 122 | 0 | 0 |
-| `cli` | 150 | 125 | 20 | 5 | 83% | 90% | 42 | 0 | 103 |
+| `cli` | 150 | 124 | 21 | 5 | 83% | 90% | 42 | 0 | 103 |
 | `webhooks` | 4 | 3 | 1 | 0 | 75% | 88% | 2 | 0 | 2 |
 | `webapp` | 81 | 69 | 8 | 4 | 85% | 90% | 3 | 0 | 74 |
 | `web_ui` | 14 | 7 | 5 | 2 | 50% | 68% | 1 | 0 | 11 |
@@ -59,7 +59,7 @@ Inventory of otterdog main @d9dac78 (after v1.7.1; release:latest is v1.7.1), fi
 
 | Priority | Features | Covered | Partial | Gap | Covered % | Weighted % | Offline-verified | Live-verified | Unverified |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| P0 | 62 | 62 | 0 | 0 | 100% | 100% | 31 | 0 | 31 |
+| P0 | 62 | 61 | 1 | 0 | 98% | 99% | 31 | 0 | 31 |
 | P1 | 146 | 124 | 20 | 2 | 85% | 92% | 70 | 0 | 74 |
 | P2 | 165 | 131 | 25 | 9 | 79% | 87% | 69 | 0 | 87 |
 
@@ -1090,11 +1090,11 @@ Details:
 
 ## Organization settings
 
-`org-settings`: 14 features, 10 covered, 4 partial, 0 gaps (weighted 86%).
+`org-settings`: 14 features, 9 covered, 5 partial, 0 gaps (weighted 82%).
 
 | Id | Feature | Tier | Plan | Prio | Status | Verified | Covered by |
 |---|---|---|---|---|---|---|---|
-| `org-settings.profile` | organization profile: name, description (&lt;= 160), email, billing_email, company, location, twitter_username, blog (REST PATCH /orgs/{org}) | cli | free | P0 | covered | **unverified** | `tests/cli/test_import.py::test_import_plans_no_change`, `cli.org.profile` |
+| `org-settings.profile` | organization profile: name, description (&lt;= 160), email, billing_email, company, location, twitter_username, blog (REST PATCH /orgs/{org}) | cli | free | P0 | **partial** | **unverified** | `tests/cli/test_import.py::test_import_plans_no_change`, `cli.org.profile` |
 | `org-settings.plan` | settings.plan: read-only, never applied, drives every plan gate (validation reads the configured plan, not GitHub) | cli | free | P0 | covered | offline | `cli.plan-mismatch`, `O-VAL-PLAN-GATE`, `O-VAL-ORGSECRET-PRIVATE-FREE` |
 | `org-settings.member-privileges` | REST member privileges: default_repository_permission, members_can_create_private/public_repositories, members_can_fork_private_repositories, deploy_keys_enabled_for_repositories, has_organization_projects | cli | free | P1 | covered | **unverified** | `cli.org.member-privileges` |
 | `org-settings.pages-creation` | members_can_create_public_pages / members_can_create_private_pages (private: enterprise plan only) | cli | free | P2 | **partial** | **unverified** | `cli.org.member-privileges` |
@@ -1111,12 +1111,20 @@ Details:
 
 Details:
 
-- **`org-settings.profile`** (covered, P0, `cli`): organization profile: name, description (&lt;= 160), email, billing_email, company, location, twitter_username, blog (REST PATCH /orgs/{org})
+- **`org-settings.profile`** (partial, P0, `cli`): organization profile: name, description (&lt;= 160), email, billing_email, company, location, twitter_username, blog (REST PATCH /orgs/{org})
     - Source: `otterdog/models/organization_settings.py:54-62`, `otterdog/resources/schemas/settings.json:6-41`, `otterdog/providers/github/__init__.py:127-147`
     - Properties (`org-settings`): `name`, `description`, `email`, `billing_email`, `company`, `location`, `twitter_username`, `blog`
     - Operations: modify, converge, import
-    - Known bugs: KB-064
-    - Notes: name, blog, location, company, email and twitter_username are changed live (':::'), read back by the oracle, converged and restored by a step without fragments (a key going back to null is a '- key = ...' removal line; whether GitHub accepts the JSON null is KB-064). description and billing_email are never changed live by design: the description holds the safety marker (the engine refuses such a plan) and billing_email is owner-only; both are read by the import round trip and the 160-char description rule is the offline validation.org-settings case. description (268 orgs) and name (265) are the most overridden Eclipse org settings.
+    - Known bugs: KB-064, KB-092
+    - Notes: name is only planned (step display-name): on an org without a display name GitHub leaves name out of GET /orgs/{org} and otterdog never plans nor applies it (KB-092, the 4 test orgs have none). blog, location, company, email and twitter_username are changed live (':::'), read back by the oracle, converged and restored by a step without fragments (a key going back to null is a '- key = ...' removal line; whether GitHub accepts the JSON null is KB-064). description and billing_email are never changed live by design: the description holds the safety marker (the engine refuses such a plan) and billing_email is owner-only; both are read by the import round trip and the 160-char description rule is the offline validation.org-settings case. description (268 orgs) and name (265) are the most overridden Eclipse org settings.
+    - Suggested: `cli.org.profile` in `scenarios/cli/org-settings/profile.yaml`
+    - Steps:
+        - a test org given a display name once (GitHub settings page, outside otterdog), then the step display-name applies name live like the other profile keys, or otterdog fixed (KB-092)
+    - Assert:
+        - name changed live, read back by the oracle (GET /orgs/{org} returns name once set), converged and restored
+    - Needs:
+        - target
+        - a test org with a display name, or a SUT with KB-092 fixed
 - **`org-settings.plan`** (covered, P0, `cli`): settings.plan: read-only, never applied, drives every plan gate (validation reads the configured plan, not GitHub)
     - Source: `otterdog/models/organization_settings.py:55`, `otterdog/models/organization_settings.py:179-181`, `otterdog/operations/plan.py:112-117`
     - Properties (`org-settings`): `plan`
@@ -1308,8 +1316,8 @@ Details:
 | `custom-properties.required-default` | required properties with default_value (repositories without a value get the default; default_value only diffed when required) | cli | free | P2 | covered | **unverified** | `cli.custom-property.required` |
 | `custom-properties.true-false` | value_type true_false properties and their repository values | cli | free | P2 | covered | **unverified** | `cli.custom-property.flag` |
 | `custom-properties.value-type-immutable` | changing value_type aborts planning: "planning aborted: trying to change 'value_type' to '&lt;t&gt;' for custom_property[name="&lt;p&gt;"] which is not supported." (exit 1) | offline | free | P2 | covered | offline | `O-LPLAN-CUSTOM-PROPERTY-DEFAULTS` |
-| `custom-properties.remove` | removing a property definition (apply -d) and the values of repositories | cli | free | P2 | covered | **unverified** | `cli.custom-property.flag` |
-| `custom-properties.repository-values` | repository custom_properties values (single_select, multi_select lists, string); removals need another change (KB-005) | cli | free | P2 | covered | **unverified** | `cli.custom-property`, `cli.kb.custom-property-underscore` |
+| `custom-properties.remove` | removing a property definition (apply -d) and the values of repositories | cli | free | P2 | covered | **unverified** | `cli.custom-property.flag`, `cli.kb.custom-property-definition-with-value` |
+| `custom-properties.repository-values` | repository custom_properties values (single_select, multi_select lists, string); removals need another change (KB-005) | cli | free | P2 | covered | **unverified** | `cli.custom-property`, `cli.kb.custom-property-underscore`, `cli.custom-property.flag` |
 
 Details:
 
@@ -1338,12 +1346,14 @@ Details:
 - **`custom-properties.remove`** (covered, P2, `cli`): removing a property definition (apply -d) and the values of repositories
     - Source: `otterdog/models/custom_property.py:200-202`, `otterdog/models/custom_property.py:235-237`
     - Operations: remove
-    - Notes: a string property definition dropped with its repo value, apply -d: '- remove custom_property[...]', counts delete 1, oracle definition absent and the repo value gone, the other property kept.
+    - Known bugs: KB-087
+    - Notes: a string property retired in two applies: its repo value first (step remove-value, PATCH .../properties/values with null, no DELETE), then its definition with -d (step remove-definition: '- remove custom_property[...]', counts delete 1, DELETE of the schema, no repository PATCH, oracle definition absent, the other property kept). Both in one apply fail on 1.8.0 (KB-087: the definition is deleted first, the repository PATCH then gets 422 'Unexpected property'), step remove-both of cli.kb.custom-property-definition-with-value.
 - **`custom-properties.repository-values`** (covered, P2, `cli`): repository custom_properties values (single_select, multi_select lists, string); removals need another change (KB-005)
     - Source: `otterdog/models/repository.py:104`, `otterdog/models/repository.py:1247-1257`, `otterdog/providers/github/rest/repo_client.py:677-698`
     - Properties (`repository`): `custom_properties`
     - Operations: add, modify, converge
     - Known bugs: KB-005, KB-016
+    - Notes: a removal alone (KB-005 fixed in 1.7.0): step remove-value of cli.custom-property.flag drops one value of a repository, PATCH .../properties/values with null, oracle value gone.
 
 <a id="org-roles"></a>
 

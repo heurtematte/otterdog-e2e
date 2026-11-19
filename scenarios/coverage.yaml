@@ -2281,11 +2281,20 @@ features:
     tier: cli
     ui_only: false
     priority: P0
-    status: covered
+    status: partial
     covered_by: [tests/cli/test_import.py::test_import_plans_no_change, cli.org.profile]
-    known_bugs: [KB-064]
-    notes: "name, blog, location, company, email and twitter_username are changed live (':::'), read back by the oracle, converged and restored by a step without fragments (a key going back to null is a '- key = ...' removal line; whether GitHub accepts the JSON null is KB-064). description and billing_email are never changed live by design: the description holds the safety marker (the engine refuses such a plan) and billing_email is owner-only; both are read by the import round trip and the 160-char description rule is the offline validation.org-settings case. description (268 orgs) and name (265) are the most overridden Eclipse org settings."
-
+    known_bugs: [KB-064, KB-092]
+    notes: "name is only planned (step display-name): on an org without a display name GitHub leaves name out of GET /orgs/{org} and otterdog never plans nor applies it (KB-092, the 4 test orgs have none). blog, location, company, email and twitter_username are changed live (':::'), read back by the oracle, converged and restored by a step without fragments (a key going back to null is a '- key = ...' removal line; whether GitHub accepts the JSON null is KB-064). description and billing_email are never changed live by design: the description holds the safety marker (the engine refuses such a plan) and billing_email is owner-only; both are read by the import round trip and the 160-char description rule is the offline validation.org-settings case. description (268 orgs) and name (265) are the most overridden Eclipse org settings."
+    gap_outline:
+      scenario: cli.org.profile
+      file: scenarios/cli/org-settings/profile.yaml
+      steps:
+        - "a test org given a display name once (GitHub settings page, outside otterdog), then the step display-name applies name live like the other profile keys, or otterdog fixed (KB-092)"
+      assertions:
+        - "name changed live, read back by the oracle (GET /orgs/{org} returns name once set), converged and restored"
+      needs:
+        - "target"
+        - "a test org with a display name, or a SUT with KB-092 fixed"
   - id: org-settings.plan
     area: org-settings
     title: "settings.plan: read-only, never applied, drives every plan gate (validation reads the configured plan, not GitHub)"
@@ -2706,8 +2715,9 @@ features:
     ui_only: false
     priority: P2
     status: covered
-    covered_by: [cli.custom-property.flag]
-    notes: "a string property definition dropped with its repo value, apply -d: '- remove custom_property[...]', counts delete 1, oracle definition absent and the repo value gone, the other property kept."
+    covered_by: [cli.custom-property.flag, cli.kb.custom-property-definition-with-value]
+    known_bugs: [KB-087]
+    notes: "a string property retired in two applies: its repo value first (step remove-value, PATCH .../properties/values with null, no DELETE), then its definition with -d (step remove-definition: '- remove custom_property[...]', counts delete 1, DELETE of the schema, no repository PATCH, oracle definition absent, the other property kept). Both in one apply fail on 1.8.0 (KB-087: the definition is deleted first, the repository PATCH then gets 422 'Unexpected property'), step remove-both of cli.kb.custom-property-definition-with-value."
 
   - id: custom-properties.repository-values
     area: custom-properties
@@ -2721,8 +2731,9 @@ features:
     ui_only: false
     priority: P2
     status: covered
-    covered_by: [cli.custom-property, cli.kb.custom-property-underscore]
+    covered_by: [cli.custom-property, cli.kb.custom-property-underscore, cli.custom-property.flag]
     known_bugs: [KB-005, KB-016]
+    notes: "a removal alone (KB-005 fixed in 1.7.0): step remove-value of cli.custom-property.flag drops one value of a repository, PATCH .../properties/values with null, oracle value gone."
 
   # ==================================================================================================================
   # org-roles: newOrgRole (models/role.py, models/organization_role.py); validated against an 'enterprise' plan

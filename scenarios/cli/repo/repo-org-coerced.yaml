@@ -14,13 +14,18 @@ description: |
   applied once the organization allows them and validation reports no ignored repository value. The managed step
   turns the repository's own signoff on and its permissions to 'write' with approvals allowed, which otterdog now
   applies too. org_level: unfiltered plans (no counts asserted, the raw numbers include the whole organization)
-  and a full baseline reset as cleanup restores the organization.
+  and a full baseline reset as cleanup restores the organization. When the organization goes from 'read' to 'write',
+  GitHub moves the other repositories (the baseline's) to 'write' too, while their configuration keeps the template's
+  'read': otterdog re-sends a repository's web_commit_signoff_required when the organization stops requiring it, but
+  nothing for default_workflow_permissions, so the 'relaxed' apply does not converge (KB-093); the 'managed' apply
+  brings those repositories back to 'read'.
 priority: P0
 min_plan: free
 org_level: true
 tags: [repo, workflows, org-settings]
 steps:
   - name: relaxed
+    known_bug: {id: KB-093, phases: [converge]}
     fragments:
       settings:
         - "web_commit_signoff_required: false"

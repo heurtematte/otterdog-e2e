@@ -13,6 +13,11 @@ other validation error fails (BAT-07), and from 1.8.0 it runs strict. The plan t
 (``members_can_create_private_pages:: null``, the baseline's own way) in a copy of the import and still checks the
 round trip; other validation errors fail it.
 
+The import writes its configuration through rich markup (KB-050), so the safety marker every test organization
+carries in its description ('[otterdog-e2e]') is dropped from the imported description, and the plan right after the
+import changes it back (seen live on 1.8.0). test_import_plans_no_change accepts exactly that difference as KB-050
+(raises=BracketedWordsLostError, after checking that nothing else differs): any other difference fails.
+
 cli.import.workflow-keys (eclipse-csi/otterdog#919, 1.8.0): without an expected configuration, import reads only the
 workflow settings the default configuration of the base template defines (a key absent or null is never requested),
 like plan and apply. The standard template sets max_cache_size_gb at both levels, so the cache size of the
@@ -23,6 +28,7 @@ read (otterdog's request statistics, CliResult.api_usage).
 
 from __future__ import annotations
 
+import json
 import re
 from typing import TYPE_CHECKING
 
@@ -49,6 +55,12 @@ pytestmark = [pytest.mark.tags("cli", "repo", "teams", "org-settings")]
 MAX_LISTED = 15
 PRIVATE_PAGES_ERROR = "enabling 'members_can_create_private_pages' requires an 'enterprise' plan."  # KB-024
 PRIVATE_PAGES_RE = re.compile(r"\bmembers_can_create_private_pages\s*:\s*true\b")
+# KB-050: a rich markup tag (rich.markup.RE_TAGS without its escapes) and a settings description change of the plan
+MARKUP_TAG_RE = re.compile(r"\[[a-zA-Z#/@][^\[]*?\]")
+JSON_STRING = r'"(?:[^"\\]|\\.)*"'
+DESCRIPTION_CHANGE_RE = re.compile(
+    rf"^\s*~ description\s*=\s*(?P<live>{JSON_STRING})\s*->\s*(?P<imported>{JSON_STRING})\s*$"
+)
 
 
 PRIVATE_PAGES_REFERENCES = [
@@ -108,6 +120,10 @@ class PrivatePagesNotAllowedError(AssertionError):
     """The import validates except for members_can_create_private_pages on a non-enterprise plan (KB-024)."""
 
 
+class BracketedWordsLostError(AssertionError):
+    """The import differs from the live org only by the bracketed words its description lost (KB-050)."""
+
+
 def kb024_only(errors: list[str], plan: str) -> bool:
     """True when the only validation error is KB-024's and the org is not on the enterprise plan."""
     return plan != "enterprise" and len(errors) == 1 and PRIVATE_PAGES_ERROR in errors[0]
@@ -127,6 +143,19 @@ def imported(
 def run_independent(objects: list[PlanObject]) -> list[PlanObject]:
     """Plan objects that are not read-only and carry no e2e run id (PlanObject.run_id: key value or parent)."""
     return [obj for obj in objects if not obj.is_read_only and obj.run_id is None]
+
+
+def lost_bracketed_words(obj: PlanObject) -> bool:
+    """True for a '~ settings' change of the description alone where the imported value is the live one without its
+    rich markup tags (KB-050: '[otterdog-e2e]' -> '')."""
+    lines = [line for line in obj.body if line.strip()]
+    if obj.kind != "settings" or obj.op != "change" or len(lines) != 1:
+        return False
+    match = DESCRIPTION_CHANGE_RE.match(lines[0])
+    if match is None:
+        return False
+    live, imported = json.loads(match["live"]), json.loads(match["imported"])
+    return live != imported and MARKUP_TAG_RE.sub("", live) == imported
 
 
 @pytest.mark.scenario("cli.import")
@@ -157,6 +186,7 @@ def test_import_validates(imported: tuple[ConfigWorkspace, OtterdogCli], verifie
 
 
 @pytest.mark.scenario("cli.import.plan", references=IMPORT_PLAN_REFERENCES)
+@pytest.mark.known_bug("KB-050", raises=BracketedWordsLostError)
 def test_import_plans_no_change(
     imported: tuple[ConfigWorkspace, OtterdogCli],
     e2e: E2EContext,
@@ -166,7 +196,8 @@ def test_import_plans_no_change(
 ) -> None:
     """``plan -n`` of the imported configuration changes no run-independent object. When KB-024 is the only
     validation error, members_can_create_private_pages is left unmanaged in a copy of the import (``:: null``) and
-    the copy is planned; any other validation error fails."""
+    the copy is planned; any other validation error fails. The description the import wrote without its bracketed
+    words (KB-050) is the only difference tolerated, reported last as BracketedWordsLostError."""
     workspace, cli = imported
     result = cli.plan()
     plan = result.plan()
@@ -185,8 +216,14 @@ def test_import_plans_no_change(
         plan = result.plan()
     assert result.exit_code == 0 and not plan.aborted and plan.add is not None, result.output[-3000:]
     changed = run_independent(plan.objects)
+    lost = [obj for obj in changed if lost_bracketed_words(obj)]
+    changed = [obj for obj in changed if obj not in lost]
     shown = "; ".join(obj.header.strip() for obj in changed[:MAX_LISTED])
     assert not changed, f"{len(changed)} object(s) differ right after the import: {shown}"
+    if lost:
+        raise BracketedWordsLostError(
+            f"KB-050: the import wrote the description without its bracketed words: {lost[0].body[0].strip()}"
+        )
 
 
 def imported_usage(cli: OtterdogCli) -> ApiUsage:

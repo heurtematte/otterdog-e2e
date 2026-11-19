@@ -12,6 +12,10 @@ description: |
   of organizations on every plan. The create step queues squash merges with non-default sizes and timeouts, the
   update step switches to merge commits with HEADGREEN grouping (one changed attribute: the embedded object); both
   converge. The pull request and status check rules are left out (KB-021).
+  GitHub accepts a merge queue method only when the repository allows it (422 "Invalid rule 'merge_queue': Invalid
+  merge method 'merge'. Not allowed for this repository."), and the template disables merge commits
+  (allow_merge_commit false), so the repository enables them from its creation on: the update step then changes the
+  ruleset only. otterdog does not validate the method against the repository's merge settings (KB-089).
 priority: P2
 min_plan: free
 tags: [rulesets, repo]
@@ -22,6 +26,7 @@ steps:
         - |
           orgs.newRepo('{{ p }}-rs-mq') {
             description: "otterdog e2e: merge queue",
+            allow_merge_commit: true,
             rulesets: [
               orgs.newRepoRuleset('{{ p }}-rs-mq') {
                 include_refs+: ["~DEFAULT_BRANCH"],
@@ -44,6 +49,9 @@ steps:
         - '+ add repo_ruleset[name="{{ p }}-rs-mq", repository={{ p }}-rs-mq]'
       counts: {add: 2, change: 0, delete: 0}
     state:
+      - kind: repo
+        name: "{{ p }}-rs-mq"
+        match: {allow_merge_commit: true, allow_squash_merge: true}
       - kind: repo_ruleset
         repo: "{{ p }}-rs-mq"
         name: "{{ p }}-rs-mq"
@@ -69,6 +77,7 @@ steps:
         - |
           orgs.newRepo('{{ p }}-rs-mq') {
             description: "otterdog e2e: merge queue",
+            allow_merge_commit: true,
             rulesets: [
               orgs.newRepoRuleset('{{ p }}-rs-mq') {
                 include_refs+: ["~DEFAULT_BRANCH"],

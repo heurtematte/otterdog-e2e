@@ -7,9 +7,12 @@ GitHub detected (GET /repos/{org}/{repo}/languages; 'actions' always counts, Git
 otterdog/models/repository.py:325-378). The test creates a public run repository with the SUT, commits a Python file
 with the admin Mutator and waits until otterdog itself reports Python (GitHub detects languages asynchronously), then
 validates: 'go' is refused naming the detected languages, 'python' and 'actions' validate, an unknown language is
-refused by the enum rule (its value list prints a Python set: KB-038, only the stable prefix is asserted) and by the
-detection, and the query suite enum is checked. Validation only after the repository exists: nothing else is
-applied; the run repository is removed afterwards (guarded apply -d with the trusted reset CLI).
+refused, and the query suite enum is checked. Since #878 (every release since 1.7.0) the schema's language enum
+refuses 'cobol' while loading the configuration (exit 1, nothing else validated); before, the model's enum rule (its
+value list prints a Python set: KB-038, only the stable prefix is asserted) and the detection refuse it (2 errors).
+The output decides which of the two holds: O-VAL-REPO pins the behaviour of each SUT offline. Validation only after
+the repository exists: nothing else is applied; the run repository is removed afterwards (guarded apply -d with the
+trusted reset CLI).
 """
 
 from __future__ import annotations
@@ -37,6 +40,7 @@ DETECTION_TIMEOUT = 360.0  # GitHub's language detection runs after the push, us
 DETECTION_INTERVAL = 20.0  # one validate (org listing, member list, languages) per attempt
 STATE_TIMEOUT = 90.0
 TAIL = 3000
+SCHEMA_LOAD_ERROR = "failed to load configuration: invalid value at '"  # since #878, as in tests/offline
 
 
 def repository(name: str, **fields: object) -> str:
@@ -66,8 +70,8 @@ def test_code_scanning_languages_must_be_detected(
     otterdog: OtterdogCli,
 ) -> None:
     """'go' on a Python repository is a validation error naming 'Python'; 'python' and 'actions' validate; 'cobol' is
-    refused twice (enum and detection; the exit code is the number of errors, KB-034, so only non-zero is asserted);
-    the query suite must be default | extended."""
+    a load error of the schema since #878, else refused twice (enum and detection; the exit code is the number of
+    errors, KB-034, so only non-zero is asserted); the query suite must be default | extended."""
     name = run_ctx.name("cs")
     header = f'repository[name="{name}"]'
     otterdog.workspace.write_org_config(renderer.render(ConfigFragments(repositories=[repository(name)])))
@@ -108,17 +112,24 @@ def test_code_scanning_languages_must_be_detected(
 
         cobol = repository(name, code_scanning_default_setup_enabled=True, code_scanning_default_languages=["cobol"])
         result, text = validate(otterdog, renderer, cobol)
-        undetected = (
-            f"Error: {header} has 'code_scanning_default_languages' configured with 'cobol' but this language is not "
-            "detected in the repository. Detected languages: Python"
-        )
-        for message in (
-            f"Error: {header} has defined an invalid code scanning language 'cobol', only values (",
-            undetected,
-        ):
-            assert message in text, f"missing {message!r}:\n{text[-TAIL:]}"
-        parsed = result.validation()
-        assert not parsed.ok and parsed.errors == 2 and result.exit_code != 0, text[-TAIL:]
+        if SCHEMA_LOAD_ERROR in text:  # since #878: the schema refuses the value, the model is not validated
+            message = (
+                f"{SCHEMA_LOAD_ERROR}repositories[name=\"{name}\"].code_scanning_default_languages[0]': 'cobol' is "
+                "not one of ['actions', "
+            )
+            assert message in text and result.exit_code == 1, f"missing {message!r} (exit 1):\n{text[-TAIL:]}"
+        else:
+            undetected = (
+                f"Error: {header} has 'code_scanning_default_languages' configured with 'cobol' but this language is "
+                "not detected in the repository. Detected languages: Python"
+            )
+            for message in (
+                f"Error: {header} has defined an invalid code scanning language 'cobol', only values (",
+                undetected,
+            ):
+                assert message in text, f"missing {message!r}:\n{text[-TAIL:]}"
+            parsed = result.validation()
+            assert not parsed.ok and parsed.errors == 2 and result.exit_code != 0, text[-TAIL:]
 
         suite = repository(name, code_scanning_default_query_suite="full")
         result, text = validate(otterdog, renderer, suite)

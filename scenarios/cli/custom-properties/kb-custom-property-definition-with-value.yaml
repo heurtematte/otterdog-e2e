@@ -1,0 +1,91 @@
+# Known bug KB-087: removing a custom property definition and its repository value in one apply fails (422).
+id: cli.kb.custom-property-definition-with-value
+title: removing a property definition together with its repository value (known bug KB-087)
+tier: cli
+description: |
+  A string property and a run repository holding a value for it are created. The next configuration drops both the
+  definition and the repository value, applied with -d: otterdog plans '- remove custom_property[...]' and a change of
+  the repository's custom_properties ('- <property> = ...'). The organization-level patches run first
+  (otterdog/models/github_organization.py:994-1000 before 1059-1061), so the definition is deleted (GitHub drops its
+  values with it) and the repository patch then sends the value null of a property GitHub no longer knows: 422
+  "Unexpected property '<name>'", apply exits 1 (nightly of 2026-11-18, v1.8.0). The step asserts what otterdog
+  should do (a clean apply that deletes the definition and sends no value of a deleted property); it is an expected
+  failure of its apply phase while the bug exists, its plan stays strict. The last step is strict: the organization
+  converges (the definition is gone, the repository holds no value). Removing the value first, then the
+  definition, works (cli.custom-property.flag). Property names use '-' (KB-016).
+priority: P2
+min_plan: free
+requires: [custom_properties]
+tags: [custom-properties, repo, known-bug]
+steps:
+  - name: create
+    fragments:
+      custom_properties:
+        - |
+          orgs.newCustomProperty('{{ p }}-gone') {
+            value_type: "string",
+            values_editable_by: "org_actors",
+          }
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-gone-repo') {
+            description: "otterdog e2e: definition removed with its value",
+            custom_properties: {"{{ p }}-gone": "otterdog-acceptance"},
+          }
+    plan:
+      expect: changes
+      contains:
+        - '+ add custom_property[name="{{ p }}-gone"]'
+        - '+ add repository[name="{{ p }}-gone-repo"]'
+      counts: {add: 2, delete: 0}
+    state:
+      - kind: repo_custom_properties
+        repo: "{{ p }}-gone-repo"
+        match: {"{{ p }}-gone": otterdog-acceptance}
+
+  - name: remove-both
+    known_bug: {id: KB-087, phases: [apply]}  # plan stays strict
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-gone-repo') {
+            description: "otterdog e2e: definition removed with its value",
+          }
+    plan:
+      expect: changes
+      contains:
+        - '- remove custom_property[name="{{ p }}-gone"]'
+        - '~ repository[name="{{ p }}-gone-repo"]'
+        - '- {{ p }}-gone'
+      counts: {add: 0, change: 1, delete: 1}
+    apply:
+      delete: true
+      not_contains:
+        - "Unexpected property"
+      api:
+        sent:
+          - 'DELETE /orgs/{org}/properties/schema/{name}'
+    state:
+      - kind: custom_property
+        name: "{{ p }}-gone"
+        absent: true
+      - kind: repo_custom_properties
+        repo: "{{ p }}-gone-repo"
+        match: {"{{ p }}-gone": {$exists: false}}
+
+  - name: converged
+    fragments:
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-gone-repo') {
+            description: "otterdog e2e: definition removed with its value",
+          }
+    plan:
+      expect: noop
+    state:
+      - kind: custom_property
+        name: "{{ p }}-gone"
+        absent: true
+      - kind: repo_custom_properties
+        repo: "{{ p }}-gone-repo"
+        match: {"{{ p }}-gone": {$exists: false}}

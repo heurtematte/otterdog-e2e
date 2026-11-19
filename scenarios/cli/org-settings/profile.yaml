@@ -10,6 +10,10 @@ description: |
   included: otterdog then PATCHes JSON null, which GitHub's description of the endpoint only documents as strings,
   so a failure there is a finding, not a harness problem) before the cleanup's baseline reset. The keys are written
   with ':::' so they are managed even when layer 1 hides a key the live organization did not return.
+  The display name has a step of its own, plan only: GitHub leaves 'name' out of GET /orgs/{org} while the
+  organization has no display name (the test organizations have none), otterdog then reads it as unset and never
+  plans nor applies it (KB-092), so the 'display-name' step declares the bug for its plan and changes nothing. A
+  test organization given a display name makes that step plan the change (the bug does not show: an XPASS warning).
   description and billing_email are never changed live (the description holds the safety marker, the engine refuses
   such a plan; billing_email is owner-only): the 160-character description rule is the offline validation case.
   Contact fields (email, twitter_username) get a step of their own: a refused value fails that step only.
@@ -20,7 +24,6 @@ steps:
   - name: profile
     fragments:
       settings:
-        - "name::: 'otterdog e2e {{ run }}'"
         - "blog::: 'https://example.org/otterdog-e2e/{{ run }}'"
         - "location::: 'otterdog-acceptance {{ run }}'"
         - "company::: 'otterdog-acceptance {{ run }}'"
@@ -28,13 +31,11 @@ steps:
       expect: changes
       contains:
         - "~ settings {"
-        - '-> "otterdog e2e {{ run }}"'
         - '-> "https://example.org/otterdog-e2e/{{ run }}"'
         - '-> "otterdog-acceptance {{ run }}"'
     state:
       - kind: org
         match:
-          name: "otterdog e2e {{ run }}"
           blog: "https://example.org/otterdog-e2e/{{ run }}"
           location: "otterdog-acceptance {{ run }}"
           company: "otterdog-acceptance {{ run }}"
@@ -42,7 +43,6 @@ steps:
   - name: contact
     fragments:
       settings:
-        - "name::: 'otterdog e2e {{ run }}'"
         - "blog::: 'https://example.org/otterdog-e2e/{{ run }}'"
         - "location::: 'otterdog-acceptance {{ run }}'"
         - "company::: 'otterdog-acceptance {{ run }}'"
@@ -72,8 +72,20 @@ steps:
       expect: changes
       contains:
         - "~ settings {"
-        - '"otterdog e2e {{ run }}"'
         - '"https://example.org/otterdog-e2e/{{ run }}"'
         - '"otterdog-acceptance {{ run }}"'
         - '"otterdog-e2e-{{ run }}@example.org"'
         - '"otterdog_acceptance"'
+
+  # plan only (nothing applied, nothing to restore): the display name of an organization that has none (KB-092)
+  - name: display-name
+    known_bug: {id: KB-092, phases: [plan]}
+    fragments:
+      settings:
+        - "name::: 'otterdog e2e {{ run }}'"
+    plan:
+      expect: changes
+      contains:
+        - "~ settings {"
+        - '-> "otterdog e2e {{ run }}"'
+    apply: null

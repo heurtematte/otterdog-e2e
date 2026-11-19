@@ -623,9 +623,10 @@
     - "e2e: scenarios/offline/template/canonical-diff.yaml (step bracketed-description declares the bug)"
     - "e2e: scenarios/offline/secrets/val-secret-access-policy.yaml (step mode-of-an-organization declares the bug)"
     - "e2e: scenarios/offline/workflows/val-actions-policies.yaml (step bot-actor-in-canonical-form declares the bug)"
+    - "e2e: tests/cli/test_import.py (test_import_plans_no_change: the imported description loses the safety marker)"
   upstream: null
   fixed_in: null
-  scenarios: [cli.kb.list-advisories-markup, O-KB-SHOW-MARKDOWN-LINKS, O-KB-VALIDATION-MARKUP]
+  scenarios: [cli.kb.list-advisories-markup, O-KB-SHOW-MARKDOWN-LINKS, O-KB-VALIDATION-MARKUP, cli.import.plan]
 
 - id: KB-051
   title: GitHub App installations of an organization are read without pagination (first 30 only), so list-apps and the app slug map of loaded rulesets miss the others
@@ -1053,3 +1054,93 @@
   upstream: https://github.com/eclipse-csi/otterdog/security/advisories/GHSA-886p-g538-rcmp
   fixed_in: 1.8.0
   scenarios: [O-KB-CREDENTIAL-SHELL]
+
+- id: KB-087
+  title: removing a custom property definition and its value on a repository in the same apply fails (the definition is deleted first, then the repository PATCH sends the value null of a property GitHub no longer knows, 422 'Unexpected property')
+  status: confirmed
+  evidence:
+    - otterdog/models/github_organization.py:994-1000
+    - otterdog/models/github_organization.py:1059-1061
+    - otterdog/models/organization_settings.py:328-335
+    - otterdog/models/custom_property.py:236-238
+    - otterdog/models/repository.py:1512-1522
+    - otterdog/providers/github/rest/repo_client.py:860-870
+    - otterdog/operations/apply.py:139-141
+    - "e2e: scenarios/cli/custom-properties/kb-custom-property-definition-with-value.yaml (step remove-both declares the bug)"
+    - "e2e: scenarios/cli/custom-properties/custom-property-required.yaml (step remove declares the bug; seen in the baseline reset after the scenario, org-level instance)"
+  upstream: null
+  fixed_in: null
+  scenarios: []
+
+- id: KB-088
+  title: making a repository private sends allow_forking false in the same PATCH /repos/{owner}/{repo}, which GitHub refuses (422 'This organization does not allow private repository forking') when the organization disables members_can_fork_private_repositories, so the repository stays public
+  status: suspected
+  evidence:
+    - otterdog/models/repository.py:557-562
+    - otterdog/providers/github/rest/repo_client.py:136-191
+    - otterdog/resources/defaults/otterdog-defaults.libsonnet:47
+    - otterdog/resources/defaults/otterdog-defaults.libsonnet:474
+    - "e2e: scenarios/cli/environments/environment-private.yaml (steps selected and protected declare the bug)"
+    - "e2e: scenarios/cli/rulesets/neg-private-ruleset.yaml (step create declares the bug)"
+    - "e2e: scenarios/enterprise/bpr/private-bpr.yaml (steps create and update declare the bug)"
+    - "e2e: scenarios/enterprise/environments/env-reviewers-private.yaml (steps create and update declare the bug)"
+    - "e2e: scenarios/enterprise/rulesets/ruleset-merge-queue-private.yaml (steps create and update declare the bug)"
+  upstream: null
+  fixed_in: null
+  scenarios: []
+
+- id: KB-089
+  title: a ruleset merge queue whose merge_method the repository disables (the template's default newMergeQueue() MERGE on a template repository without merge commits) validates cleanly, then GitHub refuses the ruleset with 422 'Invalid merge method'
+  status: suspected
+  evidence:
+    - otterdog/models/ruleset.py:259-282
+    - otterdog/resources/defaults/otterdog-defaults.libsonnet:27
+    - otterdog/resources/defaults/otterdog-defaults.libsonnet:235-243
+    - "e2e: scenarios/cli/rulesets/ruleset-merge-queue.yaml (step update before allow_merge_commit true; nightly 44338402646, enterprise organization)"
+  upstream: null
+  fixed_in: null
+  scenarios: []
+
+- id: KB-090
+  title: apply fails on every change of the organization's immutable releases policy, because otterdog expects 200 from PUT /orgs/{org}/settings/immutable-releases and GitHub answers 204 (the policy is changed)
+  status: suspected
+  evidence:
+    - otterdog/providers/github/rest/org_client.py:158-169
+    - "e2e: scenarios/cli/org-settings/immutable-releases.yaml (steps select-one and policy-none declare the bug)"
+  upstream: null
+  fixed_in: null
+  scenarios: []
+
+- id: KB-091
+  title: creating a repository that names a code security configuration fails before its settings are applied, because the wait for the attachment raises on the first answer of GET /repos/{owner}/{repo}/code-security-configuration that is not a 200 (an empty answer while the attachment is pending)
+  status: suspected
+  evidence:
+    - otterdog/providers/github/rest/repo_client.py:330-341
+    - otterdog/providers/github/rest/repo_client.py:353-360
+    - "e2e: scenarios/cli/code-security/configuration.yaml (step attach-new-repository declares the bug)"
+  upstream: null
+  fixed_in: null
+  scenarios: []
+
+- id: KB-092
+  title: settings.name (the display name) is never planned nor applied on an organization that has none, because GitHub leaves name out of GET /orgs/{org} and otterdog reads the missing key as unset
+  status: suspected
+  evidence:
+    - otterdog/providers/github/rest/org_client.py:44-77
+    - otterdog/models/__init__.py:659-660
+    - otterdog/models/__init__.py:474-492
+    - "e2e: scenarios/cli/org-settings/profile.yaml (step display-name declares the bug)"
+  upstream: null
+  fixed_in: null
+  scenarios: []
+
+- id: KB-093
+  title: relaxing the organization's default_workflow_permissions from read to write does not converge in one apply, because GitHub moves the repositories to write and otterdog, which re-sends web_commit_signoff_required in the same situation, does not re-send their default_workflow_permissions
+  status: suspected
+  evidence:
+    - otterdog/models/repo_workflow_settings.py:61-62
+    - otterdog/models/repository.py:1503-1510
+    - "e2e: scenarios/cli/repo/repo-org-coerced.yaml (step relaxed declares the bug)"
+  upstream: null
+  fixed_in: null
+  scenarios: []

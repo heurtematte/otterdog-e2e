@@ -129,7 +129,7 @@ shortened to the relevant lines.
 | KB-047 | install-deps exits 0 when the installation fails | confirmed | CLI | `webui.kb.install-deps-exit-code` |
 | KB-048 | re-import drops the secret of a masked webhook | confirmed | import | `cli.kb.import-masked-webhook-secret` |
 | KB-049 | fetch-config -r reports the default branch | confirmed | CLI | `cli.kb.fetch-config-ref-message` |
-| KB-050 | free text printed as rich markup (list-advisories, show --markdown, validation messages, canonical form) | confirmed | CLI | `cli.kb.list-advisories-markup`, `O-KB-SHOW-MARKDOWN-LINKS`, `O-KB-VALIDATION-MARKUP`, steps of `O-CANON` and `O-VAL-ACTIONS-POLICIES` |
+| KB-050 | free text printed as rich markup (list-advisories, show --markdown, validation messages, canonical form, import) | confirmed | CLI | `cli.kb.list-advisories-markup`, `O-KB-SHOW-MARKDOWN-LINKS`, `O-KB-VALIDATION-MARKUP`, `cli.import.plan`, steps of `O-CANON` and `O-VAL-ACTIONS-POLICIES` |
 | KB-051 | App installations read without pagination | suspected | provider | - |
 | KB-052 | bypass actor `<actor>:always` never converges | confirmed | model | step of `cli.ruleset.bypass` |
 | KB-053 | `merge_commit_message` sent without `merge_commit_title` | suspected | model | step of `cli.repo.merge-messages` |
@@ -166,6 +166,13 @@ shortened to the relevant lines.
 | KB-084 | organization entry with `base_template: null`: TypeError at load (since #917) | confirmed | config | step of `O-VAL-LOCAL-BASE-TEMPLATE` |
 | KB-085 | branch protection pattern `default`: canonical-diff and import crash (KeyError 'pattern') | fixed (1.9.0) | model | step of `O-CANON` |
 | KB-086 | pass / bitwarden lookups through a shell: injected commands run (CVE-2026-123717) | fixed (GHSA-886p-g538-rcmp, 1.8.0) | credentials | `O-KB-CREDENTIAL-SHELL` |
+| KB-087 | custom property definition and its repository value removed in one apply: 422 'Unexpected property' | confirmed | model | steps of `cli.kb.custom-property-definition-with-value`, `cli.custom-property.required` |
+| KB-088 | making a repository private with `allow_forking: false`: 422, the repository stays public | suspected | provider | steps of `cli.environment.private`, `cli.neg.private-ruleset`, `enterprise.env-reviewers-private`, `enterprise.private-bpr`, `enterprise.ruleset-merge-queue-private` |
+| KB-089 | merge queue method the repository disables: validates, then 422 at apply | suspected | model | - |
+| KB-090 | immutable releases policy: GitHub's 204 fails the apply | suspected | provider | step of `cli.org.immutable-releases` |
+| KB-091 | new repository naming a code security configuration: the attachment wait fails, settings not applied | suspected | provider | step of `cli.code-security.configuration` |
+| KB-092 | display name never managed on an organization that has none | suspected | provider | step of `cli.org.profile` |
+| KB-093 | organization workflow permissions relaxed to write: repositories need a second apply | suspected | model | step of `cli.repo.org-coerced` |
 
 ## Issues
 
@@ -1820,8 +1827,9 @@ cli.cli.main(["fetch-config", "-c", "otterdog.json", "--local", "-f", "-r", "e2e
 
 Status: **confirmed** · Upstream: none · Scenarios: `cli.kb.list-advisories-markup` (tests/cli/test_commands_read.py),
 `O-KB-SHOW-MARKDOWN-LINKS` (tests/offline/test_cli_basics.py), `O-KB-VALIDATION-MARKUP` (tests/offline/test_cli_markup.py),
-step `bracketed-description` of `O-CANON` (scenarios/offline/template/canonical-diff.yaml), step
-`bot-actor-in-canonical-form` of `O-VAL-ACTIONS-POLICIES` (scenarios/offline/workflows/val-actions-policies.yaml)
+`cli.import.plan` (tests/cli/test_import.py), step `bracketed-description` of `O-CANON`
+(scenarios/offline/template/canonical-diff.yaml), step `bot-actor-in-canonical-form` of `O-VAL-ACTIONS-POLICIES`
+(scenarios/offline/workflows/val-actions-policies.yaml)
 
 Evidence: `otterdog/operations/list_advisories.py:140-146`, `otterdog/operations/show.py:177-182`,
 `otterdog/operations/show.py:207`, `otterdog/utils.py:301-315`, `otterdog/logging.py:174-198`,
@@ -1851,7 +1859,11 @@ outputs still hand free text to the console unescaped (follow-up of #440):
   A value holding `[/]` makes `canonical-diff` crash (`rich.errors.MarkupError: closing tag '[/]' ... has nothing to
   close`, checked offline on 1.6.1). `import` writes the same `to_jsonnet` output (`import_configuration.py:122`), so
   an imported configuration loses the bracketed words of its values (the next apply changes them on GitHub) and `[/]`
-  makes the import crash (read from the code: import needs GitHub, it is not run offline).
+  makes the import crash (read from the code). Seen live in the nightly of 2026-11-18 (1.8.0, Free organization):
+  the import of an organization whose description is the safety marker `[otterdog-e2e]` writes `description: ""`,
+  and the plan right after it changes the description (`~ description = "[otterdog-e2e]" -> ""`). Every test
+  organization carries the marker, so `cli.import.plan` expects that one difference
+  (`known_bug("KB-050", raises=BracketedWordsLostError)`) and fails on any other.
   Since #947 (main after v1.8.0) it also changes who may run a workflow: the documented allowed actor `'@dependabot[bot]'` of an
   Actions policy is written `"@dependabot"` in the canonical form (offline, PR head c67a7f0), so an imported
   policy names the account `dependabot` instead of the bot, and the next apply replaces the actor on GitHub.
@@ -2775,3 +2787,204 @@ lookup.
 ```console
 $ otterdog validate -c otterdog.json --local e2e-test-org   # 1.7.1: /tmp/e2e-shell-ran is created
 ```
+
+### KB-087 — removing a custom property definition and its repository value in one apply fails
+
+Status: **confirmed** · Upstream: none · Scenarios: step `remove-both` of
+`cli.kb.custom-property-definition-with-value`, step `remove` of `cli.custom-property.required`
+
+Evidence: `otterdog/models/github_organization.py:994-1000`, `otterdog/models/github_organization.py:1059-1061`,
+`otterdog/models/organization_settings.py:328-335`, `otterdog/models/custom_property.py:236-238`,
+`otterdog/models/repository.py:1512-1522`, `otterdog/providers/github/rest/repo_client.py:860-870`,
+`otterdog/operations/apply.py:139-141` (v1.8.0; unchanged on main at 7f4235b).
+
+Since KB-005 was fixed (1.7.0), removing a key from a repository's `custom_properties` is planned, and the repository
+patch sends every removed key with the value `null` (`PATCH /repos/{owner}/{repo}/properties/values`). The custom
+property definitions are patches of the organization settings, generated (and applied: `apply` only moves the patches
+that make an object read-only) before the repositories. A configuration that drops a definition together with the
+values of its repositories, the natural way to retire a property, is applied with `-d` as: `DELETE
+/orgs/{org}/properties/schema/{name}` (GitHub drops the values of the deleted property), then the repository patch
+with the value `null` of that property, which GitHub refuses: 422 `Unexpected property '<name>'`. The apply reports
+`failed to apply patch: CHANGE - repository[...]` and exits 1, although the organization ends in the expected state
+(the next plan has no change). Found by the nightly of 2026-11-18 (v1.8.0, step `remove-definition` of
+`cli.custom-property.flag`, which now removes the value first; on the org-level instance the baseline reset after
+`cli.custom-property.required` failed the same way, every repository holding the default of the required property).
+otterdog should leave out the values of the properties the same apply deletes (or apply the repository patches
+first).
+
+#### Reproduction
+
+The plan order, offline: a `-BASE` configuration with the definitions `e2e-flag` (true_false) and `e2e-note`
+(string) and a repository holding a value for each; the configuration keeps `e2e-flag` and the repository value
+`"e2e-flag": "false"` only (`otterdog-acceptance inject` with `--base`, run prefix left out below).
+
+```console
+$ otterdog local-plan -c otterdog.json -s -BASE --local e2e-offline
+  - remove custom_property[name="e2e-note"] {
+    ...
+  - }
+  ~ repository[name="e2e-flag-repo"] {
+    ~ custom_properties   = {
+      - e2e-note   = "otterdog-acceptance",
+    ~ }
+  ~ }
+  Plan: 0 to add, 1 to change, 1 to delete.
+```
+
+The same change applied live with `apply -d` (nightly of 2026-11-18, otterdog 1.8.0):
+
+```console
+$ otterdog apply -f -n -r 'e2e-topfwoee-*' -d otterdog-e2e-automation   # exit code 1
+Error: failed to apply patch: CHANGE - repository[name="e2e-topfwoee-flag-repo"]
+       failed to update custom properties for repo 'otterdog-e2e-automation/e2e-topfwoee-flag-repo':
+       {"message":"Unexpected property 'e2e-topfwoee-note'", ..., "status":"422"}
+Executed plan: 0 added, 1 changed, 1 deleted.
+```
+
+### KB-088 — making a repository private sends allow_forking, which GitHub refuses
+
+Status: **suspected** · Upstream: none · Scenarios: steps `selected` and `protected` of `cli.environment.private`,
+step `create` of `cli.neg.private-ruleset`, steps `create` and `update` of `enterprise.env-reviewers-private`,
+`enterprise.private-bpr` and `enterprise.ruleset-merge-queue-private`
+
+Evidence: `otterdog/models/repository.py:557-562`, `otterdog/providers/github/rest/repo_client.py:136-191`,
+`otterdog/resources/defaults/otterdog-defaults.libsonnet:47`,
+`otterdog/resources/defaults/otterdog-defaults.libsonnet:474` (v1.8.0, 89ab4ac).
+
+The template disables `members_can_fork_private_repositories` for the organization and keeps `allow_forking: true` for
+repositories, and the validation makes `allow_forking: true` an error on a private repository of such an organization.
+A public repository that becomes private therefore changes `private` false -> true and `allow_forking` true -> false,
+and `update_repo` sends both in one `PATCH /repos/{owner}/{repo}`. GitHub answers 422 "This organization does not allow
+private repository forking" (even though the value is `false`): the repository stays public, while the nested objects
+of the same apply (environments, branch protection rules, rulesets) are still created, on a public repository. A
+private repository of such an organization cannot be forked anyway, so otterdog should leave `allow_forking` out of
+that request (GitHub disables forking itself) instead of sending a value the organization's policy refuses.
+
+Seen live in the nightly 44338402646 (2026-11-18, otterdog 1.8.0) on `otterdog-e2e-enterprise` (5 scenarios, one
+`PATCH /repos/{owner}/{repo}` per failing apply) and on `otterdog-e2e-free` (`cli.neg.private-bpr`, a discovery scenario
+that records the failed apply). Not an enterprise policy: both organizations only apply the template's
+`members_can_fork_private_repositories: false`. Upstream main (7f4235b) sends the same request. The offline lint of the
+same configurations passes ("Validation succeeded"): only GitHub refuses it. Every step after `public` of these
+scenarios declares the bug: the step that makes the repository private fails, and the later ones plan that change again.
+A live rerun of `cli.repo.visibility` (repos shard) should show the same failure on its step `private`.
+
+#### Reproduction
+
+```jsonnet
+  // the organization keeps the template default members_can_fork_private_repositories: false
+  _repositories+: [orgs.newRepo('repo') { has_wiki: false }],                                // apply 1: public
+  _repositories+: [orgs.newRepo('repo') { private: true, allow_forking: false, has_wiki: false }],  // apply 2
+```
+
+```console
+$ otterdog apply -f e2e-test-org     # apply 2
+  ~ repository[name="repo"] {
+    ~ allow_forking = true -> false
+    ~ private       = false -> true
+  ~ }
+Error: failed to apply patch: CHANGE - repository[name="repo"]
+failed to update settings for repo 'repo':
+Exception while accessing 'https://api.github.com/repos/e2e-test-org/repo': (status=422,
+  body={"message":"This organization does not allow private repository forking", ...})
+```
+
+### KB-089 — a merge queue method the repository disables validates, then GitHub refuses it
+
+Status: **suspected** · Upstream: none · Scenarios: none
+
+Evidence: `otterdog/models/ruleset.py:259-282`, `otterdog/resources/defaults/otterdog-defaults.libsonnet:27`,
+`otterdog/resources/defaults/otterdog-defaults.libsonnet:235-243` (v1.8.0, 89ab4ac).
+
+`MergeQueueSettings.validate` only checks that `merge_method` is one of `MERGE`, `SQUASH`, `REBASE`; it does not check
+the method against the merge settings of the repository the ruleset belongs to. GitHub refuses a merge queue whose
+method the repository does not allow: 422 "Invalid rule 'merge_queue': Invalid merge method 'merge'. Not allowed for
+this repository." on `PUT /repos/{owner}/{repo}/rulesets/{id}` (and presumably on the creation). The template makes the
+combination the default one: `orgs.newMergeQueue()` uses `merge_method: "MERGE"` while `orgs.newRepo()` sets
+`allow_merge_commit: false`, so a template repository with a default merge queue passes `validate` and fails at
+`apply`. otterdog should report it at validation (an error, like the other dependent settings), and the template's
+default method could be one the template's repositories allow (`SQUASH`).
+
+Seen live in the nightly 44338402646 (2026-11-18, otterdog 1.8.0) on `otterdog-e2e-enterprise`, step `update` of
+`cli.ruleset.merge-queue` (SQUASH -> MERGE on a repository with the template's merge settings); the offline lint of
+that step validated cleanly. The scenario now enables merge commits on its repository, so no scenario declares the bug.
+
+#### Reproduction
+
+```jsonnet
+  _repositories+: [orgs.newRepo('repo') {
+    rulesets: [orgs.newRepoRuleset('queue') {
+      include_refs+: ['~DEFAULT_BRANCH'],
+      required_merge_queue: orgs.newMergeQueue(),   // merge_method MERGE, allow_merge_commit false
+    }],
+  }],
+```
+
+```console
+$ otterdog validate -c otterdog.json --local e2e-test-org
+  Validation succeeded
+$ otterdog apply -f e2e-test-org
+failed to update repo ruleset ...: (status=422, body={"message":"Validation Failed",
+  "errors":["Invalid rule 'merge_queue': Invalid merge method 'merge'. Not allowed for this repository."], ...})
+```
+
+### KB-090 — every change of the immutable releases policy fails the apply although GitHub applied it
+
+Status: **suspected** · Upstream: none · Scenarios: steps `select-one` and `policy-none` of
+`cli.org.immutable-releases`
+
+Evidence: `otterdog/providers/github/rest/org_client.py:158-169` (v1.8.0, unchanged on main 7f4235b).
+
+`_update_immutable_releases_settings` sends `PUT /orgs/{org}/settings/immutable-releases` and raises unless the
+status is 200. GitHub answers 204 No Content, so every change of `immutable_releases_enforced_repositories` ends with
+`failed updating immutable release settings for org '<org>'` and the status `204:`, apply exits 1, while the policy
+is changed (the next plan has nothing left to do). The neighbouring
+`_update_selected_repositories_for_immutable_releases` already expects 204. Seen live on the Free organization of
+the org-level instance (nightly of 2026-11-18, v1.8.0); the baseline reset meets it too each time it brings the
+policy back to `none`, and converges on its next pass.
+
+### KB-091 — a new repository naming a code security configuration fails before its settings are applied
+
+Status: **suspected** · Upstream: none · Scenarios: step `attach-new-repository` of `cli.code-security.configuration`
+
+Evidence: `otterdog/providers/github/rest/repo_client.py:330-341`,
+`otterdog/providers/github/rest/repo_client.py:353-360`
+(v1.8.0, unchanged on main 7f4235b).
+
+After `POST /orgs/{org}/repos` otterdog attaches the configuration (`POST .../configurations/{id}/attach`) and then
+waits for the attachment, up to 10 tries of `GET /repos/{owner}/{repo}/code-security-configuration`. The loop raises
+on the first answer that is not a 200, so an empty answer while the attachment is pending (the nightly of 2026-11-18
+printed no body after `failed retrieving the code security configuration of repo '<repo>':`) ends the creation at
+once: the repository exists and is attached, but `_remove_not_configured_code_scanning` and `update_repo` never run,
+so its settings wait for the next apply, and apply exits 1. The wait should go on while GitHub reports no
+configuration yet. A timing issue: a run where the attachment is fast does not show it.
+
+### KB-092 — the display name of an organization that has none is never managed
+
+Status: **suspected** · Upstream: none · Scenarios: step `display-name` of `cli.org.profile`
+
+Evidence: `otterdog/providers/github/rest/org_client.py:44-77`, `otterdog/models/__init__.py:659-660`,
+`otterdog/models/__init__.py:474-492` (v1.8.0).
+
+GitHub leaves `name` out of `GET /orgs/{org}` while the organization has no display name (the three Free test
+organizations and the enterprise one: `curl https://api.github.com/orgs/otterdog-e2e-org-level` has no `name` key).
+`get_settings` keeps only the keys GitHub returned, the model maps a missing key to UNSET, and `get_difference_from`
+skips a field whose live value is UNSET: `settings.name: 'Foo'` then plans nothing, apply sends nothing and the
+organization keeps no display name. The other profile keys (`blog`, `company`, `location`, ...) come back as `null`
+and are planned (`null -> "..."`). Seen live in the plan of step `profile` of `cli.org.profile` (nightly of
+2026-11-18): blog, company and location were planned, the name was not. otterdog should read a missing `name` as
+`null`.
+
+### KB-093 — relaxing the organization's workflow permissions needs a second apply for the repositories
+
+Status: **suspected** · Upstream: none · Scenarios: step `relaxed` of `cli.repo.org-coerced`
+
+Evidence: `otterdog/models/repo_workflow_settings.py:61-62`, `otterdog/models/repository.py:1503-1510` (v1.8.0).
+
+While the organization's `default_workflow_permissions` is `read`, GitHub forces `read` on every repository and
+otterdog coerces the repositories' value away. A configuration that moves the organization to `write` and keeps a
+repository at `read` (the template's value) plans no repository change, since GitHub reports `read` for them before
+the apply; once the organization allows `write`, GitHub moves those repositories to `write`, and the next plan wants
+`"write" -> "read"` on each of them (four plans in a row in the nightly of 2026-11-18). otterdog handles the same
+situation for `web_commit_signoff_required` by re-sending the repository's value when the organization stops
+requiring it (`repository.py:1503-1510`, the `true -> true` lines of the plan); `default_workflow_permissions` gets
+nothing like it, so one apply does not reach the configured state.

@@ -62,6 +62,10 @@ steps:
           enforcement: enforced
 
   - name: attach-new-repository
+    # GET /repos/{owner}/{repo}/code-security-configuration answers without a body while the attachment is pending,
+    # and otterdog's wait fails on the first answer that is not a 200 (KB-091): the repository is created and
+    # attached, but its settings are not applied in this apply (the next step's apply applies them)
+    known_bug: {id: KB-091, phases: [apply]}
     fragments:
       extra: *config
       repositories:
