@@ -193,6 +193,16 @@ jobs:
             echo "E2E_CACHE_DIR=$RUNNER_TEMP/otterdog-e2e-cache"
             echo "E2E_ARTIFACTS=$RUNNER_TEMP/otterdog-e2e-artifacts"
           } >> "$GITHUB_ENV"
+      - name: Enable the offline sandbox (unprivileged user namespaces)
+        run: |
+          set -euo pipefail
+          if ! unshare -rn true 2>/dev/null; then
+            # Ubuntu 24.04 restricts unprivileged user namespaces through AppArmor; with CI set the harness refuses
+            # to run offline otterdog commands without the `unshare -rn` network sandbox, and the web mode keeps the
+            # SUT on the host (install-deps tests run it offline there)
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+          unshare -rn true
       - name: Install the Firefox system libraries (Playwright install-deps, before any SUT code runs)
         run: |
           set -euo pipefail
