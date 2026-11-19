@@ -75,6 +75,9 @@ class WebSetting:
     optional: bool = False
     nullable: bool = False
     note: str = ""
+    # a known bug of otterdog's web client on this setting (scenarios/known_bugs.yaml): the round trip still toggles
+    # it, records its differences in RoundTripReport.known_bug_failures and does not fail on them
+    known_bug: str | None = None
 
     @property
     def rest_readable(self) -> bool:
@@ -163,6 +166,7 @@ WEB_SETTINGS: tuple[WebSetting, ...] = (
         "string",
         "default_repository_branch",
         note="toggled to a run-specific branch name, restored afterwards",
+        known_bug="KB-094",
     ),
     WebSetting(
         "packages_containers_public",
@@ -222,6 +226,7 @@ REST_FIELDS: Mapping[str, str] = {s.key: s.rest_field for s in WEB_SETTINGS if s
 REST_READABLE: tuple[str, ...] = tuple(REST_FIELDS)
 TRUSTED_READER_ONLY: tuple[str, ...] = tuple(s.key for s in WEB_SETTINGS if s.rest_field is None)
 WRITABLE: tuple[str, ...] = tuple(s.key for s in WEB_SETTINGS if s.writable)
+KNOWN_BUGS: Mapping[str, str] = {s.key: s.known_bug for s in WEB_SETTINGS if s.known_bug is not None}
 
 
 def web_setting(key: str) -> WebSetting:

@@ -1144,3 +1144,19 @@
   upstream: null
   fixed_in: null
   scenarios: []
+- id: KB-094
+  title: a web-mode apply of default_branch_name reports the change done while GitHub keeps the old default branch name of the organization
+  status: suspected
+  evidence:
+    - otterdog/resources/github-web-settings.jsonnet:44-46
+    - otterdog/providers/github/web.py:204-264
+    - otterdog/providers/github/web.py:246
+    - otterdog/providers/github/web.py:257-258
+    - otterdog/providers/github/web.py:348-351
+    - "e2e: tests/web_ui/test_web_settings.py (webui.settings.round-trip, nightly 44338402646 of 2026-11-18 on the free
+      org otterdog-e2e-org-level: the apply exits 0 with 11 changes, REST default_repository_branch, the trusted
+      reader and the SUT's own plan still show main after 120 s; again in nightly 44522952856 of 2026-11-19, run
+      tor73x83: verify got main, the converge plan still changes default_branch_name)"
+  upstream: null
+  fixed_in: null
+  scenarios: [webui.kb.default-branch-name]

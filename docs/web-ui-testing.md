@@ -69,6 +69,7 @@ Findings:
 |---|---|---|---|
 | `webui.settings.table` | `tests/web_ui/test_web_settings.py` | 0 | the table matches the SUT's schema and web definitions |
 | `webui.settings.round-trip` | `tests/web_ui/test_web_settings.py` | 8 | every settings change of the run, in one scenario (below) |
+| `webui.kb.default-branch-name` | `tests/web_ui/test_web_settings.py` | 0 (the round trip's logins) | the round trip's apply must change `default_branch_name`; non-strict xfail KB-094 (the round trip records its differences instead of failing) |
 | `webui.import.web-settings` | `tests/web_ui/test_web_settings.py` | 1 | `import` without `-n` writes the REST-readable values GitHub reports (`show --local` evaluates the import) |
 | `webui.kb.import-two-factor` | `tests/web_ui/test_web_settings.py` | 0 (the import's login) | the same import must carry the live `two_factor_requirement`; non-strict xfail KB-041, skipped when the live value equals the template default |
 | `webui.cmd.review-permissions` | `tests/web_ui/test_web_commands.py` | 1 | logs in, reads the installations page, approves nothing |

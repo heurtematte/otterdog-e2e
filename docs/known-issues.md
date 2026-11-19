@@ -173,6 +173,7 @@ shortened to the relevant lines.
 | KB-091 | new repository naming a code security configuration: the attachment wait fails, settings not applied | suspected | provider | step of `cli.code-security.configuration` |
 | KB-092 | display name never managed on an organization that has none | suspected | provider | step of `cli.org.profile` |
 | KB-093 | organization workflow permissions relaxed to write: repositories need a second apply | suspected | model | step of `cli.repo.org-coerced` |
+| KB-094 | web apply of `default_branch_name` reports done, GitHub keeps the old name | suspected | web UI | `webui.kb.default-branch-name` |
 
 ## Issues
 
@@ -2988,3 +2989,50 @@ the apply; once the organization allows `write`, GitHub moves those repositories
 situation for `web_commit_signoff_required` by re-sending the repository's value when the organization stops
 requiring it (`repository.py:1503-1510`, the `true -> true` lines of the plan); `default_workflow_permissions` gets
 nothing like it, so one apply does not reach the configured state.
+### KB-094 — a web-mode apply of default_branch_name reports the change done while GitHub keeps the old name
+
+Status: **suspected** · Upstream: none · Scenarios: `webui.kb.default-branch-name` (tests/web_ui/test_web_settings.py)
+
+Evidence: `otterdog/resources/github-web-settings.jsonnet:44-46`, `otterdog/providers/github/web.py:204-264`,
+`otterdog/providers/github/web.py:246`, `otterdog/providers/github/web.py:257-258`,
+`otterdog/providers/github/web.py:348-351` (otterdog v1.8.0, 89ab4ac; main 7f4235b changes only the login of this
+file), e2e: `tests/web_ui/test_web_settings.py` (`webui.settings.round-trip`).
+
+Found by the web-UI tier in the nightly of 2026-11-18 (run 44338402646, free organization `otterdog-e2e-org-level`,
+otterdog 1.8.0). The round trip pinned `default_branch_name` to `e2e-<run>` together with nine other web settings. The
+apply without `-n` planned `default_branch_name = "main" -> "e2e-<run>"`, exited 0 with "Executed plan: 0 added, 11
+changed" and printed no warning. The nine other settings changed. The default branch name did not: after 120 s of
+polling, `default_repository_branch` of `GET /orgs/{org}` and the trusted reader (`show-live` without `-n`) still
+showed `main`, and the SUT's own `plan` planned the same change again. The nightly of 2026-11-19 (run 44522952856,
+same organization and SUT) showed the same thing: verify read `main`, and the converge plan changed
+`default_branch_name` again, while the other settings round-tripped.
+
+The web client fills the text input `default_branch_name` of `settings/repository-defaults`, clicks the submit button
+of its form, and moves on to the next settings page without checking the result (`_update_settings`). It registers no
+handler for JavaScript dialogs there, while its App installation and permission flows accept them
+(`web.py:348-351`, `web.py:505-509`); Playwright dismisses an unhandled `confirm()`. A confirmation step on GitHub's
+repository defaults page, or an asynchronous save that the next page load cancels, would both lose the change
+silently. Which one applies is not known: the run kept no page dump (otterdog saves the HTML and a screenshot of each
+page only at trace level, `-vvv`). Either way otterdog reports a change it did not make. The value it reads back is
+right (the reader matches REST), so a plan after the apply shows the drift again.
+
+The round trip records the differences of this setting in its report instead of failing (`mapping.KNOWN_BUGS`), and
+`webui.kb.default-branch-name` asserts them without another login: an XPASS there means the change was saved.
+
+#### Reproduction
+
+Live only (a web login of an organization owner). From the web-UI tier, one round trip:
+
+```console
+$ otterdog-acceptance run --suite cli --target org-level --sut release:latest --allow-web-ui \
+    --scenario 'webui.settings.round-trip,webui.kb.default-branch-name' tests/web_ui
+```
+
+By hand, in a scratch configuration whose settings pin `default_branch_name: "e2e-check"`, with trace logging so that
+otterdog keeps the page of the repository defaults (`web_*settings_repository-defaults.html` and `.png` in the
+working directory; keep them local, they hold the logged-in page):
+
+```console
+$ otterdog apply -vvv -c otterdog.json -f <org>          # exit 0, "default_branch_name = "main" -> "e2e-check""
+$ gh api /orgs/<org> --jq .default_repository_branch     # still main
+```

@@ -482,6 +482,7 @@ yet. Known-bug items assert the correct behaviour and run as non-strict expected
 |---|---|---|---|---|---|
 | `webui.cmd.install-deps` | With the tier's browsers dir (the SUT's Firefox installed) install-deps succeeds offline: no error (a download attempt would fail without network) and no... | - | implemented | `tests/web_ui/test_web_commands.py` (2 tests) | `cli.install-deps` |
 | `webui.kb.import-two-factor` | The import without ``-n`` (the module's single login) carries the live two_factor_requirement (KB-041: the web reader never loads the security page, the... | - | implemented | `tests/web_ui/test_web_settings.py` (1 test; xfail KB-041) | `org-settings.web-ui.two-factor` |
+| `webui.kb.default-branch-name` | The round trip's apply changes default_branch_name: REST, the trusted reader and the SUT's own plan see the toggled name (KB-094: the apply... | - | implemented | `tests/web_ui/test_web_settings.py` (1 test; xfail KB-094) | `org-settings.web-ui.default-branch` |
 | `webui.kb.install-deps-exit-code` | A failed browser installation is a failure of install-deps: non-zero exit (KB-047: it exits 0) | - | implemented | `tests/web_ui/test_web_commands.py` (1 test; xfail KB-047) | `cli.install-deps` |
 
 ## Backlog
@@ -640,6 +641,7 @@ the entry is still open); the others are still planned or future.
 
 Implemented (see the web-UI table above): `CLI-09` (web part), `CLI-19`, `CLI-20`, `MOD-ORGSET-WEB-01`,
 `MOD-FREE-WEB-01`, `PRV-WEB-01`, `PRV-WEB-03` (KB-041), `PRV-PERM-01`, `PRV-INSTALL-01`; the battery added
-`webui.cmd.install-deps`, `webui.kb.install-deps-exit-code` (KB-047) and `webui.kb.import-two-factor` (KB-041). Still open: an approval through
+`webui.cmd.install-deps`, `webui.kb.install-deps-exit-code` (KB-047), `webui.kb.import-two-factor` (KB-041) and
+`webui.kb.default-branch-name` (KB-094). Still open: an approval through
 `review-permissions -g` (it would change the e2e App's installation), the web settings of an Enterprise Cloud target
 (`packages_containers_internal`), and every web-only feature the coverage matrix lists as a gap.

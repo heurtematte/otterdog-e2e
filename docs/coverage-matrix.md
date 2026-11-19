@@ -1102,7 +1102,7 @@ Details:
 | `org-settings.code-security-defaults` | default_code_security_configurations_disabled true removes the org's default code security configurations (disable only) | cli | free | P2 | covered | **unverified** | `tests/cli/test_org_code_security.py::test_default_code_security_configurations_are_disabled` |
 | `org-settings.security-managers` | security_managers: team slugs assigned the security_manager organization role (added and removed to match) | cli | free | P2 | covered | **unverified** | `cli.org.security-managers` |
 | `org-settings.web-ui.member-privileges` | web-UI member privileges: members_can_change_repo_visibility, members_can_delete_repositories, members_can_delete_issues, members_can_create_teams, members_can_change_project_visibility, readers_can_create_discussions (UI only) | web_ui | free | P1 | covered | **unverified** | `tests/web_ui/test_web_settings.py::test_web_settings_round_trip`, `tests/web_ui/test_web_settings.py::test_web_settings_table_matches_the_sut`, `tests/web_ui/test_web_settings.py::test_import_reads_web_settings` |
-| `org-settings.web-ui.default-branch` | web-UI default_branch_name (repository defaults page) (UI only) | web_ui | free | P2 | covered | **unverified** | `tests/web_ui/test_web_settings.py::test_web_settings_round_trip` |
+| `org-settings.web-ui.default-branch` | web-UI default_branch_name (repository defaults page) (UI only) | web_ui | free | P2 | covered | **unverified** | `tests/web_ui/test_web_settings.py::test_web_settings_round_trip`, `tests/web_ui/test_web_settings.py::test_round_trip_changes_the_default_branch_name` |
 | `org-settings.web-ui.packages` | web-UI package creation: packages_containers_public, packages_containers_internal (internal: Enterprise Cloud only) (UI only) | web_ui | free | P1 | **partial** | **unverified** | `tests/web_ui/test_web_settings.py::test_web_settings_round_trip` |
 | `org-settings.web-ui.discussions` | web-UI org discussions: has_discussions with discussion_source_repository '&lt;org&gt;/&lt;repo&gt;' (17 Eclipse orgs) (UI only) | web_ui | free | P1 | **partial** | **unverified** | `tests/web_ui/test_web_settings.py::test_web_settings_round_trip` |
 | `org-settings.web-ui.two-factor` | two_factor_requirement: read-only web setting (never written; a difference prints the read-only note) (UI only) | web_ui | free | P2 | covered | offline | `tests/web_ui/test_web_settings.py::test_web_settings_table_matches_the_sut`, `O-LPLAN-READ-ONLY-KEYS`, `tests/web_ui/test_web_settings.py::test_import_reads_the_two_factor_requirement` |
@@ -1169,6 +1169,12 @@ Details:
     - Properties (`org-settings`): `members_can_change_repo_visibility`, `members_can_delete_repositories`, `members_can_delete_issues`, `members_can_create_teams`, `members_can_change_project_visibility`, `readers_can_create_discussions`
     - Operations: modify, converge, import
     - Notes: 29 Eclipse orgs set members_can_change_project_visibility, 20 the three repository/teams privileges. readers_can_create_discussions is optional on the page (skipped silently when missing). members_can_change_project_visibility is not REST-readable: with the default reset SUT (the SUT itself) the round trip checks it with the code under test only (report self_checked, BAT-17); the other keys are verified through REST.
+- **`org-settings.web-ui.default-branch`** (covered, P2, `web_ui`): web-UI default_branch_name (repository defaults page)
+    - Source: `otterdog/resources/schemas/settings.json:106-109`
+    - Properties (`org-settings`): `default_branch_name`
+    - Operations: modify, converge
+    - Known bugs: KB-094
+    - Notes: the round trip toggles it to e2e-&lt;run&gt;; KB-094: otterdog 1.8.0 reports the web change done while GitHub keeps main (REST default_repository_branch), so its differences go to the round trip's known_bug_failures and webui.kb.default-branch-name asserts them
 - **`org-settings.web-ui.packages`** (partial, P1, `web_ui`): web-UI package creation: packages_containers_public, packages_containers_internal (internal: Enterprise Cloud only)
     - Source: `otterdog/resources/schemas/settings.json:110-117`
     - Properties (`org-settings`): `packages_containers_public`, `packages_containers_internal`

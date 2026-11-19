@@ -111,6 +111,7 @@ class WebUiTier:
             restored=self.restored,
             trusted_restore=lambda values: self.baseline.restore_web_settings(self.reader.cli, values),
             reader_is_sut=self.reader.cli.installed.sut.sha == self.sut.installed.sut.sha,
+            known_bugs=mapping.KNOWN_BUGS,
         )
 
     def web_cli(self, name: str) -> WebOtterdogCli:

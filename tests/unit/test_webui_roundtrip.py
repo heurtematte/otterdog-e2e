@@ -57,6 +57,7 @@ class World:
     trusted_lies: dict[str, Any] = field(default_factory=dict)  # values the trusted reader reports wrongly
     fail_applies: list[int] = field(default_factory=list)  # apply numbers (1-based) that fail
     stale_plan: dict[str, Any] = field(default_factory=dict)  # values the SUT's plan reads instead of the live ones
+    unsaved: set[str] = field(default_factory=set)  # keys the SUT's apply reports done without changing them (KB-094)
     applies: int = 0
     logins: int = 0
 
@@ -113,7 +114,8 @@ class FakeSut:
                 "apply", world.output(changes, "") + "failed to apply patch: CHANGE - settings\n", exit_code=1
             )
         for key, (_old, new) in changes.items():
-            world.live[key] = new
+            if key not in world.unsaved:
+                world.live[key] = new
         if wanted.get("has_discussions") is False:
             world.live["discussion_source_repository"] = None
         text = world.output(changes, f"Executed plan: 0 added, {len(changes)} changed, 0 live resources ignored.")
@@ -330,6 +332,37 @@ def test_round_trip_detects_a_plan_that_does_not_converge() -> None:
     assert not report.ok and report.restored
     assert [name for name, ok in step_names(report) if not ok] == ["converge"]
     assert "members_can_delete_issues" in report.failures()[0] and world.live == ORIGINAL
+
+
+def test_round_trip_records_the_differences_of_a_known_bug_without_failing() -> None:
+    """KB-094: the SUT's apply does not save default_branch_name. Without a known bug the verify and converge steps
+    fail on it; with one they pass, the report records the differences of that key only, and the other keys stay
+    strict (a second broken key still fails the step)."""
+    known = {"default_branch_name": "KB-094"}
+    strict = round_trip(World(unsaved={"default_branch_name"}))[0].run()
+    assert [name for name, ok in step_names(strict) if not ok] == ["verify", "converge"]
+    assert "default_branch_name" in strict.failures()[0] and not strict.known_bug_failures
+    report = round_trip(World(unsaved={"default_branch_name"}), known_bugs=known)[0].run()
+    assert report.ok and report.restored, report.summary()
+    failures = report.known_bug_failures["default_branch_name"]
+    assert [line.split(": ", 1)[1].split(" ", 1)[0] for line in failures] == ["REST", "trusted", "the"]
+    assert all(line.startswith("KB-094: ") for line in failures) and list(report.known_bug_failures) == [
+        "default_branch_name"
+    ]
+    assert "known bug KB-094: REST default_branch_name" in report.summary()
+    assert report.to_json()["known_bug_failures"] == report.known_bug_failures
+    both = round_trip(World(unsaved={"default_branch_name", "members_can_delete_issues"}), known_bugs=known)[0].run()
+    assert [name for name, ok in step_names(both) if not ok] == ["verify", "converge"]
+    assert "members_can_delete_issues" in both.failures()[0] and "default_branch_name" not in both.failures()[0]
+    assert "default_branch_name" in both.known_bug_failures
+    clean = round_trip(World(), known_bugs=known)[0].run()
+    assert clean.ok and clean.known_bug_failures == {}
+
+
+def test_known_bugs_of_the_web_settings() -> None:
+    """mapping.KNOWN_BUGS lists the web settings with a known bug of otterdog's web client."""
+    assert mapping.KNOWN_BUGS == {"default_branch_name": "KB-094"}
+    assert all(mapping.web_setting(key).writable for key in mapping.KNOWN_BUGS)
 
 
 def test_round_trip_reports_when_nothing_can_be_toggled() -> None:

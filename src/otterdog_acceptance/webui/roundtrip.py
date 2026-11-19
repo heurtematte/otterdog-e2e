@@ -13,6 +13,10 @@ so the tier groups everything into one scenario with 8 logins:
 5. restore: the SUT applies the original values, 6. verify again; when the SUT could not restore them, the TRUSTED
    CLI restores them (BaselineManager.restore_web_settings) and they are verified once more.
 
+A setting with a known bug (``known_bugs``, mapping.KNOWN_BUGS) is still toggled; its differences in steps 3 and 4
+go to RoundTripReport.known_bug_failures instead of failing the step (its webui.kb test asserts them), so the other
+settings stay strictly checked. The restore steps stay strict for every setting.
+
 The original values are recorded in the BaselineManager before anything changes, so the session restores them even
 if the scenario dies (pytest_plugin baseline teardown). Not toggled: ``two_factor_requirement`` (read-only in
 otterdog; requiring 2FA would remove members), settings the plan does not offer, settings nobody could read.
@@ -163,6 +167,8 @@ class RoundTripReport:
     # toggled keys REST cannot read, verified only by the trusted reader running the SUT's own web code: no independent
     # evidence (BAT-17: a symmetric bug of otterdog's web reader and writer would pass)
     self_checked: list[str] = field(default_factory=list)
+    # key -> "<KB id>: <difference>" of the verify and converge steps for keys with a known bug (not step failures)
+    known_bug_failures: dict[str, list[str]] = field(default_factory=dict)
 
     @property
     def ok(self) -> bool:
@@ -186,6 +192,7 @@ class RoundTripReport:
                 "  self-checked only (the trusted reader runs the SUT's own code, REST cannot read them): "
                 + ", ".join(self.self_checked)
             )
+        lines += [f"  known bug {line}" for lines_of_key in self.known_bug_failures.values() for line in lines_of_key]
         return REDACTOR("\n".join(lines))
 
     def to_json(self) -> dict[str, Any]:
@@ -199,6 +206,7 @@ class RoundTripReport:
             "skipped": self.skipped,
             "steps": [asdict(step) for step in self.steps],
             "self_checked": self.self_checked,
+            "known_bug_failures": self.known_bug_failures,
         }
 
 
@@ -227,9 +235,11 @@ class WebSettingsRoundTrip:
         sleep: Callable[[float], None] = time.sleep,
         clock: Callable[[], float] = time.monotonic,
         reader_is_sut: bool = False,
+        known_bugs: Mapping[str, str] | None = None,
     ) -> None:
         """Bind the collaborators; ``reader_is_sut``: the trusted reader runs the same otterdog code as the SUT (the
-        web-only keys then have no independent oracle: RoundTripReport.self_checked)."""
+        web-only keys then have no independent oracle: RoundTripReport.self_checked); ``known_bugs``: key -> known
+        bug id of the settings whose verify and converge differences are recorded instead of failing the step."""
         self.sut = sut
         self.reader = reader
         self.rest = rest
@@ -244,6 +254,7 @@ class WebSettingsRoundTrip:
         self.sleep = sleep
         self.clock = clock
         self.reader_is_sut = reader_is_sut
+        self.known_bugs = dict(known_bugs or {})
 
     # --- steps ------------------------------------------------------------------------------------------------------
     def _step(self, report: RoundTripReport, name: str, action: Callable[[], str | None]) -> bool:
@@ -288,8 +299,11 @@ class WebSettingsRoundTrip:
             return f"the SUT planned web changes {sorted(planned)}, expected {sorted(wanted)}"
         return None
 
-    def _verify(self, expected: Mapping[str, Any], keys: Iterable[str]) -> str | None:
-        """Steps 3 and 6: REST (polled) and the trusted reader see ``expected`` for ``keys``."""
+    def _verify(
+        self, expected: Mapping[str, Any], keys: Iterable[str], report: RoundTripReport | None = None
+    ) -> str | None:
+        """Steps 3 and 6: REST (polled) and the trusted reader see ``expected`` for ``keys``; with ``report``, the
+        differences of known-bug keys are recorded there (_known_bug_problems)."""
         keys = list(keys)
         wanted = {key: expected.get(key) for key in keys}
         _values, rest_diffs = wait_rest_values(
@@ -299,11 +313,24 @@ class WebSettingsRoundTrip:
         if not read.ok:
             return "; ".join([*(f"REST {line}" for line in rest_diffs), read.problem() or "trusted read failed"])
         trusted_diffs = mapping.differences(wanted, read.values, keys)
-        problems = [*(f"REST {line}" for line in rest_diffs), *(f"trusted {line}" for line in trusted_diffs)]
-        return "; ".join(problems) or None
+        problems = [(_diff_key(line), f"REST {line}") for line in rest_diffs]
+        problems += [(_diff_key(line), f"trusted {line}") for line in trusted_diffs]
+        return self._known_bug_problems(report, problems)
 
-    def _converge(self, values: Mapping[str, Any]) -> str | None:
-        """Step 4: the SUT's own ``plan`` without -n is a no-op for every web key."""
+    def _known_bug_problems(self, report: RoundTripReport | None, problems: Iterable[tuple[str, str]]) -> str | None:
+        """The failure detail of ``(key, text)`` problems; with ``report``, those of known-bug keys go to
+        report.known_bug_failures (``<KB id>: <text>``) and do not fail the step."""
+        failing = []
+        for key, text in problems:
+            if report is not None and key in self.known_bugs:
+                report.known_bug_failures.setdefault(key, []).append(f"{self.known_bugs[key]}: {text}")
+            else:
+                failing.append(text)
+        return "; ".join(failing) or None
+
+    def _converge(self, values: Mapping[str, Any], report: RoundTripReport | None = None) -> str | None:
+        """Step 4: the SUT's own ``plan`` without -n is a no-op for every web key (known-bug keys: recorded in
+        ``report``)."""
         self.sut.workspace.write_org_config(self.render(values))
         result = self.sut.plan()
         failure = classify_web_failure(result.output)
@@ -312,6 +339,9 @@ class WebSettingsRoundTrip:
             reason = f" ({failure.kind}: {failure.hint})" if failure else ""
             return f"plan exit code {result.exit_code}{reason}:\n{_tail(result.output)}"
         changed = [key for key in settings_changes(plan) if key in mapping.WEB_KEYS]
+        known = [key for key in changed if report is not None and key in self.known_bugs]
+        self._known_bug_problems(report, [(key, f"the SUT still plans web changes ['{key}']") for key in known])
+        changed = [key for key in changed if key not in known]
         return f"the SUT still plans web changes {changed}" if changed else None
 
     def _trusted_restore(self, original: Mapping[str, Any]) -> str | None:
@@ -350,8 +380,8 @@ class WebSettingsRoundTrip:
         report.changed = True
         try:
             if self._step(report, "set", lambda: self._apply(expected, before=original, keys=keys)):
-                self._step(report, "verify", lambda: self._verify(expected, keys))
-                self._step(report, "converge", lambda: self._converge(expected))
+                self._step(report, "verify", lambda: self._verify(expected, keys, report))
+                self._step(report, "converge", lambda: self._converge(expected, report))
         finally:
             restored = self._step(
                 report, "restore", lambda: self._apply(original, before=expected, keys=keys, strict=False)
@@ -366,6 +396,11 @@ class WebSettingsRoundTrip:
             if restored and self.restored is not None:
                 self.restored()
         return report
+
+
+def _diff_key(line: str) -> str:
+    """The key of a mapping.differences line (``key: expected X, got Y``)."""
+    return line.split(":", 1)[0].strip()
 
 
 def _tail(text: str) -> str:

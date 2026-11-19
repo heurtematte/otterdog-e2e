@@ -2421,7 +2421,9 @@ features:
     ui_only: true
     priority: P2
     status: covered
-    covered_by: [tests/web_ui/test_web_settings.py::test_web_settings_round_trip]
+    covered_by: [tests/web_ui/test_web_settings.py::test_web_settings_round_trip, tests/web_ui/test_web_settings.py::test_round_trip_changes_the_default_branch_name]
+    known_bugs: [KB-094]
+    notes: "the round trip toggles it to e2e-<run>; KB-094: otterdog 1.8.0 reports the web change done while GitHub keeps main (REST default_repository_branch), so its differences go to the round trip's known_bug_failures and webui.kb.default-branch-name asserts them"
 
   - id: org-settings.web-ui.packages
     area: org-settings

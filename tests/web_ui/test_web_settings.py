@@ -5,7 +5,11 @@ webui.settings.table: the harness table of the 12 web settings (oracles, pages, 
 webui.settings.round-trip: ONE scenario for every settings change of the run (8 logins): snapshot (REST + trusted
     reader), the SUT applies the toggled values without ``-n``, REST and the trusted reader verify them, the SUT's own
     plan converges, the SUT restores the originals (the trusted CLI as fallback) and both oracles verify the restore.
-    Values an earlier session left changed (persisted snapshot of a killed run) are restored first.
+    Values an earlier session left changed (persisted snapshot of a killed run) are restored first. The differences
+    of a setting with a known bug (mapping.KNOWN_BUGS) do not fail it: its webui.kb test below asserts them.
+webui.kb.default-branch-name (known bug KB-094): the round trip's apply must change default_branch_name; otterdog
+    reports it done while GitHub keeps the old name (REST, the trusted reader and the SUT's own plan). No extra login:
+    it reads the report of the round trip, and skips when the round trip did not run or did not toggle the setting.
 webui.import.web-settings: ``import`` without ``-n`` writes the REST-readable web settings as GitHub reports them
     (1 login; ``show --local`` of the imported configuration evaluates it offline) and, unlike ``import -n``, does not
     warn that the Web UI was skipped.
@@ -25,6 +29,7 @@ import pytest
 from otterdog_acceptance.otterdog.output import normalize_text
 from otterdog_acceptance.webui import mapping
 from otterdog_acceptance.webui.oracle import parse_settings_block, rest_web_values, web_values
+from otterdog_acceptance.webui.roundtrip import DEFAULT_BRANCH
 
 if TYPE_CHECKING:
     from conftest import WebUiTier
@@ -36,6 +41,8 @@ pytestmark = [pytest.mark.web_ui, pytest.mark.tags("org-settings", "cli")]
 
 # printed by import, show-live and plan with -n (otterdog/operations/import_configuration.py, show_live.py)
 NO_WEB_UI_WARNING = "the Web UI will not be queried as '--no-web-ui' has been specified"
+# E2EContext.extras key of the round trip's report, read by the known-bug tests of its settings (no extra login)
+ROUND_TRIP_REPORT = "web_settings_round_trip"
 # show-default prints the template's settings as ``key : value,`` (otterdog/operations/show_default.py)
 TWO_FACTOR_DEFAULT_RE = re.compile(r"^\s*two_factor_requirement\s*:\s*(?P<value>true|false),?\s*$", re.MULTILINE)
 
@@ -79,8 +86,28 @@ def test_web_settings_round_trip(web_tier: WebUiTier) -> None:
     leftover = web_tier.recover_pending()
     assert not leftover, f"web values left changed by an earlier session could not be restored: {leftover}"
     report = web_tier.round_trip().run()
+    web_tier.e2e.extras[ROUND_TRIP_REPORT] = report
     web_tier.write_evidence("settings-round-trip", report.to_json())
     assert report.ok, report.summary()
+
+
+@pytest.mark.scenario("webui.kb.default-branch-name")
+@pytest.mark.known_bug("KB-094")
+@pytest.mark.tags("known-bug")
+@pytest.mark.org_level
+@pytest.mark.timeout(60)
+def test_round_trip_changes_the_default_branch_name(e2e: E2EContext) -> None:
+    """The round trip's apply changes default_branch_name: REST, the trusted reader and the SUT's own plan see the
+    toggled name (KB-094: the apply reports it done, GitHub keeps the old name and the SUT plans it again)."""
+    report = e2e.extras.get(ROUND_TRIP_REPORT)
+    if report is None:
+        pytest.skip("the settings round trip did not run in this session (webui.settings.round-trip)")
+    if DEFAULT_BRANCH not in report.toggles:
+        pytest.skip(f"the round trip did not toggle {DEFAULT_BRANCH}: {report.skipped.get(DEFAULT_BRANCH, 'stopped')}")
+    if not any(step.name == "verify" for step in report.steps):
+        pytest.skip(f"the round trip stopped before its verify step:\n{report.summary()}")
+    failures = report.known_bug_failures.get(DEFAULT_BRANCH, [])
+    assert not failures, "\n".join(failures)
 
 
 @pytest.mark.scenario("webui.import.web-settings")
