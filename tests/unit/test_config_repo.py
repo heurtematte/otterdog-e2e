@@ -158,6 +158,7 @@ def build(relay: FakeRelay | None = None, guard: Callable[[str, str], None] | No
     repo = run_ctx.name("config")
     oracle.set("branch_sha", repo, "main", value=MAIN_SHA)
     oracle.add_file(repo, PATH, BASE_TEXT, ref="main")
+    oracle.add_file(repo, PATH, BASE_TEXT, ref=MAIN_SHA)
     mutators = {name: RecordingMutator(oracle=oracle) for name in ("admin", "author", "approver")}
     guarded: list[tuple[str, str]] = []
 
@@ -254,11 +255,26 @@ def test_reset_main() -> None:
     assert world.guarded == [(BASE_TEXT, "baseline v2")]
     (call,) = world.mutators["admin"].calls
     assert call.method == "commit_files" and call.args == (world.repo, "main", {PATH: "baseline v2"}, "e2e reset")
-    assert sha
-    world.oracle.remove("file_content", world.repo, PATH, "main")
-    world.oracle.remove("file_content", world.repo, PATH, None)
+    assert sha and world.flow.main_sha() == sha and world.flow.main_config() == "baseline v2"
+    removed = world.flow.remove_main_config(message="no config")  # unguarded: no config text is pushed
+    assert world.mutators["admin"].calls[-1].args == (world.repo, "main", {PATH: None}, "no config")
+    assert world.flow.main_sha() == removed and world.flow.main_config() is None
     world.flow.reset_main("first", message="m")
     assert world.guarded == [(BASE_TEXT, "baseline v2")]
+
+
+def test_main_config_is_read_at_the_head_commit() -> None:
+    """main_config reads the text at main's head sha (the text the flow committed, else GET contents?ref=<sha>),
+    never by branch name: GitHub may serve the previous text of a branch right after a commit."""
+    world = build()
+    world.oracle.add_file(world.repo, PATH, "stale text", ref="main")
+    assert world.flow.main_config() == BASE_TEXT
+    sha = world.flow.reset_main("new main", message="m")
+    world.oracle.add_file(world.repo, PATH, "stale text", ref="main")
+    world.oracle.remove("file_content", world.repo, PATH, sha)
+    assert world.flow.main_config() == "new main"  # committed here: known without a read
+    world.oracle.remove("branch_sha", world.repo, "main")
+    assert world.flow.main_config() is None
 
 
 def test_push_commit() -> None:
@@ -364,7 +380,9 @@ def test_apply_after_merge_also_checks_the_pre_merge_base() -> None:
     pr = world.flow.open_pr(slug="s", config_texts="merged text", title="t")
     sync_pull(world, pr)
     world.flow.merge(pr)
-    world.oracle.add_file(world.repo, PATH, "merged text", ref="main")  # GitHub after the squash merge
+    merge_sha = fake_sha("squash merge")  # GitHub after the squash merge
+    world.oracle.set("branch_sha", world.repo, "main", value=merge_sha)
+    world.oracle.add_file(world.repo, PATH, "merged text", ref=merge_sha)
     world.guarded.clear()
     world.flow.comment(pr, "/otterdog apply")
     assert world.guarded == [("merged text", "merged text"), (BASE_TEXT, "merged text")]

@@ -461,7 +461,8 @@ def test_config_repo_remediations_merge_through_the_guarded_flow() -> None:
         sync_context="s",
         guard=lambda base, head: guarded.append((base, head)),
     )
-    w.oracle.add_file(CONFIG_REPO, f"otterdog/{FAKE_ORG}.jsonnet", "base", ref="main")
+    w.oracle.set("branch_sha", CONFIG_REPO, "main", value=fake_sha("main"))
+    w.oracle.add_file(CONFIG_REPO, f"otterdog/{FAKE_ORG}.jsonnet", "base", ref=fake_sha("main"))
     pull = remediation_pull(9, repo=CONFIG_REPO, slug="append")
     w.oracle.set("pull", CONFIG_REPO, 9, value=pull)
     w.oracle.add_file(CONFIG_REPO, f"otterdog/{FAKE_ORG}.jsonnet", "base + { }", ref=pull["head"]["sha"])

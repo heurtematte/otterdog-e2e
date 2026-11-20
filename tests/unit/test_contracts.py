@@ -881,6 +881,7 @@ CLASS_MEMBERS: dict[str, list[str]] = {
         "main_sha",
         "main_config",
         "reset_main",
+        "remove_main_config",
         "open_pr",
         "push_commit",
         "comment",
@@ -1311,6 +1312,7 @@ SIGNATURES: dict[str, list[str]] = {
         "default_branch",
     ],
     "otterdog_acceptance.config_repo.ConfigRepoFlow.reset_main": ["self", "text", "message", "identity"],
+    "otterdog_acceptance.config_repo.ConfigRepoFlow.remove_main_config": ["self", "message", "identity"],
     "otterdog_acceptance.config_repo.ConfigRepoFlow.open_pr": [
         "self",
         "slug",

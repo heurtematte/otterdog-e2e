@@ -237,8 +237,25 @@ class ConfigRepoFlow:
         return sha
 
     def main_config(self) -> str | None:
-        """Config text on the default branch (None when absent)."""
-        return self.oracle.file_content(self.repo, self.config_path, ref=self.default_branch)
+        """Config text on the default branch (None when absent), read at the branch's head commit: right after a
+        commit GitHub may still serve the previous text for the branch name (nightly 44545614854: the guard of a PR
+        compared it with the main a test had just replaced)."""
+        sha = self.oracle.branch_sha(self.repo, self.default_branch)
+        if not sha:
+            return None
+        known = self._texts_by_sha.get(sha)
+        if known is not None:
+            return known
+        return self.oracle.file_content(self.repo, self.config_path, ref=sha)
+
+    def remove_main_config(self, *, message: str, identity: str = "admin") -> str:
+        """Commit the removal of the org config from the default branch (nothing to guard: no config text is pushed,
+        and a later PR is guarded against the baseline); returns the commit sha. The webapp case restores main."""
+        sha = self._mutator(identity).commit_files(self.repo, self.default_branch, {self.config_path: None}, message)
+        _logger.info(
+            "removed %s from %s/%s:%s (%s)", self.config_path, self.org, self.repo, self.default_branch, message
+        )
+        return sha
 
     def reset_main(self, text: str, *, message: str, identity: str = "admin") -> str:
         """Commit ``text`` to the default branch (guarded); returns the commit sha."""

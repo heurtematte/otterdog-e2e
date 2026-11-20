@@ -1608,13 +1608,20 @@ class RecordingMutator:
         return fake_sha(("put_file", repo, path, content, branch, len(self.calls)))
 
     def commit_files(self, repo: str, branch: str, files: Mapping[str, str | None], message: str) -> str:
-        """Record; returns a fake commit sha; the oracle serves written files on that branch."""
+        """Record; returns a fake commit sha. The oracle serves the written files on that branch and at that sha,
+        no longer serves the deleted ones on the branch, and a branch with a known head moves to the new commit."""
         self._record("commit_files", repo, branch, dict(files), message)
+        sha = fake_sha(("commit_files", repo, branch, len(self.calls)))
         if self.oracle is not None:
             for path, content in files.items():
                 if content is not None:
                     self.oracle.add_file(repo, path, content, ref=branch)
-        return fake_sha(("commit_files", repo, branch, len(self.calls)))
+                    self.oracle.add_file(repo, path, content, ref=sha)
+                else:
+                    self.oracle.remove("file_content", repo, path, branch)
+            if self.oracle.branch_sha(repo, branch) is not None:
+                self.oracle.set("branch_sha", repo, branch, value=sha)
+        return sha
 
     def create_commit(self, repo: str, *, tree_sha: str, parents: Sequence[str], message: str) -> str:
         """Record; returns a fake commit sha."""

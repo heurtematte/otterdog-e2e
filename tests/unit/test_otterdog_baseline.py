@@ -579,13 +579,33 @@ def test_config_guard_accepts_heads_that_are_invalid_on_purpose(tmp_path: Path) 
     [
         (("plan-network", 1, "Cannot connect to host api.github.com"), False, "incomplete.*Cannot connect"),
         (("local-plan-noop", -1, None), True, r"incomplete \(timed out\)"),
-        (("local-plan-missing-base", 1, None), False, r"local-plan failed \(exit 1\)"),  # base unloadable: never ok
     ],
 )
 def test_config_guard_refuses_incomplete_plans(
     tmp_path: Path, output: tuple[str, int, str | None], timed_out: bool, match: str
 ) -> None:
-    """Infra errors, timeouts and a base that cannot be loaded are refused (fail closed)."""
+    """Infra errors and timeouts are refused (fail closed)."""
     manager, _cli = guard_manager(tmp_path, output, timed_out=timed_out)
     with pytest.raises(SafetyError, match=match):
         manager.guard_config_change("main", "head")
+
+
+def test_config_guard_checks_a_head_over_an_unloadable_base_against_the_baseline(tmp_path: Path) -> None:
+    """A main that cannot be loaded (W-SYNC tests break it on purpose) is replaced by the baseline: the removal check
+    still runs and main can be restored (nightly 44545614854: the restore was refused and 42 webapp tests errored).
+    A baseline that cannot be loaded is refused (fail closed)."""
+    missing_base = ("local-plan-missing-base", 1, None)
+    manager, cli = guard_manager(tmp_path / "ok", missing_base, ("local-plan-remove", 0, None))
+    assert manager.guard_config_change("broken main", "head").delete == 10
+    assert cli.workspace.base_config_file.read_text() == manager.text()
+    assert len(cli.calls_to("local-plan")) == 2
+    manager, _cli = guard_manager(tmp_path / "foreign", missing_base, ("local-plan-remove", 0, None), purgeable=set())
+    with pytest.raises(SafetyError, match="not purgeable"):
+        manager.guard_config_change("broken main", "head")
+    manager, _cli = guard_manager(tmp_path / "twice", missing_base, missing_base)
+    with pytest.raises(SafetyError, match=r"local-plan failed \(exit 1\)"):
+        manager.guard_config_change("broken main", "head")
+    manager, cli = guard_manager(tmp_path / "baseline", missing_base)
+    with pytest.raises(SafetyError, match=r"local-plan failed \(exit 1\)"):
+        manager.guard_config_change("", "head")  # already the baseline: no second plan
+    assert len(cli.calls_to("local-plan")) == 1

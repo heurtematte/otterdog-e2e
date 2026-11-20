@@ -83,6 +83,7 @@ def build(relay: FakeRelay | None = None, mutator_class: type[RecordingMutator] 
     repo = run_ctx.name("config")
     oracle.set("branch_sha", repo, "main", value=MAIN_SHA)
     oracle.add_file(repo, PATH, BASE_TEXT, ref="main")
+    oracle.add_file(repo, PATH, BASE_TEXT, ref=MAIN_SHA)
     mutators = {name: mutator_class(oracle=oracle) for name in ("admin", "author", "approver", "outsider")}
     guarded: list[tuple[str, str]] = []
 

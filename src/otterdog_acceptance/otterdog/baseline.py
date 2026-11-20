@@ -26,7 +26,7 @@ import re
 from collections.abc import Callable, Collection, Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
-from otterdog_acceptance.otterdog.output import ApplyResult
+from otterdog_acceptance.otterdog.output import CURRENT_CONFIG_ERROR, ApplyResult
 from otterdog_acceptance.otterdog.render import ConfigFragments
 from otterdog_acceptance.otterdog.runner import OtterdogCli
 from otterdog_acceptance.otterdog.workspace import ConfigWorkspace
@@ -233,15 +233,16 @@ class BaselineManager:
         check_removals (fail closed). An empty base is the baseline (~ the live org). With ``allow_invalid_head`` a
         head that explicitly fails to load or validate (for THIS trusted CLI) is accepted: W-PR-INVALID pushes such
         texts on purpose. ConfigRepoFlow passes it for pushes, and for approvals, merges and /otterdog merge|apply only
-        when the SUT itself reports the PR invalid (the SUT, possibly newer, decides what it applies: DESTR-04). A
-        timeout, an infra error, a base that cannot be loaded or any other failed local-plan is refused. Returns the
-        plan.
+        when the SUT itself reports the PR invalid (the SUT, possibly newer, decides what it applies: DESTR-04). A base
+        that cannot be loaded (a scenario broke main on purpose) is replaced by the baseline, as an empty base: the
+        removal check still runs, and main can be restored. A timeout, an infra error or any other failed local-plan
+        is refused. Returns the plan.
         """
         cli = self.guard_cli()
-        workspace = cli.workspace
-        workspace.write_base_config(base_text or self.text())
-        workspace.write_org_config(head_text)
-        result = cli.local_plan(local=_template_vendored(workspace))
+        result = self._guard_local_plan(cli, base_text or self.text(), head_text)
+        if base_text and _base_unloadable(result):
+            log.warning("config guard: the base config cannot be loaded, the head is checked against the baseline")
+            result = self._guard_local_plan(cli, self.text(), head_text)
         if result.timed_out or result.infra_error:
             reason = result.infra_error or "timed out"
             raise SafetyError(f"config guard: local-plan incomplete ({reason}), refusing the change")
@@ -255,6 +256,13 @@ class BaselineManager:
             )
         self.check_removals(plan)
         return plan
+
+    @staticmethod
+    def _guard_local_plan(cli: OtterdogCli, base_text: str, head_text: str) -> CliResult:
+        """``local-plan`` base -> head in the guard workspace (``--local`` once the template is vendored)."""
+        cli.workspace.write_base_config(base_text)
+        cli.workspace.write_org_config(head_text)
+        return cli.local_plan(local=_template_vendored(cli.workspace))
 
     def guard_cli(self) -> OtterdogCli:
         """The reset SUT's OtterdogCli bound to its own guard workspace (created once; artifacts under ``guard/``)."""
@@ -438,6 +446,15 @@ def _invalid_head(plan: PlanResult) -> bool:
     """
     validation = plan.validation
     return validation is not None and not validation.ok and bool(validation.load_error or validation.errors)
+
+
+def _base_unloadable(result: CliResult) -> bool:
+    """True when a complete local-plan failed because its BASE ("current") configuration cannot be loaded."""
+    if result.timed_out or result.infra_error or result.exit_code == 0:
+        return False
+    return any(
+        message.level == "Error" and message.text.startswith(CURRENT_CONFIG_ERROR) for message in result.plan().messages
+    )
 
 
 def _template_vendored(workspace: ConfigWorkspace) -> bool:
