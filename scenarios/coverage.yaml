@@ -4475,7 +4475,7 @@ features:
     covered_by: [tests/webapp/test_commands.py::test_sync_check_crash]
     known_bugs: [KB-040]
     findings: [F-13]
-    notes: "W-SYNC-FAILURE (P2): main with a team_permissions schema error makes the sync plan raise: state failure, failed CheckConfigurationInSyncTask (on open and after /otterdog check-sync), no check-sync comment, in_sync never set; the misleading 'detected out of sync changes' description is a scoped xfail (MisleadingSyncFailureError, known_bug KB-040)."
+    notes: "W-SYNC-FAILURE (P2): main without its org config file makes the sync check raise (404 when it reads main's config; a main that fails to load is reported in sync since 1.7.0, KB-067): state failure, failed CheckConfigurationInSyncTask (on open and after /otterdog check-sync), no check-sync comment, in_sync never set; the misleading 'detected out of sync changes' description is a scoped xfail (MisleadingSyncFailureError, known_bug KB-040)."
 
   - id: webapp-pr.sync-propagation
     area: webapp-pr

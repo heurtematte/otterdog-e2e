@@ -6,17 +6,18 @@ description: |
   with -d): a type, optionally followed by [key=value, ...] conditions on the key of the resource or on its parent
   named by its type, values being shell patterns. The apply then becomes a targeted deletion: only the selected
   removals are applied, every other patch of the plan (additions, changes, the other removals) is skipped and counted
-  ("N other change(s) are skipped, only the deletions selected by '--delete-filter' are applied." and "Executed plan:
-  ... D deleted, N skipped."). The journey creates a repository with two variables and an environment, a second
-  repository and a third one that is renamed later. Each later step plans the same pending changes (a description
-  change and the removals) and deletes one kind of object with its own selector: a variable by its key, the
-  environment by its parent, nothing (a selector that matches nothing warns and changes nothing), the second
-  repository by its type. Each step asserts the requests: the DELETE of the selected object is sent, the other
+  ("Executed plan: ... D deleted, N skipped."; "N other change(s) are skipped, only the deletions selected by
+  '--delete-filter' are applied." goes before the confirmation prompt, so the harness's apply -f sees it only when
+  nothing is left to apply: operations/apply.py:139-158). The journey creates a repository with two variables and an
+  environment, a second repository and a third one that is renamed later. Each later step plans the same pending
+  changes (a description change and the removals) and deletes one kind of object with its own selector: a variable by
+  its key, the environment by its parent, nothing (a selector that matches nothing warns and changes nothing), the
+  second repository by its type. Each step asserts the requests: the DELETE of the selected object is sent, the other
   DELETEs and the repository PATCH (the skipped description change) are not, and the oracle sees the other objects
   untouched. A repository renamed through aliases that loses a variable is the case the pull request handles apart:
   only deletions are applied, so the rename is skipped and the variable is deleted from the repository under its
-  current (old) name. The last step applies the skipped changes without a filter (the PATCH is sent). Released in
-  the first release after v1.8.0: fixed_in skips the scenario on older SUTs.
+  current (old) name. The last step applies the skipped changes without a filter (the PATCH is sent). Released in the
+  first release after v1.8.0: fixed_in skips the scenario on older SUTs.
 priority: P1
 min_plan: free
 fixed_in: "1.9.0"
@@ -101,7 +102,6 @@ steps:
       delete_filter: ['repo_variable[name="{{ P }}_DF_V2"]']
       contains:
         - '- remove repo_variable[name="{{ P }}_DF_V2", repository={{ p }}-df]'
-        - "3 other change(s) are skipped, only the deletions selected by '--delete-filter' are applied."
         - 'Executed plan: 0 added, 0 changed, 1 deleted, 3 skipped.'
       not_contains: ['- remove environment[', '- remove repository[', '~ repository[']
       api:

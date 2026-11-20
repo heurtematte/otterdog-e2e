@@ -11,6 +11,11 @@ description: |
   fields are left out of the diff and of the patch (models/repository.py:734-739, 940-947), so converging there
   shows that otterdog ignores them; the way back to public may re-enable them, hence no exact change count for that
   step. Private repositories exist on every plan, so the scenario runs on Free too.
+  Known bug KB-088 (declared by every step after 'public'): the step that makes the repository private sends
+  allow_forking false in the same PATCH /repos/{owner}/{repo} as private true, which GitHub refuses with 422 "This
+  organization does not allow private repository forking" while the organization disables
+  members_can_fork_private_repositories (the template default); the repository stays public, so 'public-again' has
+  nothing to change.
 priority: P1
 min_plan: free
 tags: [repo, private]
@@ -34,6 +39,7 @@ steps:
         match: {private: false, visibility: public, allow_forking: true}
 
   - name: private
+    known_bug: KB-088  # the repository stays public (see the description)
     fragments:
       repositories:
         - |
@@ -57,6 +63,7 @@ steps:
         match: {private: true, visibility: private, allow_forking: false}
 
   - name: public-again
+    known_bug: KB-088  # the repository stayed public (see the description)
     fragments:
       repositories:
         - |

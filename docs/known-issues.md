@@ -116,7 +116,7 @@ shortened to the relevant lines.
 | KB-034 | validate/plan exit with the error count (256 errors exit 0) (F-07) | confirmed | CLI | `O-KB-EXIT-STATUS-ERROR-COUNT` |
 | KB-035 | docs use `newEnvironmentSecret` / `newEnvironmentVariable` (F-08) | fixed (#878, 1.7.0) | docs | - |
 | KB-036 | template comment of `deployment_branch_policy` lists invalid values (F-09) | fixed (#878, 1.7.0) | template | - |
-| KB-037 | team privacy error lists `('secret' \| 'closed')` (F-10) | confirmed | model | - |
+| KB-037 | team privacy error lists `('secret' \| 'closed')` (F-10) | fixed (#878, 1.7.0) | model | step of `cli.kb.team-privacy-message` |
 | KB-038 | set-ordered values in two validation messages (F-11) | fixed (#878, 1.7.0) | model | - |
 | KB-039 | unknown `#role` bypass actor validates, apply crashes with a KeyError (F-12) | confirmed | model | - |
 | KB-040 | crashing sync check: misleading `failure` status (F-13) | confirmed | webapp | `W-SYNC-FAILURE` |
@@ -167,13 +167,14 @@ shortened to the relevant lines.
 | KB-085 | branch protection pattern `default`: canonical-diff and import crash (KeyError 'pattern') | fixed (1.9.0) | model | step of `O-CANON` |
 | KB-086 | pass / bitwarden lookups through a shell: injected commands run (CVE-2026-123717) | fixed (GHSA-886p-g538-rcmp, 1.8.0) | credentials | `O-KB-CREDENTIAL-SHELL` |
 | KB-087 | custom property definition and its repository value removed in one apply: 422 'Unexpected property' | confirmed | model | steps of `cli.kb.custom-property-definition-with-value`, `cli.custom-property.required` |
-| KB-088 | making a repository private with `allow_forking: false`: 422, the repository stays public | suspected | provider | steps of `cli.environment.private`, `cli.neg.private-ruleset`, `enterprise.env-reviewers-private`, `enterprise.private-bpr`, `enterprise.ruleset-merge-queue-private` |
+| KB-088 | making a repository private with `allow_forking: false`: 422, the repository stays public | suspected | provider | steps of `cli.environment.private`, `cli.neg.private-ruleset`, `cli.repo.visibility`, `enterprise.env-reviewers-private`, `enterprise.private-bpr`, `enterprise.ruleset-merge-queue-private` |
 | KB-089 | merge queue method the repository disables: validates, then 422 at apply | suspected | model | - |
 | KB-090 | immutable releases policy: GitHub's 204 fails the apply | suspected | provider | step of `cli.org.immutable-releases` |
 | KB-091 | new repository naming a code security configuration: the attachment wait fails, settings not applied | suspected | provider | step of `cli.code-security.configuration` |
 | KB-092 | display name never managed on an organization that has none | suspected | provider | step of `cli.org.profile` |
 | KB-093 | organization workflow permissions relaxed to write: repositories need a second apply | suspected | model | step of `cli.repo.org-coerced` |
 | KB-094 | web apply of `default_branch_name` reports done, GitHub keeps the old name | suspected | web UI | `webui.kb.default-branch-name` |
+| KB-095 | code scanning default setup with `javascript-typescript` never converges | suspected | provider, model | step of `cli.repo.code-scanning-languages` |
 
 ## Issues
 
@@ -1329,9 +1330,19 @@ $ otterdog validate -c otterdog.json --local e2e-test-org         # exit code 2
 
 ### KB-037 — the team privacy error lists ('secret' | 'closed')
 
-Status: **confirmed** · Upstream: none · Scenarios: none
+Status: **fixed** (1.7.0) · Upstream: https://github.com/eclipse-csi/otterdog/pull/878 · Scenarios: step
+`privacy-message` of `cli.kb.team-privacy-message`
 
-Evidence: `otterdog/models/team.py:77-83`, `docs/reference/organization/team.md:7`.
+Fixed by #878 (a26b543, in v1.7.0; "Configuration guides playground"): the team schema gives `privacy` the enum
+`['secret', 'visible']`, so a configuration with any other value fails to load ("failed to load configuration: invalid
+value at 'teams[name=\"...\"].privacy': 'closed' is not one of ['secret', 'visible']", exit 1) before the model's
+check runs, and the wrong list is never printed. The message itself is still in `otterdog/models/team.py`, unreachable
+from a configuration. Seen live in the nightly 44545614854 (1.8.0 and main 144eae5): `cli.validate.teams` still
+expected the model's message and failed, `cli.kb.team-privacy-message` was an expected failure for the wrong reason;
+both now assert the load error. The text below describes the defect as it was.
+
+Evidence: `otterdog/models/team.py:77-83`, `docs/reference/organization/team.md:7`,
+`otterdog/resources/schemas/team.json:12` (enum since #878, v1.7.0).
 
 Coverage finding F-10. The check accepts `secret` and `visible`, but its message names `('secret' | 'closed')`.
 `closed` is the REST API's word for `visible` (the model maps it when reading), and it is exactly the value the
@@ -1466,6 +1477,13 @@ Coverage finding F-13. When the sync plan raises (a rate limit, an unloadable BA
 Nothing was detected: the task failed. A required sync context (branch protection or ruleset) then blocks the merge,
 contrary to the description. An out-of-sync result without an exception is `success` (KB-019). The pull request is
 not updated either (`in_sync`, auto-merge), because that only happens in `_update_final_status`.
+
+Since otterdog 1.7.0 (#777) an unloadable BASE no longer raises: the plan reports the load error and the check ends
+`success` (KB-067; seen live in the nightly 44545614854 on 1.8.0, where `W-SYNC-FAILURE` still broke main with a
+schema error). `W-SYNC-FAILURE` therefore removes the org config from main: the check's read of
+`otterdog/<org>.jsonnet` answers 404 and raises. The same nightly also showed a live raise: the webapp's GitHub App
+lacked the organization Dependabot secrets permission, so every sync plan failed on `GET /orgs/{org}/dependabot/secrets`
+(403 "Resource not accessible by integration").
 
 #### Reproduction
 
@@ -2308,7 +2326,9 @@ Evidence: `otterdog/webapp/tasks/check_sync.py:163-169`, `otterdog/operations/pl
 `CheckConfigurationInSyncTask` starts with `config_in_sync = True` and lets the plan callback set it. When the
 configuration of main fails validation, the plan aborts before reading GitHub and calls the callback with an empty diff
 (in sync); when it fails to load, the callback is never called. Either way the sync status says "otterdog sync check
-completed successfully" and `in_sync` is true although nothing was compared.
+completed successfully" and `in_sync` is true although nothing was compared. The load failure was seen live in the
+nightly 44545614854 (1.8.0, `otterdog-e2e-webapp`, PR #9 of the run torajz15): a main with a `team_permissions` value
+outside the schema's enum got this `success` status.
 
 #### Reproduction
 
@@ -2845,8 +2865,9 @@ Executed plan: 0 added, 1 changed, 1 deleted.
 ### KB-088 — making a repository private sends allow_forking, which GitHub refuses
 
 Status: **suspected** · Upstream: none · Scenarios: steps `selected` and `protected` of `cli.environment.private`,
-step `create` of `cli.neg.private-ruleset`, steps `create` and `update` of `enterprise.env-reviewers-private`,
-`enterprise.private-bpr` and `enterprise.ruleset-merge-queue-private`
+step `create` of `cli.neg.private-ruleset`, steps `private` and `public-again` of `cli.repo.visibility`, steps
+`create` and `update` of `enterprise.env-reviewers-private`, `enterprise.private-bpr` and
+`enterprise.ruleset-merge-queue-private`
 
 Evidence: `otterdog/models/repository.py:557-562`, `otterdog/providers/github/rest/repo_client.py:136-191`,
 `otterdog/resources/defaults/otterdog-defaults.libsonnet:47`,
@@ -2867,7 +2888,8 @@ that records the failed apply). Not an enterprise policy: both organizations onl
 `members_can_fork_private_repositories: false`. Upstream main (7f4235b) sends the same request. The offline lint of the
 same configurations passes ("Validation succeeded"): only GitHub refuses it. Every step after `public` of these
 scenarios declares the bug: the step that makes the repository private fails, and the later ones plan that change again.
-A live rerun of `cli.repo.visibility` (repos shard) should show the same failure on its step `private`.
+The nightly 44545614854 (2026-11-19) showed the same 422 on the step `private` of `cli.repo.visibility` (1.8.0 and main
+144eae5, `otterdog-e2e-free`) and on the fork repository of `cli.org.member-privileges` (`otterdog-e2e-org-level`).
 
 #### Reproduction
 
@@ -3005,7 +3027,7 @@ changed" and printed no warning. The nine other settings changed. The default br
 polling, `default_repository_branch` of `GET /orgs/{org}` and the trusted reader (`show-live` without `-n`) still
 showed `main`, and the SUT's own `plan` planned the same change again. The nightly of 2026-11-19 (run 44522952856,
 same organization and SUT) showed the same thing: verify read `main`, and the converge plan changed
-`default_branch_name` again, while the other settings round-tripped.
+`default_branch_name` again, while the other settings round-tripped. So did the nightly 44545614854 (run torrp8bd).
 
 The web client fills the text input `default_branch_name` of `settings/repository-defaults`, clicks the submit button
 of its form, and moves on to the next settings page without checking the result (`_update_settings`). It registers no
@@ -3036,3 +3058,41 @@ working directory; keep them local, they hold the logged-in page):
 $ otterdog apply -vvv -c otterdog.json -f <org>          # exit 0, "default_branch_name = "main" -> "e2e-check""
 $ gh api /orgs/<org> --jq .default_repository_branch     # still main
 ```
+
+### KB-095 — a code scanning default setup with javascript-typescript never converges
+
+Status: **suspected** · Upstream: none · Scenarios: step `enable-javascript-typescript` of
+`cli.repo.code-scanning-languages`
+
+Evidence: `otterdog/providers/github/rest/repo_client.py:771-782`,
+`otterdog/providers/github/rest/repo_client.py:784-812`, `otterdog/models/repository.py:218-229`,
+`otterdog/models/repository.py:980-1027` (otterdog main 144eae5, after v1.8.0), e2e:
+`scenarios/cli/repo/code-scanning-languages.yaml`.
+
+Seen twice on the free organization `otterdog-e2e-free`, in the nightlies of 2026-11-19 (main 7f4235b, run tor42zdf;
+main 144eae5, run torhidc2): the scenario only runs on main (`fixed_in: 1.9.0`, #922 and #941). The repository holds a
+TypeScript file and a workflow. The configuration enables the default setup with
+`code_scanning_default_languages: ["javascript-typescript"]`, loaded as `javascript` and `typescript` (#888). The plan
+before the apply only shows `code_scanning_default_setup_enabled = false -> true`, the apply sends
+`PATCH .../code-scanning/default-setup` and exits 0, and the oracle then reads the setup as `configured`. Four plans
+over the next minute all still show:
+
+```text
+  ~ repository[name="e2e-<run>-code-lang"] {
+    ~ code_scanning_default_languages = [
+      + "javascript"
+      + "typescript"
+    ~ ]
+  ~ }
+```
+
+Since #941 the configured languages are a minimum set: the change lists the configured languages that are not
+analyzed yet, mapping `javascript` and `typescript` to `javascript-typescript`
+(`Repository._get_code_scanning_analyzed_language`). The read of the live setup (`_fill_code_scanning_config`) drops
+`javascript-typescript` from GitHub's answer ("filter invalid values returned by api", since #469). If GitHub
+answers `["javascript-typescript", ...]` without `javascript` and `typescript`, otterdog sees no analyzed JavaScript and
+the plan can never converge (and every apply sends the same PATCH again); `_get_analyzed_code_scanning_languages`, used
+by the update, keeps that value. The other explanation is a delay: GitHub may report the languages only once the first
+analysis of the new setup has run, later than the minute of the converge plans. The runs did not record the body of
+`GET /repos/{owner}/{repo}/code-scanning/default-setup`, which would decide between the two: a read of that endpoint on
+a repository whose default setup analyzes JavaScript or TypeScript shows which values GitHub returns.

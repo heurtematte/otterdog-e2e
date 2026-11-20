@@ -2329,7 +2329,7 @@ Details:
     - Operations: status, error
     - Known bugs: KB-040
     - New findings: F-13
-    - Notes: W-SYNC-FAILURE (P2): main with a team_permissions schema error makes the sync plan raise: state failure, failed CheckConfigurationInSyncTask (on open and after /otterdog check-sync), no check-sync comment, in_sync never set; the misleading 'detected out of sync changes' description is a scoped xfail (MisleadingSyncFailureError, known_bug KB-040).
+    - Notes: W-SYNC-FAILURE (P2): main without its org config file makes the sync check raise (404 when it reads main's config; a main that fails to load is reported in sync since 1.7.0, KB-067): state failure, failed CheckConfigurationInSyncTask (on open and after /otterdog check-sync), no check-sync comment, in_sync never set; the misleading 'detected out of sync changes' description is a scoped xfail (MisleadingSyncFailureError, known_bug KB-040).
 - **`webapp-pr.sync-propagation`** (covered, P2, `webapp`): sync check throttling: on synchronize within an hour of the previous commit the previous final sync status is copied; sync tasks back off at least one minute
     - Source: `otterdog/webapp/tasks/check_sync.py:91-129`
     - Operations: status, task

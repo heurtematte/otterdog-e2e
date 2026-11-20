@@ -460,13 +460,14 @@
 
 - id: KB-037
   title: the team privacy error lists ('secret' | 'closed') while the accepted values are 'secret' | 'visible'
-  status: confirmed
+  status: fixed
   evidence:
     - otterdog/models/team.py:77-83
     - docs/reference/organization/team.md:7
+    - otterdog/resources/schemas/team.json:12
     - "e2e: scenarios/cli/teams/kb-team-privacy-message.yaml (step privacy-message declares the bug)"
-  upstream: null
-  fixed_in: null
+  upstream: https://github.com/eclipse-csi/otterdog/pull/878
+  fixed_in: "1.7.0"
   scenarios: []
 
 - id: KB-038
@@ -1082,6 +1083,7 @@
     - otterdog/resources/defaults/otterdog-defaults.libsonnet:474
     - "e2e: scenarios/cli/environments/environment-private.yaml (steps selected and protected declare the bug)"
     - "e2e: scenarios/cli/rulesets/neg-private-ruleset.yaml (step create declares the bug)"
+    - "e2e: scenarios/cli/repo/repo-visibility.yaml (steps private and public-again declare the bug)"
     - "e2e: scenarios/enterprise/bpr/private-bpr.yaml (steps create and update declare the bug)"
     - "e2e: scenarios/enterprise/environments/env-reviewers-private.yaml (steps create and update declare the bug)"
     - "e2e: scenarios/enterprise/rulesets/ruleset-merge-queue-private.yaml (steps create and update declare the bug)"
@@ -1156,7 +1158,23 @@
     - "e2e: tests/web_ui/test_web_settings.py (webui.settings.round-trip, nightly 44338402646 of 2026-11-18 on the free
       org otterdog-e2e-org-level: the apply exits 0 with 11 changes, REST default_repository_branch, the trusted
       reader and the SUT's own plan still show main after 120 s; again in nightly 44522952856 of 2026-11-19, run
-      tor73x83: verify got main, the converge plan still changes default_branch_name)"
+      tor73x83: verify got main, the converge plan still changes default_branch_name; and in nightly 44545614854,
+      run torrp8bd)"
   upstream: null
   fixed_in: null
   scenarios: [webui.kb.default-branch-name]
+
+- id: KB-095
+  title: a code scanning default setup enabled for 'javascript-typescript' never converges, every later plan adds 'javascript' and 'typescript' to code_scanning_default_languages
+  status: suspected
+  evidence:
+    - otterdog/providers/github/rest/repo_client.py:771-782
+    - otterdog/providers/github/rest/repo_client.py:784-812
+    - otterdog/models/repository.py:218-229
+    - otterdog/models/repository.py:980-1027
+    - "e2e: scenarios/cli/repo/code-scanning-languages.yaml (step enable-javascript-typescript declares the bug for
+      its converge phase; nightlies of 2026-11-19 on the free org otterdog-e2e-free with main 7f4235b and 144eae5,
+      runs tor42zdf and torhidc2: the setup reads 'configured', 4 plans in a row still add the two languages)"
+  upstream: null
+  fixed_in: null
+  scenarios: []

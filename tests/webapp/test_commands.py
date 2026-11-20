@@ -299,12 +299,13 @@ def test_comment_matching_and_edits(
 @pytest.mark.tags("webapp", "teams", "repo")
 @pytest.mark.known_bug("KB-040", raises=MisleadingSyncFailureError)
 def test_sync_check_crash(webapp_scenario: WebappScenario) -> None:
-    """Main raises while it loads (team_permissions schema error, KB-032): the sync check of a PR and of
-    ``/otterdog check-sync`` crash: status failure, no check-sync comment, failed tasks, in_sync never set. The
-    failure description must not claim detected out-of-sync changes (KB-040)."""
+    """Main has no org config file: the sync check of a PR and of ``/otterdog check-sync`` crash (the read of
+    ``otterdog/<org>.jsonnet`` on main answers 404, check_sync.py fetch_config_from_github): status failure, no
+    check-sync comment, failed tasks, in_sync never set. The failure description must not claim detected out-of-sync
+    changes (KB-040). A main that fails to load no longer crashes it (since #777, 1.7.0, a schema error is a load
+    error the plan reports, then the check reports in sync: KB-067), so it cannot trigger the crash any more."""
     s = webapp_scenario
-    broken = s.render(repositories=[s.patch(s.harmless_repo, s.schema_error())])
-    s.flow.reset_main(broken, message=f"otterdog-acceptance {s.run_ctx.run_id}: {s.sid} main raises while it loads")
+    s.flow.remove_main_config(message=f"otterdog-acceptance {s.run_ctx.run_id}: {s.sid} main without configuration")
     opened_at = s.now()
     pr = s.open_pr(s.harmless_text())
 
