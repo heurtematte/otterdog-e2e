@@ -447,6 +447,18 @@ def test_repo_branch_encoding_and_renames(api: responses.RequestsMock, oracle: O
     assert oracle.repo_branch("r", "none") is None
 
 
+def test_repo_old_name_of_a_renamed_repository_is_absent(api: responses.RequestsMock, oracle: Oracle) -> None:
+    """GitHub redirects the old name of a renamed repository to its new name: the old name is absent (None); the
+    name compares without case (cli.apply.delete-filter, nightly 44760214930)."""
+    new = f"{GITHUB_API}/repos/{FAKE_ORG}/new"
+    api.add(responses.GET, f"{GITHUB_API}/repos/{FAKE_ORG}/old", status=301, headers={"Location": new})
+    api.add(responses.GET, new, json={"name": "new", "private": False})
+    api.add(responses.GET, f"{GITHUB_API}/repos/{FAKE_ORG}/New", json={"name": "new", "private": False})
+    assert oracle.repo("old") is None
+    assert oracle.repo("new") == {"name": "new", "private": False}
+    assert oracle.repo("New") == {"name": "new", "private": False}
+
+
 def test_repo_teams_collaborators_invitations(api: responses.RequestsMock, oracle: Oracle) -> None:
     """Teams, direct collaborators (affiliation=direct), one collaborator permission, invitations."""
     api.add(responses.GET, f"{REPO}/teams", json=[{"slug": "t", "permission": "push"}], match=per_page())

@@ -2889,7 +2889,9 @@ that records the failed apply). Not an enterprise policy: both organizations onl
 same configurations passes ("Validation succeeded"): only GitHub refuses it. Every step after `public` of these
 scenarios declares the bug: the step that makes the repository private fails, and the later ones plan that change again.
 The nightly 44545614854 (2026-11-19) showed the same 422 on the step `private` of `cli.repo.visibility` (1.8.0 and main
-144eae5, `otterdog-e2e-free`) and on the fork repository of `cli.org.member-privileges` (`otterdog-e2e-org-level`).
+144eae5, `otterdog-e2e-free`) and on the fork repository of `cli.org.member-privileges` (`otterdog-e2e-org-level`),
+which since 2026-11-22 makes that repository private in the apply that allows private forks (no 422 expected there:
+the organization no longer disables them when the repository PATCH comes).
 
 #### Reproduction
 
@@ -3061,7 +3063,7 @@ $ gh api /orgs/<org> --jq .default_repository_branch     # still main
 
 ### KB-095 — a code scanning default setup with javascript-typescript never converges
 
-Status: **suspected** · Upstream: none · Scenarios: step `enable-javascript-typescript` of
+Status: **suspected** · Upstream: none · Scenarios: steps `enable-javascript-typescript` and `add-language` of
 `cli.repo.code-scanning-languages`
 
 Evidence: `otterdog/providers/github/rest/repo_client.py:771-782`,
@@ -3096,3 +3098,17 @@ by the update, keeps that value. The other explanation is a delay: GitHub may re
 analysis of the new setup has run, later than the minute of the converge plans. The runs did not record the body of
 `GET /repos/{owner}/{repo}/code-scanning/default-setup`, which would decide between the two: a read of that endpoint on
 a repository whose default setup analyzes JavaScript or TypeScript shows which values GitHub returns.
+
+A third run points to the delay (nightly 44760214930, main 6f3ab92, run toteendd, 2026-11-20). The converge plans of
+`enable-javascript-typescript` again added `javascript` and `typescript` four times. The plan of the next step
+(`add-language`, configured `["javascript-typescript", "actions"]`) added `actions`, `javascript` and `typescript`;
+the apply that followed 7 s later, with the same configuration and no write in between, printed "No changes required"
+and sent no request. Plan and apply compute the change with the same code (`Repository.get_difference_from`), so the
+languages GitHub reported changed between the two reads, and `actions`, which no configuration had requested, became
+analyzed: GitHub fills the languages of the default setup some time after its state reads `configured`. The
+`javascript-typescript` filter cannot explain that run. If the delay is the whole story, this is no otterdog defect but
+a race of the scenario: once GitHub analyzes every detected language (the repository holds a workflow, so `actions`
+too), `add-language` plans nothing. The fix of the scenario waits until the setup lists the languages before the
+converge plan and expects no change in `add-language`; it needs the body of the endpoint (`javascript` and
+`typescript`, or `javascript-typescript`) to write that wait. Until then the step `add-language` declares the bug for
+its plan and apply phases.

@@ -1175,6 +1175,9 @@
     - "e2e: scenarios/cli/repo/code-scanning-languages.yaml (step enable-javascript-typescript declares the bug for
       its converge phase; nightlies of 2026-11-19 on the free org otterdog-e2e-free with main 7f4235b and 144eae5,
       runs tor42zdf and torhidc2: the setup reads 'configured', 4 plans in a row still add the two languages)"
+    - "e2e: scenarios/cli/repo/code-scanning-languages.yaml (step add-language declares the bug for its plan and
+      apply phases; nightly 44760214930, main 6f3ab92, run toteendd: its plan adds actions, javascript and
+      typescript, the apply 7 s later prints 'No changes required': GitHub's languages changed without a write)"
   upstream: null
   fixed_in: null
   scenarios: []

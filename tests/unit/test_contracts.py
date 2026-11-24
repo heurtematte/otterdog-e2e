@@ -1334,6 +1334,7 @@ SIGNATURES: dict[str, list[str]] = {
         "marker",
         "contains",
         "exclude_ids",
+        "unmarked",
         "timeout",
     ],
     "otterdog_acceptance.config_repo.normalize_comment": ["body"],

@@ -56,6 +56,19 @@ REFERENCES_943 = [
     }
 ]
 
+REFERENCES_965 = [
+    {
+        "pr": 965,
+        "note": (
+            "'Fix/auto merge comment' (main 144eae5, after v1.8.0): the separate automerge comment is replaced by a "
+            "status section at the top of the validate comment ('Ready to merge' with the /otterdog merge command), "
+            "rewritten in place when a review, a push or a validation changes the eligibility; the refusal of a third "
+            "party names the teams in a collapsed section; drafts are no longer eligible. Must not change: who may "
+            "merge, the merge and the apply. Webapp only: no CLI delta"
+        ),
+    }
+]
+
 if TYPE_CHECKING:
     from conftest import WebappScenario
     from otterdog_acceptance.config_repo import ConfigPr
@@ -118,23 +131,21 @@ def test_merge_applies_config(webapp_scenario: WebappScenario) -> None:
     assert s.stored_repositories(stored)[name].get("description") == description, "stored description"
 
 
-@pytest.mark.scenario("W-AUTOMERGE", priority="P0")
+@pytest.mark.scenario("W-AUTOMERGE", priority="P0", references=REFERENCES_965)
 @pytest.mark.tags("webapp", "teams", "repo")
 @pytest.mark.identities("author", "approver")
 def test_automerge_after_approval(webapp_scenario: WebappScenario) -> None:
-    """Contributor PR: no auto-merge offer before approval, automerge comment after it, ``/otterdog merge`` by the
-    author merges and applies."""
-    s, texts = webapp_scenario, webapp_scenario.texts
+    """Contributor PR: no auto-merge offer before approval, an offer after it (the automerge comment, since #965 the
+    status section of the validate comment), ``/otterdog merge`` by the author merges and applies."""
+    s = webapp_scenario
     name, description = s.run_repo(), s.describe("auto-merged by the webapp")
     pr = s.open_pr(s.text(repos={name: description}), identity="author")
     s.wait_settled(pr)
     s.quiesce()
-    early = s.flow.bot_comments(pr, marker="automerge")
-    assert not early, "auto-merge offered before any approval: the author identity must be a contributor only"
+    s.assert_no_automerge_offer(pr, "before any approval: the author identity must be a contributor only")
 
     s.flow.approve(pr, identity="approver")
-    automerge = s.wait_comment(pr, marker="automerge")
-    assert comment_contains(automerge.get("body") or "", texts.AUTOMERGE), "automerge comment without its offer"
+    s.wait_automerge_offer(pr)
 
     s.flow.comment(pr, "/otterdog merge", identity="author")
     s.wait_merged(pr)
@@ -253,7 +264,7 @@ def test_merged_removal_is_applied(webapp_scenario: WebappScenario) -> None:
     s.assert_merge_blockers(pr, body, [texts.BLOCKER_DELETIONS])
     s.wait_api_pull(pr, until=lambda r: r.get("supports_auto_merge") is False, what="deletion: no auto-merge")
     s.quiesce()
-    assert not s.flow.bot_comments(pr, marker="automerge"), "auto-merge offered for a deletion (SUT)"
+    s.assert_no_automerge_offer(pr, "for a deletion")
     s.flow.comment(pr, "/otterdog merge")
     problems = s.wait_problems(pr)
     assert comment_contains(problems, texts.NOT_AUTO_MERGEABLE), f"refusal without its reason: {problems!r}"
@@ -421,7 +432,7 @@ def test_invalid_merged_pr_is_not_applied(webapp_scenario: WebappScenario) -> No
     assert record.get("apply_status") == "not_applied", f"an invalid merged PR is not applied: {record}"
 
 
-@pytest.mark.scenario("W-AUTOMERGE-AUTHOR-TEAM", priority="P0")
+@pytest.mark.scenario("W-AUTOMERGE-AUTHOR-TEAM", priority="P0", references=REFERENCES_965)
 @pytest.mark.tags("webapp", "teams", "repo")
 @pytest.mark.identities("approver")
 def test_approval_team_author_merges_without_review(webapp_scenario: WebappScenario) -> None:
@@ -433,8 +444,7 @@ def test_approval_team_author_merges_without_review(webapp_scenario: WebappScena
     s.wait_settled(pr)
     record = s.wait_api_pull(pr, until=lambda r: r.get("author_can_auto_merge") is True, what="author eligible")
     assert record.get("has_required_approvals") is None, f"no review was submitted: {record}"
-    automerge = s.wait_comment(pr, marker="automerge")
-    assert comment_contains(automerge.get("body") or "", texts.AUTOMERGE), "automerge comment without its offer"
+    s.wait_automerge_offer(pr)
 
     s.flow.comment(pr, "/otterdog merge", identity="approver")
     s.wait_merged(pr)
@@ -446,14 +456,14 @@ def test_approval_team_author_merges_without_review(webapp_scenario: WebappScena
     s.wait_validation(invalid, state="error")
     s.wait_sync(invalid)
     s.quiesce()
-    assert not s.flow.bot_comments(invalid, marker="automerge"), "auto-merge offered for an invalid PR (SUT)"
+    s.assert_no_automerge_offer(invalid, "for an invalid PR")
     s.flow.comment(invalid, "/otterdog merge", identity="approver")
     problems = s.wait_problems(invalid)
     assert comment_contains(problems, texts.NOT_VALID), f"the refusal does not say 'not valid': {problems!r}"
     s.assert_still_open(invalid, "an invalid PR is never auto-merged")
 
 
-@pytest.mark.scenario("W-AUTOMERGE-THIRD-PARTY", priority="P1")
+@pytest.mark.scenario("W-AUTOMERGE-THIRD-PARTY", priority="P1", references=REFERENCES_965)
 @pytest.mark.tags("webapp", "teams", "repo")
 @pytest.mark.identities("author", "approver", "outsider")
 def test_merge_command_of_a_third_party(webapp_scenario: WebappScenario) -> None:
@@ -464,7 +474,7 @@ def test_merge_command_of_a_third_party(webapp_scenario: WebappScenario) -> None
     pr = s.open_pr(s.text(repos={name: description}), identity="author")
     s.wait_settled(pr)
     s.flow.approve(pr, identity="approver")
-    s.wait_comment(pr, marker="automerge")
+    s.wait_automerge_offer(pr)
 
     s.flow.comment(pr, "/otterdog merge", identity="outsider")
     problems = s.wait_problems(pr)
@@ -478,7 +488,7 @@ def test_merge_command_of_a_third_party(webapp_scenario: WebappScenario) -> None
     s.wait_repo(name)
 
 
-@pytest.mark.scenario("W-AUTOMERGE-DISMISS", priority="P1")
+@pytest.mark.scenario("W-AUTOMERGE-DISMISS", priority="P1", references=REFERENCES_965)
 @pytest.mark.tags("webapp", "teams", "repo")
 @pytest.mark.identities("author", "approver")
 def test_dismissed_approval_blocks_the_merge(webapp_scenario: WebappScenario) -> None:
@@ -492,21 +502,22 @@ def test_dismissed_approval_blocks_the_merge(webapp_scenario: WebappScenario) ->
     s.flow.request_changes(pr)
     s.wait_api_pull(pr, until=lambda r: r.get("has_required_approvals") is False, what="changes requested")
     s.quiesce()
-    assert not s.flow.bot_comments(pr, marker="automerge"), "auto-merge offered with changes requested (SUT)"
+    s.assert_no_automerge_offer(pr, "with changes requested")
 
     review = s.flow.approve(pr)
-    s.wait_comment(pr, marker="automerge")
+    s.wait_automerge_offer(pr)
     s.wait_api_pull(pr, until=lambda r: r.get("has_required_approvals") is True, what="approved")
 
     s.flow.dismiss_review(pr, review)
     s.wait_api_pull(pr, until=lambda r: r.get("has_required_approvals") is False, what="approval dismissed")
+    s.wait_automerge_withdrawn(pr, "approval dismissed")  # since #965 the status section follows the review
     s.flow.comment(pr, "/otterdog merge", identity="author")
     problems = s.wait_problems(pr)
     assert comment_contains(problems, texts.APPROVAL_MISSING), f"the refusal does not name the approval: {problems!r}"
     s.assert_still_open(pr, "the approval was dismissed")
 
 
-@pytest.mark.scenario("W-AUTOMERGE-DRIFT", priority="P1")
+@pytest.mark.scenario("W-AUTOMERGE-DRIFT", priority="P1", references=REFERENCES_965)
 @pytest.mark.tags("webapp", "repo")
 def test_drifted_org_still_auto_merges(webapp_scenario: WebappScenario, mutator: Mutator) -> None:
     """A declared run repository drifts: the PR adding another repository is out of sync (check-sync comment, in_sync
@@ -524,7 +535,7 @@ def test_drifted_org_still_auto_merges(webapp_scenario: WebappScenario, mutator:
     status = s.wait_sync(pr)
     assert status.get("state") == "success" and status.get("description") == texts.SYNC_OUT_OF_SYNC, f"{status}"
     s.wait_api_pull(pr, until=lambda r: r.get("in_sync") is False, what="out of sync")
-    s.wait_comment(pr, marker="automerge")  # an out-of-sync organization does not block auto-merge
+    s.wait_automerge_offer(pr)  # an out-of-sync organization does not block auto-merge
 
     s.flow.comment(pr, "/otterdog merge")
     s.wait_merged(pr)

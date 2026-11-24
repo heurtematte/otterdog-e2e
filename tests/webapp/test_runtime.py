@@ -9,7 +9,8 @@ Facts verified in otterdog main 9bdeb75 (identical in v1.6.1):
   on ',' WITHOUT stripping (KB-013), approval patterns are stripped and matched with re.search against the team slugs
   of the org. The help comment (templates/comment/help_comment.txt) shows both: "approved by a member of team
   '<slug>'" (or "a team matching pattern '<p>' (no team in this organization currently matches any of these
-  patterns)") and the admin team(s) `<org>/<team>, ...` of /otterdog done and apply;
+  patterns)"; since #965, main 144eae5, "- **Approval teams**: team '<slug>'" in a collapsed section) and the admin
+  team(s) `<org>/<team>, ...` of /otterdog done and apply;
 * /internal/init schedules FetchAllPullRequestsTask, which imports the config repo's pull requests targeting 'main'
   (tasks/fetch_all_pull_requests.py:39-62): a PR the webapp missed is listed by /api/pullrequests/open (status open,
   not applied, never validated), a PR against another base is not imported (KB-014: the branch name is hardcoded);
@@ -47,6 +48,18 @@ from otterdog_acceptance import waiting
 from otterdog_acceptance.config_repo import DeliveryTimeoutError, ReactionTimeoutError, comment_contains
 from otterdog_acceptance.otterdog.render import ConfigFragments
 from otterdog_acceptance.webapp.api import parse_html
+
+REFERENCES_965 = [
+    {
+        "pr": 965,
+        "note": (
+            "'Fix/auto merge comment' (main 144eae5, after v1.8.0): the help comment lists the approval and admin "
+            "teams in a collapsed section ('- **Approval teams**: <teams>') instead of 'approved by a member of "
+            "<teams>'. Must not change: which teams the organization entry or the environment select. Webapp only: no "
+            "CLI delta"
+        ),
+    }
+]
 
 if TYPE_CHECKING:
     from conftest import WebappScenario
@@ -86,14 +99,20 @@ def _slug(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
 
 
-def _approval_line(team_slug: str) -> str:
-    """The help comment's approval condition when the patterns match ``team_slug`` only."""
-    return f"approved by a member of team '{team_slug}'"
+def _approval_teams(team_slug: str) -> str:
+    """The approval teams of the help comment when the patterns match ``team_slug`` only (describe_approval_teams)."""
+    return f"team '{team_slug}'"
 
 
-def _no_approval_line(pattern: str) -> str:
-    """The help comment's approval condition when no team of the org matches ``pattern``."""
-    return f"approved by a member of a team matching pattern '{pattern}' {NO_MATCH_NOTE}"
+def _no_approval_teams(pattern: str) -> str:
+    """The approval teams of the help comment when no team of the org matches ``pattern``."""
+    return f"a team matching pattern '{pattern}' {NO_MATCH_NOTE}"
+
+
+def _names_approval(s: WebappScenario, body: str, teams: str) -> bool:
+    """Whether the help comment ``body`` names ``teams`` as its approval teams, in the form of the webapp's version
+    (WebappScenario.approval_condition: a sentence until #965, a collapsed section since)."""
+    return any(comment_contains(body, form) for form in s.approval_condition(teams))
 
 
 def _location(response: Any) -> str:
@@ -137,7 +156,7 @@ def _wait_lost(relay: DeliveryRelay, wanted: set[tuple[int, str]], *, after: dat
 
 
 # --- configuration --------------------------------------------------------------------------------------------------
-@pytest.mark.scenario("W-RT-CONFIG-TEAMS", priority="P1")
+@pytest.mark.scenario("W-RT-CONFIG-TEAMS", priority="P1", references=REFERENCES_965)
 @pytest.mark.tags("webapp", "teams", "webhooks-app")
 def test_organization_teams_override_the_environment(
     webapp_scenario: WebappScenario,
@@ -155,7 +174,7 @@ def test_organization_teams_override_the_environment(
     first = s.wait_comment(pr, marker="help")
     body = first.get("body") or ""
     assert comment_contains(body, texts.HELP), f"help comment without its greeting: {body[:300]!r}"
-    assert comment_contains(body, _approval_line(approval)), f"help comment ignores the org approval teams:\n{body}"
+    assert _names_approval(s, body, _approval_teams(approval)), f"help comment ignores the org approval teams:\n{body}"
     assert comment_contains(body, f"`{s.org}/{admin}`"), f"help comment ignores the org admin teams:\n{body}"
     assert nobody not in body, (
         f"the environment's teams leaked into the help comment of an org that sets its own:\n{body}"
@@ -165,12 +184,12 @@ def test_organization_teams_override_the_environment(
     s.flow.comment(pr, "/otterdog help")
     second = s.wait_comment(pr, marker="help", exclude=[first])
     body = second.get("body") or ""
-    assert comment_contains(body, _no_approval_line(f"^{nobody}$")), f"help comment ignores the environment:\n{body}"
+    assert _names_approval(s, body, _no_approval_teams(f"^{nobody}$")), f"help comment ignores the environment:\n{body}"
     assert comment_contains(body, f"`{s.org}/{nobody}`"), f"help comment ignores GITHUB_ADMIN_TEAMS:\n{body}"
     assert f"{s.org}/{admin}`" not in body, f"the dropped org admin teams still apply:\n{body}"
 
 
-@pytest.mark.scenario("W-RT-ADMIN-TEAMS-SPACES", priority="P2")
+@pytest.mark.scenario("W-RT-ADMIN-TEAMS-SPACES", priority="P2", references=REFERENCES_965)
 @pytest.mark.tags("webapp", "teams")
 @pytest.mark.known_bug("KB-013", raises=AdminTeamsSplitError)
 def test_admin_teams_list_with_spaces(
@@ -188,7 +207,7 @@ def test_admin_teams_list_with_spaces(
     webapp_env({"GITHUB_ADMIN_TEAMS": f"{nobody}, {admin}", "GITHUB_APPROVAL_TEAMS": f"^{nobody}$, ^{approval}$"})
     pr = s.open_pr(s.harmless_text())
     body = s.wait_comment(pr, marker="help").get("body") or ""
-    assert comment_contains(body, _approval_line(approval)), f"approval patterns with spaces do not match:\n{body}"
+    assert _names_approval(s, body, _approval_teams(approval)), f"approval patterns with spaces do not match:\n{body}"
     s.write_evidence({"help": body})
     if not comment_contains(body, f"`{s.org}/{nobody}, {s.org}/{admin}`"):
         raise AdminTeamsSplitError(f"GITHUB_ADMIN_TEAMS '{nobody}, {admin}' is not rendered as two teams:\n{body}")

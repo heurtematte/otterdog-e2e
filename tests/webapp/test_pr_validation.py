@@ -49,9 +49,12 @@ pytestmark = [pytest.mark.webapp]
 FIX_771 = "476bf5ecc82fff626580e5808ba6b9f50062a6ab"  # Fix grammatic issues in validation warnings (#771)
 FIX_770 = "c4f75eb3aaee64ddf62c7bb53e870f9f0c4454d9"  # Fix cost policy auto merge (#770, v1.6.1)
 FIX_IMPORTS = "326d62d193712183df28fec3d7ecb4cae537fc91"  # Confine jsonnet imports to the org directory (v1.3.2)
-# validate_pull_request.py:196-205; before #771 the warnings read "some of requested changes ..."
-SECRETS_WARNING = "requested changes require secrets, need to apply these changes manually"
-COST_WARNING = "requested changes may incur costs, need review by the designated team"
+# a schema error is a load error "invalid value at '<path>': <cause>" instead of an exception (#777, v1.7.0)
+FIX_777 = "7ffc5e5d8bf8a7db7d2757a3fa40af89dc98e6e3"
+LOAD_ERROR = "failed to load configuration"
+# validate_pull_request.py:196-205 (v1.8.0): "<WORDING_771> <warning>"; before #771 "some of requested changes ..."
+SECRETS_WARNING = "require secrets, need to apply these changes manually"
+COST_WARNING = "may incur costs, need review by the designated team"
 WORDING_771 = "some of the requested changes"
 WORDING_BEFORE_771 = "some of requested changes"
 IMPORT_REFUSED = "is not allowed"  # utils.py _make_jsonnet_import_callback: "import of '<path>' is not allowed"
@@ -309,8 +312,10 @@ def test_closed_pr_is_validated_again_when_reopened(webapp_scenario: WebappScena
 @pytest.mark.scenario("W-PR-EVAL-ERROR", priority="P1")
 @pytest.mark.tags("webapp", "teams", "repo")
 def test_evaluation_error_gets_a_friendly_comment(webapp_scenario: WebappScenario) -> None:
-    """A team_permissions value outside the schema raises while the configuration loads (KB-032): the validate
-    comment shows the friendly evaluation error (no exception text), status error, /api record invalid."""
+    """A team_permissions value outside the schema (KB-032): status error, /api record invalid, and no exception text
+    in the validate comment. Before #777 (v1.7.0) the configuration raised while it loaded and the comment shows the
+    friendly evaluation error; since #777 the schema error is a load error and the diff names the field and the
+    refused value ("failed to load configuration", "invalid value at '...team_permissions...'")."""
     s, texts = webapp_scenario, webapp_scenario.texts
     pr = s.open_pr(s.render(repositories=[s.patch(s.harmless_repo, s.schema_error())]))
 
@@ -320,10 +325,31 @@ def test_evaluation_error_gets_a_friendly_comment(webapp_scenario: WebappScenari
     )
     body = s.wait_comment(pr, marker="validate").get("body") or ""
     assert comment_contains(body, f"{texts.DIFF_FOR} {pr.head_sha}"), f"validate comment is not for {pr.head_sha}"
-    assert comment_contains(body, texts.EVALUATION_ERROR) and comment_contains(body, texts.CONTACT_ADMIN), (
-        f"the validate comment lacks the friendly evaluation error (SUT): {body[:2000]!r}"
+    friendly = comment_contains(body, texts.EVALUATION_ERROR) and comment_contains(body, texts.CONTACT_ADMIN)
+    load_error = all(
+        comment_contains(body, text)
+        for text in (
+            LOAD_ERROR,
+            "invalid value at",
+            "team_permissions.",
+            f"'{s.SCHEMA_ERROR_PERMISSION}' is not one of",
+        )
     )
-    leaked = [word for word in ("Traceback", "Failed validating", s.SCHEMA_ERROR_PERMISSION) if word in body]
+    includes_777 = s.webapp_includes(FIX_777)
+    if includes_777 is None:
+        assert friendly or load_error, (
+            f"the validate comment reports no evaluation or load error (SUT): {body[:2000]!r}"
+        )
+    elif includes_777:
+        assert load_error, f"since #777 the validate comment names the refused value (SUT): {body[:2000]!r}"
+    else:
+        assert friendly, f"the validate comment lacks the friendly evaluation error (SUT): {body[:2000]!r}"
+    raw = (
+        ("Traceback", "Failed validating")
+        if load_error
+        else ("Traceback", "Failed validating", s.SCHEMA_ERROR_PERMISSION)
+    )
+    leaked = [word for word in raw if word in body]
     assert not leaked, f"the validate comment shows the raw evaluator output {leaked} (SUT): {body[:2000]!r}"
     s.wait_api_pull(pr, until=lambda r: r.get("valid") is False, what="invalid")
 
@@ -388,14 +414,13 @@ def test_validation_warnings(request: pytest.FixtureRequest, webapp_scenario: We
         raise CostAutoMergeRegressionError(f"a new repository with the default cache size got warnings: {new_body!r}")
     s.assert_merge_blockers(new_pr, new_body, [])
     s.wait_api_pull(new_pr, until=lambda r: r.get("supports_auto_merge") is True, what="new repo: auto-mergeable")
-    automerge = s.wait_comment(new_pr, marker="automerge")
-    assert comment_contains(automerge.get("body") or "", texts.AUTOMERGE), "automerge comment without its offer"
+    s.wait_automerge_offer(new_pr)
 
     for pr in (secret_pr, cost_pr, new_pr):
         s.wait_sync(pr)
     s.quiesce()  # validation, team-info and sync tasks are done: none of them offered auto-merge
     for pr, reason in ((secret_pr, None), (cost_pr, texts.COST_REASON)):
-        assert not s.flow.bot_comments(pr, marker="automerge"), f"PR #{pr.number}: auto-merge offered (SUT)"
+        s.assert_no_automerge_offer(pr, "for a secret or a cost")
         s.flow.comment(pr, "/otterdog merge")
         problems = s.wait_problems(pr)
         assert comment_contains(problems, texts.NOT_AUTO_MERGEABLE), f"refusal without its reason: {problems!r}"
@@ -440,7 +465,7 @@ def test_non_configuration_change(webapp_scenario: WebappScenario) -> None:
         s.wait_sync(pr)
     s.quiesce()
     for pr in (readme_pr, multi_pr):
-        assert not s.flow.bot_comments(pr, marker="automerge"), f"PR #{pr.number}: auto-merge offered (SUT)"
+        s.assert_no_automerge_offer(pr, "for a non-configuration file")
         s.flow.comment(pr, "/otterdog merge")
         problems = s.wait_problems(pr)
         assert comment_contains(problems, texts.NOT_AUTO_MERGEABLE) and comment_contains(

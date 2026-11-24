@@ -8,14 +8,19 @@ description: |
   (members_can_create_public_repositories, members_can_create_private_repositories: every plan), deploy keys
   (deploy_keys_enabled_for_repositories), organization projects (has_organization_projects) and public Pages
   creation (members_can_create_public_pages). GET /orgs/{org} returns every key under the same name, so the oracle
-  matches them one by one after each apply, and each step converges. The run repository is created PUBLIC in a first
-  step and made private in the 'privileges' step, with allow_forking false (the template's
-  members_can_fork_private_repositories false makes true a validation error, validation.repo.forking): otterdog
-  before 1.7.0.dev14 cannot create a private repository on an organization without Code Security (the code scanning
-  default setup PATCH of new repositories fails, #791; regression.private-repo-template-defaults covers that path), and this
-  scenario must run strictly on release:latest and Free. The 'fork' step allows members to fork private repositories
-  and turns the repository's allow_forking on in the same apply (settings are patched before repositories), which
-  GitHub keeps; the other privileges are back to the template in that step (the baseline values, asserted too).
+  matches them one by one after each apply, and each step converges. Members may create public repositories in the
+  'privileges' step and private ones too in the 'private-creation' step: GitHub Free answers 422 "Private-only
+  repository creation policy is not allowed for this organization" to the PATCH that turns both on at once
+  (nightlies 44545614854 and 44760214930, 1.8.0 and main 6f3ab92; the body lists
+  members_can_create_private_repositories first, in the model's field order, and GitHub apparently checks the policy
+  after each field, private-only after the first one). The 'fork' step turns both off again in one PATCH, which should
+  pass the same way (public-only after the first field).
+  The run repository is created PUBLIC (otterdog before 1.7.0 cannot create a private repository on an organization
+  without Code Security, #791, and the scenario runs on such SUTs too: BAT-01) and becomes private in the 'fork' step,
+  with allow_forking true, in the apply that allows members to fork private repositories (settings are patched before
+  repositories). Made private while the organization still refuses private forks, it would be refused whatever its
+  allow_forking (KB-088: the 'privileges' step did so until 2026-11-22, and the repository stayed public). The other
+  privileges are back to the template in the 'fork' step (the baseline values, asserted too).
   Private Pages creation (members_can_create_private_pages) is enterprise-only (validation, KB-024) and not changed
   here. org_level: unfiltered plans, full baseline reset as cleanup (it removes the private run repository too).
 priority: P1
@@ -34,12 +39,57 @@ steps:
       expect: changes
       contains:
         - '+ add repository[name="{{ p }}-fork"]'
+    apply:
+      api:
+        sent:
+          - 'POST /orgs/{org}/repos'
     state:
       - kind: repo
         name: "{{ p }}-fork"
         match: {private: false}
 
   - name: privileges
+    fragments:
+      settings:
+        - "default_repository_permission: 'none'"
+        - "members_can_create_public_repositories: true"
+        - "deploy_keys_enabled_for_repositories: false"
+        - "has_organization_projects: false"
+        - "members_can_create_public_pages: false"
+      repositories:
+        - |
+          orgs.newRepo('{{ p }}-fork') {
+            description: "otterdog e2e: private repository members may fork",
+            has_wiki: false,
+          }
+    plan:
+      expect: changes
+      contains:
+        - "~ settings {"
+        - '"read" -> "none"'
+        - "members_can_create_public_repositories"
+        - "deploy_keys_enabled_for_repositories"
+        - "has_organization_projects"
+        - "members_can_create_public_pages"
+      not_contains:
+        - "members_can_create_private_repositories"
+        - "members_can_fork_private_repositories"
+        - 'repository[name="{{ p }}-fork"]'
+    apply:
+      api:
+        sent:
+          - 'PATCH /orgs/{org}'
+    state:
+      - kind: org
+        match:
+          default_repository_permission: none
+          members_can_create_public_repositories: true
+          members_can_create_private_repositories: false
+          deploy_keys_enabled_for_repositories: false
+          has_organization_projects: false
+          members_can_create_public_pages: false
+
+  - name: private-creation
     fragments:
       settings:
         - "default_repository_permission: 'none'"
@@ -52,42 +102,27 @@ steps:
         - |
           orgs.newRepo('{{ p }}-fork') {
             description: "otterdog e2e: private repository members may fork",
-            private: true,
-            allow_forking: false,
             has_wiki: false,
           }
     plan:
       expect: changes
       contains:
         - "~ settings {"
-        - '~ repository[name="{{ p }}-fork"]'
-        - '"read" -> "none"'
-        - "members_can_create_public_repositories"
         - "members_can_create_private_repositories"
-        - "deploy_keys_enabled_for_repositories"
-        - "has_organization_projects"
-        - "members_can_create_public_pages"
       not_contains:
-        - "members_can_fork_private_repositories"
-        - '+ add repository[name="{{ p }}-fork"]'
-        - '- remove repository[name="{{ p }}-fork"]'
+        - "members_can_create_public_repositories"
+        - "default_repository_permission"
+        - 'repository[name="{{ p }}-fork"]'
     apply:
       api:
         sent:
           - 'PATCH /orgs/{org}'
-          - 'PATCH /repos/{owner}/{repo}'
     state:
       - kind: org
         match:
           default_repository_permission: none
           members_can_create_public_repositories: true
           members_can_create_private_repositories: true
-          deploy_keys_enabled_for_repositories: false
-          has_organization_projects: false
-          members_can_create_public_pages: false
-      - kind: repo
-        name: "{{ p }}-fork"
-        match: {private: true, allow_forking: false}
 
   - name: fork
     fragments:
@@ -112,11 +147,11 @@ steps:
         - "members_can_fork_private_repositories"
         - '"none" -> "read"'
         - '~ repository[name="{{ p }}-fork"]'
-        - "allow_forking"
     apply:
       api:
         sent:
           - 'PATCH /orgs/{org}'
+          - 'PATCH /repos/{owner}/{repo}'
     state:
       - kind: org
         match:

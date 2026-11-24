@@ -23,7 +23,10 @@ description: |
   archived one (cli.repo.archive-side-requests).
   #922 is in v1.8.0, #941 merged after it: fixed_in skips the scenario on SUTs older than the next minor release.
   Known bug KB-095 (step enable-javascript-typescript, converge): after the apply, every plan still adds 'javascript'
-  and 'typescript' (twice on main, 2026-11-19).
+  and 'typescript' (twice on main, 2026-11-19). On 2026-11-20 the plan of add-language added the languages and its
+  apply, 7 s later, found no change: GitHub fills the analyzed languages after the state reads 'configured', and once
+  it analyzes 'actions' (the repository holds a workflow) add-language plans nothing; the step declares KB-095 for
+  its plan and apply phases until the scenario can wait for the languages.
 priority: P1
 min_plan: free
 fixed_in: "1.9.0"
@@ -97,6 +100,7 @@ steps:
         timeout: 600
 
   - name: add-language
+    known_bug: {id: KB-095, phases: [plan, apply]}  # GitHub may list actions and JavaScript before or after the plan
     fragments:
       repositories:
         - |

@@ -946,6 +946,74 @@ def test_pull_state_helpers(tiers: Tiers) -> None:
         scenario.login("approver")
 
 
+def test_the_problems_of_a_refused_merge_are_not_the_validate_comment(tiers: Tiers) -> None:
+    """Since #943 the validate comment carries the sentence of the problems comment: wait_problems takes the reply
+    without a marker."""
+    scenario, oracle, pr = _scenario(tiers)
+    texts = scenario.texts
+    note = f"<!-- Otterdog Comment: validate -->\n> [!NOTE]\n> {texts.AUTOMERGE_PROBLEMS}:\n> - some of the changes\n"
+    oracle.add_pr_comment(REPO, pr.number, note, author=BOT)
+    reply = f"> [!WARNING]\n> {texts.AUTOMERGE_PROBLEMS}\n\n{texts.NOT_AUTO_MERGEABLE} (contains secrets)\n"
+    oracle.add_pr_comment(REPO, pr.number, reply, author=BOT)
+    assert scenario.wait_problems(pr) == reply
+
+
+def test_automerge_offer_in_both_forms(tiers: Tiers, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The offer of /otterdog merge: an automerge comment before #965, the Ready to merge status section of the
+    validate comment since (minimized comments aside); the form must match the version when it is known; since #965
+    a withdrawn offer is waited for."""
+    wapp = tiers.conftest("webapp")
+    scenario, oracle, pr = _scenario(tiers)
+    included: list[bool | None] = [None]
+    monkeypatch.setattr(scenario, "webapp_includes_any", lambda commits: included[0])
+    empty = "<!-- otterdog:auto-merge-status --><!-- /otterdog:auto-merge-status -->"
+    ready = (
+        "<!-- otterdog:auto-merge-status -->\n### :rocket: Ready to merge\n\n```\n/otterdog merge\n```\n\n"
+        "<!-- /otterdog:auto-merge-status -->"
+    )
+    validate = "<!-- Otterdog Comment: validate -->\n{status}\nPlease find below the validation"
+    assert wapp.auto_merge_status(validate.format(status=empty)) == ""
+    assert wapp.auto_merge_status("no section") is None
+    oracle.add_pr_comment(REPO, pr.number, validate.format(status=empty), author=BOT)
+    scenario.assert_no_automerge_offer(pr, "before the approval")
+    with pytest.raises(ReactionTimeoutError, match="auto-merge offered on PR"):
+        scenario.wait_automerge_offer(pr, timeout=10)
+
+    current = oracle.pr_comments(REPO, pr.number)[0]
+    oracle.set("pr_comments", REPO, pr.number, value=[current | {"body": validate.format(status=ready)}])
+    with pytest.raises(AssertionError, match="auto-merge offered with changes requested"):
+        scenario.assert_no_automerge_offer(pr, "with changes requested")
+    included[0] = True
+    assert scenario.wait_automerge_offer(pr)["id"] == current["id"]
+    included[0] = False
+    with pytest.raises(AssertionError, match=r"predates #965 \(144eae5\), the auto-merge offer must be an automerge"):
+        scenario.wait_automerge_offer(pr)
+    stale = current | {"body": validate.format(status=ready), "is_minimized": True}
+    oracle.set("pr_comments", REPO, pr.number, value=[stale])
+    scenario.assert_no_automerge_offer(pr, "by an outdated validation")
+    legacy = oracle.add_pr_comment(
+        REPO,
+        pr.number,
+        "<!-- Otterdog Comment: automerge -->\nThis Pull Request is eligible for auto-merging",
+        author=BOT,
+    )
+    assert scenario.wait_automerge_offer(pr)["id"] == legacy["id"]
+
+    included[0] = True
+    oracle.set("pr_comments", REPO, pr.number, value=[current | {"body": validate.format(status=ready)}])
+    with pytest.raises(ReactionTimeoutError, match="withdrawn"):
+        scenario.wait_automerge_withdrawn(pr, "approval dismissed", timeout=10)
+    oracle.set("pr_comments", REPO, pr.number, value=[current | {"body": validate.format(status=empty)}])
+    scenario.wait_automerge_withdrawn(pr, "approval dismissed")
+    included[0] = None
+    assert scenario.approval_condition("team 'leads'") == [
+        "approved by a member of team 'leads'",
+        "**Approval teams**: team 'leads'",
+    ]
+    included[0] = True
+    assert scenario.approval_condition("team 'leads'") == ["**Approval teams**: team 'leads'"]
+
+
 def test_texts_match_the_templates(tiers: Tiers) -> None:
     """The battery's regexes match otterdog's texts (templates and messages of main 9bdeb75, unchanged since v1.5.0)."""
     texts = tiers.conftest("webapp").Texts
@@ -954,6 +1022,11 @@ def test_texts_match_the_templates(tiers: Tiers) -> None:
         f"or a member of team '{FAKE_ORG}/otterdog-admins' is allowed to auto-merge."
     )
     assert texts.THIRD_PARTY_RE.search(third_party)
+    since_965 = (  # automerge_not_allowed.txt, the teams in a collapsed section after it
+        "Only the author of the pull request, or a member of an approval team or of an admin team, is allowed to "
+        "auto-merge.\n\n<details>\n<summary>Approval and admin teams</summary>"
+    )
+    assert texts.THIRD_PARTY_RE.search(since_965)
     team_info = (
         "<!-- Otterdog Comment: team-info -->\nThe author ([e2e-author](https://github.com/e2e-author)) of this PR "
         "is associated with this organization in the role of `MEMBER`.\n"

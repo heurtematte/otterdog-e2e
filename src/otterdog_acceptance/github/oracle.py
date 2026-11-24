@@ -644,8 +644,12 @@ class Oracle:
         return self._list("repos", (), f"/orgs/{self._org}/repos", params={"type": "all"})
 
     def repo(self, name: str) -> dict[str, Any] | None:
-        """GET /repos/{org}/{name}."""
-        return self._get(self._repo(name))
+        """GET /repos/{org}/{name}; None when absent or renamed: GitHub redirects the old name of a renamed repository
+        to the repository under its new name (names compare without case, as on GitHub)."""
+        body = self._get(self._repo(name))
+        if isinstance(body, dict) and body.get("name") is not None and str(body["name"]).lower() != name.lower():
+            return None
+        return body
 
     def repo_topics(self, name: str) -> list[str]:
         """GET /repos/{org}/{name}/topics (names)."""

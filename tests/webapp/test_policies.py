@@ -407,6 +407,13 @@ def test_macos_large_runner_jobs_are_cancelled_unless_allowed(
     cancelled = bp.wait_run(
         repo, workflow, after=denied.after, run_id=run_id, until=lambda r: r.get("status") == "completed"
     )
+    if cancelled.get("conclusion") == "failure":
+        # nightly 44760214930 (GitHub Free): the job was queued at 18:17:36 and completed as failure at 18:17:40,
+        # before the webapp received the queued delivery; only the App cancels (conclusion cancelled)
+        pytest.skip(
+            f"GitHub failed run {run_id} on macos-latest-large by itself (no larger runner on this plan): "
+            "no queued job is left for the App to cancel"
+        )
     assert cancelled.get("conclusion") == "cancelled", f"run {run_id} on a disallowed larger runner: {cancelled}"
     counters = bp.wait_policy_counter(
         MACOS, CANCELLED, at_least=_counter(before, CANCELLED) + 1, timeout=COUNTER_TIMEOUT

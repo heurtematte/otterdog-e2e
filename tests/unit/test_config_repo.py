@@ -440,6 +440,20 @@ def test_wait_comment_excludes_known_ids_and_matches_normalized_text() -> None:
     assert applied["body"] == APPLIED_COMMENT
 
 
+def test_wait_comment_unmarked_skips_the_comments_of_a_marker() -> None:
+    """unmarked: a validate comment carrying the same sentence (the merge blockers note of #943) is not the reply to a
+    refused /otterdog merge, which has no marker."""
+    world = build()
+    pr = world.flow.open_pr(slug="s", config_texts="x", title="t")
+    sentence = "This pull request cannot be auto-merged via `/otterdog merge`"
+    world.oracle.add_pr_comment(world.repo, pr.number, f"{MARKERS['validate']}\n> [!NOTE]\n> {sentence}:\n", author=BOT)
+    reply = f"> [!WARNING]\n> {sentence}\n\npull request is not valid\n"
+    world.time.hooks.append(lambda: world.oracle.add_pr_comment(world.repo, pr.number, reply, author=BOT))
+    assert world.flow.wait_comment(pr, contains=sentence, unmarked=True, timeout=60)["body"] == reply
+    assert world.time.now == 5
+    assert MARKERS["validate"] in world.flow.wait_comment(pr, contains=sentence, timeout=60)["body"]
+
+
 def test_wait_comment_timeout_is_a_sut_failure() -> None:
     """No matching comment: ReactionTimeoutError naming the bot comments that were seen."""
     world = build()

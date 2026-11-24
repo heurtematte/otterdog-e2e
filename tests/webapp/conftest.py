@@ -18,7 +18,8 @@ Exact otterdog texts (``Texts``), verified in SRC (otterdog main 9bdeb75, after 
   ``failure`` "otterdog detected out of sync changes, but they will not prevent a successful merge";
 * comments (otterdog/webapp/templates/comment/*.txt): help "Thank you for raising a pull request to update the
   configuration of your GitHub organization.", validate "Please find below the validation of the requested
-  configuration changes:" + "Diff for <head sha>", automerge "This Pull Request is eligible for auto-merging",
+  configuration changes:" + "Diff for <head sha>", automerge "This Pull Request is eligible for auto-merging" (until
+  #965; since then a "Ready to merge" status section at the top of the validate comment, rewritten in place),
   check-sync "The current configuration is out-of-sync with the live settings:" (``[!NOTE]`` up to v1.5.0,
   ``[!WARNING]`` since v1.6.0), apply "The following changes have been applied successfully:" or "[!CAUTION] The changes
   could not be applied successfully" (no marker: both contain "applied successfully");
@@ -36,8 +37,9 @@ Exact otterdog texts (``Texts``), verified in SRC (otterdog main 9bdeb75, after 
   "some of the requested changes ...", before "some of requested changes ...");
 * team-info (team_membership_comment.txt): "The author ([<login>](https://github.com/<login>)) of this PR is associated
   with this organization in the role of `<association>`." plus "- [<team name>](https://github.com/orgs/<org>/teams/
-  <team name>)" lines; the automerge problems comment (automerge_problems.txt) "This pull request cannot be
-  auto-merged via `/otterdog merge`" with one paragraph per problem (db/models.py:117-200, merge_pull_request.py:66-83);
+  <team name>)" lines; the automerge problems comment (automerge_problems.txt, no marker) "This pull request cannot
+  be auto-merged via `/otterdog merge`" with one paragraph per problem (db/models.py:117-200,
+  merge_pull_request.py:66-83); since #943 the validate comment carries the same sentence in its merge blockers note;
 * done / apply permissions (wrong_team_done_comment.txt, wrong_team_apply_comment.txt): "Only members of the admin
   team(s) `<org>/<team>` are allowed to mark the PR as being completed." / "... to apply the changes manually.";
   done_comment.txt "The PR has been marked as being completed."; a partial apply (applied_changes_comment.txt) "The
@@ -78,6 +80,7 @@ from otterdog_acceptance.config_repo import (
     ReactionTimeoutError,
     check_forwarded,
     comment_contains,
+    comment_marker,
 )
 from otterdog_acceptance.otterdog.render import ConfigFragments
 from otterdog_acceptance.redact import REDACTOR
@@ -101,6 +104,25 @@ T = TypeVar("T")
 # eclipse-csi/otterdog#943 "feat(web): explain in the validation comment why a pull request cannot be auto-merged":
 # merge commit on main (after v1.8.0) and head of the pull request (a pr: SUT of that head lacks the merge commit)
 FEATURE_943 = ("127c06393e04bf5ee3ab38e76d4d2626dc905121", "82880ded0fa55780a52a6039037dea6273edf16a")
+
+
+# eclipse-csi/otterdog#965 "Fix/auto merge comment" (merge commit 144eae5 on main, 2026-11-19, after v1.8.0; head of
+# the pull request 6cd088e): the separate "automerge" comment is gone, a status section at the top of the validate
+# comment (auto_merge_status.txt), rewritten in place whenever a condition may have changed, reads "Ready to merge"
+# while the PR can be auto-merged and is empty otherwise (minimized comments are no longer updated); the help comment
+# lists the approval and admin teams in a collapsed section ("- **Approval teams**: <description>") instead of
+# "approved by a member of <description>"; the refusal of a third party names no team in its sentence; drafts are not
+# eligible any more
+FEATURE_965 = ("144eae5aa6144597501c60c198f0a9632b30c697", "6cd088eaf2d42bac2dec4b41e268b3ed6db1b3fa")
+AUTO_MERGE_STATUS_RE = re.compile(
+    r"<!-- otterdog:auto-merge-status -->(.*?)<!-- /otterdog:auto-merge-status -->", re.DOTALL
+)
+
+
+def auto_merge_status(body: str) -> str | None:
+    """The auto-merge status section of a validate comment (#965), stripped ('' when empty); None without one."""
+    match = AUTO_MERGE_STATUS_RE.search(body)
+    return match.group(1).strip() if match else None
 
 
 def merge_blockers(body: str) -> list[str] | None:
@@ -129,7 +151,8 @@ class Texts:
     HELP = "Thank you for raising a pull request to update the configuration of your GitHub organization"
     VALIDATE = "Please find below the validation of the requested configuration changes"
     DIFF_FOR = "Diff for"
-    AUTOMERGE = "eligible for auto-merging"
+    AUTOMERGE = "eligible for auto-merging"  # the "automerge" comment, until #965
+    AUTOMERGE_READY = "Ready to merge"  # the auto-merge status section of the validate comment, since #965
     OUT_OF_SYNC = "out-of-sync with the live settings"
     APPLY_RESULT = "applied successfully"  # both branches of applied_changes_comment.txt
     APPLY_SUCCESS, APPLY_FAILURE = APPLIED_TEXTS
@@ -157,7 +180,11 @@ class Texts:
     NON_CONFIG_REASON = "touches non-configuration files"
     NOT_VALID = "pull request is not valid"  # models.py:147-150
     APPROVAL_MISSING = "No approval from a member of"  # automerge_eligibility.txt via models.py:172-180
-    THIRD_PARTY_RE = re.compile(r"Only the author of the pull request, a member of .+ is allowed to auto-merge\.")
+    # the teams are named in the sentence until #965, in a collapsed section after it since (automerge_not_allowed.txt)
+    THIRD_PARTY_RE = re.compile(
+        r"Only the author of the pull request, (?:a member of .+|or a member of an approval team or of an admin team,) "
+        r"is allowed to auto-merge\."
+    )
     WRONG_TEAM_DONE = "are allowed to mark the PR as being completed"
     WRONG_TEAM_APPLY = "are allowed to apply the changes manually"
     DONE = "The PR has been marked as being completed"
@@ -511,9 +538,83 @@ class WebappScenario:
     def wait_problems(
         self, pr: ConfigPr, *, exclude: Sequence[Mapping[str, Any]] = (), timeout: float = COMMENT_TIMEOUT
     ) -> str:
-        """Body of the new automerge problems comment of a refused ``/otterdog merge`` (automerge_problems.txt)."""
-        comment = self.wait_comment(pr, contains=Texts.AUTOMERGE_PROBLEMS, exclude=exclude, timeout=timeout)
+        """Body of the new automerge problems comment of a refused ``/otterdog merge`` (automerge_problems.txt). It
+        has no marker: since #943 the validate comment carries the same sentence, and does not count."""
+        excluded = {value for comment in exclude for value in comment_ids(comment)}
+        comment = self.flow.wait_comment(
+            pr, contains=Texts.AUTOMERGE_PROBLEMS, exclude_ids=excluded, unmarked=True, timeout=timeout
+        )
         return str(comment.get("body") or "")
+
+    def automerge_offers(self, pr: ConfigPr) -> list[dict[str, Any]]:
+        """The bot comments of ``pr`` that offer ``/otterdog merge`` now, minimized ones aside: an "automerge" comment
+        (webapps before #965) and a validate comment whose auto-merge status section reads "Ready to merge" (#965)."""
+        offers = []
+        for comment in self.flow.bot_comments(pr):
+            body = str(comment.get("body") or "")
+            marker = comment_marker(body)
+            if comment.get("is_minimized"):
+                continue
+            if marker == "automerge" or (
+                marker == "validate" and Texts.AUTOMERGE_READY in (auto_merge_status(body) or "")
+            ):
+                offers.append(comment)
+        return offers
+
+    def wait_automerge_offer(self, pr: ConfigPr, *, timeout: float = COMMENT_TIMEOUT) -> dict[str, Any]:
+        """The comment that offers ``/otterdog merge`` (automerge_offers) in the form of the webapp's version: the
+        status section of the validate comment, with the command to copy, on webapps known to include #965; the
+        "automerge" comment on webapps known to predate it; either form when that is unknown."""
+        offer = self.reaction(
+            lambda: self.automerge_offers(pr),
+            until=bool,
+            what=f"auto-merge offered on PR #{pr.number} (an automerge comment, or Ready to merge in the validate one)",
+            timeout=timeout,
+        )[0]
+        body = str(offer.get("body") or "")
+        marker = comment_marker(body)
+        included = self.webapp_includes_any(FEATURE_965)
+        if included is not None:
+            expected = "the status section of the validate comment" if included else "an automerge comment"
+            assert marker == ("validate" if included else "automerge"), (
+                f"PR #{pr.number}: the webapp {'includes' if included else 'predates'} #965 (144eae5), the auto-merge "
+                f"offer must be {expected}, got a {marker} comment (SUT): {body[:1500]!r}"
+            )
+        if marker == "validate":
+            status = auto_merge_status(body) or ""
+            assert "/otterdog merge" in status, f"PR #{pr.number}: Ready to merge without the command: {status!r}"
+        else:
+            assert comment_contains(body, Texts.AUTOMERGE), f"PR #{pr.number}: automerge comment without its offer"
+        return offer
+
+    def approval_condition(self, description: str) -> list[str]:
+        """The forms of the help comment's approval condition naming ``description`` (describe_approval_teams):
+        "approved by a member of <description>" until #965, "**Approval teams**: <description>" in its collapsed
+        section since; both when the version of the webapp is unknown."""
+        included = self.webapp_includes_any(FEATURE_965)
+        forms = []
+        if included is not True:
+            forms.append(f"approved by a member of {description}")
+        if included is not False:
+            forms.append(f"**Approval teams**: {description}")
+        return forms
+
+    def assert_no_automerge_offer(self, pr: ConfigPr, why: str) -> None:
+        """No comment of ``pr`` offers ``/otterdog merge`` (automerge_offers); ``why`` names the case."""
+        offers = [str(comment.get("body") or "")[:600] for comment in self.automerge_offers(pr)]
+        assert not offers, f"PR #{pr.number}: auto-merge offered {why} (SUT): {offers!r}"
+
+    def wait_automerge_withdrawn(self, pr: ConfigPr, why: str, *, timeout: float = COMMENT_TIMEOUT) -> None:
+        """Since #965 the status section is rewritten when a condition changes: the offer disappears. Waited for on
+        webapps known to include #965 only (the automerge comment of older ones stays)."""
+        if self.webapp_includes_any(FEATURE_965) is not True:
+            return
+        self.reaction(
+            lambda: self.automerge_offers(pr),
+            until=lambda offers: not offers,
+            what=f"the auto-merge offer withdrawn from PR #{pr.number} ({why})",
+            timeout=timeout,
+        )
 
     def assert_still_open(self, pr: ConfigPr, why: str) -> None:
         """The PR is open and not merged on GitHub (AssertionError naming ``why`` otherwise)."""

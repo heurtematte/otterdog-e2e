@@ -784,9 +784,11 @@ class ConfigRepoFlow:
         marker: str | None = None,
         contains: str | None = None,
         exclude_ids: Collection[str] = (),
+        unmarked: bool = False,
         timeout: float = 240,
     ) -> dict[str, Any]:
-        """First bot comment matching marker/contains whose id is not excluded."""
+        """First bot comment matching marker/contains whose id is not excluded; ``unmarked``: only comments without
+        an otterdog marker (the replies to a command, e.g. the problems of a refused ``/otterdog merge``)."""
         excluded = {str(value) for value in exclude_ids} | set(pr.comment_ids_before)
         remaining = self._remaining(pr, timeout)
 
@@ -794,7 +796,7 @@ class ConfigRepoFlow:
             """First new matching bot comment, or None."""
             for comment in self.bot_comments(pr, marker=marker):
                 ids = {str(comment.get("id")), str(comment.get("database_id"))}
-                if ids & excluded:
+                if ids & excluded or (unmarked and comment_marker(comment.get("body") or "") is not None):
                     continue
                 if contains is None or comment_contains(comment.get("body") or "", contains):
                     return comment
@@ -809,7 +811,8 @@ class ConfigRepoFlow:
             ]
             raise ReactionTimeoutError(
                 f"webapp did not react within {timeout:g} s ({self._transport()}): no new bot comment on PR "
-                f"#{pr.number} with marker={marker!r} contains={contains!r}; bot comments: {REDACTOR(str(seen))}"
+                f"#{pr.number} with marker={marker!r} contains={contains!r}{' unmarked' if unmarked else ''}; "
+                f"bot comments: {REDACTOR(str(seen))}"
             ) from None
 
     def wait_merged(self, pr: ConfigPr, *, timeout: float = 120) -> dict[str, Any]:
