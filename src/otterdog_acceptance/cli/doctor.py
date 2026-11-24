@@ -68,6 +68,7 @@ FINE_GRAINED_OWNER_READS: tuple[tuple[str, str], ...] = (
     ("/orgs/{org}/hooks", "Organization > Webhooks"),
     ("/orgs/{org}/teams", "Organization > Members"),
     ("/orgs/{org}/actions/secrets", "Organization > Secrets"),
+    ("/orgs/{org}/dependabot/secrets", "Organization > Organization Dependabot secrets"),
     ("/orgs/{org}/actions/variables", "Organization > Variables"),
     ("/orgs/{org}/properties/schema", "Organization > Custom properties"),
     ("/orgs/{org}/organization-roles", "Organization > Custom organization roles"),

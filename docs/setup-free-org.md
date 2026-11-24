@@ -506,6 +506,7 @@ lease, bootstrap) call, mapped with GitHub's tables "Permissions required for fi
 | Members | Read and write | teams, team members, team repository permissions, security manager teams, organization memberships (`bootstrap`) |
 | Plan | Read | the `plan` of `GET /orgs/{org}` (read by otterdog and checked by the harness); GitHub documents it for Apps only: to confirm on the first live run |
 | Secrets | Read and write | organization Actions secrets |
+| Organization Dependabot secrets | Read and write | organization Dependabot secrets, read by every plan of otterdog 1.8.0 (#890) |
 | Variables | Read and write | organization Actions variables |
 | Webhooks | Read and write | organization webhooks (and the harness proof read `GET /orgs/{org}/hooks`) |
 
@@ -531,14 +532,13 @@ Not needed: organization Blocking users, Projects, Self-hosted runners; reposito
 alerts, Code scanning alerts, Secret scanning alerts (otterdog toggles these features through Administration and
 `PATCH /repos/{owner}/{repo}`).
 
-Since #890 (main d9dac78, after v1.7.1) otterdog reads the Dependabot and Codespaces secrets of the organization and of
-every repository whenever the template defines them, and a refused read aborts `plan`, `apply` and `import` (it is no
-longer taken as "no secret"). Besides the repository Dependabot secrets above, grant the organization **Dependabot
-secrets** and **Codespaces secrets** and the repository **Codespaces secrets** permissions (Read and write) by hand on
-the token form before testing such a SUT: their URL parameter names are not documented in GitHub's OpenAPI
-description, so the prefilled URL cannot preselect them (unverified: `organization_dependabot_secrets`,
-`organization_codespaces_secrets`, `codespaces_secrets`). The GitHub App of the webapp tier needs the same permissions
-(otterdog's `docs/operating_otterdog/install.md`).
+Since #890 (main d9dac78, released in 1.8.0) otterdog reads the Dependabot and Codespaces secrets of the organization
+and of every repository whenever the template defines them, and a refused read aborts `plan`, `apply` and `import` (it
+is no longer taken as "no secret"). The prefilled URL selects the organization and repository Dependabot secrets
+permissions (`organization_dependabot_secrets` and `dependabot_secrets`, GitHub's "Pre-filling fine-grained personal
+access token details using URL parameters"). The Codespaces secrets are not needed on Free and Team: GitHub answers
+404 and otterdog skips them with a warning. The GitHub App of the webapp tier needs the same Dependabot permissions
+([github-app.md](github-app.md#permissions-and-events)).
 
 **`oracle`** (optional; omit it to let the admin token serve as oracle): an organization owner, every permission of
 the admin table at **Read**, except two reads that GitHub lists under write: organization Administration **Read and

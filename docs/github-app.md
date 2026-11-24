@@ -18,7 +18,7 @@ The manifest requests exactly what otterdog's webapp needs (`appmanifest.DEFAULT
 | Contents | write | | Members | write |
 | Custom properties | write | | Plan | read |
 | Dependabot secrets | write | | Secrets | write |
-| Environments | write | | | |
+| Environments | write | | Organization Dependabot secrets | write |
 | Issues | read | | Variables | write |
 | Metadata | read | | Webhooks | write |
 | Pages | write | | | |
@@ -31,12 +31,19 @@ The manifest requests exactly what otterdog's webapp needs (`appmanifest.DEFAULT
 Events: `issue_comment`, `pull_request`, `pull_request_review`, `push`, `workflow_job`, `workflow_run`
 (`installation` events are always delivered).
 
-Since #890 (main d9dac78, after v1.7.1) otterdog reads the Dependabot and Codespaces secrets of the organization and
-of every repository when the template defines them, and a refused read fails the validation. The manifest requests the
-repository Dependabot secrets permission; grant the repository Codespaces secrets and the organization Dependabot and
-Codespaces secrets permissions by hand in the App settings before testing such a [SUT](glossary.md#systems-under-test) (their manifest keys are not in
-GitHub's OpenAPI description, so the manifest does not request them: see otterdog's
-`docs/operating_otterdog/install.md`).
+Since #890 (main d9dac78, released in 1.8.0) otterdog reads the Dependabot and Codespaces secrets of the organization
+and of every repository when the template defines them, and a refused read fails the plan. The repository Dependabot
+secrets permission does not cover `GET /orgs/{org}/dependabot/secrets`: without the organization permission every sync
+check of the webapp failed with 403 "Resource not accessible by integration" (nightly 44545614854). The manifest
+requests both (`organization_dependabot_secrets` is missing from GitHub's OpenAPI description but documented as a
+fine-grained token URL parameter). An App created before that change lacks it: doctor reports `app:installation` FAIL
+"permissions missing: organization_dependabot_secrets", and the webapp tier fails its preflight. GitHub has no API to
+change the permissions of an existing App: `otterdog-acceptance setup --target <instance>` keeps the App, names what it
+lacks ("Organization permissions > organization_dependabot_secrets: Read and write"), prints (with `--open`, opens) the
+App's permission page, where you set it and Save changes, then the installation's page, where you accept the new
+permissions, and waits until the installation has them. `setup --rotate app` registers a new App from the current
+manifest instead, at the cost of new credentials (CI secrets to sync, the old App to delete). The Codespaces secrets
+permissions are not requested: on Free and Team, GitHub answers 404 and otterdog skips them with a warning.
 
 The App is private (`public: false`) and named `otterdog-e2e-<org>` (truncated to 34 characters).
 
@@ -70,6 +77,9 @@ organization owner (the admin machine account).
   installation link, setup stops with the reason and `otterdog-acceptance setup --target <instance> --rotate app`;
 - prints the installation URL and polls `GET /orgs/{org}/installation` (App JWT) every 10 s until the App is
   installed (`--wait-timeout`, default `30m`), then checks the installation;
+- for an installation that lacks permissions or events of the manifest (an App created before they joined it), prints
+  what the App lacks, its permission page and the installation's page, then polls the installation until they are
+  granted (same timeout);
 - on a fresh organization without the marker, offers the App right after the bootstrap it runs;
 - registers a new App with `--rotate app`.
 

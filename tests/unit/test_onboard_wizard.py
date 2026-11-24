@@ -95,10 +95,17 @@ class FakeApp:
     """AppAuth stand-in: installation_for_org answers from a queue (the last answer repeats); GET /app names
     ``owner``, GET /app/installations lists nothing."""
 
-    def __init__(self, answers: list[dict[str, Any] | None], owner: dict[str, Any]) -> None:
-        """Queue of GET /orgs/{org}/installation answers and the App's owner."""
+    def __init__(
+        self,
+        answers: list[dict[str, Any] | None],
+        owner: dict[str, Any],
+        permissions: dict[str, str] | None = None,
+    ) -> None:
+        """Queue of GET /orgs/{org}/installation answers, the App's owner and its own permissions (None: GET /app
+        names none)."""
         self.answers = answers
         self.owner = owner
+        self.permissions = permissions
         self.calls = 0
         self.verified = 0
         self.slug = "otterdog-e2e-e2e-test-org"
@@ -106,7 +113,10 @@ class FakeApp:
     def get_app(self, refresh: bool = False) -> dict[str, Any]:
         """GET /app."""
         self.verified += 1
-        return {"id": 4242, "slug": self.slug, "owner": dict(self.owner), "installations_count": 0}
+        app = {"id": 4242, "slug": self.slug, "owner": dict(self.owner), "installations_count": 0}
+        if self.permissions is not None:
+            app |= {"permissions": dict(self.permissions), "events": list(DEFAULT_EVENTS)}
+        return app
 
     def installations(self) -> list[dict[str, Any]]:
         """GET /app/installations."""
@@ -135,6 +145,7 @@ class World:
     manifest_calls: list[tuple[str, str]] = field(default_factory=list)
     installations: list[dict[str, Any] | None] = field(default_factory=lambda: [dict(INSTALLATION)])
     app_owner: dict[str, Any] = field(default_factory=app_owner_of_the_test_org)
+    app_permissions: dict[str, str] | None = None  # the App's own permissions (GET /app), None: not named
     app: FakeApp | None = None
     bootstraps: list[str] = field(default_factory=list)
     doctors: list[str] = field(default_factory=list)
@@ -241,7 +252,7 @@ class World:
     def app_auth(self, credentials: Any) -> FakeApp:
         """The App's JWT client."""
         assert credentials.private_key_pem.startswith("-----BEGIN") and credentials.webhook_secret
-        self.app = FakeApp(self.installations, self.app_owner)
+        self.app = FakeApp(self.installations, self.app_owner, self.app_permissions)
         return self.app
 
     def bootstrap(self, instance: str) -> None:
@@ -1215,6 +1226,55 @@ def test_a_stored_app_is_kept_and_its_installation_checked(world: World) -> None
     run_wizard(world, script)
     assert "\u2713 keeping my-app (id 1)" in script.output and "installation 777 ready" in script.output
     assert not world.manifest_calls
+
+
+def stored_app(world: World) -> None:
+    """The env file of org2 names an App (id 1, my-app) and its key."""
+    key = world.config_dir / "org2" / "app-1.private-key.pem"
+    key.parent.mkdir(parents=True)
+    key.write_text(PEM)
+    world.write_env(
+        "org2",
+        f"E2E_APP_ID=1\nE2E_APP_SLUG=my-app\nE2E_APP_PRIVATE_KEY_FILE={key}\nE2E_APP_WEBHOOK_SECRET={WEBHOOK_SECRET}\n",
+    )
+
+
+def test_a_stored_app_older_than_the_manifest_gets_its_permission_pages(world: World) -> None:
+    """A stored App created before a permission joined the manifest (organization_dependabot_secrets, 2026-11-20):
+    GitHub has no API to change it, so setup names the permission, prints (and opens) the App's permission page and
+    the installation's page, then polls the installation until the admin accepted it."""
+    stored_app(world)
+    older = {name: level for name, level in DEFAULT_PERMISSIONS.items() if name != "organization_dependabot_secrets"}
+    world.app_permissions = older
+    world.installations = [{**INSTALLATION, "permissions": older}, {**INSTALLATION, "permissions": older}]
+    world.installations.append(dict(INSTALLATION))
+    script = Script(secrets=[TOKENS["admin"]])
+    run_wizard(world, script, open_urls=True, poll_interval=10)
+    pages = (
+        f"https://github.com/organizations/{ORG}/settings/apps/otterdog-e2e-e2e-test-org/permissions",
+        f"https://github.com/organizations/{ORG}/settings/installations/777",
+    )
+    assert "permissions missing: organization_dependabot_secrets (none < write)" in script.output
+    assert "set Organization permissions > organization_dependabot_secrets: Read and write, then Save" in script.output
+    assert all(page in script.output for page in pages) and script.opened[-2:] == list(pages)
+    assert world.app is not None and world.app.calls == 3 and script.now == 10.0  # found, polled, slept, granted
+    assert "\u2713 installation 777 ready" in script.output and not world.manifest_calls
+
+
+def test_an_installation_that_did_not_accept_the_permissions_is_waited_for(world: World) -> None:
+    """The App has the permissions but its installation never accepted them: only the installation's page, then a
+    timeout that leaves setup re-runnable."""
+    stored_app(world)
+    world.app_permissions = dict(DEFAULT_PERMISSIONS)
+    world.installations = [{**INSTALLATION, "permissions": {"metadata": "read"}}]
+    script = Script(secrets=[TOKENS["admin"]])
+    run_wizard(world, script, wait_timeout=30, poll_interval=10)
+    assert "settings/apps/" not in script.output.split("installation 777:")[-1]
+    assert f"accept the new permissions (and All repositories) on https://github.com/organizations/{ORG}/" in (
+        script.output
+    )
+    assert "not granted yet: the webapp tier fails its preflight until then" in script.output
+    assert "installation 777 ready" not in script.output
 
 
 def test_a_stored_app_is_verified_before_its_installation_link(world: World) -> None:

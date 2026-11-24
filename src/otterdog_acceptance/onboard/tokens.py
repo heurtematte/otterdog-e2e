@@ -42,6 +42,7 @@ ORG_PERMISSIONS = (
     "members",
     "organization_plan",
     "organization_secrets",
+    "organization_dependabot_secrets",
     "organization_actions_variables",
     "organization_hooks",
 )
@@ -71,6 +72,7 @@ ORG_PERMISSION_LABELS: Mapping[str, str] = {
     "Members": "members",
     "Plan": "organization_plan",
     "Secrets": "organization_secrets",
+    "Organization Dependabot secrets": "organization_dependabot_secrets",
     "Variables": "organization_actions_variables",
     "Webhooks": "organization_hooks",
 }
@@ -106,6 +108,7 @@ ADMIN_PERMISSIONS: Mapping[str, str] = {
     "members": "write",
     "organization_plan": "read",
     "organization_secrets": "write",
+    "organization_dependabot_secrets": "write",
     "organization_actions_variables": "write",
     "organization_hooks": "write",
     "actions": "write",

@@ -49,7 +49,11 @@ CLIENT_SECRET = "e2e-appmanifest-client-secret-0123456789abcdef"
 CLIENT_ID = "Iv23liE2eAppManifestClient"
 WEBHOOK_SECRET = "e2e-appmanifest-webhook-secret-0123456789abcdef"
 # documented in the GitHub docs permission tables, missing from components.schemas.app-permissions (GH-01)
-UNDOCUMENTED_IN_OPENAPI = {"actions_variables": ["read", "write"], "organization_actions_variables": ["read", "write"]}
+UNDOCUMENTED_IN_OPENAPI = {
+    "actions_variables": ["read", "write"],
+    "organization_actions_variables": ["read", "write"],
+    "organization_dependabot_secrets": ["read", "write"],  # GitHub docs: fine-grained token URL parameters
+}
 
 
 def make_target(org: str = ORG) -> Target:
@@ -99,7 +103,10 @@ def test_default_permissions_cover_what_otterdog_manages() -> None:
     assert DEFAULT_PERMISSIONS["organization_custom_properties"] == "admin"
     assert DEFAULT_PERMISSIONS["repository_custom_properties"] == "write"
     assert DEFAULT_PERMISSIONS["actions_variables"] == DEFAULT_PERMISSIONS["organization_actions_variables"] == "write"
-    assert len(DEFAULT_PERMISSIONS) == 23
+    # the repository permission does not cover GET /orgs/{org}/dependabot/secrets (403 to the webapp, 2026-11-19)
+    assert DEFAULT_PERMISSIONS["dependabot_secrets"] == "write"
+    assert DEFAULT_PERMISSIONS["organization_dependabot_secrets"] == "write"
+    assert len(DEFAULT_PERMISSIONS) == 24
 
 
 def test_default_events() -> None:

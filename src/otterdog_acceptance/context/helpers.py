@@ -128,7 +128,7 @@ def lease_holder(environ: Mapping[str, str]) -> str:
 
 def installation_problems(installation: Mapping[str, Any], *, permissions: bool = True) -> list[str]:
     """Why an App installation cannot serve the webapp tier (selection all, not suspended, permissions, events)."""
-    from otterdog_acceptance.appmanifest import DEFAULT_EVENTS, DEFAULT_PERMISSIONS
+    from otterdog_acceptance.appmanifest import DEFAULT_EVENTS
 
     problems = []
     if installation.get("repository_selection") != "all":
@@ -137,17 +137,25 @@ def installation_problems(installation: Mapping[str, Any], *, permissions: bool 
         problems.append(f"installation suspended since {installation['suspended_at']}")
     if permissions:
         granted = installation.get("permissions") or {}
-        missing = [
-            f"{name} ({granted.get(name, 'none')} < {level})"
-            for name, level in DEFAULT_PERMISSIONS.items()
-            if PERMISSION_LEVELS.get(str(granted.get(name, "")), 0) < PERMISSION_LEVELS[level]
-        ]
+        missing = [f"{name} ({granted.get(name, 'none')} < {level})" for name, level in permissions_lacking(granted)]
         if missing:
             problems.append(f"permissions missing: {', '.join(missing)}")
         events = sorted(set(DEFAULT_EVENTS) - set(installation.get("events") or []))
         if events:
             problems.append(f"events not subscribed: {', '.join(events)}")
     return problems
+
+
+def permissions_lacking(granted: Mapping[str, Any]) -> list[tuple[str, str]]:
+    """The (name, level) pairs of appmanifest.DEFAULT_PERMISSIONS that ``granted`` (the ``permissions`` of an
+    installation or of GET /app) does not reach."""
+    from otterdog_acceptance.appmanifest import DEFAULT_PERMISSIONS
+
+    return [
+        (name, level)
+        for name, level in DEFAULT_PERMISSIONS.items()
+        if PERMISSION_LEVELS.get(str(granted.get(name, "")), 0) < PERMISSION_LEVELS[level]
+    ]
 
 
 def printed_version(version_output: str) -> str | None:

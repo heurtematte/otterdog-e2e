@@ -32,7 +32,8 @@ run keeps its progress and the next run continues where it stopped:
    (browser click), E2E_APP_* written into the instance env file itself; a new or stored App is verified first
    (``safety.verify_app``: owned by the test org, installed on test orgs only; refused otherwise, ``--rotate app``),
    then the installation URL printed and ``GET /orgs/{org}/installation`` (App JWT) polled until installed (timeout:
-   run setup again);
+   run setup again); an installation that lacks the manifest's permissions or events (a stored App older than the
+   manifest) gets the App's permission page and the installation's page, and is polled until they are granted;
 5. ``bootstrap --apply`` and ``doctor`` offered (callables of the CLI).
 
 Machine accounts serving several test orgs: a classic PAT lists every membership of its account. An org id N it
@@ -1731,14 +1732,65 @@ class SetupWizard:
             except WaitTimeoutError:
                 self.warn("not installed yet: install it, then run setup (or bootstrap) again")
                 return
-        problems = installation_problems(installation)
-        if problems:
-            self.warn(
-                f"installation {installation.get('id')}: {'; '.join(problems)} (accept the requested "
-                "permissions and select All repositories)"
+        if installation_problems(installation):
+            installation = self.grant_installation(app, org, installation)
+            if installation is None:
+                return
+        self.done(f"installation {installation.get('id')} ready")
+
+    def grant_installation(self, app: Any, org: OrgInfo, installation: Mapping[str, Any]) -> Mapping[str, Any] | None:
+        """An installation the webapp tier cannot use yet (installation_problems). The manifest's permissions and
+        events grow with otterdog (DEFAULT_PERMISSIONS), and GitHub has no API to change those of an existing App:
+        print (and open with --open) the App's permission page when GET /app lacks some, then the installation's
+        page, where the admin accepts them and selects All repositories; poll the installation until it is fixed.
+        None (warned) on a timeout: setup can be run again."""
+        from otterdog_acceptance.appmanifest import (
+            DEFAULT_EVENTS,
+            app_permissions_url,
+            installation_settings_url,
+            permission_label,
+        )
+        from otterdog_acceptance.context import permissions_lacking
+
+        info = app.get_app(refresh=True)
+        slug = str(info.get("slug") or app.slug)
+        lacks = []
+        if isinstance(info.get("permissions"), Mapping):  # GET /app names the App's own permissions and events
+            lacks = [permission_label(name, level) for name, level in permissions_lacking(info["permissions"])]
+            lacks += [f"event {name}" for name in DEFAULT_EVENTS if name not in (info.get("events") or [])]
+        accept = installation_settings_url(org.login, int(installation["id"]))
+        self.warn(f"installation {installation.get('id')}: {'; '.join(installation_problems(installation))}")
+        if lacks:
+            url = app_permissions_url(org.login, slug)
+            self.echo(
+                f"the App {slug} lacks what the manifest of this checkout requests, and GitHub has no API to change "
+                f"an App: on {url} set {', '.join(lacks)}, then Save changes"
             )
-        else:
-            self.done(f"installation {installation.get('id')} ready")
+            self.open(url)
+        self.echo(f"{'then ' if lacks else ''}accept the new permissions (and All repositories) on {accept}")
+        self.open(accept)
+        self.echo(
+            f"waiting for the installation (up to {self.options.wait_timeout:g} s; Ctrl-C stops, setup can be run "
+            "again)"
+        )
+
+        def granted() -> Mapping[str, Any] | None:
+            """The installation once it has everything the webapp tier needs, else None."""
+            current = app.installation_for_org(org.login)
+            return current if current is not None and not installation_problems(current) else None
+
+        try:
+            return wait_until(
+                granted,
+                timeout=self.options.wait_timeout,
+                interval=self.options.poll_interval,
+                what=f"permissions of the App installation on {org.login}",
+                sleep=self.io.sleep,
+                clock=self.io.clock,
+            )
+        except WaitTimeoutError:
+            self.warn("not granted yet: the webapp tier fails its preflight until then; run setup again once done")
+            return None
 
     # --- end ------------------------------------------------------------------------------------------------------
     def finish(self, org: OrgInfo, app: str) -> None:

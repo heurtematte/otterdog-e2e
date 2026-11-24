@@ -1,7 +1,8 @@
 """GitHub App manifest flow for the e2e App (SPEC 14, GH-01, GH-12).
 
 Permission keys are the parameterized permission names of the GitHub docs; components.schemas.app-permissions of the
-OpenAPI description is incomplete (it lacks actions_variables and organization_actions_variables). The App is private
+OpenAPI description is incomplete (it lacks actions_variables, organization_actions_variables and
+organization_dependabot_secrets, documented as fine-grained token URL parameters). The App is private
 (``public: false``) and its hook URL must not be a loopback URL (deliveries reach the webapp through the relay).
 
 Flow: build_manifest() -> manifest_form_html() (served on 127.0.0.1, auto-posts to GitHub) -> GitHub redirects to
@@ -56,6 +57,8 @@ DEFAULT_PERMISSIONS: dict[str, str] = {
     "members": "write",
     "organization_plan": "read",
     "organization_secrets": "write",
+    # GET /orgs/{org}/dependabot/secrets: read by every plan of otterdog 1.8.0 (#890), a 403 fails the plan
+    "organization_dependabot_secrets": "write",
     "organization_actions_variables": "write",
     "organization_hooks": "write",
 }
@@ -260,6 +263,29 @@ def _env_value(value: str) -> str:
     if any(char in _UNQUOTABLE_ENV_CHARS for char in value):
         raise ValueError("an env-file value cannot hold vertical tabs, form feeds or Unicode line separators")
     return '"' + "".join(_ENV_ESCAPES.get(char, char) for char in value) + '"'
+
+
+PERMISSION_LEVEL_LABELS = {"read": "Read-only", "write": "Read and write", "admin": "Admin"}
+
+
+def app_permissions_url(org: str, slug: str) -> str:
+    """The App's "Permissions & events" settings page: ``https://github.com/organizations/<org>/settings/apps/<slug>/
+    permissions`` (GitHub has no API to change the permissions of an existing App)."""
+    app = urllib.parse.quote(slug, safe="")
+    return f"{GITHUB_WEB}/organizations/{check_login(org)}/settings/apps/{app}/permissions"
+
+
+def installation_settings_url(org: str, installation_id: int) -> str:
+    """The installation's settings page, where an owner accepts the App's new permissions and picks the repositories:
+    ``https://github.com/organizations/<org>/settings/installations/<id>``."""
+    return f"{GITHUB_WEB}/organizations/{check_login(org)}/settings/installations/{int(installation_id)}"
+
+
+def permission_label(name: str, level: str) -> str:
+    """``Organization permissions > organization_dependabot_secrets: Read and write`` (the section of the App's
+    permission page, the manifest key, the level as the page names it)."""
+    section = "Organization" if name.startswith("organization_") or name == "members" else "Repository"
+    return f"{section} permissions > {name}: {PERMISSION_LEVEL_LABELS.get(level, level)}"
 
 
 def installation_url(slug: str, org_id: int) -> str:
