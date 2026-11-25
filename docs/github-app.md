@@ -14,13 +14,14 @@ The manifest requests exactly what otterdog's webapp needs (`appmanifest.DEFAULT
 |---|---|---|---|---|
 | Actions | write | | Administration | write |
 | Administration | write | | Custom organization roles | write |
-| Commit statuses | write | | Custom properties | admin |
-| Contents | write | | Members | write |
-| Custom properties | write | | Plan | read |
-| Dependabot secrets | write | | Secrets | write |
-| Environments | write | | Organization Dependabot secrets | write |
-| Issues | read | | Variables | write |
-| Metadata | read | | Webhooks | write |
+| Codespaces secrets | write | | Custom properties | admin |
+| Commit statuses | write | | Members | write |
+| Contents | write | | Plan | read |
+| Custom properties | write | | Secrets | write |
+| Dependabot secrets | write | | Organization Dependabot secrets | write |
+| Environments | write | | Variables | write |
+| Issues | read | | Webhooks | write |
+| Metadata | read | | | |
 | Pages | write | | | |
 | Pull requests | write | | | |
 | Secrets | write | | | |
@@ -42,8 +43,15 @@ change the permissions of an existing App: `otterdog-acceptance setup --target <
 lacks ("Organization permissions > organization_dependabot_secrets: Read and write"), prints (with `--open`, opens) the
 App's permission page, where you set it and Save changes, then the installation's page, where you accept the new
 permissions, and waits until the installation has them. `setup --rotate app` registers a new App from the current
-manifest instead, at the cost of new credentials (CI secrets to sync, the old App to delete). The Codespaces secrets
-permissions are not requested: on Free and Team, GitHub answers 404 and otterdog skips them with a warning.
+manifest instead, at the cost of new credentials (CI secrets to sync, the old App to delete).
+
+The repository Codespaces secrets permission (`codespaces_secrets`, write: GitHub has no read level for it, and lists
+`GET /repos/{owner}/{repo}/codespaces/secrets` under write) is requested too: without it every sync check failed on
+that read with 403 "Resource not accessible by integration" once the Dependabot permission was granted (nightly
+45395404229, webapp reruns of 2026-11-24, 1.8.0 and main), while the admin token of the CLI tiers reads it. The
+organization Codespaces secrets permission (`organization_codespaces_secrets`) is not requested: on Free and Team,
+`GET /orgs/{org}/codespaces/secrets` answers 404 and otterdog skips it with a warning; an organization on another plan
+would need it.
 
 The App is private (`public: false`) and named `otterdog-e2e-<org>` (truncated to 34 characters).
 

@@ -42,6 +42,8 @@ DEFAULT_PERMISSIONS: dict[str, str] = {
     "contents": "write",
     "repository_custom_properties": "write",
     "dependabot_secrets": "write",  # read by otterdog since #890 (main after v1.7.1) when the template defines them
+    # GET /repos/{owner}/{repo}/codespaces/secrets (#890): GitHub lists it under write only; a 403 fails the sync check
+    "codespaces_secrets": "write",
     "environments": "write",
     "issues": "read",
     "metadata": "read",

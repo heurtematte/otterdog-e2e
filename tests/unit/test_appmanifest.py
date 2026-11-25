@@ -53,6 +53,7 @@ UNDOCUMENTED_IN_OPENAPI = {
     "actions_variables": ["read", "write"],
     "organization_actions_variables": ["read", "write"],
     "organization_dependabot_secrets": ["read", "write"],  # GitHub docs: fine-grained token URL parameters
+    "codespaces_secrets": ["write"],  # same table: write only
 }
 
 
@@ -106,7 +107,9 @@ def test_default_permissions_cover_what_otterdog_manages() -> None:
     # the repository permission does not cover GET /orgs/{org}/dependabot/secrets (403 to the webapp, 2026-11-19)
     assert DEFAULT_PERMISSIONS["dependabot_secrets"] == "write"
     assert DEFAULT_PERMISSIONS["organization_dependabot_secrets"] == "write"
-    assert len(DEFAULT_PERMISSIONS) == 24
+    # GET /repos/{owner}/{repo}/codespaces/secrets needs it, write being its only level (403 to the webapp, 2026-11-24)
+    assert DEFAULT_PERMISSIONS["codespaces_secrets"] == "write"
+    assert len(DEFAULT_PERMISSIONS) == 25
 
 
 def test_default_events() -> None:

@@ -536,9 +536,9 @@ Since #890 (main d9dac78, released in 1.8.0) otterdog reads the Dependabot and C
 and of every repository whenever the template defines them, and a refused read aborts `plan`, `apply` and `import` (it
 is no longer taken as "no secret"). The prefilled URL selects the organization and repository Dependabot secrets
 permissions (`organization_dependabot_secrets` and `dependabot_secrets`, GitHub's "Pre-filling fine-grained personal
-access token details using URL parameters"). The Codespaces secrets are not needed on Free and Team: GitHub answers
-404 and otterdog skips them with a warning. The GitHub App of the webapp tier needs the same Dependabot permissions
-([github-app.md](github-app.md#permissions-and-events)).
+access token details using URL parameters"). The organization Codespaces secrets are not needed on Free and Team:
+GitHub answers 404 and otterdog skips them with a warning. The GitHub App of the webapp tier needs the same Dependabot
+permissions and the repository Codespaces secrets one ([github-app.md](github-app.md#permissions-and-events)).
 
 **`oracle`** (optional; omit it to let the admin token serve as oracle): an organization owner, every permission of
 the admin table at **Read**, except two reads that GitHub lists under write: organization Administration **Read and
