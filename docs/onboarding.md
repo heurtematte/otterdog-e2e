@@ -397,6 +397,31 @@ otterdog-acceptance run --target @shards --suite cli,webhooks,webapp,enterprise 
 serve `repos`: `--target free --shard repos`), `--shard none` none (the instance then runs every live item, as
 before).
 
+#### From one organization to the shards
+
+An organization set up as a single instance (`free`, `otterdog-e2e-free`) becomes one of the shards as it is: no
+rename on GitHub (setup pins `E2E_ORG` and `E2E_ORG_ID`, a renamed organization stops it), no new organization for
+that shard.
+
+1. Share its accounts: `set: free` (or `default: free`) in the accounts section of `setup.yaml`, above.
+2. Give it the shard that needs what it has already, so nothing is set up twice: `webapp` when its App is installed
+   (the only shard with the App), `org-level` when only its web login is set up (the only shard with it), else
+   `repos`:
+
+   ```bash
+   otterdog-acceptance setup --target free --shard webapp   # writes E2E_SHARD, lists free in lists/shards
+   ```
+
+3. `otterdog-acceptance setup --shards`: the shard that `free` selects is kept (its setup is finished), the others
+   get their organization `otterdog-e2e-<shard>` (the creation page as the shared admin, the Enterprise Cloud one
+   created by an enterprise owner beforehand), tokens, `E2E_ALLOWED_ORG_IDS`, bootstrap and doctor.
+4. `otterdog-acceptance targets` (a SHARD per instance), `otterdog-acceptance shards`, then
+   `run --target @shards --parallel 5`.
+
+When the shard of the App is a new instance, its App step asks the webhook sink URL: give the one of the former
+instance (`grep E2E_APP_WEBHOOK_URL ~/.config/otterdog-acceptance/free.env`), also as
+`setup --shards --webhook-url <url>` (`--from free` cannot: it names one of the instances being set up).
+
 ## The App step
 
 The webapp and webhooks tiers need a GitHub App owned by the test organization ([github-app.md](github-app.md)).
@@ -405,7 +430,10 @@ The webapp and webhooks tiers need a GitHub App owned by the test organization (
    `bootstrap` adds it later: setup then postpones the App, and right after the bootstrap it runs it offers it again
    ("The marker is set now: create the GitHub App?").
 2. The webhook sink URL: `--webhook-url`, the stored `E2E_APP_WEBHOOK_URL`, else asked. Any `https` endpoint you
-   control that answers 2xx, never a loopback URL: the harness pulls the deliveries from GitHub.
+   control that answers 2xx, never a loopback URL: the harness pulls the deliveries from GitHub, nothing reads what
+   the sink receives. That of another instance serves again (its `E2E_APP_WEBHOOK_URL`); else a static endpoint
+   that answers 204 to a POST, or a smee.io channel (public: anyone with its URL reads the payloads), never a real
+   otterdog deployment ([the webhook sink](github-app.md#the-webhook-sink)).
 3. The manifest flow: setup listens on `http://127.0.0.1:8765/` (`--port`) and prints that URL; open it in a browser
    signed in as an organization owner (the admin account) and confirm the App on GitHub. GitHub redirects back with a
    code, which setup exchanges at once (the listener waits 10 minutes for the redirect).
