@@ -7,7 +7,8 @@ validated like any other PR, but:
   the Web UI, need to apply these changes manually", otterdog/webapp/tasks/validate_pull_request.py:199-202) and the
   /api record has ``requires_manual_apply`` true and ``supports_auto_merge`` false (validate_pull_request.py:278-286);
 * ``/otterdog merge`` is refused ("cannot be auto-merged", automerge_problems.txt; the problem names "requires web UI
-  changes", db/models.py:153-157) and the PR stays open;
+  changes", db/models.py:153-157) and the PR stays open; the refusal is the reply without a marker (WebappScenario
+  .wait_problems): since #943 the validate comment carries the same sentence;
 * once merged by the admin, the apply comment reports a partial apply (applied_changes_comment.txt: "only partially
   applied as it requires some access to secrets or the Web UI"), /api says ``partially_applied`` and the live setting
   is UNCHANGED (REST oracle): the webapp applies with ``no_web_ui=True`` (tasks/apply_changes.py:188-200);
@@ -34,7 +35,6 @@ pytestmark = [pytest.mark.webapp]
 
 SETTING = web_setting("members_can_delete_issues")
 WEB_UI_WARNING = "require accessing the Web UI, need to apply these changes manually"  # "some of [the] requested ..."
-AUTOMERGE_REFUSED = "cannot be auto-merged"
 WEB_UI_PROBLEM = "requires web UI changes"
 PARTIAL_APPLY = "only partially applied as it requires some access to secrets or the Web UI"
 REFERENCES_943 = [
@@ -87,7 +87,7 @@ def test_web_ui_setting_needs_a_manual_apply(webapp_scenario: WebappScenario) ->
     )
 
     s.flow.comment(pr, "/otterdog merge")
-    refused = s.wait_comment(pr, contains=AUTOMERGE_REFUSED).get("body") or ""
+    refused = s.wait_problems(pr)
     assert comment_contains(refused, WEB_UI_PROBLEM), f"the auto-merge refusal does not name the web UI:\n{refused}"
     assert not (s.oracle.pull(s.repo, pr.number) or {}).get("merged"), "a web-UI change was auto-merged"
 

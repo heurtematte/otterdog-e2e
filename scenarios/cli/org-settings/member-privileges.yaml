@@ -13,14 +13,17 @@ description: |
   repository creation policy is not allowed for this organization" to the PATCH that turns both on at once
   (nightlies 44545614854 and 44760214930, 1.8.0 and main 6f3ab92; the body lists
   members_can_create_private_repositories first, in the model's field order, and GitHub apparently checks the policy
-  after each field, private-only after the first one). The 'fork' step turns both off again in one PATCH, which should
-  pass the same way (public-only after the first field).
+  after each field, private-only after the first one).
   The run repository is created PUBLIC (otterdog before 1.7.0 cannot create a private repository on an organization
   without Code Security, #791, and the scenario runs on such SUTs too: BAT-01) and becomes private in the 'fork' step,
   with allow_forking true, in the apply that allows members to fork private repositories (settings are patched before
   repositories). Made private while the organization still refuses private forks, it would be refused whatever its
-  allow_forking (KB-088: the 'privileges' step did so until 2026-11-22, and the repository stayed public). The other
-  privileges are back to the template in the 'fork' step (the baseline values, asserted too).
+  allow_forking (KB-088: the 'privileges' step did so until 2026-11-22, and the repository stayed public). The 'fork'
+  step keeps the privileges of the steps before: GitHub applies a default_repository_permission change in the
+  background, for minutes, and answers 409 "Currently updating default_repository_permission. Further changes will be
+  ignored until update is complete" to any PATCH /orgs/{org} that names it meanwhile (nightly 45395404229, 1.8.0 and
+  main: the 'fork' step put the template values back 2-3 minutes after the 'privileges' step). The baseline reset
+  restores them; an attempt that comes too early gets the same 409 and the next reset completes it.
   Private Pages creation (members_can_create_private_pages) is enterprise-only (validation, KB-024) and not changed
   here. org_level: unfiltered plans, full baseline reset as cleanup (it removes the private run repository too).
 priority: P1
@@ -127,7 +130,13 @@ steps:
   - name: fork
     fragments:
       settings:
+        - "default_repository_permission: 'none'"
+        - "members_can_create_public_repositories: true"
+        - "members_can_create_private_repositories: true"
         - "members_can_fork_private_repositories: true"
+        - "deploy_keys_enabled_for_repositories: false"
+        - "has_organization_projects: false"
+        - "members_can_create_public_pages: false"
       repositories:
         - |
           orgs.newRepo('{{ p }}-fork') {
@@ -145,8 +154,11 @@ steps:
       contains:
         - "~ settings {"
         - "members_can_fork_private_repositories"
-        - '"none" -> "read"'
         - '~ repository[name="{{ p }}-fork"]'
+      not_contains:
+        - "default_repository_permission"
+        - "members_can_create_public_repositories"
+        - "members_can_create_private_repositories"
     apply:
       api:
         sent:
@@ -156,12 +168,12 @@ steps:
       - kind: org
         match:
           members_can_fork_private_repositories: true
-          default_repository_permission: read
-          members_can_create_public_repositories: false
-          members_can_create_private_repositories: false
-          deploy_keys_enabled_for_repositories: true
-          has_organization_projects: true
-          members_can_create_public_pages: true
+          default_repository_permission: none
+          members_can_create_public_repositories: true
+          members_can_create_private_repositories: true
+          deploy_keys_enabled_for_repositories: false
+          has_organization_projects: false
+          members_can_create_public_pages: false
       - kind: repo
         name: "{{ p }}-fork"
         match: {private: true, allow_forking: true}

@@ -540,32 +540,32 @@
 
 - id: KB-043
   title: delete-file crashes with an UnboundLocalError when GitHub refuses the deletion instead of printing 'failure deleting file' (exit 2 instead of 1)
-  status: confirmed
+  status: fixed
   evidence:
     - otterdog/operations/delete_file.py:85-104
     - otterdog/providers/github/rest/content_client.py:145-149
-  upstream: null
-  fixed_in: null
+  upstream: https://github.com/eclipse-csi/otterdog/pull/961
+  fixed_in: 1.9.0
   scenarios: [cli.kb.delete-file-refused]
 
 - id: KB-044
   title: delete-file reports 'succeeded' for a file that does not exist
-  status: confirmed
+  status: fixed
   evidence:
     - otterdog/operations/delete_file.py:96-99
     - otterdog/providers/github/rest/content_client.py:130-139
-  upstream: null
-  fixed_in: null
+  upstream: https://github.com/eclipse-csi/otterdog/pull/961
+  fixed_in: 1.9.0
   scenarios: [cli.kb.delete-file-missing]
 
 - id: KB-045
   title: dispatch-workflow exits 0 when GitHub refuses the dispatch ('failed to dispatch workflow')
-  status: confirmed
+  status: fixed
   evidence:
     - otterdog/operations/dispatch_workflow.py:61-69
     - otterdog/providers/github/rest/repo_client.py:1361-1366
-  upstream: null
-  fixed_in: null
+  upstream: https://github.com/eclipse-csi/otterdog/pull/961
+  fixed_in: 1.9.0
   scenarios: [cli.kb.dispatch-workflow-exit-code]
 
 - id: KB-046

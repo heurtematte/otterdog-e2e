@@ -9,7 +9,10 @@ description: |
   PUT .../variables/{name}/repositories of 'selected-two', 20 to 30 s after its creation, answered 404 on 4 runs of 5
   (1.8.0 and main 6f3ab92, nightlies 44545614854 to 44760214930; otterdog drops the status and body: "failed to update
   selected repositories"), with the same requests and the same otterdog code on the runs that passed. Created a step
-  earlier, it is about a minute old at the PUT: if the 404 goes away, GitHub needs time to know a new repository. The oracle checks the variable (GET .../actions/variables/{name}) and its selected
+  earlier, it is more than a minute old at the PUT, and the PUT still answered 404 on 1.8.0 and main (nightly
+  45395404229, 2026-11-24): the age of the repository is not the cause. otterdog sends PATCH .../variables/{name} with the whole
+  variable but its name and ids (value, visibility 'selected': models/organization_variable.py apply_live_patch), then
+  the PUT; both repository ids resolved (GET /repos/{owner}/{repo} twice). The oracle checks the variable (GET .../actions/variables/{name}) and its selected
   repositories (GH-07: GET .../variables/{name}/repositories). The update step changes the value and widens the
   visibility to all repositories (otterdog 'public' == GitHub 'all'). Org-level object: the scenario is org_level, so
   its plans are not filtered with -r and its cleanup is a full baseline reset.

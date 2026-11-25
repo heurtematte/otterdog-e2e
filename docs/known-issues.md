@@ -122,9 +122,9 @@ shortened to the relevant lines.
 | KB-040 | crashing sync check: misleading `failure` status (F-13) | confirmed | webapp | `W-SYNC-FAILURE` |
 | KB-041 | `two_factor_requirement` never read through the web UI | confirmed | web UI | `webui.kb.import-two-factor` |
 | KB-042 | list-blueprints/approve-blueprints need the webapp package and its dependencies | confirmed | CLI, packaging | `cli.kb.blueprint-commands-without-webapp` |
-| KB-043 | delete-file UnboundLocalError on a refused deletion | confirmed | CLI | `cli.kb.delete-file-refused` |
-| KB-044 | delete-file reports 'succeeded' for a missing file | confirmed | CLI | `cli.kb.delete-file-missing` |
-| KB-045 | dispatch-workflow exits 0 when the dispatch fails | confirmed | CLI | `cli.kb.dispatch-workflow-exit-code` |
+| KB-043 | delete-file UnboundLocalError on a refused deletion | fixed (1.9.0) | CLI | `cli.kb.delete-file-refused` |
+| KB-044 | delete-file reports 'succeeded' for a missing file | fixed (1.9.0) | CLI | `cli.kb.delete-file-missing` |
+| KB-045 | dispatch-workflow exits 0 when the dispatch fails | fixed (1.9.0) | CLI | `cli.kb.dispatch-workflow-exit-code` |
 | KB-046 | push-config of an invalid configuration exits 0 | confirmed | CLI | `cli.kb.push-config-invalid-exit-code` |
 | KB-047 | install-deps exits 0 when the installation fails | confirmed | CLI | `webui.kb.install-deps-exit-code` |
 | KB-048 | re-import drops the secret of a masked webhook | confirmed | import | `cli.kb.import-masked-webhook-secret` |
@@ -1620,9 +1620,15 @@ ModuleNotFoundError: No module named 'otterdog.webapp'
 
 ### KB-043 — delete-file crashes with an UnboundLocalError when GitHub refuses the deletion
 
-Status: **confirmed** · Upstream: none · Scenarios: `cli.kb.delete-file-refused`
+Status: **fixed** (1.9.0) · Upstream: https://github.com/eclipse-csi/otterdog/pull/961 · Scenarios:
+`cli.kb.delete-file-refused`
 
 Evidence: `otterdog/operations/delete_file.py:85-104`, `otterdog/providers/github/rest/content_client.py:145-149`.
+
+Fixed by #961 ("fix(cli): report failures of delete-file and dispatch-workflow", squash 97bce29, 2026-11-19, after
+v1.8.0, unreleased: 1.9.0): a refused deletion now prints 'failed' and 'failure deleting file' with exit 1 (the
+RuntimeError of the content client is caught before any read of the result). The scenario passed on main (XPASS, nightly
+45395404229, automation shard) and still fails as expected on 1.8.0.
 
 `DeleteFileOperation.execute` assigns `deleted_file` inside a `try` whose `except RuntimeError` only records the error;
 when the DELETE of the contents API fails (a protected default branch, missing permissions) the next line reads the
@@ -1656,9 +1662,15 @@ cli.cli.main(["delete-file", "-c", "otterdog.json", "--local", "-r", "repo", "--
 
 ### KB-044 — delete-file reports 'succeeded' for a file that does not exist
 
-Status: **confirmed** · Upstream: none · Scenarios: `cli.kb.delete-file-missing`
+Status: **fixed** (1.9.0) · Upstream: https://github.com/eclipse-csi/otterdog/pull/961 · Scenarios:
+`cli.kb.delete-file-missing`
 
 Evidence: `otterdog/operations/delete_file.py:96-99`, `otterdog/providers/github/rest/content_client.py:130-139`.
+
+Fixed by #961 ("fix(cli): report failures of delete-file and dispatch-workflow", squash 97bce29, 2026-11-19, after
+v1.8.0, unreleased: 1.9.0): the content client returns False only for a 404, and delete-file prints 'not found, nothing
+to delete' instead of 'succeeded'. The scenario passed on main (XPASS, nightly 45395404229, automation shard) and still
+fails as expected on 1.8.0.
 
 `ContentClient.delete_content` returns False when the file is not found (no sha), and the operation prints
 "succeeded" for both outcomes (only the color differs, green or red, invisible with NO_COLOR and in logs), exit 0.
@@ -1686,9 +1698,15 @@ cli.cli.main(["delete-file", "-c", "otterdog.json", "--local", "-r", "repo", "--
 
 ### KB-045 — dispatch-workflow exits 0 when GitHub refuses the dispatch
 
-Status: **confirmed** · Upstream: none · Scenarios: `cli.kb.dispatch-workflow-exit-code`
+Status: **fixed** (1.9.0) · Upstream: https://github.com/eclipse-csi/otterdog/pull/961 · Scenarios:
+`cli.kb.dispatch-workflow-exit-code`
 
 Evidence: `otterdog/operations/dispatch_workflow.py:61-69`, `otterdog/providers/github/rest/repo_client.py:1361-1366`.
+
+Fixed by #961 ("fix(cli): report failures of delete-file and dispatch-workflow", squash 97bce29, 2026-11-19, after
+v1.8.0, unreleased: 1.9.0): the repository client raises with the status and body of a refused dispatch, and
+dispatch-workflow prints 'failed to dispatch workflow' and exits 1. The scenario passed on main (XPASS, nightly
+45395404229, automation shard) and still fails as expected on 1.8.0.
 
 `RepoClient.dispatch_workflow` returns False for any answer other than 204 (unknown workflow, a workflow without
 `workflow_dispatch`, missing permissions); the operation prints "failed to dispatch workflow '&lt;wf&gt;' for repo
