@@ -1,4 +1,4 @@
-/* Filter and sort controls of the scenario explorer's tables (docs/assets/explorer.js), in Material's colors. */
+/* Filter controls of the scenario explorer's tables (docs/assets/explorer.js), in Material's colors. */
 .e2e-filter__controls {
   display: flex;
   flex-wrap: wrap;
@@ -32,15 +32,6 @@
 .e2e-filter__count {
   font-size: 0.7rem;
   color: var(--md-default-fg-color--light);
-}
-
-.md-typeset table:not([class]) th.e2e-sortable {
-  cursor: pointer;
-  user-select: none;
-}
-
-.md-typeset table:not([class]) th.e2e-sortable:hover {
-  color: var(--md-accent-fg-color);
 }
 
 /* the tags of a scenario page, chips linking to their pages (docs_scenarios.py, Writer.tag_chips) */

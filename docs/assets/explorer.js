@@ -1,8 +1,9 @@
-// Filter and sort controls of the scenario explorer's tables (docs_scenarios.py generates the pages).
+// Filter controls of the scenario explorer's tables (docs_scenarios.py generates the pages); sortable.js sorts them,
+// like every table of the site.
 //
 // A table preceded by <div class="e2e-filter" data-columns="Tier,Domain"> gets a search box (every word must appear in
-// the row), one list per named column (a cell holds comma-separated values) and sortable headers. The state lives in
-// the query string (?q=repo+secrets&Tier=cli&Tags=regression), so a filtered view can be linked and shared.
+// the row) and one list per named column (a cell holds comma-separated values). The state lives in the query string
+// (?q=repo+secrets&Tier=cli&Tags=regression), so a filtered view can be linked and shared.
 (function () {
   "use strict";
 
@@ -90,20 +91,6 @@
 
     search.addEventListener("input", apply);
     selects.forEach(({ select }) => select.addEventListener("change", apply));
-
-    Array.from(table.tHead.rows[0].cells).forEach((header, index) => {
-      header.classList.add("e2e-sortable");
-      header.setAttribute("title", "Sort");
-      let ascending = true;
-      header.addEventListener("click", () => {
-        const key = (row) => (row.cells[index] ? row.cells[index].textContent.trim() : "");
-        const sorted = Array.from(body.rows).sort(
-          (a, b) => key(a).localeCompare(key(b), undefined, { numeric: true }) * (ascending ? 1 : -1),
-        );
-        sorted.forEach((row) => body.appendChild(row));
-        ascending = !ascending;
-      });
-    });
 
     apply();
   }

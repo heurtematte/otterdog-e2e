@@ -58,7 +58,7 @@ nav = [
 # the filter and sort controls of the scenario explorer's tables (docs_scenarios.py); the Eclipse colors and the hero
 # of the home page
 extra_css = ["assets/explorer.css", "assets/theme.css"]
-extra_javascript = ["assets/explorer.js"]
+extra_javascript = ["assets/explorer.js", "assets/sortable.js"]
 
 # the links of the footer
 [[project.extra.social]]

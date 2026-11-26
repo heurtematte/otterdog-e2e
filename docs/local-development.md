@@ -458,9 +458,9 @@ The pages stay GitHub-flavored Markdown that renders on github.com; `docs_hooks.
 - the home page is `README.md`, with its links rebased on `docs/`, without the blocks between
   `<!-- github-only -->` and `<!-- /github-only -->` (the badge, the link to the site) and without the navigation
   sidebar: there is no `docs/index.md`. Its line `<!-- site:coverage -->`, a comment github.com hides, becomes the
-  coverage summary `docs_scenarios.home_coverage` computes when the site is built (key figures, the shares per tier
-  and per area, from `scenarios/coverage.yaml`, the tests and `scenarios/known_bugs.yaml`): the README holds no
-  figure that could go stale;
+  coverage summary `docs_scenarios.home_coverage` computes when the site is built (key figures, each a link to the
+  section that details it, the shares per tier and per area, from `scenarios/coverage.yaml`, the tests and
+  `scenarios/known_bugs.yaml`): the README holds no figure that could go stale;
 - a link that leaves `docs/` (`../scenarios/coverage.yaml`) points to the file on GitHub (`blob/main`, `tree/main`
   for a directory), and its target must exist (`--strict` fails otherwise);
 - GitHub callouts (`> [!WARNING]`) become admonitions;
@@ -470,13 +470,20 @@ The pages stay GitHub-flavored Markdown that renders on github.com; `docs_hooks.
 one page per YAML scenario of `scenarios/<tier>/<domain>/` (description, context, references, known bugs, covered
 features with their otterdog sources, each step's jsonnet, commands and expectations, the Python code quoting the
 scenario id, the YAML source) and one page per `tests/<tier>/test_*.py` module (docstring, marks and source of every
-test), with overview tables that filter and sort in the browser by tier, domain, priority, GitHub plan, scope (what a
+test), with overview tables that filter in the browser by tier, domain, priority, GitHub plan, scope (what a
 scenario configures: the organization, its repositories), first otterdog version (`fixed_in`) and tags
 (`docs/assets/explorer.js`; the query string holds the filter, so `scenarios/?Plan=enterprise&Tags=regression` can be
 linked), counts of the scenarios by those values on the overview page and one page per tag. The nav entry `{ "Scenario explorer" = "scenarios/index.md" }` of
 `zensical.toml` becomes the section in the staged configuration, and `docs/scenarios/` must not exist. Nothing is written by hand there: a change of a
 scenario or a test shows on the site at the next build of `main` (the docs workflow also runs for `scenarios/**` and
 `tests/**`).
+
+Every table of the site sorts in the browser (`docs/assets/sortable.js`): a click on a header, or Enter on a focused
+one, sorts ascending, then descending, then restores the order of the page, and the theme shows the sort icon. A
+column whose cells are all numbers (`81%`, `12`) sorts as numbers, any other in natural order (`KB-9` before `KB-10`),
+with the empty cells (`-`) and a last row whose first cell reads `Total` kept at the end. A generated cell whose text is not its value gives its sort key in a `data-sort`
+attribute, on the cell or on an element inside it, like the bars of the coverage summary (their weighted share).
+Tables of a single row, and tables whose rows span columns, are left as they are.
 
 Python-Markdown is stricter than GitHub in a few places. Both render the page as written when you:
 

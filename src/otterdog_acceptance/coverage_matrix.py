@@ -867,6 +867,8 @@ class MatrixProject:
         out += [f"- `{tier}`: {md_text(text)}" for tier, text in data["tiers"].items()]
         out += ["", "Operations:", ""]
         out += [f"- `{op}`: {md_text(text)}" for op, text in data["operations"].items()]
+        out += self.render_open(data, "gap")
+        out += self.render_open(data, "partial")
         out += [
             "",
             "## New findings",
@@ -888,6 +890,44 @@ class MatrixProject:
         for area, group in area_groups(data):
             out += self.render_area(area, group)
         return "\n".join(out).rstrip("\n") + "\n"
+
+    def render_open(self, data: Mapping[str, Any], status: str) -> list[str]:
+        """The section of the gaps (``## Gaps``) or of the partial features (``## Partially covered features``) of
+        every area, by priority then area: the targets of the home page's tiles (docs_scenarios.home_coverage)."""
+        order = {area["id"]: index for index, area in enumerate(data["areas"])}
+        titles = {area["id"]: area["title"] for area in data["areas"]}
+        group = sorted(
+            (e for e in data["features"] if e["status"] == status),
+            key=lambda e: (PRIORITIES.index(e["priority"]), order[e["area"]]),
+        )
+        heading, intro = {
+            "gap": ("Gaps", "have no test yet"),
+            "partial": ("Partially covered features", "are only partly asserted"),
+        }[status]
+        out = [
+            "",
+            f"## {heading}",
+            "",
+            (
+                f"{len(group)} features {intro}, by priority; the outline of the missing test is in the details of "
+                "their area."
+            ),
+            "",
+        ]
+        header = ["Id", "Feature", "Area", "Tier", "Plan", "Prio"]
+        rows = [
+            [
+                f"`{e['id']}`",
+                md_text(e["title"]) + (" (UI only)" if e["ui_only"] else ""),
+                f"[{titles[e['area']]}](#{e['area']})",
+                e["tier"],
+                e["min_plan"],
+                e["priority"],
+                *([code_list(e["covered_by"])] if status == "partial" else []),
+            ]
+            for e in group
+        ]
+        return out + md_table([*header, "Covered by"] if status == "partial" else header, rows)
 
     def render_area(self, area: Mapping[str, Any], group: Sequence[Mapping[str, Any]]) -> list[str]:
         """The section of one area: a table of its features, then the details of notes, partials and gaps."""

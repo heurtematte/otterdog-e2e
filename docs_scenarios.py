@@ -9,7 +9,7 @@ built, so it never drifts from them:
   runs, what it expects of them and of GitHub), the Python code that refers to it, how to run it and its YAML source;
 * one page per Python test module of a tier (``tests/<tier>/test_*.py`` -> ``scenarios/python-tests/<tier>/...``):
   every test with its markers, docstring, covered features and source;
-* overview pages whose tables filter and sort in the browser (docs/assets/explorer.js), and their place in the
+* overview pages whose tables filter in the browser (docs/assets/explorer.js), and their place in the
   navigation: the nav entry ``scenarios/index.md`` of zensical.toml becomes a section holding them all (expand_nav).
 
 Links to code point to GitHub: the harness at ``main`` (the branch the site is built from), otterdog at the commit of
@@ -1895,7 +1895,8 @@ def share(part: float, total: int) -> str:
 
 
 def coverage_bar(found: Mapping[str, int]) -> str:
-    """An inline bar of the covered, partial and gap shares (``e2e-bar`` of docs/assets/theme.css)."""
+    """An inline bar of the covered, partial and gap shares (``e2e-bar`` of docs/assets/theme.css); its column sorts by
+    the weighted share, a partial feature counting half (``data-sort``, docs/assets/sortable.js)."""
     total = sum(found.values())
     title = ", ".join(f"{found[status]} {plural}" for status, plural in STATUSES)
     parts = "".join(
@@ -1903,7 +1904,8 @@ def coverage_bar(found: Mapping[str, int]) -> str:
         for status, _ in STATUSES
         if total and found[status]
     )
-    return f'<span class="e2e-bar" title="{title}">{parts}</span>'
+    weighted = 100 * (found["covered"] + found["partial"] / 2) / total if total else 0
+    return f'<span class="e2e-bar" title="{title}" data-sort="{weighted:.1f}">{parts}</span>'
 
 
 def coverage_rows(header: str, groups: Iterable[tuple[str, Sequence[Mapping[str, Any]]]]) -> list[str]:
@@ -1921,7 +1923,9 @@ def coverage_rows(header: str, groups: Iterable[tuple[str, Sequence[Mapping[str,
 
 def home_coverage(site: Site) -> str:
     """The coverage summary of the home page, from scenarios/coverage.yaml, the scenarios, the Python tests and the
-    known bugs of the commit the site is built from: key figures, the shares per tier and, folded, per area."""
+    known bugs of the commit the site is built from: key figures, each a link to the section that details it (a
+    Markdown link inside the tile, md_in_html, so that the site resolves it), the shares per tier and, folded, per
+    area."""
     w = Writer(site, HOME)
     features = [feature for feature in site.coverage.get("features") or [] if isinstance(feature, Mapping)]
     found = status_counts(features)
@@ -1931,20 +1935,36 @@ def home_coverage(site: Site) -> str:
     runs = [run for feature in features for run in feature.get("verified_on") or [] if isinstance(run, Mapping)]
     verified = sum(1 for feature in features if feature.get("verified_on"))
     last = max((str(run.get("date") or "") for run in runs), default="")
+    matrix = w.rel(COVERAGE_MATRIX)
     tiles = (
-        (str(total), "otterdog features inventoried", ""),
-        (share(found["covered"], total), f"covered ({found['covered']} features)", "covered"),
-        (str(found["partial"]), "partially covered", "partial"),
-        (str(found["gap"]), "gaps, each with its outline", "gap"),
-        (str(verified), f"seen working in a live run{f' (last {last})' if last else ''}", "covered"),
-        (str(len(site.scenarios) + tests), f"tests: {len(site.scenarios)} YAML scenarios, {tests} in Python", ""),
-        (str(open_bugs), "otterdog bugs found, confirmed or suspected", ""),
+        (str(total), "otterdog features inventoried", "", matrix),
+        (
+            share(found["covered"], total),
+            f"covered ({found['covered']} features)",
+            "covered",
+            f"{matrix}#summary-by-area",
+        ),
+        (str(found["partial"]), "partially covered", "partial", f"{matrix}#partially-covered-features"),
+        (str(found["gap"]), "gaps, each with its outline", "gap", f"{matrix}#gaps"),
+        (
+            str(verified),
+            f"seen working in a live run{f' (last {last})' if last else ''}",
+            "covered",
+            f"{matrix}#summary-by-tier",
+        ),
+        (
+            str(len(site.scenarios) + tests),
+            f"tests: {len(site.scenarios)} YAML scenarios, {tests} in Python",
+            "",
+            w.rel(INDEX),
+        ),
+        (str(open_bugs), "otterdog bugs found, confirmed or suspected", "", f"{w.rel(KNOWN_ISSUES)}#summary"),
     )
-    html = "".join(
-        f'<div class="e2e-tile{f" e2e-tile--{kind}" if kind else ""}"><span class="e2e-tile__value">{value}</span>'
-        f'<span class="e2e-tile__label">{label}</span></div>'
-        for value, label, kind in tiles
-    )
+    html = [
+        f'<div class="e2e-tile{f" e2e-tile--{kind}" if kind else ""}" markdown="span">'
+        f'[<span class="e2e-tile__value">{value}</span><span class="e2e-tile__label">{label}</span>]({link})</div>'
+        for value, label, kind, link in tiles
+    ]
     upstream = site.coverage.get("otterdog") or {}
     ref = str(upstream.get("ref") or "")
     release = str(upstream.get("release") or "")
@@ -1955,7 +1975,6 @@ def home_coverage(site: Site) -> str:
         for status, plural in STATUSES
     )
     anchors = site.area_anchors
-    matrix = w.rel(COVERAGE_MATRIX)
     areas = [
         (
             f"[{escape(str(area.get('title') or area['id']))}]({matrix}#{anchors[str(area['id'])]})"
@@ -1968,7 +1987,9 @@ def home_coverage(site: Site) -> str:
     ]
     tiers = [(f"`{tier}`", [feature for feature in features if feature.get("tier") == tier]) for tier in COVERAGE_TIERS]
     out = [
-        f'<div class="e2e-tiles">{html}</div>',
+        '<div class="e2e-tiles" markdown="block">',
+        *html,
+        "</div>",
         "",
         (
             f"Inventory of otterdog `main` at {inventory}"

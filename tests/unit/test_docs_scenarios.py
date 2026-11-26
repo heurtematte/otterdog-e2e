@@ -338,16 +338,24 @@ def test_home_coverage_counts_features_tests_and_bugs() -> None:
     current.known_bugs = {"KB-001": {"status": "confirmed"}, "KB-002": {"status": "fixed"}}
     home = module.home_coverage(current)
     lines = home.split("\n")
-    tiles = re.findall(r'e2e-tile__value">([^<]*)</span><span class="e2e-tile__label">([^<]*)<', lines[0])
+    tiles = re.findall(
+        r'^<div class="e2e-tile[^"]*" markdown="span">\[<span class="e2e-tile__value">([^<]*)</span>'
+        r'<span class="e2e-tile__label">([^<]*)</span>\]\(([^)]*)\)</div>$',
+        home,
+        re.MULTILINE,
+    )
     assert tiles == [
-        ("4", "otterdog features inventoried"),
-        ("50%", "covered (2 features)"),
-        ("1", "partially covered"),
-        ("1", "gaps, each with its outline"),
-        ("1", "seen working in a live run (last 2026-11-25)"),
-        ("2", "tests: 2 YAML scenarios, 0 in Python"),
-        ("1", "otterdog bugs found, confirmed or suspected"),
+        ("4", "otterdog features inventoried", "coverage-matrix.md"),
+        ("50%", "covered (2 features)", "coverage-matrix.md#summary-by-area"),
+        ("1", "partially covered", "coverage-matrix.md#partially-covered-features"),
+        ("1", "gaps, each with its outline", "coverage-matrix.md#gaps"),
+        ("1", "seen working in a live run (last 2026-11-25)", "coverage-matrix.md#summary-by-tier"),
+        ("2", "tests: 2 YAML scenarios, 0 in Python", "scenarios/index.md"),
+        ("1", "otterdog bugs found, confirmed or suspected", "known-issues.md#summary"),
     ]
+    assert lines[0] == '<div class="e2e-tiles" markdown="block">' and lines[8] == "</div>", (
+        "md_in_html resolves the links"
+    )
     assert "[`d9dac78`](https://github.com/eclipse-csi/otterdog/commit/d9dac78" in home and "v1.7.1" in home
     assert "62% covered when a partial feature counts half" in home  # round half to even, as the matrix
     assert any(line.startswith("| `offline` | 2 | ") and line.endswith("| 100% | 0 | 0 |") for line in lines)
@@ -358,8 +366,11 @@ def test_home_coverage_counts_features_tests_and_bugs() -> None:
     assert any(line.startswith("    | Teams | 1 | ") for line in lines)
     assert '<span class="e2e-bar__covered" style="width: 66.7%"></span>' in home
     assert module.coverage_bar({"covered": 0, "partial": 0, "gap": 0}) == (
-        '<span class="e2e-bar" title="0 covered, 0 partial, 0 gaps"></span>'
+        '<span class="e2e-bar" title="0 covered, 0 partial, 0 gaps" data-sort="0.0"></span>'
     )
+    assert 'title="1 covered, 1 partial, 2 gaps" data-sort="37.5">' in module.coverage_bar(
+        {"covered": 1, "partial": 1, "gap": 2}
+    ), "the bar sorts by the weighted share"
 
 
 def test_every_known_bug_of_a_scenario_has_an_anchor() -> None:

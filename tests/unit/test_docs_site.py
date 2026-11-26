@@ -103,7 +103,7 @@ def test_site_settings() -> None:
     assert config["site_url"] == SITE_URL
     assert config["repo_url"] == REPO_URL
     assert config["edit_uri"] == "edit/main/docs/"
-    assert config["extra_javascript"] == ["assets/explorer.js"]
+    assert config["extra_javascript"] == ["assets/explorer.js", "assets/sortable.js"]
     assert config["extra_css"] == ["assets/explorer.css", "assets/theme.css"]
     assert config["theme"]["custom_dir"] == "docs-theme" and config["theme"].get("name", "material") == "material"
     assert (config["theme"]["logo"], config["theme"]["favicon"]) == (

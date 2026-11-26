@@ -30,6 +30,7 @@ Coverage per area (also printed by ``pytest tests/unit/test_coverage_matrix.py -
 
 from __future__ import annotations
 
+import re
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -113,6 +114,22 @@ def test_markdown_is_up_to_date() -> None:
     current = DOC.read_text(encoding="utf-8") if DOC.is_file() else ""
     assert current == expected, f"{DOC.relative_to(ROOT)} is stale, regenerate it: {REGENERATE}"
     assert PROJECT.markdown_problems() == []
+
+
+def test_gaps_and_partial_features_have_their_own_sections() -> None:
+    """The home page's tiles link to ## Gaps and ## Partially covered features: each lists every feature of that
+    status, by priority, with its area linked to the area's section."""
+    data = matrix()
+    lines = PROJECT.render_markdown(data).split("\n")
+    for heading, status in (("## Gaps", "gap"), ("## Partially covered features", "partial")):
+        start = lines.index(heading)
+        end = next(i for i in range(start + 1, len(lines)) if lines[i].startswith("## "))
+        rows = {line.split("`")[1]: line for line in lines[start:end] if line.startswith("| `")}
+        wanted = {e["id"]: e for e in data["features"] if e["status"] == status}
+        assert set(rows) == set(wanted) and lines[start + 2].startswith(f"{len(wanted)} features "), heading
+        priorities = [re.findall(r" \| (P\d) \| ", f"{line} ")[-1] for line in rows.values()]
+        assert priorities == sorted(priorities), heading
+        assert all(f"](#{wanted[fid]['area']})" in line for fid, line in rows.items()), heading
 
 
 def test_covered_needs_an_item_that_runs_strictly_on_the_default_sut() -> None:
