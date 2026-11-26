@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, Any
 
 from otterdog_acceptance import waiting
 from otterdog_acceptance.github.oracle import normalize
+from otterdog_acceptance.infra import INFRA_PREFIX
 from otterdog_acceptance.redact import REDACTOR
 
 if TYPE_CHECKING:
@@ -167,7 +168,6 @@ class CheckError(ValueError):
     """A malformed check (unknown kind, missing parameter, bad form or operator)."""
 
 
-INFRA_PREFIX = "[infra]"  # problems caused by the infrastructure (network, 5xx, rate limits), never product defects
 _INFRA_STATUSES = frozenset({429, 500, 502, 503, 504})
 
 

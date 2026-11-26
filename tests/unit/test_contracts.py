@@ -106,6 +106,7 @@ PUBLIC_NAMES: dict[str, list[str]] = {
         "pause_for_rate_limit",
         "pause_sleep",
     ],
+    "otterdog_acceptance.infra": ["INFRA_PREFIX", "INFRA_PATTERNS", "INFRA_RE", "is_infra"],
     "otterdog_acceptance.redact": [
         "Redactor",
         "REDACTOR",

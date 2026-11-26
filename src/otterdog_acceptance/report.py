@@ -53,6 +53,7 @@ import yaml
 from otterdog_acceptance.differential import JSON_FILE as DIFFERENTIAL_JSON
 from otterdog_acceptance.differential import MARKDOWN_FILE as DIFFERENTIAL_MD
 from otterdog_acceptance.differential import md_cell, md_code, md_fence
+from otterdog_acceptance.infra import INFRA_RE
 from otterdog_acceptance.redact import REDACTOR, Redactor
 from otterdog_acceptance.safety import SafetyError
 
@@ -102,11 +103,6 @@ OTTERDOG_COMMANDS = frozenset(
         "validate", "web-login",
     }
 )  # fmt: skip
-INFRA_RE = re.compile(
-    r"\(infra\)|secondary rate limit|API rate limit exceeded|github rate budget|github-rate-limit"
-    r"|Cannot connect to host api\.github\.com|Cannot connect to the Docker daemon|delivery not observed|LeaseBusy",
-    re.IGNORECASE,
-)
 KNOWN_BUG_RE = re.compile(r"\bKB-\d+\b")
 _CLI_DIR_RE = re.compile(r"^\d+-(?P<command>.+)$")
 _UNSHARE_NET_RE = re.compile(r"^(-[A-Za-z]*n[A-Za-z]*|--net(=.*)?)$")  # unshare options creating a network namespace

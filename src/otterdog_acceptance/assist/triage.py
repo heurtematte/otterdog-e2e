@@ -50,6 +50,7 @@ from otterdog_acceptance.assist.bundle import (
     untrusted_block,
     write_bundle,
 )
+from otterdog_acceptance.infra import INFRA_PATTERNS
 from otterdog_acceptance.naming import RUN_ID_RE, run_id_timestamp
 from otterdog_acceptance.redact import REDACTOR, Redactor
 
@@ -108,48 +109,7 @@ class Rule:
 
 
 RULES: tuple[Rule, ...] = (
-    Rule("infrastructure", "[infra] problem", re.compile(r"\[infra\]")),
-    Rule(
-        "infrastructure",
-        "GitHub server error (5xx)",
-        re.compile(
-            r"->\s*5\d\d\b|\b5\d\d (?:Server Error|Internal Server Error|Bad Gateway|Service Unavailable|Gateway "
-            r"Time-?out)|\bHTTP(?:Error)?[ /]?5\d\d\b|status(?: code)?[ =:]+5\d\d\b",
-            re.IGNORECASE,
-        ),
-    ),
-    Rule("infrastructure", "secondary rate limit", re.compile(r"secondary rate limit", re.IGNORECASE)),
-    Rule(
-        "infrastructure",
-        "rate limit",
-        re.compile(r"API rate limit exceeded|github rate budget|github-rate-limit|-> 429\b", re.IGNORECASE),
-    ),
-    Rule("infrastructure", "abuse detection", re.compile(r"abuse detection|abuse-rate-limits", re.IGNORECASE)),
-    Rule(
-        "infrastructure",
-        "network error",
-        re.compile(
-            r"ConnectionError|ConnectionResetError|Connection reset by peer|Connection refused|RemoteDisconnected"
-            r"|Max retries exceeded|Temporary failure in name resolution|Name or service not known"
-            r"|Network is unreachable|Read timed out|ConnectTimeout|ReadTimeout|SSLError|Cannot connect to host",
-            re.IGNORECASE,
-        ),
-    ),
-    Rule(
-        "infrastructure",
-        "delivery wait timeout",
-        re.compile(r"delivery not observed|DeliveryTimeoutError|timed out waiting for (?:the )?deliver", re.IGNORECASE),
-    ),
-    Rule(
-        "infrastructure",
-        "docker/compose failure",
-        re.compile(
-            r"Cannot connect to the Docker daemon|Error response from daemon|docker[- ]compose\b[^\n]*(?:failed|error)"
-            r"|WebappNotReadyError|WebappStackError|docker: [^\n]*error",
-            re.IGNORECASE,
-        ),
-    ),
-    Rule("infrastructure", "org lease busy", re.compile(r"LeaseBusy|org lease (?:held|of)", re.IGNORECASE)),
+    *(Rule("infrastructure", name, pattern) for name, pattern in INFRA_PATTERNS),
     Rule(
         "harness",
         "harness error type",

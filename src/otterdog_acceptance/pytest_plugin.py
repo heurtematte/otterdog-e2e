@@ -47,7 +47,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from otterdog_acceptance import redact
+from otterdog_acceptance import infra, redact
 from otterdog_acceptance.context import (
     DEFAULT_RESET_SUT,
     DEFAULT_SUT,
@@ -195,13 +195,6 @@ NO_TARGET_REASON = "live test without a target: pass --e2e-target (or set E2E_TA
 NO_BASE_REASON = "differential test without a base SUT: pass --e2e-base-sut (or set E2E_BASE_SUT)"
 SKIP_PREFIX_RE = re.compile(r"^(Skipped|XFAIL|xfail):\s*")
 FULL_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
-# failures matching this are infrastructure problems (rate limits, network, lease), not product defects
-INFRA_RE = re.compile(
-    r"secondary rate limit|API rate limit exceeded|rate budget|Cannot connect to host|\(infra\)|LeaseBusy|"
-    r"ConnectionError|ConnectTimeout|ReadTimeout|Max retries exceeded|Temporary failure in name resolution|"
-    r"50[234] (Bad Gateway|Service Unavailable|Gateway Time-?out)",
-    re.IGNORECASE,
-)
 FAILURE_MAX_CHARS = 2000
 FAILURE_MAX_LINES = 30
 SCENARIO_PARAM = "scenario"
@@ -1034,7 +1027,7 @@ def result_line(item: pytest.Item, reports: dict[str, pytest.TestReport], contex
         "sut": context.sut_label(),
         "reason": _reason(decisive) if outcome in ("skipped", "xfailed", "xpassed") else None,
         "failure": _short(failure_text) if failure_text else None,
-        "infra": bool(failure_text and INFRA_RE.search(failure_text)),
+        "infra": infra.is_infra(failure_text),
         "known_bug": item.stash.get(_KNOWN_BUG_KEY, None),
         "rate": context.rate_remaining(),
         "finished_at": datetime.now(UTC).isoformat(),
