@@ -88,6 +88,10 @@ and several runs exist (`ls -1t artifacts/`).
 
 7. **Report** the table failure, verdict, evidence, proposed action (example below), then the drafts and the
    commands the user may run.
+8. **Live verification of the matrix**: `.venv/bin/otterdog-acceptance assist verify-coverage <run dirs>` lists the
+   features each run verifies (a live covering item passed, none failed) or refuses; with `--write` it records them in
+   `verified_on` of `scenarios/coverage.yaml` and regenerates `docs/coverage-matrix.md`. Add the counts to the report
+   and write only when the user asks for the matrix update (it is a change of the work tree like the drafts).
 
 ## Done means
 

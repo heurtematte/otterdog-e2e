@@ -3,7 +3,8 @@ is called, agents read the bundles.
 
 pr-context gathers an upstream otterdog PR from anonymous public reads; check validates the files an agent wrote and
 lints its live scenarios offline (the offline suite through run_pytest, like ``run``); triage pre-classifies the
-failures of a run directory, scrubbed first; coverage lists the features of scenarios/coverage.yaml to work on.
+failures of a run directory, scrubbed first; coverage lists the features of scenarios/coverage.yaml to work on;
+verify-coverage records the runs in which the live covering items of a feature passed (coverage_verify).
 """
 
 from __future__ import annotations
@@ -239,3 +240,60 @@ def assist_coverage(
     lines = [f"{item['priority']} {item['status']:<8} {item['tier']:<10} {item['id']}" for item in summary["features"]]
     lines.append(f"{len(summary['features'])} feature(s) of {summary['totals']['features']}")
     _echo_bundle(summary, as_json=as_json, lines=lines)
+
+
+@assist.command("verify-coverage")
+@click.argument("run_dirs", nargs=-1, required=True, type=click.Path(exists=True, file_okay=False, path_type=Path))
+@click.option("--write", is_flag=True, help="record the runs in scenarios/coverage.yaml and regenerate its page")
+@click.option("--json", "as_json", is_flag=True, help="print the result as JSON")
+@_handled
+def assist_verify_coverage(run_dirs: tuple[Path, ...], write: bool, as_json: bool) -> None:
+    """Record the green live runs of the features of scenarios/coverage.yaml (verified_on) from run directories (each
+    with run.json and results.jsonl, or a directory holding such run directories, e.g. a downloaded CI artifact): a
+    run verifies a feature when a live covering item passed and none failed or errored. A dry run without --write."""
+    from otterdog_acceptance import coverage_matrix, coverage_verify
+    from otterdog_acceptance.report import RunData, load_coverage
+
+    settings = _settings()
+    project = coverage_matrix.MatrixProject(settings.project_root)
+    matrix = load_coverage(project.matrix_path)
+    directories = [
+        path for root in run_dirs for path in ([root] if (root / "run.json").is_file() else sorted(root.glob("*/")))
+    ]
+    directories = [path for path in directories if (path / "run.json").is_file()]
+    if not directories:
+        raise click.UsageError("no run directory (a directory with run.json) among the arguments")
+    results = [
+        coverage_verify.verify_run(matrix, RunData.load(path, coverage_file=project.matrix_path))
+        for path in directories
+    ]
+    data = coverage_matrix.load_matrix(project.matrix_path)
+    updates = coverage_verify.verified_updates(coverage_verify.current_verified(data), results)
+    if write and updates:
+        text = project.matrix_path.read_text(encoding="utf-8")
+        project.matrix_path.write_text(coverage_verify.write_verified(text, updates), encoding="utf-8")
+        project.doc_path.write_text(
+            project.render_markdown(coverage_matrix.load_matrix(project.matrix_path)), encoding="utf-8"
+        )
+    if as_json:
+        _echo_json(
+            {
+                "runs": [
+                    {
+                        "directory": str(result.directory),
+                        "stamp": result.stamp.entry() if result.stamp else None,
+                        "skipped": result.skipped,
+                        "verified": result.verified,
+                        "refused": result.refused,
+                    }
+                    for result in results
+                ],
+                "updates": updates,
+                "written": bool(write and updates),
+            }
+        )
+        return
+    for line in coverage_verify.summary(results, updates):
+        _echo(line)
+    if updates:
+        _echo(f"{'recorded in' if write else 'dry run, --write records them in'} {project.matrix_path}")

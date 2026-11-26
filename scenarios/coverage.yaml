@@ -254,6 +254,9 @@ features:
     priority: P0
     status: covered
     covered_by: [tests/offline/test_cli_basics.py::test_version_is_the_resolved_sut_version, tests/cli/test_smoke.py::test_version]
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   - id: cli.help
     area: cli
@@ -348,6 +351,9 @@ features:
     status: covered
     covered_by: [O-VAL-OK, O-VAL-SYNTAX, O-VAL-PLAN-GATE, O-VAL-ORGSECRET-PRIVATE-FREE, O-VAL-RULESET-STRICT, cli.secrets]
     notes: "the stray quote of the warning-only summary (\"Validation succeeded': 0 info(s), 1 warning(s), 0 error(s)\") is verified offline; validate needs GitHub only for teams (org members) and code scanning languages"
+    verified_on:
+      - {target: "automation", sut: "main-fa01483", run: "tp2fgp07", date: "2026-11-25"}
+      - {target: "automation", sut: "v1.8.0", run: "tp24ye15", date: "2026-11-25"}
 
   - id: cli.validate.missing-config
     area: cli
@@ -361,6 +367,9 @@ features:
     status: covered
     covered_by: [tests/offline/test_config_loading.py::test_missing_organization_configuration, tests/cli/test_commands_errors.py::test_commands_need_the_org_config]
     notes: "validate and show exit 1 (\"does not exist, run 'fetch-config' or 'import' first.\"), local-plan exit 1 ('does not yet exist, run fetch-config or import first.') Live: validate and list-members/delete-file/sync-template/push-config/open-pr \"configuration file '<f>' does not exist, run 'fetch-config' or 'import' first.\", local-plan/plan/apply/check-status '... does not yet exist, run fetch-config or import first.', all exit 1 (verified offline too)."
+    verified_on:
+      - {target: "automation", sut: "main-fa01483", run: "tp2fgp07", date: "2026-11-25"}
+      - {target: "automation", sut: "v1.8.0", run: "tp24ye15", date: "2026-11-25"}
 
   - id: cli.show
     area: cli
@@ -403,6 +412,9 @@ features:
     status: covered
     covered_by: [tests/cli/test_commands_read.py::test_show_live_prints_the_live_org]
     notes: "show-live -n: header, the --no-web-ui warning, REST-backed settings equal GET /orgs/{org} (plan from plan.name), no web-only key in the settings block, every repository/team the oracle lists has its block (advisory forks excluded like otterdog). Without -n it runs as the trusted reader of the web_ui round trip (reset SUT only)."
+    verified_on:
+      - {target: "automation", sut: "main-fa01483", run: "tp2fgp07", date: "2026-11-25"}
+      - {target: "automation", sut: "v1.8.0", run: "tp24ye15", date: "2026-11-25"}
 
   - id: cli.show-default
     area: cli
@@ -457,6 +469,9 @@ features:
     priority: P2
     status: covered
     covered_by: [tests/offline/test_cli_basics.py::test_list_projects_lists_the_offline_organization, tests/cli/test_smoke.py::test_list_projects]
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   - id: cli.check-token-permissions
     area: cli
@@ -472,6 +487,11 @@ features:
     covered_by: [tests/cli/test_smoke.py::test_check_token_permissions, tests/cli/test_commands_read.py::test_check_token_permissions_lists_the_granted_scopes, tests/cli/test_commands_read.py::test_check_token_permissions_reports_missing_scopes, tests/cli/test_commands_read.py::test_check_token_permissions_accepts_a_fine_grained_admin]
     known_bugs: [KB-078]
     notes: "-l: 'Granted scopes:' == the token's X-OAuth-Scopes; config_reader (no scope): 'Missing scopes:' == the five required minus granted (order-insensitive: printed from a frozenset), exit 1. A fine-grained ADMIN token is reported the same way (KB-078: the command only knows classic scopes); its test is skipped with a classic admin token."
+    verified_on:
+      - {target: "automation", sut: "main-fa01483", run: "tp2fgp07", date: "2026-11-25"}
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "automation", sut: "v1.8.0", run: "tp24ye15", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   - id: cli.list-members
     area: cli
@@ -486,6 +506,9 @@ features:
     status: covered
     covered_by: [tests/cli/test_commands_read.py::test_list_members_counts_the_members]
     notes: "'Found <n> members.' n = GET /orgs/{org}/members; --two-factor-disabled: '<x> / <n> members with 2FA disabled' (x = filter=2fa_disabled) and the 2FA status from the LOCAL config (two_factor_requirement::: true -> enabled, false -> disabled on the same org)."
+    verified_on:
+      - {target: "automation", sut: "main-fa01483", run: "tp2fgp07", date: "2026-11-25"}
+      - {target: "automation", sut: "v1.8.0", run: "tp24ye15", date: "2026-11-25"}
 
   - id: cli.list-apps
     area: cli
@@ -501,6 +524,9 @@ features:
     covered_by: [tests/cli/test_commands_read.py::test_list_apps_matches_the_installations, tests/offline/test_cli_json_output.py::test_list_apps_json_keeps_stdout_for_the_json]
     known_bugs: [KB-051]
     notes: "--json array == GET /orgs/{org}/installations reduced to app_id/app_slug/permissions, sorted by slug, e2e App listed with its id when ready; text mode: one app['<slug>'] block with app_id per installation. Since #963 (02e0e72, after v1.8.0) stdout holds only the JSON (click.echo) and the messages, errors and -v log records go to stderr; O-JSON-STDOUT checks it offline with refused credentials ('[]' on stdout, exit 1), and the error on stdout before #963."
+    verified_on:
+      - {target: "automation", sut: "main-fa01483", run: "tp2fgp07", date: "2026-11-25"}
+      - {target: "automation", sut: "v1.8.0", run: "tp24ye15", date: "2026-11-25"}
 
   - id: cli.list-advisories
     area: cli
@@ -516,6 +542,10 @@ features:
     covered_by: [tests/web_ui/test_web_commands.py::test_list_advisories_with_web, tests/cli/test_commands_read.py::test_list_advisories_prints_the_csv, tests/cli/test_commands_read.py::test_list_advisories_keeps_brackets_of_summaries]
     known_bugs: [KB-050]
     notes: "draft advisory of a run repo: exact CSV header, full row (org, draft, low, NO_CVE, summary, html_url, dates, empty comment fields without -w) for default states and -s all, absent from -s published; -d blocks without header; listings == the oracle per state."
+    verified_on:
+      - {target: "org-level", sut: "v1.8.0", run: "tp2p707c", date: "2026-11-25"}
+      - {target: "automation", sut: "main-fa01483", run: "tp2fgp07", date: "2026-11-25"}
+      - {target: "automation", sut: "v1.8.0", run: "tp24ye15", date: "2026-11-25"}
 
   - id: cli.dispatch-workflow
     area: cli
@@ -531,6 +561,9 @@ features:
     covered_by: [tests/cli/test_commands_content.py::test_dispatch_workflow_starts_a_run, tests/cli/test_commands_content.py::test_failed_dispatch_exits_non_zero]
     known_bugs: [KB-045]
     notes: "dispatch on the default branch -> a workflow_dispatch run with head_branch main; unknown workflow 'failed to dispatch ...'; unknown repo exits non-zero."
+    verified_on:
+      - {target: "automation", sut: "main-fa01483", run: "tp2fgp07", date: "2026-11-25"}
+      - {target: "automation", sut: "v1.8.0", run: "tp24ye15", date: "2026-11-25"}
 
   - id: cli.delete-file
     area: cli
@@ -546,6 +579,9 @@ features:
     covered_by: [tests/cli/test_commands_content.py::test_delete_file_removes_a_configured_file, tests/cli/test_commands_content.py::test_delete_file_reports_a_missing_file, tests/cli/test_commands_content.py::test_delete_file_reports_a_refused_deletion, tests/offline/test_cli_delete_file.py::test_delete_file_warns_about_a_skipped_repository]
     known_bugs: [KB-043, KB-044]
     notes: "-m message and default message \"Deleting file '<p>' with otterdog.\" as head commit messages, file gone; missing file creates no commit; unconfigured repo untouched. Since #961 (97bce29, after v1.8.0, fixes KB-043 and KB-044): a missing file 'not found, nothing to delete', a refused deletion 'failed' + 'failure deleting file' and exit 1 (live), a repository missing from the configuration or archived a warning ('not found in the configuration, skipped', 'is archived, skipped') and exit 0 (O-DELETE-FILE-SKIP, offline). Not covered: a path naming a directory ('is not a file', exit 1) and a read of the file that fails (403, 5xx: error, no DELETE sent)."
+    verified_on:
+      - {target: "automation", sut: "main-fa01483", run: "tp2fgp07", date: "2026-11-25"}
+      - {target: "automation", sut: "v1.8.0", run: "tp24ye15", date: "2026-11-25"}
 
   - id: cli.sync-template
     area: cli
@@ -560,6 +596,9 @@ features:
     status: covered
     covered_by: [tests/cli/test_commands_content.py::test_sync_template_recopies_the_template]
     notes: "Python test instead of the suggested YAML cli.repo.template: template change -> 'updated file' for README.md (re-rendered {{org}}/{{repo}}), TEMPLATE.txt (verbatim), NEW.txt; second run updates nothing; a repo without template_repository is skipped."
+    verified_on:
+      - {target: "automation", sut: "main-fa01483", run: "tp2fgp07", date: "2026-11-25"}
+      - {target: "automation", sut: "v1.8.0", run: "tp24ye15", date: "2026-11-25"}
 
   - id: cli.list-blueprints
     area: cli
@@ -575,6 +614,8 @@ features:
     covered_by: [tests/cli/test_commands_blueprints.py::test_blueprint_commands_need_a_base_url, tests/webapp/test_cli_blueprints.py::test_list_and_approve_blueprints]
     known_bugs: [KB-042]
     notes: "W-CLI-BLUEPRINTS (tests/webapp): with a required_file remediation PR and the SUT CLI installed with the app group (install_cli with_app=True, host runtime only) and base_url = the webapp, the 'Projects' table is exactly [<id>, <org>, <repo>, <PR url>]; without defaults.base_url: exit 2 and \"no base_url set which is required when using operation 'list-blueprints'\". A CLI-only install crashes with ModuleNotFoundError (KB-042, cli.kb.blueprint-commands-without-webapp)."
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: cli.approve-blueprints
     area: cli
@@ -590,6 +631,8 @@ features:
     covered_by: [tests/cli/test_commands_blueprints.py::test_blueprint_commands_need_a_base_url, tests/webapp/test_cli_blueprints.py::test_list_and_approve_blueprints]
     known_bugs: [KB-042]
     notes: "W-CLI-BLUEPRINTS (tests/webapp): approve-blueprints -b <id> prints 'Merging PR #<n>: merged.', the PR is merged on GitHub, UpdateBlueprintStatusTask and DeleteBranchTask finish, the remediation branch is gone and the status goes recheck/success. A CLI-only install crashes with ModuleNotFoundError (KB-042)."
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: cli.import
     area: cli
@@ -604,6 +647,9 @@ features:
     status: covered
     covered_by: [tests/cli/test_import.py::test_import_writes_config, tests/cli/test_import.py::test_import_validates, tests/cli/test_import.py::test_import_plans_no_change]
     known_bugs: [KB-024]
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   - id: cli.import.overwrite-backup-secrets
     area: cli
@@ -618,6 +664,9 @@ features:
     covered_by: [tests/cli/test_commands_import.py::test_reimport_backs_up_copies_secrets_and_masks_urls, tests/cli/test_commands_import.py::test_import_without_force_asks_before_overwriting, tests/cli/test_commands_import.py::test_reimport_keeps_the_secret_of_a_masked_webhook]
     known_bugs: [KB-048]
     notes: "Second import: <file>.bak == previous file, 'Copying secrets ...', 'Masking webhooks ... 1 URLs have been masked.', repo secret and unmasked hook keep the literal value, live URL replaced by the masked one; without -f 'n' -> 'Operation cancelled.' exit 1, file and backup unchanged."
+    verified_on:
+      - {target: "automation", sut: "main-fa01483", run: "tp2fgp07", date: "2026-11-25"}
+      - {target: "automation", sut: "v1.8.0", run: "tp24ye15", date: "2026-11-25"}
 
   - id: cli.import.web-ui
     area: cli
@@ -631,6 +680,10 @@ features:
     status: covered
     covered_by: [tests/web_ui/test_web_settings.py::test_import_reads_web_settings, tests/cli/test_commands_import.py::test_import_without_web_ui_warns_and_skips_web_settings]
     notes: "import -n: the warning, no web-only key written (template defaults), secrets read as ********; web import: no warning (assertion added inside the existing login)."
+    verified_on:
+      - {target: "org-level", sut: "v1.8.0", run: "tp2p707c", date: "2026-11-25"}
+      - {target: "automation", sut: "main-fa01483", run: "tp2fgp07", date: "2026-11-25"}
+      - {target: "automation", sut: "v1.8.0", run: "tp24ye15", date: "2026-11-25"}
 
   - id: cli.import.workflow-keys
     area: cli
@@ -644,6 +697,9 @@ features:
     status: covered
     covered_by: [tests/cli/test_import.py::test_import_reads_only_the_workflow_settings_of_the_template]
     notes: "request statistics of import -f -n: the standard template reads the org and repository cache sizes; a local copy of it (#917) with max_cache_size_gb null at both levels reads neither and writes no max_cache_size_gb, repository Actions settings still read. Skipped on SUTs before 1.8.0."
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   - id: cli.fetch-config
     area: cli
@@ -659,6 +715,9 @@ features:
     covered_by: [tests/cli/test_config_repo_cli.py::test_push_fetch_round_trip, tests/cli/test_commands_config_repo.py::test_fetch_config_from_a_pull_request_and_a_ref, tests/cli/test_commands_config_repo.py::test_fetch_config_asks_before_overwriting, tests/cli/test_commands_config_repo.py::test_fetch_config_names_the_ref, tests/cli/test_commands_config_repo.py::test_config_repo_commands_report_a_missing_repository]
     known_bugs: [KB-049]
     notes: "-p head, -r branch, -s suffix files, overwrite prompt n/y, unknown PR and missing config repo 'failed to fetch definition from repo' exit 1."
+    verified_on:
+      - {target: "automation", sut: "main-fa01483", run: "tp2fgp07", date: "2026-11-25"}
+      - {target: "automation", sut: "v1.8.0", run: "tp24ye15", date: "2026-11-25"}
 
   - id: cli.push-config
     area: cli
@@ -674,6 +733,9 @@ features:
     covered_by: [tests/cli/test_config_repo_cli.py::test_push_fetch_round_trip, tests/cli/test_commands_config_repo.py::test_push_config_shows_the_diff_and_asks, tests/cli/test_commands_config_repo.py::test_push_config_without_diff_uses_the_default_message, tests/cli/test_commands_config_repo.py::test_push_config_refuses_an_invalid_configuration, tests/cli/test_commands_config_repo.py::test_push_config_of_an_invalid_configuration_fails, tests/cli/test_commands_config_repo.py::test_push_config_to_a_repository_without_definition, tests/cli/test_commands_config_repo.py::test_config_repo_commands_report_a_missing_repository]
     known_bugs: [KB-046]
     notes: "diff + prompt n ('push cancelled.', no commit) / y (pushed, -m commit message), identical file pushes nothing, -n pushes without diff/prompt with the default message, invalid config not pushed, 'No configuration yet available.' for a repo without definition, missing repo exit 1."
+    verified_on:
+      - {target: "automation", sut: "main-fa01483", run: "tp2fgp07", date: "2026-11-25"}
+      - {target: "automation", sut: "v1.8.0", run: "tp24ye15", date: "2026-11-25"}
 
   - id: cli.open-pr
     area: cli
@@ -688,6 +750,9 @@ features:
     status: covered
     covered_by: [tests/cli/test_config_repo_cli.py::test_open_pr, tests/cli/test_commands_config_repo.py::test_open_pr_opens_nothing_when_it_must_not, tests/cli/test_commands_config_repo.py::test_open_pr_title_and_body, tests/cli/test_commands_config_repo.py::test_config_repo_commands_report_a_missing_repository]
     notes: "identical (exit 0), validation error (exit 1), unknown author (exit 2), 'n' (exit 1) open nothing and leave no otterdog/<branch>; opened PR: title, fixed body naming the author, head, printed URL; missing repo exit 1."
+    verified_on:
+      - {target: "automation", sut: "main-fa01483", run: "tp2fgp07", date: "2026-11-25"}
+      - {target: "automation", sut: "v1.8.0", run: "tp24ye15", date: "2026-11-25"}
 
   - id: cli.plan
     area: cli
@@ -701,6 +766,11 @@ features:
     priority: P0
     status: covered
     covered_by: [cli.repo.lifecycle, cli.team, cli.bpr.public, cli.ruleset.public, cli.environment, cli.plan-mismatch]
+    verified_on:
+      - {target: "automation", sut: "main-fa01483", run: "tp2fgp07", date: "2026-11-25"}
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "enterprise", sut: "main-fa01483", run: "tp28q9d7", date: "2026-11-25"}
+      - {target: "automation", sut: "v1.8.0", run: "tp24ye15", date: "2026-11-25"}
 
   - id: cli.plan.no-web-ui
     area: cli
@@ -714,6 +784,10 @@ features:
     status: covered
     covered_by: [tests/cli/test_baseline.py::test_baseline_in_sync_after_reset, cli.repo.lifecycle]
     notes: "every live command of the harness passes -n; the baseline renders the template defaults of the web keys and still converges, which proves they are ignored"
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "org-level", sut: "v1.8.0", run: "tp23ue25", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   - id: cli.no-web-ui-default
     area: cli
@@ -750,6 +824,10 @@ features:
     status: covered
     covered_by: [tests/web_ui/test_web_settings.py::test_web_settings_round_trip, tests/cli/test_commands_errors.py::test_web_commands_need_the_web_credentials]
     notes: "plan/apply/check-status/import/show-live/local-apply without -n and with unset web-login variables: 'invalid credentials' + \"environment variable 'E2E_OTTERDOG_NO_WEB_USERNAME' for key 'username' not found\", exit 1, before any web access (no login possible)."
+    verified_on:
+      - {target: "org-level", sut: "v1.8.0", run: "tp2p707c", date: "2026-11-25"}
+      - {target: "automation", sut: "main-fa01483", run: "tp2fgp07", date: "2026-11-25"}
+      - {target: "automation", sut: "v1.8.0", run: "tp24ye15", date: "2026-11-25"}
 
   - id: cli.plan.repo-filter
     area: cli
@@ -764,6 +842,9 @@ features:
     covered_by: [cli.repo.lifecycle, cli.team, O-LPLAN-FILTER]
     known_bugs: [KB-077]
     notes: "O-LPLAN-FILTER (offline): -r '<p>-a' plans the matching repository and the organization variable and leaves the other repository and its branch protection rule out (0/2/0); a pattern '<p>-*' plans both (0/4/0); an added repository outside the filter is not planned, one matching it is. A repository that exists only in the other configuration is planned for removal whatever the filter (KB-077, step-level). Every live scenario plans with -r e2e-<run>-* (cli.repo.lifecycle, cli.team)."
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   - id: cli.plan.update-secrets
     area: cli
@@ -778,6 +859,10 @@ features:
     covered_by: [cli.secrets, O-LPLAN-FORCED-SECRETS, cli.org.secret, cli.environment.secrets]
     known_bugs: [KB-056]
     notes: "offline (O-LPLAN-FORCED-SECRETS): forced '!' updates of organization, repository and environment secrets (every key 'v -> v', 0/10/0) and --update-filter selecting one secret (0/2/0). Live: cli.secrets and cli.environment.secrets apply with --update-secrets, cli.org.secret applies with --update-secrets and --update-filter and asserts '! org_secret[name=<P>_ORG_SECRET]' while the other secret is not forced. local-plan also forces dummy secrets that every apply skips (KB-056)."
+    verified_on:
+      - {target: "automation", sut: "main-fa01483", run: "tp2fgp07", date: "2026-11-25"}
+      - {target: "automation", sut: "v1.8.0", run: "tp24ye15", date: "2026-11-25"}
+      - {target: "org-level", sut: "v1.8.0", run: "tp23ue25", date: "2026-11-25"}
 
   - id: cli.plan.update-webhooks
     area: cli
@@ -792,6 +877,11 @@ features:
     covered_by: [O-LPLAN-FORCED-WEBHOOKS, cli.repo.webhook-secret, tests/webhooks/test_managed_org_hook.py::test_org_webhook_secret]
     known_bugs: [KB-056]
     notes: "offline (O-LPLAN-FORCED-WEBHOOKS): forced '!' updates of org and repo hooks with a secret, never of a hook without secret (0/14/0), --update-filter on urls (0/7/0). Live: cli.repo.webhook-secret applies with --update-webhooks and an url filter (only the secured hook is forced) and H-ORG-HOOK-SECRET forces an organization hook. local-plan also forces hooks with a dummy secret that every apply skips (KB-056)."
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
+      - {target: "automation", sut: "main-fa01483", run: "tp2fgp07", date: "2026-11-25"}
+      - {target: "automation", sut: "v1.8.0", run: "tp24ye15", date: "2026-11-25"}
+      - {target: "webapp", sut: "v1.8.0", run: "tp239l54", date: "2026-11-25"}
 
   - id: cli.plan.only-secrets
     area: cli
@@ -818,6 +908,9 @@ features:
     status: covered
     covered_by: [cli.plan-mismatch, O-LPLAN-READ-ONLY-KEYS]
     notes: "verified offline too (local-plan of plan free -> team and template_repository 'o/a' -> 'o/b': the Note, 'Plan: 0 to add, 0 to change, 0 to delete.'). plan (base_config on team), two_factor_requirement, template_repository notes not counted; mixed with writable keys (0/2/0)."
+    verified_on:
+      - {target: "automation", sut: "main-fa01483", run: "tp2fgp07", date: "2026-11-25"}
+      - {target: "automation", sut: "v1.8.0", run: "tp24ye15", date: "2026-11-25"}
 
   - id: cli.plan.webhook-secret-removal
     area: cli
@@ -843,6 +936,11 @@ features:
     priority: P0
     status: covered
     covered_by: [O-VAL-RULESET-STRICT, regression.code-scanning-new-repo, regression.repo-ruleset-without-strict]
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "enterprise", sut: "main-fa01483", run: "tp28q9d7", date: "2026-11-25"}
+      - {target: "enterprise", sut: "v1.8.0", run: "tp20305a", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   - id: cli.plan.errors
     area: cli
@@ -871,6 +969,10 @@ features:
     covered_by: [tests/cli/test_baseline.py::test_baseline_in_sync_after_reset, tests/cli/test_commands_check_status.py::test_check_status_reports_validity_and_sync, tests/cli/test_commands_check_status.py::test_check_status_of_an_invalid_configuration, tests/cli/test_commands_check_status.py::test_check_status_fails_for_an_invalid_configuration, tests/offline/test_cli_json_output.py::test_check_status_json_dash_writes_the_json_to_stdout]
     known_bugs: [KB-011]
     notes: "warning-only config: is_valid false (warnings 1), in_sync false, counts 0; -r counts per filtered repo (== plan change count); additions/deletions; read-only plan mismatch in_sync false with 0 counts; invalid config: no comparison. Since #963 (02e0e72, after v1.8.0) '--json -' writes the status list to stdout, '[]' when no organization was checked, with the messages on stderr (O-JSON-STDOUT, offline with refused credentials); before, nothing was written for an empty list and a file named '-' otherwise."
+    verified_on:
+      - {target: "automation", sut: "main-fa01483", run: "tp2fgp07", date: "2026-11-25"}
+      - {target: "automation", sut: "v1.8.0", run: "tp24ye15", date: "2026-11-25"}
+      - {target: "org-level", sut: "v1.8.0", run: "tp23ue25", date: "2026-11-25"}
 
   - id: cli.local-plan
     area: cli
@@ -923,6 +1025,11 @@ features:
     priority: P0
     status: covered
     covered_by: [cli.repo.lifecycle, cli.team, cli.secrets, cli.bpr.public, cli.ruleset.public, cli.environment]
+    verified_on:
+      - {target: "automation", sut: "main-fa01483", run: "tp2fgp07", date: "2026-11-25"}
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "enterprise", sut: "main-fa01483", run: "tp28q9d7", date: "2026-11-25"}
+      - {target: "automation", sut: "v1.8.0", run: "tp24ye15", date: "2026-11-25"}
 
   - id: cli.apply.delete-resources
     area: cli
@@ -935,6 +1042,11 @@ features:
     priority: P0
     status: covered
     covered_by: [cli.repo.lifecycle, cli.team, cli.bpr.public, cli.ruleset.public, cli.repo.webhook]
+    verified_on:
+      - {target: "automation", sut: "main-fa01483", run: "tp2fgp07", date: "2026-11-25"}
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "enterprise", sut: "main-fa01483", run: "tp28q9d7", date: "2026-11-25"}
+      - {target: "automation", sut: "v1.8.0", run: "tp24ye15", date: "2026-11-25"}
 
   - id: cli.apply.delete-filter
     area: cli
@@ -948,6 +1060,8 @@ features:
     status: covered
     covered_by: [cli.apply.delete-filter, tests/offline/test_cli_local_apply.py::test_a_delete_filter_applies_only_the_selected_deletions, tests/offline/test_cli_local_apply.py::test_a_delete_filter_selecting_nothing_changes_nothing, tests/offline/test_cli_local_apply.py::test_delete_filter_usage_errors, tests/offline/test_cli_local_apply.py::test_deletions_in_a_renamed_repository]
     notes: "offline (local-apply): selectors by key, by repeated types, by a value pattern, by the parent's type and by a type pattern show only the selected removals and 'N other change(s) are skipped, ...' before the prompt; selectors matching nothing warn ('no resource to delete matches the delete filter ...') and end with 'No changes required.'; without -d or with a malformed selector: usage error, exit 2; a renamed repository's variable is deleted under its old name (the rename is skipped). Live (cli.apply.delete-filter, fixed_in 1.9.0): only the DELETE of the selected object is sent, never the repository PATCH of the skipped change nor another DELETE, a renamed repository's variable is deleted under its current name. Not covered: team_sync and org_code_security_configuration selectors (identity provider, code security reads), organization-level deletions live (org_level)."
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
 
   - id: cli.apply.deletion-hints
     area: cli
@@ -974,6 +1088,9 @@ features:
     status: covered
     covered_by: [tests/offline/test_cli_local_apply.py::test_declined_approval_cancels_the_apply, tests/offline/test_cli_local_apply.py::test_end_of_input_at_the_prompt_exits_2, tests/cli/test_commands_local_apply.py::test_local_apply_applies_the_local_diff]
     notes: "offline (local-apply): 'n', 'no' and 'YES' cancel ('Apply cancelled.', exit 0, nothing executed), end of input fails with 'EOF when reading a line' (exit 2); live: local-apply answering 'n' creates nothing (cli.local-apply)."
+    verified_on:
+      - {target: "automation", sut: "main-fa01483", run: "tp2fgp07", date: "2026-11-25"}
+      - {target: "automation", sut: "v1.8.0", run: "tp24ye15", date: "2026-11-25"}
 
   - id: cli.apply.validation-errors
     area: cli
@@ -996,6 +1113,9 @@ features:
         - "covered once release:latest contains #923 (otterdog 1.8.0): then the default SUT runs them strictly"
       needs:
         - "the otterdog 1.8.0 release"
+    verified_on:
+      - {target: "automation", sut: "main-fa01483", run: "tp2fgp07", date: "2026-11-25"}
+      - {target: "automation", sut: "v1.8.0", run: "tp24ye15", date: "2026-11-25"}
 
   - id: cli.apply.failed-patches
     area: cli
@@ -1009,6 +1129,9 @@ features:
     status: covered
     covered_by: [tests/cli/test_commands_errors.py::test_failed_patches_set_the_exit_code]
     notes: "Python test (id cli.cmd.apply-failed-patches) instead of the suggested YAML: team_permissions of a missing team make PUT .../teams/<t>/repos 404 after the repo is created (the outline's unknown bypass team is only skipped with a warning by otterdog, get_actor_ids_with_type): exactly 2 'failed to apply patch: ADD - repository[...]', a non-zero exit (otterdog exits with the count, 2; the test does not pin it: KB-034 calls count-as-exit-status a bug), no team access on the failing repos, the other repo applied, plan still pending."
+    verified_on:
+      - {target: "automation", sut: "main-fa01483", run: "tp2fgp07", date: "2026-11-25"}
+      - {target: "automation", sut: "v1.8.0", run: "tp24ye15", date: "2026-11-25"}
 
   - id: cli.local-apply
     area: cli
@@ -1024,6 +1147,10 @@ features:
     covered_by: [tests/webapp/test_merge_apply.py::test_merge_applies_config, tests/cli/test_commands_local_apply.py::test_local_apply_applies_the_local_diff]
     known_bugs: [KB-077]
     notes: "prompt 'n' -> 'Apply cancelled.' nothing created; -f '1 added'; live drift ignored ('No changes required.'); removal only with -d ('1 resource(s) would be deleted ...' then '1 deleted'), guarded by guard_config_change."
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
+      - {target: "automation", sut: "main-fa01483", run: "tp2fgp07", date: "2026-11-25"}
+      - {target: "automation", sut: "v1.8.0", run: "tp24ye15", date: "2026-11-25"}
 
   - id: cli.web-login
     area: cli
@@ -1103,6 +1230,8 @@ features:
       steps: ["request a new permission for a helper App, run review-permissions -a <slug>, then with -g -f"]
       assertions: ["\"app['<slug>'] {\" with the requested permission; -g prints 'requested permissions approved.'"]
       needs: [web_ui tier, "available: the probe App of `web_ui.probe_app_slug` (docs/web-ui-testing.md)"]
+    verified_on:
+      - {target: "org-level", sut: "v1.8.0", run: "tp2p707c", date: "2026-11-25"}
 
   - id: cli.install-deps
     area: cli
@@ -1118,6 +1247,8 @@ features:
     covered_by: [tests/web_ui/test_web_commands.py::test_install_deps_keeps_the_installed_firefox, tests/web_ui/test_web_commands.py::test_install_deps_reports_a_failed_download, tests/web_ui/test_web_commands.py::test_failed_install_deps_exits_non_zero]
     known_bugs: [KB-047]
     notes: "0 logins: offline sandbox with PLAYWRIGHT_BROWSERS_PATH=tier dir (success, nothing downloaded) / empty dir (failure message, nothing installed)."
+    verified_on:
+      - {target: "org-level", sut: "v1.8.0", run: "tp2p707c", date: "2026-11-25"}
 
   # ==================================================================================================================
   # config: otterdog.json, base template, hooks and credentials (otterdog/config.py, otterdog/jsonnet.py, credentials)
@@ -1135,6 +1266,9 @@ features:
     priority: P0
     status: covered
     covered_by: [O-VAL-OK, cli.repo.lifecycle]
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   - id: config.discovery
     area: config
@@ -1235,6 +1369,9 @@ features:
     status: covered
     covered_by: [O-VAL-OK, cli.repo.lifecycle]
     notes: "the harness renders exactly this layout (offline: vendor/template/otterdog-defaults.libsonnet; live: the upstream template path)"
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   - id: config.exclude-teams
     area: config
@@ -1248,6 +1385,8 @@ features:
     status: covered
     covered_by: [tests/cli/test_org_config.py::test_excluded_teams_are_neither_loaded_nor_configurable]
     notes: "exclude_teams from .otterdog-defaults.json of a test workspace: an out-of-band run team is not planned for removal (control plan without the pattern removes it), not imported, and declaring a matching team is a validation error with the exact message."
+    verified_on:
+      - {target: "org-level", sut: "v1.8.0", run: "tp23ue25", date: "2026-11-25"}
 
   - id: config.template-url
     area: config
@@ -1304,6 +1443,10 @@ features:
       - tests/offline/test_config_template_cache.py::test_a_tag_or_commit_ref_is_never_refreshed_nor_reported
       - tests/offline/test_config_template_cache.py::test_a_process_waits_for_the_lock_of_the_cached_clone
     notes: "live commands clone the template pinned to a commit sha (sut/template.py). Offline, O-TEMPLATE-CACHE seeds the cached clone with a bare repository of the workspace as its origin: validate (without --local) pulls a branch ref before the copy to vendor/<repo> (without .git), never refreshes a tag (even one moved in the origin) or a commit sha. Since 1.8.0 a branch ref logs once per process (#921, two organizations: one warning) 'base template '<url>' references the branch '<ref>': every push to it changes the default configuration and the python scripts that otterdog executes from it, reference a tag or a commit SHA instead', and the clone or pull holds an exclusive flock on <template dir>.lock (#927: v1.8.0 validated after 10.4 s while the test held the lock for 10 s, 2.2 s otherwise). The subdirectory copy rule is config.hook.subdirectory-template."
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "org-level", sut: "v1.8.0", run: "tp23ue25", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   - id: config.template-feature-gating
     area: config
@@ -1325,6 +1468,8 @@ features:
         - "plan -n with that template"
       assertions: ["no env_secret object and no team_permissions diff appear (the types are unmanaged)"]
       needs: [target, "TemplatePublisher with a modified template"]
+    verified_on:
+      - {target: "org-level", sut: "v1.8.0", run: "tp23ue25", date: "2026-11-25"}
 
   - id: config.hook.validate-org-settings
     area: config
@@ -1418,6 +1563,9 @@ features:
     status: covered
     covered_by: [O-VAL-OK, tests/cli/test_smoke.py::test_check_token_permissions, tests/offline/test_config_credentials.py::test_env_defaults_templates_resolve_placeholders, tests/offline/test_config_credentials.py::test_env_organization_keys_are_literal, tests/offline/test_config_credentials.py::test_env_resolves_the_four_keys_without_no_web_ui]
     notes: "defaults.env templates ({github_id}, {org_name} with ' '/'-' -> '_'), org-level literal names win, braces refused, unset variable named; local-apply without -n resolves all four keys"
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   - id: config.credentials.other-providers
     area: config
@@ -1454,6 +1602,8 @@ features:
     priority: P2
     status: covered
     covered_by: [tests/webapp/test_boot.py::test_webapp_boot, tests/webapp/test_pr_validation.py::test_valid_config_pr]
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: config.secret-references
     area: config
@@ -1479,6 +1629,10 @@ features:
       needs:
         - "offline"
         - "available: OtterdogCli.invoke(..., env={'PATH': '<stub dir>:<system PATH>'})"
+    verified_on:
+      - {target: "automation", sut: "main-fa01483", run: "tp2fgp07", date: "2026-11-25"}
+      - {target: "automation", sut: "v1.8.0", run: "tp24ye15", date: "2026-11-25"}
+      - {target: "org-level", sut: "v1.8.0", run: "tp23ue25", date: "2026-11-25"}
 
   - id: config.secret-access-policy
     area: config
@@ -1517,6 +1671,8 @@ features:
     status: covered
     covered_by: [tests/cli/test_org_config.py::test_http_cache_does_not_hide_out_of_band_changes]
     notes: "warm shared cache (cache dir non-empty), out-of-band description change, the next plans (within GitHub's max-age of 60 s) show the change."
+    verified_on:
+      - {target: "org-level", sut: "v1.8.0", run: "tp23ue25", date: "2026-11-25"}
 
   # ==================================================================================================================
   # validation: validation rules (models/*.validate, github_organization.validate, JSON schema). All messages quoted
@@ -1686,6 +1842,9 @@ features:
     covered_by: [enterprise.kb.org-ruleset-repo-patterns, O-VAL-ORG-RULESET-STRICT, enterprise.org-ruleset.missing-strict, O-VAL-ORG-RULESETS]
     known_bugs: [KB-008, KB-023, KB-081]
     notes: "verified offline with variables.plan enterprise: 'nomatch-*' -> \"org_ruleset[name=\"ors\"] has an 'include_repo_names' pattern 'nomatch-*' that does not match any existing repository\"; protect without names -> \"... has 'protect_repo_names' set to 'True' but 'include_repo_names' and 'exclude_repo_names' are empty.\"; required_pull_request count 11 or requires_deployments crash with AttributeError (get_model_header / environments), exit 2. include/exclude no-match and protect warnings, target/enforcement/ref-pattern errors with the org_ruleset header, valid control planned; KB-023 (second pattern), KB-008 (review count 11, fixed by #891 in 1.8.0) and KB-081 (deployment rule: AttributeError 'environments', still on main d9dac78) as step-level expected failures."
+    verified_on:
+      - {target: "enterprise", sut: "main-fa01483", run: "tp28q9d7", date: "2026-11-25"}
+      - {target: "enterprise", sut: "v1.8.0", run: "tp20305a", date: "2026-11-25"}
 
   - id: validation.teams
     area: validation
@@ -1701,6 +1860,10 @@ features:
     known_bugs: [KB-037]
     findings: [F-10]
     notes: "validation lists the org members as soon as teams exist: no offline run (verified: 'Cannot connect to host api.github.com' exit 2). privacy 'closed' refused (stable prefix; the correct value list is the KB-037 step of cli.kb.team-privacy-message), skip_members with members, skip_non_organization_members with the outsider identity, exclusion pattern message."
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "org-level", sut: "v1.8.0", run: "tp23ue25", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   - id: validation.webhooks
     area: validation
@@ -1729,6 +1892,9 @@ features:
     covered_by: [cli.secrets, O-VAL-OK, O-VAL-SECRETS]
     known_bugs: [KB-025, KB-026]
     notes: "verified offline: \"repo_secret[name=\"GITHUB_R\"] starts with prefix 'GITHUB_' which is not allowed for secrets.\"; \"env_secret[name=\"E2E_ES\"] has a value 'lit' that does not use a credential provider.\"; 'pass:a:b' -> 'too many values to unpack (expected 2)' exit 2; lowercase secret names are accepted (GitHub upper-cases them). GITHUB_ prefix (org/repo/env), provider warnings (plain, foo:), pass: silent, dummy infos (-v, 3 levels), lowercase accepted; KB-025 and KB-026 step-level."
+    verified_on:
+      - {target: "automation", sut: "main-fa01483", run: "tp2fgp07", date: "2026-11-25"}
+      - {target: "automation", sut: "v1.8.0", run: "tp24ye15", date: "2026-11-25"}
 
   - id: validation.org-secrets
     area: validation
@@ -1768,6 +1934,9 @@ features:
     status: covered
     covered_by: [tests/cli/test_known_bugs.py::test_apply_fails_on_validation_errors, O-VAL-REPO]
     notes: "351 chars, 21 topics, invalid topics; limits control (350 chars, 20 topics)."
+    verified_on:
+      - {target: "automation", sut: "main-fa01483", run: "tp2fgp07", date: "2026-11-25"}
+      - {target: "automation", sut: "v1.8.0", run: "tp24ye15", date: "2026-11-25"}
 
   - id: validation.repo.forking
     area: validation
@@ -1878,6 +2047,10 @@ features:
     known_bugs: [KB-034, KB-038]
     findings: [F-11]
     notes: "offline (O-VAL-REPO): the query suite enum ('full' refused) and the language enum ('cobol' refused, stable prefix only: set order, KB-038; every supported language validates), with the default setup disabled so that no language detection reads GitHub. Live (cli.validate.code-scanning-languages): once GitHub detected Python, 'go' is refused naming 'Detected languages: Python', python and actions validate, 'cobol' is refused by the enum (stable prefix only: set order, KB-038) and by the detection (2 errors, exit 2: KB-034); new repositories in regression.code-scanning-new-repo."
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "org-level", sut: "v1.8.0", run: "tp23ue25", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   - id: validation.repo.archived-bpr
     area: validation
@@ -1962,6 +2135,9 @@ features:
     known_bugs: [KB-031, KB-055]
     findings: [F-04]
     notes: "review count 11/-1, merge queue FAST/-1/-5, valid limits planned; messages asserted after the header (they name the repository twice: KB-055); KB-031 step-level for missing PR and merge-queue keys."
+    verified_on:
+      - {target: "enterprise", sut: "main-fa01483", run: "tp28q9d7", date: "2026-11-25"}
+      - {target: "enterprise", sut: "v1.8.0", run: "tp20305a", date: "2026-11-25"}
 
   - id: validation.environments
     area: validation
@@ -2037,6 +2213,11 @@ features:
     status: covered
     covered_by: [O-LPLAN-ADD, cli.repo.lifecycle, cli.bpr.public, cli.repo.webhook, O-LPLAN-RESOURCE-TYPES]
     notes: "adds org roles, org rulesets, env secrets/variables."
+    verified_on:
+      - {target: "automation", sut: "main-fa01483", run: "tp2fgp07", date: "2026-11-25"}
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "automation", sut: "v1.8.0", run: "tp24ye15", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   - id: plan-semantics.change-block
     area: plan-semantics
@@ -2051,6 +2232,9 @@ features:
     covered_by: [O-LPLAN-CHANGE, cli.repo.lifecycle, cli.team, O-LPLAN-RESOURCE-TYPES]
     known_bugs: [KB-063]
     notes: "changes settings, Actions, custom property, role, org ruleset, org secret, org webhook, repo ruleset, env secret/variable (counts per changed key)."
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   - id: plan-semantics.remove-block
     area: plan-semantics
@@ -2064,6 +2248,9 @@ features:
     status: covered
     covered_by: [O-LPLAN-REMOVE, cli.repo.lifecycle, cli.bpr.public, O-LPLAN-RESOURCE-TYPES]
     notes: "verified offline: removing a repository's only environment (with an env variable) prints one '- remove environment[name=\"e\", repository=r1]' block, 'Plan: 0 to add, 0 to change, 1 to delete.'. removes custom property, role, org ruleset, org secret, repo secret, repo ruleset, BPR, env secret/variable; a removed environment is ONE block."
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   - id: plan-semantics.converge
     area: plan-semantics
@@ -2078,6 +2265,11 @@ features:
     covered_by: [cli.repo.lifecycle, cli.team, cli.bpr.public, cli.ruleset.public, cli.environment, cli.custom-property, cli.repo.webhook, cli.secrets, tests/cli/test_import.py::test_import_plans_no_change]
     known_bugs: [KB-003, KB-020, KB-021]
     notes: "the scenario engine re-plans after every applied step (converge loop); KB-003/KB-020/KB-021 are the known non-converging cases (xfail scenarios)"
+    verified_on:
+      - {target: "automation", sut: "main-fa01483", run: "tp2fgp07", date: "2026-11-25"}
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "enterprise", sut: "main-fa01483", run: "tp28q9d7", date: "2026-11-25"}
+      - {target: "automation", sut: "v1.8.0", run: "tp24ye15", date: "2026-11-25"}
 
   - id: plan-semantics.rename-aliases
     area: plan-semantics
@@ -2092,6 +2284,9 @@ features:
     covered_by: [regression.rename-and-modify, O-LPLAN-RENAME]
     known_bugs: [KB-004]
     notes: "verified offline: base newRepo('old') {description: 'a'}, config newRepo('new') {aliases: ['old'], description: 'b'} -> '~ repository[name=\"new\"]' with '~ description = \"a\" -> \"b\"' and '~ name = \"old\" -> \"new\"', 'Plan: 0 to add, 2 to change, 0 to delete.'; without the alias: '- remove repository[name=\"old\"]' + '+ add repository[name=\"new\"]' (1 to add, 1 to delete). alias with changes (name line + nested object under the new name, 0/3/0), alias only (0/1/0), no alias (1/0/1), dangling alias (plain add), webhook alias association; KB-004 step-level (url change expected)."
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   - id: plan-semantics.dict-one-way
     area: plan-semantics
@@ -2106,6 +2301,9 @@ features:
     covered_by: [cli.kb.team-permissions-removal, O-LPLAN-DICT-ONE-WAY]
     known_bugs: [KB-005]
     notes: "KB-005 fixed by #842 (1.7.0): the removal-only steps of O-LPLAN-DICT-ONE-WAY and cli.kb.team-permissions-removal are strict from that version on (release:latest included), expected failures before. Verified offline before the fix: team_permissions {a: 'push', b: 'pull'} -> {a: 'push'}: 'Plan: 0 to add, 0 to change, 0 to delete.'; -> {a: 'maintain'}: '~ team_permissions = {', '~ a = \"push\" -> \"maintain\"', '- b = \"pull\"', 1 to change; custom_properties {p1: 'x', p2: 'y'} -> {p1: 'x'}: no change. offline complete: removal-only (KB-005 step-level, team_permissions and custom_properties), removal with change, addition."
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   - id: plan-semantics.wildcard-keys
     area: plan-semantics
@@ -2144,6 +2342,8 @@ features:
     status: covered
     covered_by: [O-LPLAN-COERCE-SIGNOFF, cli.org.signoff]
     notes: "offline (O-LPLAN-COERCE-SIGNOFF): turning the org requirement off forces 'true -> true' / 'false -> false' on every non-archived repository (archived ones are not forced), a repository-only change is unmanaged while the org requires signoff, managed control. Live (cli.org.signoff, org_level): the org going false re-applies the run repository's own value ('false -> false') and GitHub reports org false / repo false; back to true the repository is unmanaged again and both steps converge. 2019 of 2578 Eclipse repositories set it to false."
+    verified_on:
+      - {target: "org-level", sut: "v1.8.0", run: "tp23ue25", date: "2026-11-25"}
 
   - id: plan-semantics.coerce.org-projects-pages
     area: plan-semantics
@@ -2200,6 +2400,9 @@ features:
     status: covered
     covered_by: [regression.private-repo-template-defaults, O-LPLAN-IGNORED-FIELDS]
     notes: "verified offline: a private repository changing secret_scanning 'enabled' -> 'disabled' and push protection: Plan 0/0/0. The private-repository regression converges with the template's security defaults, which only works because they are excluded. private security, pages disabled/workflow, code scanning suite, model-only creation fields (forked_repository, fork_default_branch_only, auto_init) with controls."
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   - id: plan-semantics.ignored-org-actions
     area: plan-semantics
@@ -2280,6 +2483,10 @@ features:
     covered_by: [cli.kb.org-variable-same-apply, cli.team, cli.kb.org-secret-same-apply, cli.org.security-managers]
     known_bugs: [KB-022]
     notes: "a team granted on a new repository works (teams before repositories, cli.team); an org variable/secret selecting a new repository fails (KB-022). org secret selecting a repo of the same apply (step-level known_bug KB-022, then a strict retry step), teams before settings (security manager team created and assigned in one apply), teams before repositories (cli.team). Roles/org rulesets ordering needs Enterprise."
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "org-level", sut: "v1.8.0", run: "tp23ue25", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   # ==================================================================================================================
   # org-settings: newOrg.settings (models/organization_settings.py); REST keys and web-UI keys (provider: web in
@@ -2325,6 +2532,9 @@ features:
     status: covered
     covered_by: [cli.plan-mismatch, O-VAL-PLAN-GATE, O-VAL-ORGSECRET-PRIVATE-FREE]
     known_bugs: [KB-009]
+    verified_on:
+      - {target: "automation", sut: "main-fa01483", run: "tp2fgp07", date: "2026-11-25"}
+      - {target: "automation", sut: "v1.8.0", run: "tp24ye15", date: "2026-11-25"}
 
   - id: org-settings.member-privileges
     area: org-settings
@@ -2379,6 +2589,8 @@ features:
     status: covered
     covered_by: [cli.org.signoff]
     notes: "org true (template) with a run repo declaring false (coerced, no change); org false re-applies the repo value ('false -> false' line) and GitHub reports org false/repo false; org back to true: no repo change, oracle org true and repo true (GitHub enforcement, unverified live); converge each step."
+    verified_on:
+      - {target: "org-level", sut: "v1.8.0", run: "tp23ue25", date: "2026-11-25"}
 
   - id: org-settings.code-security-defaults
     area: org-settings
@@ -2394,6 +2606,8 @@ features:
     status: covered
     covered_by: [tests/cli/test_org_code_security.py::test_default_code_security_configurations_are_disabled]
     notes: "org_level Python test: an e2e code security configuration made the default for new public repos (Mutator), the baseline plans 'false -> true', the apply leaves GET .../defaults empty (oracle), the plan converges; configuring false while no default exists plans nothing (disable only). Skips when a foreign default exists or the configurations API answers 403/404."
+    verified_on:
+      - {target: "org-level", sut: "v1.8.0", run: "tp23ue25", date: "2026-11-25"}
 
   - id: org-settings.security-managers
     area: org-settings
@@ -2409,6 +2623,8 @@ features:
     status: covered
     covered_by: [cli.org.security-managers]
     notes: "run team created and assigned the security_manager role in one apply (teams patched before settings), oracle security_managers contains it; back to the template's [] (the baseline): team kept, role removed (equals [] assumes the baseline has no security manager team)."
+    verified_on:
+      - {target: "org-level", sut: "v1.8.0", run: "tp23ue25", date: "2026-11-25"}
 
   - id: org-settings.web-ui.member-privileges
     area: org-settings
@@ -2424,6 +2640,8 @@ features:
     status: covered
     covered_by: [tests/web_ui/test_web_settings.py::test_web_settings_round_trip, tests/web_ui/test_web_settings.py::test_web_settings_table_matches_the_sut, tests/web_ui/test_web_settings.py::test_import_reads_web_settings]
     notes: "29 Eclipse orgs set members_can_change_project_visibility, 20 the three repository/teams privileges. readers_can_create_discussions is optional on the page (skipped silently when missing). members_can_change_project_visibility is not REST-readable: with the default reset SUT (the SUT itself) the round trip checks it with the code under test only (report self_checked, BAT-17); the other keys are verified through REST."
+    verified_on:
+      - {target: "org-level", sut: "v1.8.0", run: "tp2p707c", date: "2026-11-25"}
 
   - id: org-settings.web-ui.default-branch
     area: org-settings
@@ -2440,6 +2658,8 @@ features:
     covered_by: [tests/web_ui/test_web_settings.py::test_web_settings_round_trip, tests/web_ui/test_web_settings.py::test_round_trip_changes_the_default_branch_name]
     known_bugs: [KB-094]
     notes: "the round trip toggles it to e2e-<run>; KB-094: otterdog 1.8.0 reports the web change done while GitHub keeps main (REST default_repository_branch), so its differences go to the round trip's known_bug_failures and webui.kb.default-branch-name asserts them"
+    verified_on:
+      - {target: "org-level", sut: "v1.8.0", run: "tp2p707c", date: "2026-11-25"}
 
   - id: org-settings.web-ui.packages
     area: org-settings
@@ -2464,6 +2684,8 @@ features:
         - "an independent read of the organization settings pages (a Playwright DOM read of the checkbox and select states, harness-side) agrees with the toggled and the restored values"
       needs:
         - "a harness-side Playwright reader of the settings pages, or a reset SUT that differs from the SUT under test"
+    verified_on:
+      - {target: "org-level", sut: "v1.8.0", run: "tp2p707c", date: "2026-11-25"}
 
   - id: org-settings.web-ui.discussions
     area: org-settings
@@ -2487,6 +2709,8 @@ features:
         - "an independent read of the organization settings pages (a Playwright DOM read of the checkbox and select states, harness-side) agrees with the toggled and the restored values"
       needs:
         - "a harness-side Playwright reader of the settings pages, or a reset SUT that differs from the SUT under test"
+    verified_on:
+      - {target: "org-level", sut: "v1.8.0", run: "tp2p707c", date: "2026-11-25"}
 
   - id: org-settings.web-ui.two-factor
     area: org-settings
@@ -2503,6 +2727,8 @@ features:
     covered_by: [tests/web_ui/test_web_settings.py::test_web_settings_table_matches_the_sut, O-LPLAN-READ-ONLY-KEYS, tests/web_ui/test_web_settings.py::test_import_reads_the_two_factor_requirement]
     known_bugs: [KB-041]
     notes: "plan side offline: O-LPLAN-READ-ONLY-KEYS step two-factor-requirement prints the read-only Note and plans nothing. Import side in the existing web_ui login: the imported two_factor_requirement must equal REST two_factor_requirement_enabled (KB-041 test, skipped when the live value equals the template default); the web settings table is checked against the SUT. Never toggled (KB-041, the web UI never reads it)."
+    verified_on:
+      - {target: "org-level", sut: "v1.8.0", run: "tp2p707c", date: "2026-11-25"}
 
   - id: org-settings.web-ui.no-web-ui-skip
     area: org-settings
@@ -2515,6 +2741,8 @@ features:
     priority: P1
     status: covered
     covered_by: [tests/webapp/test_web_ui_flags.py::test_web_ui_setting_needs_a_manual_apply]
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   # ==================================================================================================================
   # org-workflows: newOrg.settings.workflows (models/organization_workflow_settings.py, workflow_settings.py,
@@ -2534,6 +2762,8 @@ features:
     status: covered
     covered_by: [cli.org.actions-enabled-repositories]
     notes: "selected with every configured repository except a run repo (overlay over $._repositories, so baseline repos keep Actions), oracle org_actions selected + selected repositories contain the run repo, validate -v Info for the left-out repo, plan not listing it; back to 'all' (selected list no longer diffed, oracle []); 'none' never applied by design."
+    verified_on:
+      - {target: "org-level", sut: "v1.8.0", run: "tp23ue25", date: "2026-11-25"}
 
   - id: org-workflows.allowed-actions
     area: org-workflows
@@ -2551,6 +2781,8 @@ features:
     known_bugs: [KB-029]
     findings: [F-02]
     notes: "selected with github-owned true, verified false, patterns ['actions/*'] (oracle org_actions + org_selected_actions), repo 'all' ignored (Info); back to 'all': selected-action keys not diffed, selected-actions 409 (absent); 'local_only' never applied (would block GitHub-owned actions org-wide). KB-029 (invalid value crash) stays an offline validation case."
+    verified_on:
+      - {target: "org-level", sut: "v1.8.0", run: "tp23ue25", date: "2026-11-25"}
 
   - id: org-workflows.default-permissions
     area: org-workflows
@@ -2566,6 +2798,8 @@ features:
     status: covered
     covered_by: [cli.org.workflow-permissions]
     notes: "org write + can_approve false (oracle org_workflow_permissions, repo_workflow_permissions write for a run repo), Infos for the coerced repo values; back to read: plan converges although the repo still declares write (no '\"read\" -> \"write\"' line), oracle read/true."
+    verified_on:
+      - {target: "org-level", sut: "v1.8.0", run: "tp23ue25", date: "2026-11-25"}
 
   - id: org-workflows.fork-pr-approval
     area: org-workflows
@@ -2583,6 +2817,8 @@ features:
     known_bugs: [KB-038]
     findings: [F-11]
     notes: "all_external_contributors then first_time_contributors (oracle org_fork_pr_approval, converge); invalid value refused at validation (stable prefix only, KB-038). The template has no org-level key, so the baseline never restores it: the scenario ends on GitHub's default first_time_contributors."
+    verified_on:
+      - {target: "org-level", sut: "v1.8.0", run: "tp23ue25", date: "2026-11-25"}
 
   - id: org-workflows.sha-pinning
     area: org-workflows
@@ -2679,6 +2915,9 @@ features:
     covered_by: [cli.custom-property, O-LPLAN-ADD]
     known_bugs: [KB-062]
     notes: "4 definitions in 2 Eclipse orgs. string properties never send allowed_values (#653, regression.653-string-property)"
+    verified_on:
+      - {target: "automation", sut: "main-fa01483", run: "tp2fgp07", date: "2026-11-25"}
+      - {target: "automation", sut: "v1.8.0", run: "tp24ye15", date: "2026-11-25"}
 
   - id: custom-properties.required-default
     area: custom-properties
@@ -2711,6 +2950,9 @@ features:
     status: covered
     covered_by: [cli.custom-property.flag]
     notes: "value_type true_false definition, repo value 'true' then 'false' (oracle custom_property + repo_custom_properties, converge)."
+    verified_on:
+      - {target: "automation", sut: "main-fa01483", run: "tp2fgp07", date: "2026-11-25"}
+      - {target: "automation", sut: "v1.8.0", run: "tp24ye15", date: "2026-11-25"}
 
   - id: custom-properties.value-type-immutable
     area: custom-properties
@@ -2738,6 +2980,9 @@ features:
     covered_by: [cli.custom-property.flag, cli.kb.custom-property-definition-with-value]
     known_bugs: [KB-087]
     notes: "a string property retired in two applies: its repo value first (step remove-value, PATCH .../properties/values with null, no DELETE), then its definition with -d (step remove-definition: '- remove custom_property[...]', counts delete 1, DELETE of the schema, no repository PATCH, oracle definition absent, the other property kept). Both in one apply fail on 1.8.0 (KB-087: the definition is deleted first, the repository PATCH then gets 422 'Unexpected property'), step remove-both of cli.kb.custom-property-definition-with-value."
+    verified_on:
+      - {target: "automation", sut: "main-fa01483", run: "tp2fgp07", date: "2026-11-25"}
+      - {target: "automation", sut: "v1.8.0", run: "tp24ye15", date: "2026-11-25"}
 
   - id: custom-properties.repository-values
     area: custom-properties
@@ -2754,6 +2999,9 @@ features:
     covered_by: [cli.custom-property, cli.kb.custom-property-underscore, cli.custom-property.flag]
     known_bugs: [KB-005, KB-016]
     notes: "a removal alone (KB-005 fixed in 1.7.0): step remove-value of cli.custom-property.flag drops one value of a repository, PATCH .../properties/values with null, oracle value gone."
+    verified_on:
+      - {target: "automation", sut: "main-fa01483", run: "tp2fgp07", date: "2026-11-25"}
+      - {target: "automation", sut: "v1.8.0", run: "tp24ye15", date: "2026-11-25"}
 
   # ==================================================================================================================
   # org-roles: newOrgRole (models/role.py, models/organization_role.py); validated against an 'enterprise' plan
@@ -2772,6 +3020,9 @@ features:
     status: covered
     covered_by: [enterprise.org-role]
     notes: "0 Eclipse orgs use roles; removal is the guarded cleanup (-d) of the scenario"
+    verified_on:
+      - {target: "enterprise", sut: "main-fa01483", run: "tp28q9d7", date: "2026-11-25"}
+      - {target: "enterprise", sut: "v1.8.0", run: "tp20305a", date: "2026-11-25"}
 
   - id: org-roles.unused-model-fields
     area: org-roles
@@ -2805,6 +3056,9 @@ features:
     status: covered
     covered_by: [cli.team, cli.kb.team-permissions-removal]
     notes: "81 teams in 18 Eclipse orgs"
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   - id: teams.privacy
     area: teams
@@ -2822,6 +3076,9 @@ features:
     known_bugs: [KB-037]
     findings: [F-10]
     notes: "visible -> secret -> visible ('~ team[...]', oracle privacy closed/secret/closed, converge)."
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   - id: teams.members
     area: teams
@@ -2837,6 +3094,9 @@ features:
     status: covered
     covered_by: [cli.team, cli.team.members, cli.validate.team-non-member]
     notes: "members [author] then [approver] (oracle team_members exact list, team_membership role member / absent), skip_members true with [] keeps the live member (plan noop); skip_non_organization_members validated live with the outsider identity. Needs identities author+approver (outsider for the validation)."
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   - id: teams.notifications
     area: teams
@@ -2852,6 +3112,9 @@ features:
     status: covered
     covered_by: [cli.team.settings]
     notes: "notifications false then true (oracle notification_setting notifications_disabled/enabled, converge)."
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   - id: teams.repository-permissions
     area: teams
@@ -2868,6 +3131,9 @@ features:
     covered_by: [cli.team, cli.kb.team-permissions-removal]
     known_bugs: [KB-005, KB-032]
     findings: [F-05]
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   - id: teams.team-sync
     area: teams
@@ -2935,6 +3201,9 @@ features:
     status: covered
     covered_by: [tests/webhooks/test_org_hook.py::test_org_webhook_lifecycle, O-LPLAN-ADD, O-LPLAN-REMOVE]
     notes: "94 org webhooks in 87 Eclipse orgs (ci.eclipse.org)"
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
+      - {target: "webapp", sut: "v1.8.0", run: "tp239l54", date: "2026-11-25"}
 
   - id: webhooks.org.settings
     area: webhooks
@@ -2950,6 +3219,9 @@ features:
     status: covered
     covered_by: [tests/webhooks/test_org_hook.py::test_org_webhook_lifecycle, tests/webhooks/test_managed_org_hook.py::test_org_webhook_settings_are_updated]
     notes: "H-ORG-HOOK-UPDATE: one '~ org_webhook' change with exactly {active, content_type, events, insecure_ssl}, oracle after each apply, converge, changed back, guarded -d removal."
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
+      - {target: "webapp", sut: "v1.8.0", run: "tp239l54", date: "2026-11-25"}
 
   - id: webhooks.org.secret
     area: webhooks
@@ -2966,6 +3238,9 @@ features:
     covered_by: [O-LPLAN-FORCED-WEBHOOKS, tests/webhooks/test_managed_org_hook.py::test_org_webhook_secret]
     known_bugs: [KB-026, KB-064]
     notes: "114 Eclipse webhooks have a secret, 93 of them the dummy '********' (hooks created out of band: never added nor updated by otterdog). Offline (O-LPLAN-FORCED-WEBHOOKS): presence change, reference diff, removal warning, '<DUMMY>', forced update. Live (H-ORG-HOOK-SECRET): a plain dummy secret (Warning) is reported as '********' and converges (never compared), the ping delivery is signed (X-Hub-Signature-256 sha256=...), --update-webhooks --update-filter <url> forces '!', secret null is planned with 'Warning: removing secret for webhook with url ...' and the next ping is unsigned (whether GitHub accepts the JSON null is KB-064); a '********' hook is skipped (Info, never created)."
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
+      - {target: "webapp", sut: "v1.8.0", run: "tp239l54", date: "2026-11-25"}
 
   - id: webhooks.org.aliases
     area: webhooks
@@ -3005,6 +3280,9 @@ features:
     status: covered
     covered_by: [cli.repo.webhook, O-LPLAN-ADD, O-LPLAN-REMOVE]
     notes: "447 repository webhooks in 85 Eclipse orgs"
+    verified_on:
+      - {target: "automation", sut: "main-fa01483", run: "tp2fgp07", date: "2026-11-25"}
+      - {target: "automation", sut: "v1.8.0", run: "tp24ye15", date: "2026-11-25"}
 
   - id: webhooks.repo.settings
     area: webhooks
@@ -3020,6 +3298,9 @@ features:
     status: covered
     covered_by: [cli.repo.webhook, cli.repo.webhook-settings]
     notes: "active false, insecure_ssl '1', form, two events and back (oracle each step, converge), nested removal -d."
+    verified_on:
+      - {target: "automation", sut: "main-fa01483", run: "tp2fgp07", date: "2026-11-25"}
+      - {target: "automation", sut: "v1.8.0", run: "tp24ye15", date: "2026-11-25"}
 
   - id: webhooks.repo.secret
     area: webhooks
@@ -3036,6 +3317,9 @@ features:
     covered_by: [O-LPLAN-FORCED-WEBHOOKS, cli.repo.webhook-secret]
     known_bugs: [KB-026, KB-057, KB-064]
     notes: "Offline (O-LPLAN-FORCED-WEBHOOKS): forced update with an url filter, removal warning. Live (cli.repo.webhook-secret): a plain secret (Warning) is reported as config.secret '********', a hook without secret has none, a '********' hook is skipped (Info, absent); --update-webhooks with --update-filter forces only the secured hook; secret null is planned with the removal warning and the oracle shows no secret (KB-064); removal with -d. An unknown provider prefix validates silently (KB-057). Delivery signatures are asserted by the organization variant (H-ORG-HOOK-SECRET)."
+    verified_on:
+      - {target: "automation", sut: "main-fa01483", run: "tp2fgp07", date: "2026-11-25"}
+      - {target: "automation", sut: "v1.8.0", run: "tp24ye15", date: "2026-11-25"}
 
   - id: webhooks.repo.aliases
     area: webhooks
@@ -3080,6 +3364,10 @@ features:
     covered_by: [O-LPLAN-ADD, O-VAL-ORGSECRET-PRIVATE-FREE, cli.org.secret, cli.org.secret-private]
     known_bugs: [KB-025]
     notes: "public (GitHub 'all') add, selected, forced update (--update-secrets with filter), removal -d, dummy '********' skipped; 'private' on Team/Enterprise (cli.org.secret-private, min_plan team; Free: offline gate)."
+    verified_on:
+      - {target: "enterprise", sut: "main-fa01483", run: "tp28q9d7", date: "2026-11-25"}
+      - {target: "org-level", sut: "v1.8.0", run: "tp23ue25", date: "2026-11-25"}
+      - {target: "enterprise", sut: "v1.8.0", run: "tp20305a", date: "2026-11-25"}
 
   - id: secrets-variables.org-secret.selected-repositories
     area: secrets-variables
@@ -3096,6 +3384,8 @@ features:
     covered_by: [cli.org.secret, cli.kb.org-secret-same-apply]
     known_bugs: [KB-022]
     notes: "selected [sel] then [sel, sel2] (oracle org_secret_repos exact / $unordered, converge); the same-apply case is the KB-022 step of cli.kb.org-secret-same-apply."
+    verified_on:
+      - {target: "org-level", sut: "v1.8.0", run: "tp23ue25", date: "2026-11-25"}
 
   - id: secrets-variables.org-variable.lifecycle
     area: secrets-variables
@@ -3113,6 +3403,8 @@ features:
     known_bugs: [KB-003, KB-028]
     findings: [F-01]
     notes: "3 organization variables in 2 Eclipse orgs"
+    verified_on:
+      - {target: "org-level", sut: "v1.8.0", run: "tp23ue25", date: "2026-11-25"}
 
   - id: secrets-variables.org-variable.selected-repositories
     area: secrets-variables
@@ -3128,6 +3420,8 @@ features:
     status: covered
     covered_by: [cli.org.variable, cli.kb.org-variable-same-apply]
     known_bugs: [KB-022]
+    verified_on:
+      - {target: "org-level", sut: "v1.8.0", run: "tp23ue25", date: "2026-11-25"}
 
   - id: secrets-variables.repo-secret.lifecycle
     area: secrets-variables
@@ -3144,6 +3438,9 @@ features:
     covered_by: [cli.secrets, O-LPLAN-ADD, O-VAL-OK]
     known_bugs: [KB-026]
     notes: "573 repository secrets in 82 Eclipse orgs"
+    verified_on:
+      - {target: "automation", sut: "main-fa01483", run: "tp2fgp07", date: "2026-11-25"}
+      - {target: "automation", sut: "v1.8.0", run: "tp24ye15", date: "2026-11-25"}
 
   - id: secrets-variables.repo-variable.lifecycle
     area: secrets-variables
@@ -3159,6 +3456,9 @@ features:
     status: covered
     covered_by: [cli.secrets, cli.kb.variables-pagination, O-LPLAN-CHANGE, O-LPLAN-REMOVE]
     known_bugs: [KB-003]
+    verified_on:
+      - {target: "automation", sut: "main-fa01483", run: "tp2fgp07", date: "2026-11-25"}
+      - {target: "automation", sut: "v1.8.0", run: "tp24ye15", date: "2026-11-25"}
 
   - id: secrets-variables.env-secret.lifecycle
     area: secrets-variables
@@ -3176,6 +3476,9 @@ features:
     known_bugs: [KB-035]
     findings: [F-08]
     notes: "env secret add ('+ add env_secret[name=..., environment=...]'), forced by --update-secrets ('!'), removal -d with the environment kept."
+    verified_on:
+      - {target: "automation", sut: "main-fa01483", run: "tp2fgp07", date: "2026-11-25"}
+      - {target: "automation", sut: "v1.8.0", run: "tp24ye15", date: "2026-11-25"}
 
   - id: secrets-variables.env-variable.lifecycle
     area: secrets-variables
@@ -3192,6 +3495,9 @@ features:
     covered_by: [cli.environment.secrets]
     known_bugs: [KB-003]
     notes: "env variable add/change/remove with oracle values per step, converge."
+    verified_on:
+      - {target: "automation", sut: "main-fa01483", run: "tp2fgp07", date: "2026-11-25"}
+      - {target: "automation", sut: "v1.8.0", run: "tp24ye15", date: "2026-11-25"}
 
   - id: secrets-variables.remove
     area: secrets-variables
@@ -3205,6 +3511,10 @@ features:
     status: covered
     covered_by: [cli.environment.secrets, cli.org.secret]
     notes: "repo secret + repo variable (+ env secret/variable) removed with -d, counts delete 4, oracle absent; org secrets removed with -d in cli.org.secret."
+    verified_on:
+      - {target: "automation", sut: "main-fa01483", run: "tp2fgp07", date: "2026-11-25"}
+      - {target: "automation", sut: "v1.8.0", run: "tp24ye15", date: "2026-11-25"}
+      - {target: "org-level", sut: "v1.8.0", run: "tp23ue25", date: "2026-11-25"}
 
   - id: secrets-variables.plain-value-warning
     area: secrets-variables
@@ -3218,6 +3528,9 @@ features:
     status: covered
     covered_by: [cli.secrets]
     known_bugs: [KB-025, KB-026]
+    verified_on:
+      - {target: "automation", sut: "main-fa01483", run: "tp2fgp07", date: "2026-11-25"}
+      - {target: "automation", sut: "v1.8.0", run: "tp24ye15", date: "2026-11-25"}
 
   # ==================================================================================================================
   # repositories: newRepo / extendRepo (models/repository.py, providers/github/rest/repo_client.py). Frequencies: 2578
@@ -3236,6 +3549,9 @@ features:
     priority: P0
     status: covered
     covered_by: [cli.repo.lifecycle, O-LPLAN-ADD, O-LPLAN-CHANGE, O-LPLAN-REMOVE, tests/cli/test_import.py::test_import_plans_no_change]
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   - id: repositories.features
     area: repositories
@@ -3252,6 +3568,9 @@ features:
     covered_by: [cli.repo.lifecycle, cli.repo.features, O-LPLAN-COERCE-SIGNOFF]
     known_bugs: [KB-065]
     notes: "has_issues, has_wiki, has_projects and has_discussions are created with non-default values, flipped (exactly 9 changed attributes, checked offline with local-plan), read back from GET /repos and converged (cli.repo.features). The coercions are diff semantics exercised offline by O-LPLAN-COERCE-SIGNOFF: has_projects is unmanaged while has_organization_projects is false, has_discussions is forced on the org discussion source; their validation messages never fire (KB-033). has_discussions is not documented by the create endpoint and not re-applied after the creation (KB-065, suspected: the create step converges live or shows it). has_wiki (423 Eclipse repos, 407 false), has_discussions (387, 353 true), has_projects (239, 223 false)."
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   - id: repositories.merge-methods
     area: repositories
@@ -3268,6 +3587,9 @@ features:
     covered_by: [cli.repo.lifecycle, cli.repo.features]
     known_bugs: [KB-065]
     notes: "allow_auto_merge and allow_update_branch are asserted at creation and after the flip, together with allow_merge_commit, allow_rebase_merge, allow_squash_merge and delete_branch_on_merge."
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   - id: repositories.merge-commit-messages
     area: repositories
@@ -3299,6 +3621,8 @@ features:
     status: covered
     covered_by: [cli.repo.org-coerced, cli.org.signoff]
     notes: "with the example template the org requires signoff, so the repository field is only managed under an org setting off (org_level). cli.repo.org-coerced relaxes the org, then turns the repository from false to true (oracle); cli.org.signoff covers the coercion while the org requires signoff and the 'false -> false' re-send when it stops requiring it. The signoff warning never fires (KB-033) and is not asserted."
+    verified_on:
+      - {target: "org-level", sut: "v1.8.0", run: "tp23ue25", date: "2026-11-25"}
 
   - id: repositories.visibility-forking
     area: repositories
@@ -3315,6 +3639,9 @@ features:
     covered_by: [regression.private-repo-template-defaults, enterprise.private-bpr, cli.neg.private-bpr, cli.repo.visibility]
     known_bugs: [KB-065]
     notes: "An existing repository goes public -> private (allow_forking false, exactly 2 changes) -> public. Each switch must plan a change, never a remove+add. Creating a private repository directly is covered by regression.private-repo-template-defaults only (otterdog 1.7.0+): older SUTs, release:latest included, fail it without Code Security (#791), so the other private-repository scenarios create their repository public and make it private in the next step."
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   - id: repositories.default-branch
     area: repositories
@@ -3330,6 +3657,9 @@ features:
     status: covered
     covered_by: [cli.repo.default-branch]
     notes: "Covers the rename at creation (main->master), a rename of an existing repo (master->trunk), and a switch to the existing branch e2e/<run>/develop (created by a probe with Mutator.create_branch; trunk stays). The empty-repository skip is exercised by the auto_init false repository of tests/cli/test_repo_template.py."
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   - id: repositories.archive
     area: repositories
@@ -3346,6 +3676,9 @@ features:
     covered_by: [cli.repo.archive]
     known_bugs: [KB-058]
     notes: "Archive together with a description change (2 changes); while archived, a description change plus a new BPR plan noop (validate -v Info asserted, oracle shows no BPR); unarchive (1 change)."
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   - id: repositories.security
     area: repositories
@@ -3361,6 +3694,9 @@ features:
     status: covered
     covered_by: [cli.repo.security]
     notes: "748 repos enable dependabot security updates, 215 set PVR, 207 push protection (198 disabled), 187 alerts (168 false). Each setting is checked through its own oracle kind (security_and_analysis, vulnerability-alerts, automated-security-fixes, private-vulnerability-reporting) with exact change counts (2, then 4). The last step also creates a repository with security updates enabled from the start."
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   - id: repositories.code-scanning
     area: repositories
@@ -3376,6 +3712,9 @@ features:
     status: covered
     covered_by: [regression.code-scanning-new-repo, regression.private-repo-template-defaults, cli.repo.code-scanning, cli.repo.code-scanning-languages, O-LPLAN-CODE-SCANNING-LANGUAGES]
     notes: "An existing repository; a probe commits a Python file and a dispatch-only workflow and waits until Python is detected. The setup is then configured with the extended suite for languages [actions, python] (state check timeout 600 s before converge) and disabled. cli.repo.code-scanning-languages (fixed_in 1.9.0): a TypeScript repository enabled for 'javascript-typescript' (#922: sent as the combined value), 'actions' added (#941: the change shows the missing language only, analyzed ones kept), [] and a dropped analyzed language plan nothing (#941: minimum set), disabled, enabled again without languages (none sent). O-LPLAN-CODE-SCANNING-LANGUAGES: offline, [] is never compared (#941), enable/disable and a disabled setup's languages plan the same on every SUT."
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   - id: repositories.pages
     area: repositories
@@ -3399,6 +3738,9 @@ features:
       assertions:
         - "oracle pages {public: false}, then {public: true}; converge"
       needs: ["enterprise target", "capability private_pages", org_level]
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   - id: repositories.template-repositories
     area: repositories
@@ -3414,6 +3756,8 @@ features:
     status: covered
     covered_by: [tests/cli/test_repo_template.py::test_repository_from_template]
     notes: "template_repository is read-only: changing it later prints the read-only note (verified offline). 12 repos in 3 orgs use templates, 6 orgs mark templates. Covers is_template, template_repository (oracle template_repository.full_name), post_process_template_content (README.md rendered with org/repo, NOTICE.md not listed stays raw), and auto_init false (no branches)."
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
 
   - id: repositories.fork
     area: repositories
@@ -3429,6 +3773,9 @@ features:
     status: covered
     covered_by: [cli.repo.fork]
     notes: "Forks octocat/Hello-World with default_branch master and fork_default_branch_only; the oracle checks fork and parent.full_name, and the branches equal [master]."
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   - id: repositories.rename
     area: repositories
@@ -3444,6 +3791,9 @@ features:
     status: covered
     covered_by: [regression.rename-and-modify]
     notes: "34 aliases in 20 Eclipse orgs; offline counterpart: plan-semantics.rename-aliases"
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   - id: repositories.extend
     area: repositories
@@ -3472,6 +3822,9 @@ features:
     status: covered
     covered_by: [tests/cli/test_repo_ghsa.py::test_advisory_fork_is_ignored]
     notes: "Draft advisory plus temporary private fork (probe). The plan is noop and the fork never appears; a guarded apply -d leaves it in place. The test closes the advisory and deletes the fork itself."
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   # ==================================================================================================================
   # repo-workflows: newRepo.workflows (models/repo_workflow_settings.py, providers/github/rest/repo_client.py:1164-1338).
@@ -3492,6 +3845,10 @@ features:
     status: covered
     covered_by: [cli.repo.actions, cli.org.actions-enabled-repositories]
     notes: "176 Eclipse repos set enabled, 167 false. Created with Actions disabled (only 'enabled' sent), then enabled. The coercion (org selected/none) is covered by cli.org.actions-enabled-repositories"
+    verified_on:
+      - {target: "automation", sut: "main-fa01483", run: "tp2fgp07", date: "2026-11-25"}
+      - {target: "automation", sut: "v1.8.0", run: "tp24ye15", date: "2026-11-25"}
+      - {target: "org-level", sut: "v1.8.0", run: "tp23ue25", date: "2026-11-25"}
 
   - id: repo-workflows.allowed-actions
     area: repo-workflows
@@ -3509,6 +3866,10 @@ features:
     known_bugs: [KB-029]
     findings: [F-02]
     notes: "Covers 'selected' with github_owned true, verified false and patterns [actions/*] (oracle repo_selected_actions), then 'local_only' (selected-actions absent). The coercion (org more restrictive) is covered by cli.org.actions-allowed."
+    verified_on:
+      - {target: "automation", sut: "main-fa01483", run: "tp2fgp07", date: "2026-11-25"}
+      - {target: "automation", sut: "v1.8.0", run: "tp24ye15", date: "2026-11-25"}
+      - {target: "org-level", sut: "v1.8.0", run: "tp23ue25", date: "2026-11-25"}
 
   - id: repo-workflows.default-permissions
     area: repo-workflows
@@ -3524,6 +3885,10 @@ features:
     status: covered
     covered_by: [cli.repo.org-coerced, cli.repo.actions, cli.org.workflow-permissions]
     notes: "the example template's org default_workflow_permissions 'read' makes the repository value unmanaged: a scenario must set the org to 'write' (org_level) first. With the org at 'write', the repository goes 'read' -> 'write'. actions_can_approve_pull_request_reviews false/true is set at repository level in both scenarios. The coercion with the org at 'read' is covered by cli.org.workflow-permissions."
+    verified_on:
+      - {target: "automation", sut: "main-fa01483", run: "tp2fgp07", date: "2026-11-25"}
+      - {target: "automation", sut: "v1.8.0", run: "tp24ye15", date: "2026-11-25"}
+      - {target: "org-level", sut: "v1.8.0", run: "tp23ue25", date: "2026-11-25"}
 
   - id: repo-workflows.fork-pr-approval
     area: repo-workflows
@@ -3539,6 +3904,11 @@ features:
     status: covered
     covered_by: [regression.private-repo-template-defaults, cli.repo.actions]
     notes: "all_external_contributors on a public repository, read through repo_fork_pr_approval."
+    verified_on:
+      - {target: "automation", sut: "main-fa01483", run: "tp2fgp07", date: "2026-11-25"}
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "automation", sut: "v1.8.0", run: "tp24ye15", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   - id: repo-workflows.sha-pinning
     area: repo-workflows
@@ -3554,6 +3924,8 @@ features:
     status: covered
     covered_by: [cli.repo.actions.sha-pinning, O-VAL-REPO-WORKFLOWS, O-LPLAN-IGNORED-FIELDS]
     notes: "live (fixed_in 1.9.0): created requiring it, then false, then removed, PUT .../actions/permissions and repo_actions read back. Offline: the Info of a repository not requiring it under an org that does, the coerced (noop) and managed plans; older SUTs refuse the key at load (SUT_EXPECTATIONS asserts per SUT)."
+    verified_on:
+      - {target: "automation", sut: "main-fa01483", run: "tp2fgp07", date: "2026-11-25"}
 
   - id: repo-workflows.cache-size
     area: repo-workflows
@@ -3599,6 +3971,8 @@ features:
       assertions:
         - "POST/PUT/DELETE of .../actions/policies per step; archive in the same apply sends the policy PUT and the archiving PATCH; covered on the default SUT once a release contains #947"
       needs: [target, "an otterdog release >= 1.9.0", "the plans offering Actions policies (unknown)", "available: kind `repo_actions_policy`"]
+    verified_on:
+      - {target: "automation", sut: "main-fa01483", run: "tp2fgp07", date: "2026-11-25"}
 
   # ==================================================================================================================
   # branch-protection: newBranchProtectionRule (models/branch_protection_rule.py, GraphQL providers/github/graphql.py).
@@ -3617,6 +3991,9 @@ features:
     priority: P0
     status: covered
     covered_by: [cli.bpr.public, enterprise.private-bpr, cli.neg.private-bpr, O-LPLAN-ADD, O-LPLAN-CHANGE]
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   - id: branch-protection.pull-request-reviews
     area: branch-protection
@@ -3632,6 +4009,9 @@ features:
     status: covered
     covered_by: [cli.bpr.public, enterprise.private-bpr, cli.bpr.settings]
     notes: "require_last_push_approval true, then requires_pull_request false with required_approving_review_count null (the dependent fields leave the diff: exactly 7 changes)."
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   - id: branch-protection.review-dismissal
     area: branch-protection
@@ -3647,6 +4027,9 @@ features:
     status: covered
     covered_by: [cli.bpr.allowances, cli.protection.app-checks]
     notes: "restricts_review_dismissals with a team and a user (cli.bpr.allowances) and with the e2e App (cli.protection.app-checks, requires app); the oracle uses otterdog's notation."
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   - id: branch-protection.bypass-allowances
     area: branch-protection
@@ -3662,6 +4045,9 @@ features:
     status: covered
     covered_by: [cli.bpr.allowances, cli.protection.app-checks]
     notes: "34 Eclipse rules use bypass_pull_request_allowances+. bypass_pull_request_allowances and bypass_force_push_allowances with a team and a user, swapped in the update step (exactly 5 changes), and with the App."
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   - id: branch-protection.status-checks
     area: branch-protection
@@ -3677,6 +4063,9 @@ features:
     status: covered
     covered_by: [cli.bpr.public, cli.bpr.settings, cli.protection.app-checks]
     notes: "A plain context is bound to github-actions (oracle app.slug github-actions); a '<app-slug>:<ctx>' check uses the e2e App (requires app); 'any:' is in cli.bpr.public."
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   - id: branch-protection.history-and-signatures
     area: branch-protection
@@ -3692,6 +4081,9 @@ features:
     status: covered
     covered_by: [cli.bpr.public, enterprise.private-bpr, O-LPLAN-CHANGE, cli.bpr.settings]
     notes: "requires_commit_signatures true, then false."
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   - id: branch-protection.force-push-deletion-admin
     area: branch-protection
@@ -3707,6 +4099,9 @@ features:
     status: covered
     covered_by: [cli.bpr.public, cli.bpr.settings]
     notes: "allows_force_pushes and allows_deletions true, then false; is_admin_enforced true."
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   - id: branch-protection.push-restrictions
     area: branch-protection
@@ -3722,6 +4117,9 @@ features:
     status: covered
     covered_by: [cli.bpr.allowances, cli.protection.app-checks]
     notes: "restricts_pushes with a team, then user+team, and blocks_creations true->false, on 'release/*' of a public repository. GitHub documents branch restrictions on public repositories of Free organizations. The App is the push actor in cli.protection.app-checks."
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   - id: branch-protection.lock-branch
     area: branch-protection
@@ -3737,6 +4135,9 @@ features:
     status: covered
     covered_by: [cli.bpr.lock]
     notes: "lock_branch and lock_allows_fetch_and_merge true, then false (2 changes)."
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   - id: branch-protection.deployments
     area: branch-protection
@@ -3752,6 +4153,9 @@ features:
     status: covered
     covered_by: [cli.bpr.deployments]
     notes: "requires_deployments with the repository's own environment in the same apply; drop (1 change); validation error for an undefined environment."
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   # ==================================================================================================================
   # rulesets: newRepoRuleset / newOrgRuleset and the embedded newPullRequest, newStatusChecks, newMergeQueue
@@ -3771,6 +4175,9 @@ features:
     priority: P1
     status: covered
     covered_by: [cli.ruleset.public, regression.disabled-ruleset-without-refs, O-VAL-OK, O-VAL-RULESET-STRICT]
+    verified_on:
+      - {target: "enterprise", sut: "main-fa01483", run: "tp28q9d7", date: "2026-11-25"}
+      - {target: "enterprise", sut: "v1.8.0", run: "tp20305a", date: "2026-11-25"}
 
   - id: rulesets.targets
     area: rulesets
@@ -3794,6 +4201,9 @@ features:
       assertions:
         - "discovery: what GitHub accepts from otterdog's model (otterdog always sends ref_name conditions and its simple rules are not push rules); record it, then assert it"
       needs: [target, "min_plan: team", "requires: [push_rulesets]"]
+    verified_on:
+      - {target: "enterprise", sut: "main-fa01483", run: "tp28q9d7", date: "2026-11-25"}
+      - {target: "enterprise", sut: "v1.8.0", run: "tp20305a", date: "2026-11-25"}
 
   - id: rulesets.enforcement
     area: rulesets
@@ -3808,6 +4218,9 @@ features:
     priority: P1
     status: covered
     covered_by: [cli.ruleset.public, regression.disabled-ruleset-without-refs, enterprise.org-ruleset]
+    verified_on:
+      - {target: "enterprise", sut: "main-fa01483", run: "tp28q9d7", date: "2026-11-25"}
+      - {target: "enterprise", sut: "v1.8.0", run: "tp20305a", date: "2026-11-25"}
 
   - id: rulesets.rules
     area: rulesets
@@ -3823,6 +4236,9 @@ features:
     status: covered
     covered_by: [cli.ruleset.public, cli.kb.ruleset-default-status-checks, cli.ruleset.rules]
     notes: "Exact rule sets: update, required_signatures, no non_fast_forward/creation, then the inverse (8 changes)."
+    verified_on:
+      - {target: "enterprise", sut: "main-fa01483", run: "tp28q9d7", date: "2026-11-25"}
+      - {target: "enterprise", sut: "v1.8.0", run: "tp20305a", date: "2026-11-25"}
 
   - id: rulesets.bypass-actors
     area: rulesets
@@ -3840,6 +4256,9 @@ features:
     known_bugs: [KB-039, KB-052]
     findings: [F-12]
     notes: "22 Eclipse rulesets use bypass_actors+ ('#OrganizationAdmin', '@<org>/eclipsefdn-releng'); the webapp's own config-repo ruleset needs '#OrganizationAdmin'. Covers #OrganizationAdmin, #RepositoryAdmin, #Maintain:pull_request, #Write, a team, then mode changes; the App actor (app-checks); the user actor (779, fixed_in 1.7.0). Known-bug steps: '#Admin' (KB-039) and explicit ':always' (KB-052)."
+    verified_on:
+      - {target: "enterprise", sut: "main-fa01483", run: "tp28q9d7", date: "2026-11-25"}
+      - {target: "enterprise", sut: "v1.8.0", run: "tp20305a", date: "2026-11-25"}
 
   - id: rulesets.deployments
     area: rulesets
@@ -3855,6 +4274,9 @@ features:
     status: covered
     covered_by: [cli.ruleset.deployments]
     notes: "required_deployments rule with the repository's environment; drop (1 change); validation error for an undefined environment."
+    verified_on:
+      - {target: "enterprise", sut: "main-fa01483", run: "tp28q9d7", date: "2026-11-25"}
+      - {target: "enterprise", sut: "v1.8.0", run: "tp20305a", date: "2026-11-25"}
 
   - id: rulesets.pull-request
     area: rulesets
@@ -3872,6 +4294,9 @@ features:
     known_bugs: [KB-031]
     findings: [F-04]
     notes: "Count 0 with every flag on, then count 3 with every flag off, then required_pull_request null removes the rule."
+    verified_on:
+      - {target: "enterprise", sut: "main-fa01483", run: "tp28q9d7", date: "2026-11-25"}
+      - {target: "enterprise", sut: "v1.8.0", run: "tp20305a", date: "2026-11-25"}
 
   - id: rulesets.status-checks
     area: rulesets
@@ -3888,6 +4313,9 @@ features:
     covered_by: [cli.ruleset.public, regression.ruleset-empty-status-checks, cli.kb.ruleset-any-status-check, cli.kb.ruleset-default-status-checks, O-VAL-RULESET-STRICT, regression.repo-ruleset-without-strict, cli.ruleset.status-checks, cli.protection.app-checks]
     known_bugs: [KB-020, KB-021, KB-054]
     notes: "do_not_enforce_on_create, the plain context and '15368:<ctx>' (GitHub Actions integration id) are strict; the installed App slug is in app-checks. Known-bug steps for 'github-actions:<ctx>' and '<installed app id>:<ctx>' never converge (KB-054)."
+    verified_on:
+      - {target: "enterprise", sut: "main-fa01483", run: "tp28q9d7", date: "2026-11-25"}
+      - {target: "enterprise", sut: "v1.8.0", run: "tp20305a", date: "2026-11-25"}
 
   - id: rulesets.merge-queue
     area: rulesets
@@ -3905,6 +4333,9 @@ features:
     known_bugs: [KB-031]
     findings: [F-04]
     notes: "12 merge queues in 3 Eclipse orgs (eclipse-score: MERGE 6, SQUASH 5, REBASE 1). Public repository: SQUASH with non-default sizes, then MERGE/HEADGREEN. Private repository on Enterprise: requires merge_queue_private."
+    verified_on:
+      - {target: "enterprise", sut: "main-fa01483", run: "tp28q9d7", date: "2026-11-25"}
+      - {target: "enterprise", sut: "v1.8.0", run: "tp20305a", date: "2026-11-25"}
 
   - id: rulesets.org.repository-conditions
     area: rulesets
@@ -3921,6 +4352,9 @@ features:
     covered_by: [enterprise.org-ruleset, enterprise.kb.org-ruleset-repo-patterns]
     known_bugs: [KB-009, KB-023]
     notes: "New repo-conditions step in enterprise.org-ruleset: exclude_repo_names for a second run repository and protect_repo_names true; oracle repository_name {include, exclude, protected}; 1 add + 2 changes, checked offline with the enterprise plan."
+    verified_on:
+      - {target: "enterprise", sut: "main-fa01483", run: "tp28q9d7", date: "2026-11-25"}
+      - {target: "enterprise", sut: "v1.8.0", run: "tp20305a", date: "2026-11-25"}
 
   - id: rulesets.copilot-code-review
     area: rulesets
@@ -3936,6 +4370,9 @@ features:
     status: covered
     covered_by: [cli.ruleset.copilot-code-scanning, O-VAL-RULESET-CODE-ANALYSIS, O-VAL-RULESET-PUSH-RULES]
     notes: "cli.ruleset.copilot-code-scanning: a default-branch ruleset of a public run repository with the rule, read back with its exact parameters, both flags flipped, then the rule removed (copilot_code_review null), a no-op plan after each apply. #900 also fixed the rule type of #639 ('copilot_review' with 'review_new_pushes', refused by GitHub). Offline: the rule plans a change, a push ruleset refuses it (O-VAL-RULESET-PUSH-RULES pull-request-rules-on-push). Not verified: GitHub's answer on an organization without Copilot."
+    verified_on:
+      - {target: "enterprise", sut: "main-fa01483", run: "tp28q9d7", date: "2026-11-25"}
+      - {target: "enterprise", sut: "v1.8.0", run: "tp20305a", date: "2026-11-25"}
 
   - id: rulesets.code-scanning
     area: rulesets
@@ -3951,6 +4388,9 @@ features:
     status: covered
     covered_by: [cli.ruleset.copilot-code-scanning, O-VAL-RULESET-CODE-ANALYSIS]
     notes: "Live: the rule with its tools as written, narrowed to another threshold, removed. Offline (O-VAL-RULESET-CODE-ANALYSIS code-scanning-tools): the validation errors of an empty list, a value without thresholds and an unknown threshold."
+    verified_on:
+      - {target: "enterprise", sut: "main-fa01483", run: "tp28q9d7", date: "2026-11-25"}
+      - {target: "enterprise", sut: "v1.8.0", run: "tp20305a", date: "2026-11-25"}
 
   - id: rulesets.code-quality
     area: rulesets
@@ -4108,6 +4548,9 @@ features:
     status: covered
     covered_by: [cli.environment, enterprise.env-reviewers-private, O-LPLAN-ADD, O-LPLAN-CHANGE, cli.environment.policies, cli.environment.private]
     notes: "Live removal from an existing repository: '- remove environment' with apply -d, environment absent, repository kept. Private repositories (min_plan team, requires private_repo_environments) in cli.environment.private."
+    verified_on:
+      - {target: "automation", sut: "main-fa01483", run: "tp2fgp07", date: "2026-11-25"}
+      - {target: "automation", sut: "v1.8.0", run: "tp24ye15", date: "2026-11-25"}
 
   - id: environments.wait-timer
     area: environments
@@ -4122,6 +4565,9 @@ features:
     priority: P1
     status: covered
     covered_by: [cli.environment, enterprise.env-reviewers-private, O-LPLAN-CHANGE]
+    verified_on:
+      - {target: "automation", sut: "main-fa01483", run: "tp2fgp07", date: "2026-11-25"}
+      - {target: "automation", sut: "v1.8.0", run: "tp24ye15", date: "2026-11-25"}
 
   - id: environments.reviewers
     area: environments
@@ -4137,6 +4583,9 @@ features:
     status: covered
     covered_by: [enterprise.env-reviewers-private, cli.environment.reviewers]
     notes: "Public repository: a team (pull access) plus the admin user with prevent_self_review, then the team only (2 changes). A one-minute wait timer makes the protection_rules list deterministic."
+    verified_on:
+      - {target: "automation", sut: "main-fa01483", run: "tp2fgp07", date: "2026-11-25"}
+      - {target: "automation", sut: "v1.8.0", run: "tp24ye15", date: "2026-11-25"}
 
   - id: environments.branch-policies
     area: environments
@@ -4154,6 +4603,9 @@ features:
     known_bugs: [KB-036]
     findings: [F-09]
     notes: "selected with ['main', 'tag:v*'] (oracle types branch/tag), then 'protected' (1 change)."
+    verified_on:
+      - {target: "automation", sut: "main-fa01483", run: "tp2fgp07", date: "2026-11-25"}
+      - {target: "automation", sut: "v1.8.0", run: "tp24ye15", date: "2026-11-25"}
 
   # ==================================================================================================================
   # receiver: the webapp's GitHub App webhook endpoint (webapp/webhook/github_webhook.py). Checks run in this order:
@@ -4173,6 +4625,8 @@ features:
     covered_by: [tests/offline/test_webapp_contract.py::test_webhook_receiver_contract, tests/webhooks/test_app_delivery.py::test_config_pr_delivery_is_relayed, tests/offline/test_webapp_runtime.py::test_webhook_endpoint_is_configurable]
     known_bugs: [KB-012]
     notes: "GITHUB_WEBHOOK_ENDPOINT moves the receiver, the default path then answers 404"
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: receiver.signature
     area: receiver
@@ -4245,6 +4699,8 @@ features:
     covered_by: [tests/offline/test_webapp_contract.py::test_webhook_receiver_contract, tests/webhooks/test_app_delivery.py::test_config_pr_delivery_is_relayed, tests/offline/test_webapp_contract.py::test_replayed_delivery_is_processed_again]
     known_bugs: [KB-017]
     notes: "a redelivery (same bytes and X-GitHub-Delivery) is accepted and processed again (no deduplication)"
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: receiver.hook-exception
     area: receiver
@@ -4289,6 +4745,8 @@ features:
     priority: P0
     status: covered
     covered_by: [tests/webapp/test_pr_validation.py::test_valid_config_pr, tests/webapp/test_pr_validation.py::test_invalid_config_pr, tests/webhooks/test_app_delivery.py::test_config_pr_delivery_is_relayed]
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: webapp-events.pr-synchronize
     area: webapp-events
@@ -4303,6 +4761,8 @@ features:
     status: covered
     covered_by: [tests/webapp/test_pr_validation.py::test_new_commits_are_validated_again]
     notes: "W-PR-SYNCHRONIZE (P0): three commits, a validate comment per head sha (previous minimized), success/success/error, /api valid false after the broken commit; the sync status of commits 2 and 3 is copied (one non-pending status, no pending one)."
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: webapp-events.pr-draft
     area: webapp-events
@@ -4317,6 +4777,8 @@ features:
     status: covered
     covered_by: [tests/webapp/test_stale_status.py::test_stale_snapshot_keeps_merged_status, tests/webapp/test_pr_validation.py::test_draft_pr_lifecycle]
     notes: "W-PR-DRAFT (P1): draft opened -> record only (draft true, no comment, no status, delivery+quiesce); mark_ready -> help, team-info, validate comments, success, sync, draft false; convert_to_draft -> draft true, no new comment/status."
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: webapp-events.pr-reopened
     area: webapp-events
@@ -4331,6 +4793,8 @@ features:
     status: covered
     covered_by: [tests/webapp/test_pr_validation.py::test_closed_pr_is_validated_again_when_reopened, tests/webapp/test_blueprints.py::test_closed_remediation_dismisses_the_blueprint]
     notes: "W-PR-REOPEN (P2): unmerged close drops the /api record, no ApplyChangesTask/apply comment; reopen -> open record (not_applied), new validate comment for the same sha, a second pending validation status. The otterdog/* blueprint-status part is exercised by W-BP-DISMISS (reopen of a remediation PR)."
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: webapp-events.pr-closed
     area: webapp-events
@@ -4345,6 +4809,8 @@ features:
     status: covered
     covered_by: [tests/webapp/test_merge_apply.py::test_merge_applies_config, tests/webapp/test_merge_apply.py::test_rebase_merge_applies_every_commit, tests/webapp/test_merge_apply.py::test_closed_prs_are_never_applied, tests/webapp/test_otterdog_branches.py::test_otterdog_branches_are_deleted]
     notes: "W-PR-CLOSED (P0): an unmerged close (record gone, no ApplyChangesTask, no apply comment, repo not created) and a PR merged into a side base branch (recorded merged/not_applied, no ApplyChangesTask, no comment, repo not created). W-OPEN-PR-BRANCH covers the otterdog/* branch deletion."
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: webapp-events.review
     area: webapp-events
@@ -4370,6 +4836,8 @@ features:
         - "webapp"
         - "identities approver, author"
         - "harness: Mutator.edit_review (PUT /repos/{o}/{r}/pulls/{n}/reviews/{id}) and ConfigRepoFlow.edit_review"
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: webapp-events.issue-comment
     area: webapp-events
@@ -4384,6 +4852,8 @@ features:
     status: covered
     covered_by: [tests/webapp/test_commands.py::test_help_command, tests/webapp/test_commands.py::test_validate_command, tests/webapp/test_commands.py::test_comment_matching_and_edits]
     notes: "W-CMD-NEG (P1): edited comment re-runs its command (new help comment, previous minimized), deleted comment ignored (delivery observed + quiesce), synthetic issue_comment on an issue of the config repo and on a PR of another repository schedule no task."
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: webapp-events.push
     area: webapp-events
@@ -4399,6 +4869,8 @@ features:
     covered_by: [tests/webapp/test_boot.py::test_webapp_boot, tests/webapp/test_merge_apply.py::test_merge_applies_config, tests/webapp/test_blueprints.py::test_global_definitions_reload_on_configs_push, tests/webapp/test_blueprints.py::test_required_file_remediation]
     known_bugs: [KB-015]
     notes: "W-MERGE-APPLY waits for the relayed push of the merge commit, a finished FetchConfigTask created after the merge and /api/organizations/<org> listing the new repository with its description (the stored sha is the blob sha and is not exposed by the API). A push to the configs repository reloading the global definitions is W-BP-GLOBAL-PUSH (KB-015, scoped xfail), a push to a project repository re-evaluating blueprints is W-BP-REQUIRED-FILE (a deleted strict file is re-added at once); the boot checks the FetchConfigTask of /internal/init."
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: webapp-events.installation
     area: webapp-events
@@ -4413,6 +4885,8 @@ features:
     status: covered
     covered_by: [tests/webapp/test_installation_events.py::test_installation_events_update_the_record]
     notes: "W-INSTALLATION-EVENTS (P2): signed synthetic installation deliveries for the real id: suspend -> suspended, unsuspend -> installed + finished FetchConfigTask and FetchAllPullRequestsTask, deleted -> not_installed with id 0, created -> installed with the real id + refresh; /internal/init restores on failure. Routing verified against the 9bdeb75 image locally."
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: webapp-events.workflow-events
     area: webapp-events
@@ -4427,6 +4901,8 @@ features:
     status: covered
     covered_by: [tests/webapp/test_policies.py::test_macos_large_runner_jobs_are_cancelled_unless_allowed, tests/webapp/test_policies.py::test_sbom_upload_to_dependency_track, tests/offline/test_webapp_contract.py::test_workflow_events_are_described_selectively]
     notes: "workflow_job queued: W-POL-MACOS (the run on a macOS larger runner is cancelled unless allowed, the /admin/policies counters change); workflow_run completed: W-POL-SBOM (UploadSBOMTask, PUT /api/v1/bom of the Dependency-Track mock); offline, the receiver describes workflow_job only when queued and workflow_run only when completed."
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   # ==================================================================================================================
   # webapp-commands: /otterdog comment commands (webapp/webhook/comment_handlers.py; re.match at the start of the
@@ -4444,6 +4920,8 @@ features:
     priority: P1
     status: covered
     covered_by: [tests/webapp/test_commands.py::test_help_command, tests/webapp/test_pr_validation.py::test_valid_config_pr]
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: webapp-commands.team-info
     area: webapp-commands
@@ -4467,6 +4945,8 @@ features:
       assertions:
         - "no help and no team-info comment for the bot-authored PR"
       needs: [webapp, app]
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: webapp-commands.check-sync
     area: webapp-commands
@@ -4480,6 +4960,8 @@ features:
     priority: P1
     status: covered
     covered_by: [tests/webapp/test_commands.py::test_drift_check_sync]
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: webapp-commands.done
     area: webapp-commands
@@ -4495,6 +4977,8 @@ features:
     covered_by: [tests/webapp/test_web_ui_flags.py::test_web_ui_setting_needs_a_manual_apply, tests/webapp/test_merge_apply.py::test_secret_needs_a_manual_apply]
     known_bugs: [KB-013]
     notes: "Wrong-team /otterdog done of a contributor (comment naming <org>/<admin team>, apply_status stays partially_applied) is in W-MERGE-SECRET instead of the suggested W-CMD-DONE-WRONG-TEAM (same partial-apply flow, keeps the catalogue test W-PR-WEBUI identity-free)."
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: webapp-commands.apply
     area: webapp-commands
@@ -4510,6 +4994,8 @@ features:
     covered_by: [tests/webapp/test_merge_apply.py::test_failed_apply_is_retried_by_an_admin, tests/webapp/test_merge_apply.py::test_secret_needs_a_manual_apply]
     known_bugs: [KB-001, KB-013]
     notes: "W-CMD-APPLY (P1): repo created out of band -> merged PR's apply fails ([!CAUTION], 'failed to apply patch', partially_applied); contributor /otterdog apply -> wrong_team_apply_comment, record unchanged; repo removed -> admin /otterdog apply -> success, repo created with the declared description, completed; /otterdog apply of a completed PR -> ApplyChangesTask finished, no comment. Note: a failed apply is recorded partially_applied (ApplyStatus.FAILED only for exceptions outside the local-apply)."
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: webapp-commands.merge
     area: webapp-commands
@@ -4523,6 +5009,8 @@ features:
     priority: P0
     status: covered
     covered_by: [tests/webapp/test_merge_apply.py::test_automerge_after_approval, tests/webapp/test_web_ui_flags.py::test_web_ui_setting_needs_a_manual_apply]
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: webapp-commands.validate
     area: webapp-commands
@@ -4536,6 +5024,8 @@ features:
     priority: P1
     status: covered
     covered_by: [tests/webapp/test_commands.py::test_validate_command]
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: webapp-commands.validate-info
     area: webapp-commands
@@ -4550,6 +5040,8 @@ features:
     status: covered
     covered_by: [tests/webapp/test_commands.py::test_validate_info_command]
     notes: "W-CMD-VALIDATE-INFO (P2): dummy repo secret: default comment has 'there have been N validation infos' and no Info line; /otterdog validate info prints 'repo_secret[name=...] only has a dummy value, resource will be skipped.' and no hint; first comment minimized."
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: webapp-commands.matching
     area: webapp-commands
@@ -4563,6 +5055,8 @@ features:
     status: covered
     covered_by: [tests/webapp/test_commands.py::test_comment_matching_and_edits]
     notes: "W-CMD-NEG (P1) instead of the separate W-CMD-MATCHING/W-CMD-EDITED (one PR, the docs/scenario-catalog.md planned id): 'please /otterdog help' ignored, '/otterdog validate' validates, '/otterdog helpme, ...' helps (prefix match), '/otterdog validate\\n/otterdog help' runs validate only. All cases also verified against the 9bdeb75 webapp image locally."
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   # ==================================================================================================================
   # webapp-pr: validation, sync check and apply of config pull requests
@@ -4580,6 +5074,8 @@ features:
     status: covered
     covered_by: [tests/webapp/test_pr_validation.py::test_valid_config_pr, tests/webapp/test_pr_validation.py::test_invalid_config_pr, tests/webapp/test_commands.py::test_validate_command]
     known_bugs: [KB-026]
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: webapp-pr.outdated-branch
     area: webapp-pr
@@ -4607,6 +5103,8 @@ features:
     status: covered
     covered_by: [tests/webapp/test_pr_validation.py::test_valid_config_pr]
     notes: "W-PR-VALID lists every commit status (GET .../commits/{sha}/statuses): first validation status pending 'validating configuration change using otterdog', last success; first sync status pending 'checking if configuration is in-sync using otterdog', last success."
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: webapp-pr.validation-failure
     area: webapp-pr
@@ -4632,6 +5130,8 @@ features:
       needs:
         - "webapp"
         - "harness: ConfigRepoFlow opt-in to open a PR deleting the org configuration (refused today)"
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: webapp-pr.validation-warnings
     area: webapp-pr
@@ -4645,6 +5145,8 @@ features:
     status: covered
     covered_by: [tests/webapp/test_web_ui_flags.py::test_web_ui_setting_needs_a_manual_apply, tests/webapp/test_pr_validation.py::test_validation_warnings]
     notes: "W-PR-WARNINGS (P1): secret -> secrets warning, requires_manual_apply true, supports_auto_merge false; max_cache_size_gb 10 -> 5 on a declared repo (main pins 10 with ':::' so the diff exists also when the renderer hides the cache limit) -> cost warning, supports_auto_merge false, no manual apply; both refused by /otterdog merge; new repo with 10 GB -> no warning, auto-merge offered."
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: webapp-pr.no-changes
     area: webapp-pr
@@ -4658,6 +5160,8 @@ features:
     status: covered
     covered_by: [tests/webapp/test_pr_validation.py::test_non_configuration_change]
     notes: "W-PR-NO-CHANGES (P2): README.md-only PR -> 'No changes.' + success; multi-file PR (org config + README.md) -> validated on its config change; both valid, supports_auto_merge false, no automerge comment, /otterdog merge refused naming 'touches non-configuration files'."
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: webapp-pr.import-confinement
     area: webapp-pr
@@ -4681,6 +5185,8 @@ features:
       needs:
         - "webapp"
         - "harness: an audited 'restore main to the baseline' path for tests that break main on purpose"
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: webapp-pr.sync-check
     area: webapp-pr
@@ -4696,6 +5202,8 @@ features:
     covered_by: [tests/webapp/test_commands.py::test_drift_check_sync, tests/webapp/test_pr_validation.py::test_valid_config_pr, tests/webapp/test_commands.py::test_sync_check_of_an_invalid_main]
     known_bugs: [KB-019, KB-067]
     notes: "W-PR-VALID asserts the in-sync outcome ('otterdog sync check completed successfully', state success, no check-sync comment); W-DRIFT-CHECKSYNC the out-of-sync one."
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: webapp-pr.sync-failure
     area: webapp-pr
@@ -4726,6 +5234,8 @@ features:
     covered_by: [tests/webapp/test_pr_validation.py::test_new_commits_are_validated_again, tests/webapp/test_pr_validation.py::test_out_of_sync_status_survives_a_new_commit]
     known_bugs: [KB-066]
     notes: "Propagation observed as one non-pending sync status on the new head (no pending, same state/description). Note: the CheckConfigurationInSyncTask is still recorded (finished) when it copies, so the outline's 'task count unchanged' is wrong. W-SYNC-PROPAGATION-DRIFT is a scoped xfail of KB-066 (copied out-of-sync status becomes 'completed successfully')."
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: webapp-pr.apply
     area: webapp-pr
@@ -4740,6 +5250,8 @@ features:
     status: covered
     covered_by: [tests/webapp/test_merge_apply.py::test_merge_applies_config, tests/webapp/test_merge_apply.py::test_rebase_merge_applies_every_commit, tests/webapp/test_merge_apply.py::test_automerge_after_approval, tests/webapp/test_merge_apply.py::test_merge_commit_applies_every_commit, tests/webapp/test_merge_apply.py::test_drifted_org_still_auto_merges]
     notes: "W-MERGE-COMMIT-APPLY (P0): merge method 'merge' (2-parent commit) applies both commits, both repos with their descriptions, completed. W-AUTOMERGE-DRIFT shows the apply replays only the PR diff (drift left untouched)."
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: webapp-pr.apply-deletions
     area: webapp-pr
@@ -4753,6 +5265,8 @@ features:
     status: covered
     covered_by: [tests/webapp/test_merge_apply.py::test_merged_removal_is_applied]
     notes: "W-MERGE-DELETE (P0): declared run repo removed by a PR: validate comment 'remove repository[name=...]', supports_auto_merge false, no automerge comment, /otterdog merge refused; admin merge -> apply comment names the removal, repo deleted (oracle), completed."
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: webapp-pr.apply-partial
     area: webapp-pr
@@ -4766,6 +5280,8 @@ features:
     status: covered
     covered_by: [tests/webapp/test_web_ui_flags.py::test_web_ui_setting_needs_a_manual_apply, tests/webapp/test_merge_apply.py::test_secret_needs_a_manual_apply]
     notes: "W-MERGE-SECRET (P1): new run repo with a secret: apply creates the repo, never the secret (oracle repo_secret None), 'only partially applied', partially_applied, completed by the admin's /otterdog done."
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: webapp-pr.apply-guards
     area: webapp-pr
@@ -4780,6 +5296,8 @@ features:
     covered_by: [tests/webapp/test_merge_apply.py::test_invalid_merged_pr_is_not_applied, tests/webapp/test_merge_apply.py::test_failed_apply_is_retried_by_an_admin, tests/webapp/test_merge_apply.py::test_crashing_apply_gets_a_friendly_comment, tests/webapp/test_merge_apply.py::test_closed_prs_are_never_applied]
     known_bugs: [KB-001, KB-039]
     notes: "W-MERGE-INVALID (invalid topic: ApplyChangesTask finished without comment, nothing created, merged/not_applied), W-CMD-APPLY (already completed -> skipped; patch failure), W-PR-CLOSED (unmerged). W-MERGE-APPLY-CRASH (P1): KB-039 '#Admin' bypass actor as trigger -> [!CAUTION] with 'Applying the configuration failed.'/'Please contact an admin', no KeyError/Traceback, partially_applied, repo created, ruleset not (skips if KB-039 is fixed). Title correction: a failed or crashed apply is recorded partially_applied, not failed."
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: webapp-pr.records
     area: webapp-pr
@@ -4794,6 +5312,8 @@ features:
     status: covered
     covered_by: [tests/webapp/test_pr_validation.py::test_valid_config_pr, tests/webapp/test_merge_apply.py::test_merge_applies_config, tests/webhooks/test_app_delivery.py::test_config_pr_delivery_is_relayed, tests/webapp/test_web_ui_flags.py::test_web_ui_setting_needs_a_manual_apply]
     known_bugs: [KB-018]
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: webapp-pr.delete-otterdog-branch
     area: webapp-pr
@@ -4808,6 +5328,8 @@ features:
     status: covered
     covered_by: [tests/webapp/test_otterdog_branches.py::test_otterdog_branches_are_deleted]
     notes: "W-OPEN-PR-BRANCH in tests/webapp (not tests/cli): PR opened with 'otterdog open-pr' (trusted reset CLI, fresh workspace, adopted by the flow) closed -> finished DeleteBranchTask (no pull_request recorded) and the otterdog/e2e-<run>-* branch gone."
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   # ==================================================================================================================
   # webapp-automerge: eligibility (db/models.py automerge_problems), approvals, the automerge comment and merge
@@ -4825,6 +5347,8 @@ features:
     covered_by: [tests/webapp/test_merge_apply.py::test_automerge_after_approval, tests/webapp/test_web_ui_flags.py::test_web_ui_setting_needs_a_manual_apply, tests/webapp/test_merge_apply.py::test_approval_team_author_merges_without_review]
     known_bugs: [KB-013, KB-027]
     notes: "W-AUTOMERGE-AUTHOR-TEAM (P0): approver-authored PR: author_can_auto_merge true, has_required_approvals None, automerge comment without review, /otterdog merge merges and applies; an invalid PR of the same author is refused ('pull request is not valid')."
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: webapp-automerge.blockers
     area: webapp-automerge
@@ -4838,6 +5362,8 @@ features:
     status: covered
     covered_by: [tests/webapp/test_web_ui_flags.py::test_web_ui_setting_needs_a_manual_apply, tests/webapp/test_pr_validation.py::test_validation_warnings, tests/webapp/test_pr_validation.py::test_non_configuration_change, tests/webapp/test_merge_apply.py::test_merged_removal_is_applied]
     notes: "Each blocker is asserted in the test of its change type (secret, cost, README/multi-file, deletion, web UI) with admin-authored (eligible) PRs: no automerge comment after quiesce, /otterdog merge refused with the supports_auto_merge sentence, PR open. No separate W-AUTOMERGE-BLOCKERS (would duplicate those PRs). Since #943 (main 127c063, after v1.8.0) the validate comment lists the blockers ('> [!NOTE]' 'This pull request cannot be auto-merged via `/otterdog merge`:', one reason per line) and mentions the admin team: WebappScenario.assert_merge_blockers in the same tests, and W-PR-VALID / the new repository of W-PR-WARNINGS get no note and no cc."
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: webapp-automerge.comment
     area: webapp-automerge
@@ -4852,6 +5378,8 @@ features:
     status: covered
     covered_by: [tests/webapp/test_merge_apply.py::test_automerge_after_approval]
     notes: "W-AUTOMERGE: the eligibility signal is the automerge comment on webapps before #965 and the 'Ready to merge' auto-merge status section of the validate comment since (tests/webapp/conftest.py FEATURE_965, auto_merge_status); before #965 the task posted a separate comment headed '<!-- Otterdog Comment: automerge -->' from templates/comment/auto_merge_comment.txt, which #965 removed."
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
   - id: webapp-automerge.third-party
     area: webapp-automerge
     title: "/otterdog merge by someone else than the author requires approval/admin team membership ('Only the author of the pull request, a member of ..., or a member of ... is allowed to auto-merge.')"
@@ -4865,6 +5393,8 @@ features:
     covered_by: [tests/webapp/test_merge_apply.py::test_merge_command_of_a_third_party]
     known_bugs: [KB-027]
     notes: "W-AUTOMERGE-THIRD-PARTY (P1): approved contributor PR: the outsider's /otterdog merge -> 'Only the author of the pull request, a member of ..., or a member of ... is allowed to auto-merge.', open; the approver's /otterdog merge -> merged and applied."
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   # ==================================================================================================================
   # webapp-runtime: boot, configuration, /internal, /api and the pages (otterdog/app.py, webapp/__init__.py, config.py, internal/, api/,
@@ -4883,6 +5413,8 @@ features:
     status: covered
     covered_by: [tests/offline/test_webapp_contract.py::test_webapp_boots_with_dummy_credentials, tests/webapp/test_boot.py::test_webapp_boot]
     known_bugs: [KB-061]
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: webapp-runtime.ready
     area: webapp-runtime
@@ -4924,6 +5456,8 @@ features:
     covered_by: [tests/offline/test_webapp_contract.py::test_webapp_boots_with_dummy_credentials, tests/webapp/test_boot.py::test_webapp_boot, tests/webapp/test_merge_apply.py::test_automerge_after_approval, tests/webapp/test_runtime.py::test_organization_teams_override_the_environment, tests/webapp/test_runtime.py::test_admin_teams_list_with_spaces, tests/webapp/test_blueprints.py::test_check_interval_and_limit, tests/webapp/test_policies.py::test_sbom_upload_to_dependency_track]
     known_bugs: [KB-012, KB-013]
     notes: "W-RT-CONFIG-TEAMS (P1): GITHUB_ADMIN_TEAMS / GITHUB_APPROVAL_TEAMS point at a team that does not exist. The help comment names the otterdog.json org-entry teams (\"approved by a member of team '<approval>'\", `<org>/<admin>`). Once the entry drops them, it names the environment's (pattern '^x$' with the 'no team ... matches' note, `<org>/x`). Requires otterdog#715 (v1.5.0). W-RT-ADMIN-TEAMS-SPACES covers KB-013 (scoped xfail; approval patterns with spaces as the strict control). BLUEPRINT_CHECK_INTERVAL and DEPENDENCY_TRACK_URL/TOKEN are asserted by W-BP-CHECK and W-POL-SBOM. The GITHUB_WEBHOOK_ENDPOINT override is covered offline by tests/offline/test_webapp_runtime.py::test_webhook_endpoint_is_configurable."
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: webapp-runtime.init
     area: webapp-runtime
@@ -4939,6 +5473,8 @@ features:
     covered_by: [tests/webapp/test_boot.py::test_webapp_boot, tests/webapp/test_runtime.py::test_init_imports_existing_pull_requests, tests/webapp/test_policies.py::test_policy_definitions_are_loaded_and_merged, tests/webapp/test_blueprints.py::test_blueprint_definitions_are_loaded]
     known_bugs: [KB-015, KB-074]
     notes: "Reloading global policies and blueprints on /internal/init is now asserted on the project page; init after a webapp restart refreshes PRs. The KB-015 push path is covered by W-BP-GLOBAL-PUSH."
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: webapp-runtime.fetch-all-pull-requests
     area: webapp-runtime
@@ -4954,6 +5490,8 @@ features:
     covered_by: [tests/webapp/test_runtime.py::test_init_imports_existing_pull_requests, tests/webapp/test_runtime.py::test_init_keeps_the_apply_status]
     known_bugs: [KB-014, KB-074]
     notes: "W-RT-INIT-IMPORTS-PRS: the webapp service is stopped and the relay is shown to have failed (and dropped) the opened/closed deliveries. PRs opened or merged meanwhile are handled by the next /internal/init (FetchAllPullRequestsTask finished): the open PR is imported (open, draft false, not_applied, valid null, no bot comment; /otterdog validate then validates it), the merged PR is imported as merged and completed and never applied, and a PR against another base is not imported. KB-014: 'main' is hardcoded, which is consistent here because main is the config repo's default branch. KB-074 (W-RT-INIT-APPLY-STATUS): the re-import overwrites partially_applied with completed (non-strict xfail, scoped)."
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: webapp-runtime.internal-unknown
     area: webapp-runtime
@@ -4981,6 +5519,8 @@ features:
     priority: P1
     status: covered
     covered_by: [tests/webapp/test_boot.py::test_webapp_boot]
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: webapp-runtime.api-projects
     area: webapp-runtime
@@ -4995,6 +5535,8 @@ features:
     status: covered
     covered_by: [tests/webapp/test_runtime.py::test_project_api]
     notes: "W-RT-API-PROJECTS: /api/projects/<project> == /api/organizations/<org> (read after quiesce); an unknown project or org answers 404 with body {}. Also verified offline against the 9bdeb75 image."
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: webapp-runtime.api-tasks
     area: webapp-runtime
@@ -5008,6 +5550,8 @@ features:
     priority: P1
     status: covered
     covered_by: [tests/webhooks/test_app_delivery.py::test_config_pr_delivery_is_relayed, tests/webapp/test_boot.py::test_webapp_boot]
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: webapp-runtime.api-pullrequests
     area: webapp-runtime
@@ -5021,6 +5565,8 @@ features:
     priority: P1
     status: covered
     covered_by: [tests/webapp/test_pr_validation.py::test_valid_config_pr, tests/webapp/test_merge_apply.py::test_merge_applies_config, tests/webapp/test_stale_status.py::test_stale_snapshot_keeps_merged_status]
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: webapp-runtime.api-statistics
     area: webapp-runtime
@@ -5087,6 +5633,8 @@ features:
     status: covered
     covered_by: [tests/webapp/test_runtime.py::test_project_and_admin_pages]
     notes: "W-RT-PAGES: /organizations/<org> -> 302 /projects/<project>; /organizations/<org>/repos/<repo> -> 302 /projects/<project>/repos/<repo>. The project page has the policies and blueprints tabs and the repo link; the repository page shows 'Repository <repo>'; /defaults shows the snippets orgs.newOrg('<project-name>', '<github-id>') = and orgs.newRepo('<name>') =; /playground shows the template (in a textarea up to v1.6.1, in the templateFiles of its playground-data JSON script since #878, v1.7.0); unknown org, project and repo get the 404 HTML page; /allprojects lists the project. The redirect and 404 shapes were checked offline."
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: webapp-runtime.pages-admin
     area: webapp-runtime
@@ -5101,6 +5649,8 @@ features:
     status: covered
     covered_by: [tests/offline/test_webapp_contract.py::test_pages_need_no_login, tests/offline/test_webapp_contract.py::test_admin_pages_of_an_empty_database, tests/webapp/test_runtime.py::test_project_and_admin_pages, tests/webapp/test_policies.py::test_macos_large_runner_jobs_are_cancelled_unless_allowed]
     notes: "offline: the five admin pages render without a session on an empty database (O-WEB-ROUTES); live: the /admin/organizations row of the test org {installation id of the App, installed, project} (W-RT-PAGES) and the /admin/policies counters (W-POL-MACOS)."
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: webapp-runtime.login-required
     area: webapp-runtime
@@ -5166,6 +5716,8 @@ features:
       needs:
         - "webapp"
         - "harness: BlueprintHelper option bypassing the per-type rule for global definitions"
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: blueprints.required-file
     area: blueprints
@@ -5180,6 +5732,8 @@ features:
     status: covered
     covered_by: [tests/webapp/test_blueprints.py::test_required_file_remediation]
     notes: "W-BP-REQUIRED-FILE: the remediation PR (title, base main, body naming the blueprint name and definition, the dismissal note and /organizations/<org>#blueprint-<id>) adds a strict file and a non-strict file rendered with mustache (repo_name, github_id, project_name, blueprint_id, repo.description, repo_url). A list name_pattern is used and only the matching repo gets a status. A recheck (changed definition, exactly one fetch) rewrites the strict file in the existing branch, keeps the maintainer's edit of the non-strict file, and reuses the same PR. Merge -> recheck/success. A push to main deleting the strict file re-evaluates at once (CheckFilesTask without /internal/check) and opens a new PR with only that file. Skips on webapps older than otterdog#766 (v1.6.0)."
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: blueprints.pin-workflow
     area: blueprints
@@ -5209,6 +5763,8 @@ features:
     status: covered
     covered_by: [tests/webapp/test_blueprints.py::test_append_configuration_remediation]
     notes: "the Eclipse '.github' snippet blueprint appears in 199 org files as an appended '} + {' block. W-BP-APPEND: config-repo PR from otterdog/blueprint/<id>. Its otterdog/<org>.jsonnet is main.rstrip() + ' + ' + the rendered snippet ({{blueprint_id}}, {{github_id}}); the snippet was checked offline with rjsonnet. Review is requested from the approval team (requested_reviewers). The webapp validates it (status + validate comment naming the new repo). It is merged through the guarded ConfigRepoFlow and applied (repository created with the rendered description), then the stored config declares it and the blueprint reports success."
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: blueprints.scorecard-integration
     area: blueprints
@@ -5233,6 +5789,8 @@ features:
       needs:
         - "webapp"
         - "harness: a repository with published results or a redirect of api.securityscorecards.dev (hardcoded, sync_scorecard_result.py)"
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: blueprints.status-and-dismissal
     area: blueprints
@@ -5248,6 +5806,8 @@ features:
     covered_by: [tests/webapp/test_blueprints.py::test_closed_remediation_dismisses_the_blueprint, tests/webapp/test_blueprints.py::test_required_file_remediation]
     known_bugs: [KB-075]
     notes: "W-BP-DISMISS: closing the PR -> UpdateBlueprintStatusTask -> dismissed (row keeps the PR number), bot comment with the blueprint-dismissal marker 'The blueprint `<id>` has been dismissed for this repo.', branch deleted by the webapp, listed by /api/blueprints/dismissed and no longer by remediations. A check evaluates nothing and opens no new PR. Reopen (branch recreated first) -> remediation_prepared. A second close minimizes the first dismissal comment. A lost status (definition removed and re-added) is restored to dismissed from the closed PR on GitHub, with no new PR: the regression of otterdog#766 (16f7f32, v1.6.0), a strict xfail limited to DismissalLostError on older webapps. Merge -> recheck/success is covered in W-BP-REQUIRED-FILE."
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: blueprints.remediations-api
     area: blueprints
@@ -5263,6 +5823,8 @@ features:
     covered_by: [tests/webapp/test_blueprints.py::test_required_file_remediation, tests/webapp/test_blueprints.py::test_closed_remediation_dismisses_the_blueprint]
     known_bugs: [KB-075]
     notes: "Rows {id.org_id, id.repo_name, id.blueprint_id, remediation_pr} with the id[blueprint_id] filter while the PR is open; gone after the merge or the dismissal (W-BP-REQUIRED-FILE, W-BP-DISMISS). The CLI consumers are cli.list-blueprints / cli.approve-blueprints (W-CLI-BLUEPRINTS). updated_at is never refreshed (KB-075)."
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: blueprints.check-endpoint
     area: blueprints
@@ -5278,6 +5840,8 @@ features:
     covered_by: [tests/webapp/test_blueprints.py::test_check_interval_and_limit, tests/webapp/test_blueprints.py::test_changed_type_keeps_the_check_working]
     known_bugs: [KB-072]
     notes: "W-BP-CHECK uses append_configuration blueprints whose condition is not a boolean (status failure, no GitHub writes, one AppendConfigurationTask per evaluation of the config repo). With BLUEPRINT_CHECK_INTERVAL=3600 (webapp_env) /internal/check evaluates nothing and logs \"skipping blueprint with id '<id>' for org '<org>', last checked at ...\" (compose). Back at 0: /internal/check/1 evaluates only the never-checked blueprint, /internal/check all three. Requires otterdog#766. Validated offline against the 9bdeb75 image with a seeded database. W-BP-TYPE-CHANGE shows the failure mode where /internal/check answers 500."
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   # ==================================================================================================================
   # policies: macos_large_runners and dependency_track_upload (webapp/policies, tasks/policies, tasks/fetch_policies)
@@ -5296,6 +5860,8 @@ features:
     covered_by: [tests/webapp/test_policies.py::test_policy_definitions_are_loaded_and_merged, tests/webapp/test_policies.py::test_malformed_policy_does_not_block_the_others]
     known_bugs: [KB-069]
     notes: "W-POL-LOAD: global macos_large_runners and dependency_track_upload policies load on /internal/init (project page cards: name or 'Overview', Reference URL, config parsed from PrettyFormatter). Org policies pushed to config repo main merge over them: path and name from the org file, the global description kept when the org sets none, allowed and workflow_filter from the org, artifact_name always from the global one (Policy.merge). Removing the org macos file restores the global values. KB-069 (W-POL-LOAD-MALFORMED): a file without 'type' fails FetchPoliciesTask (non-strict xfail, scoped). #944 (open) removes the dependency_track_upload type: on a webapp built without it W-POL-LOAD asserts that its files never show up and the macos policy still loads and merges."
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: policies.macos-large-runners
     area: policies
@@ -5324,6 +5890,8 @@ features:
     status: covered
     covered_by: [tests/webapp/test_policies.py::test_sbom_upload_to_dependency_track]
     notes: "W-POL-SBOM (dtrack_mock): a successful run of the caller of the reusable store workflow -> workflow_run completed -> UploadSBOMTask finished -> PUT /api/v1/bom with X-Api-Key e2e-dummy*, application/json, {projectName, projectVersion 1.0.0, parentUUID default, autoCreate true, bom == the CycloneDX document}. A non-matching workflow_filter -> no UploadSBOMTask and no upload. The mock answering 500 -> UploadSBOMTask failed ('failed to upload SBOM'). #944 (open) removes the policy, UploadSBOMTask and the workflow_run hook: W-POL-SBOM is skipped on a webapp built without them; offline, O-WEB-SIG then expects every workflow_run delivery logged as 'workflow_run (<delivery id>)'."
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   # ==================================================================================================================
   # regressions: notable fixes of CHANGELOG.md (and the commits after v1.6.1 on main, cited by their code) that a
@@ -5341,6 +5909,9 @@ features:
     status: covered
     covered_by: [O-VAL-RULESET-STRICT, regression.repo-ruleset-without-strict, O-VAL-ORG-RULESET-STRICT, enterprise.org-ruleset.missing-strict, tests/differential/test_offline_diff.py::test_change_expected_deltas_observed]
     known_bugs: [KB-008]
+    verified_on:
+      - {target: "enterprise", sut: "main-fa01483", run: "tp28q9d7", date: "2026-11-25"}
+      - {target: "enterprise", sut: "v1.8.0", run: "tp20305a", date: "2026-11-25"}
 
   - id: regression.791-code-scanning-new-repos
     area: regressions
@@ -5354,6 +5925,9 @@ features:
     status: covered
     covered_by: [regression.private-repo-template-defaults]
     notes: "fixed_in 1.7.0, released in v1.7.0: regression.private-repo-template-defaults runs on release:latest (v1.7.1) and later, older SUTs skip it."
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   - id: regression.779-user-bypass-actors
     area: regressions
@@ -5367,6 +5941,9 @@ features:
     status: covered
     covered_by: [regression.user-bypass-actors]
     notes: "fixed_in 1.7.0, released in v1.7.0: regression.user-bypass-actors runs on release:latest (v1.7.1) and later, older SUTs skip it (f055d51 = v1.6.1 + 7). The user actor in the default mode, then pull_request mode, converging."
+    verified_on:
+      - {target: "enterprise", sut: "main-fa01483", run: "tp28q9d7", date: "2026-11-25"}
+      - {target: "enterprise", sut: "v1.8.0", run: "tp20305a", date: "2026-11-25"}
 
   - id: regression.775-unformattable-webhook-events
     area: regressions
@@ -5392,6 +5969,8 @@ features:
     priority: P1
     status: covered
     covered_by: [tests/webapp/test_merge_apply.py::test_rebase_merge_applies_every_commit]
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: regression.771-warning-wording
     area: regressions
@@ -5405,6 +5984,8 @@ features:
     status: covered
     covered_by: [tests/webapp/test_web_ui_flags.py::test_web_ui_setting_needs_a_manual_apply, tests/webapp/test_pr_validation.py::test_validation_warnings]
     notes: "Exact secrets and cost wordings: 'some of the requested changes ...' when the webapp includes 476bf5e, 'some of requested changes ...' when it predates it, either when unknown."
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: regression.767-code-scanning-languages-new-repo
     area: regressions
@@ -5418,6 +5999,9 @@ features:
     status: covered
     covered_by: [regression.code-scanning-new-repo]
     notes: "fixed_in 1.7.0, released in v1.7.0: regression.code-scanning-new-repo runs on release:latest (v1.7.1) and later, older SUTs skip it."
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   - id: regression.770-cost-automerge
     area: regressions
@@ -5431,6 +6015,8 @@ features:
     status: covered
     covered_by: [tests/webapp/test_pr_validation.py::test_validation_warnings]
     notes: "Cost change: warning, supports_auto_merge false, no automerge comment, refusal naming 'may incur costs'; new repo with the default 10 GB stays auto-mergeable (automerge comment). Strict xfail (CostAutoMergeRegressionError) on webapps without c4f75eb."
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: regression.766-blueprint-dismissed
     area: regressions
@@ -5444,6 +6030,8 @@ features:
     status: covered
     covered_by: [tests/webapp/test_blueprints.py::test_closed_remediation_dismisses_the_blueprint]
     notes: "W-BP-DISMISS: a dismissed blueprint whose status is lost (definition removed and re-added) is restored to dismissed from the closed remediation PR on GitHub and no new PR is opened (strict xfail limited to DismissalLostError on webapps without 16f7f32)."
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: regression.765-out-of-sync-warning
     area: regressions
@@ -5457,6 +6045,8 @@ features:
     status: covered
     covered_by: [tests/webapp/test_commands.py::test_drift_check_sync]
     notes: "The check-sync comment starts with its marker line followed by '> [!WARNING]' when the webapp includes 975cf1b ('> [!NOTE]' before, either when unknown)."
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: regression.751-disabled-ruleset-conditions
     area: regressions
@@ -5469,6 +6059,9 @@ features:
     priority: P2
     status: covered
     covered_by: [regression.disabled-ruleset-without-refs]
+    verified_on:
+      - {target: "enterprise", sut: "main-fa01483", run: "tp28q9d7", date: "2026-11-25"}
+      - {target: "enterprise", sut: "v1.8.0", run: "tp20305a", date: "2026-11-25"}
 
   - id: regression.731-private-repo-rulesets
     area: regressions
@@ -5481,6 +6074,10 @@ features:
     priority: P1
     status: covered
     covered_by: [regression.private-repo-template-defaults, cli.neg.private-ruleset]
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "enterprise", sut: "main-fa01483", run: "tp28q9d7", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   - id: regression.718-unknown-properties
     area: regressions
@@ -5507,6 +6104,8 @@ features:
     status: covered
     covered_by: [tests/webapp/test_otterdog_branches.py::test_otterdog_branches_are_deleted]
     notes: "Second open-pr PR: the harness deletes otterdog/e2e-<run>-* first (GitHub closes the PR, flow.close is a no-op then), the closed delivery arrives with the branch gone, the DeleteBranchTask must finish (strict xfail DeletedBranchRegressionError before 2bbd1a4). No delete_branch_on_merge drift needed."
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: regression.712-fail-fast-configuration
     area: regressions
@@ -5547,6 +6146,9 @@ features:
     covered_by: [cli.repo.lifecycle, tests/cli/test_smoke.py::test_check_token_permissions]
     known_bugs: [KB-002]
     notes: "every live CLI run provides only api_token (no username, password or TOTP)"
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   - id: regression.695-700-491-status-check-mapping
     area: regressions
@@ -5561,6 +6163,9 @@ features:
     covered_by: [cli.ruleset.public, cli.ruleset.status-checks, cli.protection.app-checks]
     known_bugs: [KB-051, KB-054]
     notes: "#700 (integration id of an app that is not installed: 15368) and #491/#695 (installed App slug sent as integration_id and read back as the slug) are strict. The outline's expectation that '<installed app id>:<ctx>' converges is wrong: it never converges (KB-054 known-bug step)."
+    verified_on:
+      - {target: "enterprise", sut: "main-fa01483", run: "tp28q9d7", date: "2026-11-25"}
+      - {target: "enterprise", sut: "v1.8.0", run: "tp20305a", date: "2026-11-25"}
 
   - id: regression.691-open-pr-author
     area: regressions
@@ -5574,6 +6179,9 @@ features:
     status: covered
     covered_by: [tests/cli/test_config_repo_cli.py::test_open_pr, tests/offline/test_cli_basics.py::test_usage_errors_exit_2, tests/cli/test_commands_config_repo.py::test_open_pr_opens_nothing_when_it_must_not]
     notes: "offline: open-pr without -a is a click usage error (exit 2, \"Missing option '-a'\") before any configuration is loaded; live: an author that is no GitHub user exits 2 ('author ... is not a valid GitHub user') and opens nothing."
+    verified_on:
+      - {target: "automation", sut: "main-fa01483", run: "tp2fgp07", date: "2026-11-25"}
+      - {target: "automation", sut: "v1.8.0", run: "tp24ye15", date: "2026-11-25"}
 
   - id: regression.685-pin-invalid-workflow
     area: regressions
@@ -5605,6 +6213,9 @@ features:
     status: covered
     covered_by: [tests/cli/test_import.py::test_import_plans_no_change, tests/cli/test_protection_import.py::test_imported_protections_plan_no_change]
     notes: "Imports a repository with a BPR, a branch ruleset (partial pull_request, status checks, merge queue, bypass actors) and a tag ruleset (pull_request/status checks null). Checks the imported spelling, then plans the cut-out repository block with the baseline: noop (round trip checked offline with otterdog's writer)."
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   - id: regression.653-string-property
     area: regressions
@@ -5618,6 +6229,9 @@ features:
     status: covered
     covered_by: [cli.custom-property, cli.custom-property.flag]
     notes: "string properties (cli.custom-property) and true_false properties (cli.custom-property.flag) are created without allowed_values and converge."
+    verified_on:
+      - {target: "automation", sut: "main-fa01483", run: "tp2fgp07", date: "2026-11-25"}
+      - {target: "automation", sut: "v1.8.0", run: "tp24ye15", date: "2026-11-25"}
 
   - id: regression.635-fork-pr-private
     area: regressions
@@ -5631,6 +6245,9 @@ features:
     status: covered
     covered_by: [regression.private-repo-template-defaults, cli.repo.visibility, cli.org.member-privileges]
     notes: "Released in v1.3.1: cli.repo.visibility and cli.org.member-privileges plan, apply and converge private repositories (created public, then made private: #791) on release:latest, so the fork PR approval reads and patches of private repositories run there; regression.private-repo-template-defaults (fixed_in 1.7.0) also creates one directly."
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   - id: regression.603-automerge-problems-comment
     area: regressions
@@ -5643,6 +6260,8 @@ features:
     priority: P1
     status: covered
     covered_by: [tests/webapp/test_web_ui_flags.py::test_web_ui_setting_needs_a_manual_apply]
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: regression.nested-dict-printing
     area: regressions
@@ -5670,6 +6289,8 @@ features:
     covered_by: [tests/webapp/test_commands.py::test_drift_check_sync, tests/webapp/test_merge_apply.py::test_drifted_org_still_auto_merges]
     known_bugs: [KB-019]
     notes: "W-AUTOMERGE-DRIFT (P1): drifted run repo: check-sync comment, 'sync check failed' with state success, /api in_sync false, automerge comment, /otterdog merge merges, the apply names only the added repo and the drifted description stays on GitHub."
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: regression.562-empty-status-checks
     area: regressions
@@ -5683,6 +6304,9 @@ features:
     status: covered
     covered_by: [regression.ruleset-empty-status-checks]
     known_bugs: [KB-021]
+    verified_on:
+      - {target: "enterprise", sut: "main-fa01483", run: "tp28q9d7", date: "2026-11-25"}
+      - {target: "enterprise", sut: "v1.8.0", run: "tp20305a", date: "2026-11-25"}
 
   - id: regression.472-rename-and-modify
     area: regressions
@@ -5695,6 +6319,9 @@ features:
     priority: P1
     status: covered
     covered_by: [regression.rename-and-modify]
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   - id: regression.450-pages-required-fields
     area: regressions
@@ -5708,6 +6335,9 @@ features:
     status: covered
     covered_by: [cli.repo.pages]
     notes: "source-path step: only gh_pages_source_path changes (1 change); apply ok and oracle source {branch main, path /docs}."
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   - id: regression.440-rich-escaping
     area: regressions
@@ -5735,6 +6365,9 @@ features:
     status: covered
     covered_by: [cli.repo.code-scanning]
     notes: "languages ['actions','python'] validate (no 'not detected' message), apply, and converge."
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   - id: regression.import-multiple-custom-properties
     area: regressions
@@ -5748,6 +6381,9 @@ features:
     status: covered
     covered_by: [tests/cli/test_repo_import.py::test_imported_custom_properties_plan_no_change]
     notes: "Three definitions (single_select, string, true_false) plus repository values; checks the imported spelling, then the blocks plan noop with the baseline (requires custom_properties)."
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   - id: regression.local-apply-teams-webhooks
     area: regressions
@@ -5762,6 +6398,8 @@ features:
     covered_by: [tests/webapp/test_web_ui_flags.py::test_web_ui_setting_needs_a_manual_apply, tests/webapp/test_merge_apply.py::test_team_and_wildcard_webhook_are_applied]
     known_bugs: [KB-068]
     notes: "W-MERGE-TEAM-HOOK (P2): run team + run repo whose hook url carries a token, declared on main with '<prefix>*' (trusted CLI then reset_main): the merged PR's team description is applied (strict); the wildcard webhook update loses the live url (scoped xfail WildcardWebhookUpdateError: KB-068, otterdog PATCHes config.url = the pattern)."
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   # ==================================================================================================================
   # otterdog main d9dac78: changes after main 9bdeb75 (v1.7.0, v1.7.1 and main after v1.7.1), sources at d9dac78
@@ -5895,6 +6533,9 @@ features:
       assertions:
         - "oracle org_dependabot_secret, org_codespaces_secret, org_dependabot_secret_repos as written, absent after -d"
       needs: [target, org_level, "an otterdog release >= 1.8.0", "Dependabot and Codespaces secrets permissions of the admin token (docs/setup-free-org.md)"]
+    verified_on:
+      - {target: "enterprise", sut: "main-fa01483", run: "tp28q9d7", date: "2026-11-25"}
+      - {target: "enterprise", sut: "v1.8.0", run: "tp20305a", date: "2026-11-25"}
 
   - id: secrets-variables.repo-dependabot-codespaces-secrets
     area: secrets-variables
@@ -5915,6 +6556,9 @@ features:
       assertions:
         - "oracle repo_dependabot_secret and repo_codespaces_secret present, then absent"
       needs: [target, "an otterdog release >= 1.8.0"]
+    verified_on:
+      - {target: "enterprise", sut: "main-fa01483", run: "tp28q9d7", date: "2026-11-25"}
+      - {target: "enterprise", sut: "v1.8.0", run: "tp20305a", date: "2026-11-25"}
 
   - id: validation.secret-names-uppercase
     area: validation
@@ -5968,6 +6612,9 @@ features:
     covered_by: [O-VAL-IMMUTABLE-RELEASES, cli.repo.immutable-releases]
     known_bugs: [KB-033]
     notes: "offline: '~ immutable_releases_enabled = false -> true'; with the policy 'all' the repository setting plans nothing (coerced at load, so the documented Info never prints: KB-033 step); live: cli.repo.immutable-releases (fixed_in 1.7.0, runs on release:latest) enables then disables it through the oracle kind repo_immutable_releases (not run live yet)."
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   - id: repositories.pages-custom-domain
     area: repositories
@@ -6172,6 +6819,9 @@ features:
     covered_by: [O-LPLAN-DICT-ONE-WAY, cli.kb.team-permissions-removal]
     known_bugs: [KB-005]
     notes: "KB-005 fixed in 1.7.0: the steps that declared it are strict from that version on (release:latest included) and expected failures before."
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   - id: regression.878-schema-enums
     area: regressions
@@ -6324,6 +6974,8 @@ features:
         - "offline: vendor/<repo>/sub/nested/helper.libsonnet exists and validate passes (otterdog >= 1.8.0); before #893 the helper is not vendored and the import fails"
         - "webapp: defaultConfig vendor/otterdog/otterdog/resources/defaults/otterdog-defaults.libsonnet is one of the filenames, with url <upstream repo>/blob/<sut sha>/otterdog/resources/defaults/otterdog-defaults.libsonnet, otterdog-functions.libsonnet beside it"
       needs: [offline, webapp, "available: publish_origin and seed_clone of tests/offline/test_config_template_cache.py (O-TEMPLATE-CACHE)", "an otterdog release >= 1.8.0", "harness: Playwright pages of the webapp dashboard for the completion and snippet behaviour"]
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: regression.895-merge-rechecks-approvals
     area: regressions
@@ -6346,6 +6998,8 @@ features:
       assertions:
         - "webapps with #895: the PR is merged and applied and /api has_required_approvals is true; before #895 (v1.7.1) the refusal names the missing approval ('No approval from a member of') and the PR stays open"
       needs: [webapp, "identity author", "identity approver", "available: webapp_otterdog_json fixture (otterdog.json organization overrides, then /internal/init)", "an otterdog release >= 1.8.0"]
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: regression.904-merge-base-from-branch-activity
     area: regressions
@@ -6367,6 +7021,8 @@ features:
       assertions:
         - "webapps with #904: the ApplyChangesTask of the PR fails, its log naming 'unable to determine base of merged pull request, no merge of a pull request into branch 'main' up to commit '<merge sha>' found in the activity of repo '<org>/<config repo>'', no apply comment, the run repository is not created"
       needs: [target, webapp, "target: merge queues on the config repository (a public repository, or the enterprise plan for a private one)", "harness: enqueue a pull request (GraphQL enqueuePullRequest) and wait for the merge of the queue", "an otterdog release >= 1.8.0"]
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: regression.905-excluded-teams-local-operations
     area: regressions
@@ -6414,6 +7070,8 @@ features:
       assertions:
         - "webapps with #906: the row is back {installation_id: the real id, status installed, project_name} and a FetchConfigTask of the config repository finishes, without /internal/init; before #906 (v1.7.1) there is no row until the next reload"
       needs: [webapp, app, "available: WebhookInjector and installation_payload (W-INSTALLATION-EVENTS), E2EContext.publish_otterdog_json and reload_webapp", "harness: hold back the relayed push of the configs repository for one test (DeliveryRelay.accept is only set when the relay is built)", "an otterdog release >= 1.8.0"]
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: regression.907-custom-property-editable-default
     area: regressions
@@ -6462,6 +7120,8 @@ features:
         - "the organization's card on /allprojects and the activity of /projects/<project> link 'Configuration changed ...' to https://github.com/<org>/<config repo>/commit/<merge commit sha> (webapps with #912)"
         - "the page has the color mode toggle (button[data-otterdog-color-scheme-toggle]) and no fonts.googleapis.com stylesheet (v1.7.1 has one)"
       needs: [webapp, "an otterdog release >= 1.8.0", "harness: Playwright pages of the webapp dashboard for the dark mode itself"]
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: regression.914-codespaces-secrets-unavailable
     area: regressions
@@ -6485,6 +7145,8 @@ features:
         - "the baseline plan is a no-op and prints \"organization_codespaces secrets of '<org>' are not available (GitHub answers 404 for '/orgs/<org>/codespaces/secrets'), they are skipped\" once"
         - "the declaring plan fails with \"The configuration of '<org>' declares organization_codespaces secrets which cannot be managed, remove them or make the secrets available.\" and no Plan line"
       needs: [target, "harness: a capability for unavailable organization Codespaces secrets (GET /orgs/{org}/codespaces/secrets answers 404), to skip on the enterprise shard (min_plan cannot say Free only)", "an otterdog release >= 1.8.0"]
+    verified_on:
+      - {target: "org-level", sut: "v1.8.0", run: "tp23ue25", date: "2026-11-25"}
 
   - id: regression.924-team-permissions-not-patched
     area: regressions
@@ -6498,6 +7160,9 @@ features:
     status: covered
     covered_by: [regression.archived-repo-team-permissions]
     notes: "fixed_in 1.8.0, released in v1.8.0: regression.archived-repo-team-permissions runs on release:latest (v1.8.0) and later, older SUTs skip it. apply.api of each step: a permission-only change of a regular repository sends PUT /orgs/{org}/teams/{name}/repos/{owner}/{repo} and no PATCH /repos/{owner}/{repo}; archiving sends the PATCH and no teams request; on the archived repository a changed and an added team send PUT, a removed team DELETE, never the PATCH, the output has no 'Repository was archived so is read-only' and the oracle shows the new permissions; every step converges. The body of POST /orgs/{org}/repos (without team_permissions since #924) is not asserted: GitHub ignores the field there."
+    verified_on:
+      - {target: "free", sut: "main-fa01483", run: "tp28qbd9", date: "2026-11-25"}
+      - {target: "free", sut: "v1.8.0", run: "tp202z74", date: "2026-11-25"}
 
   # ==================================================================================================================
   # pending: unmerged otterdog changes the battery already targets ("ws:" = a checkout of the maintainer's workspace)
@@ -6515,6 +7180,8 @@ features:
     covered_by: [tests/webapp/test_stale_status.py::test_stale_snapshot_keeps_merged_status]
     known_bugs: [KB-018]
     notes: "W-PR-STALE-SNAPSHOT references #792 with its expected delta (--change 792)"
+    verified_on:
+      - {target: "webapp", sut: "main-fa01483", run: "tp2fya79", date: "2026-11-25"}
 
   - id: pending.check-merge-command
     area: pending

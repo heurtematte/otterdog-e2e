@@ -120,6 +120,25 @@ covering items and gap outline (needs split into available and missing), sorted 
 gives one feature with the existing scenarios and tests to imitate (same area and tags) and the commands that
 validate the change and regenerate `docs/coverage-matrix.md`.
 
+### `assist verify-coverage`
+
+```bash
+gh run download <nightly run id> --dir artifacts/nightly    # or the run directories of local runs
+otterdog-acceptance assist verify-coverage artifacts/nightly/*           # dry run: what each run verifies or refuses
+otterdog-acceptance assist verify-coverage artifacts/nightly/* --write   # records verified_on, regenerates the page
+```
+
+`otterdog-acceptance assist verify-coverage RUN_DIR... [--write] [--json]`
+
+Records the live verification of the coverage matrix. A run directory (with `run.json` and `results.jsonl`, or a
+directory holding such run directories, like a downloaded CI artifact) verifies a covered or partial feature when at
+least one of its live covering items passed in it and none failed or errored; xfails of known bugs and skips are
+neutral. With `--write` the feature's `verified_on` list gets `{target, sut, run, date}` of the run (the SUT label
+of `run.json`, e.g. `v1.8.0` or `main-fa01483`), one entry per target and SUT, the four newest, and
+`docs/coverage-matrix.md` is regenerated. A run of a SUT with uncommitted changes records nothing; a feature refused by
+a run keeps the runs already recorded. The command never runs a test and never talks to GitHub: commit the change
+after review, like any matrix edit.
+
 ## Bundles
 
 ```text

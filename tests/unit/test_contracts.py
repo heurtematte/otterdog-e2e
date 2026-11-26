@@ -364,6 +364,18 @@ PUBLIC_NAMES: dict[str, list[str]] = {
     # the check of the harness itself: outcome changes of two runs on one SUT (compare-runs, make harness-check)
     "otterdog_acceptance.compare_runs": ["RunComparison", "OutcomeChange", "compare_runs", "render"],
     # the coverage matrix (scenarios/coverage.yaml): checks and rendering of tests/unit/test_coverage_matrix.py
+    "otterdog_acceptance.coverage_verify": [
+        "RunStamp",
+        "RunVerification",
+        "VerifyError",
+        "VERIFIED_KEEP",
+        "verify_run",
+        "merge_entries",
+        "verified_updates",
+        "write_verified",
+        "current_verified",
+        "summary",
+    ],
     "otterdog_acceptance.coverage_matrix": [
         "MatrixProject",
         "MatrixError",

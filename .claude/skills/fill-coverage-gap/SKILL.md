@@ -95,8 +95,8 @@ The text after the skill name (`$ARGUMENTS` in Claude Code): a feature id (`conf
      the endpoints of the feature), and `remove` is applied by the SUT in a step, never only by the cleanup;
    - `gap_outline`: removed for `covered`; `known_bugs`: the bugs the test hit; `notes`: the verified behaviour and
      the exact messages;
-   - never add `verified_on`: it records a green live run (target, SUT, run id, date from `run.json`) that the user
-     reports to you;
+   - never write `verified_on` by hand: `otterdog-acceptance assist verify-coverage <run dirs> --write` records it
+     from the artifacts of a run in which the covering items passed (the user runs the live tiers);
    - a live test that has not run yet: do not change the status; put the proposed edit in the report (the battery
      guide updates the matrix after the test ran green).
 7. **Regenerate and check the matrix:**

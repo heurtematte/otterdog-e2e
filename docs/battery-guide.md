@@ -633,9 +633,9 @@ After the test runs green (live tests on a target), edit the feature in `scenari
    `release:latest` by `fixed_in` leaves the feature `partial` (the matrix test refuses it);
 3. `gap_outline`: remove it for `covered`, shrink it to what is still missing for `partial`;
 4. `known_bugs`: the bugs the test hit (new ones registered first);
-5. `verified_on`: append the green live run that exercised the covering items,
-   `{target: free, sut: release:latest, run: <run id>, date: YYYY-MM-DD}` (run.json of the artifacts); until then the
-   matrix renders the feature as **unverified** (implemented, never run), whatever its status;
+5. `verified_on`: recorded by `otterdog-acceptance assist verify-coverage <run dirs> --write` from the artifacts of a
+   run in which the covering items passed (`{target, sut, run, date}`, the SUT label of `run.json`), never typed by
+   hand; until then the matrix renders the feature as **unverified** (implemented, never run), whatever its status;
 6. regenerate and check:
 
 ```bash

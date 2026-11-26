@@ -117,7 +117,7 @@ flowchart LR
 | webapp and webhooks | `webapp/stack`, `webapp/api`, `webhooks/*`, `config_repo`, `blueprints`, `resources/dtrack_mock` | the compose stack of the webapp under test (services stopped and started, environment overrides, the Dependency-Track mock of profile `dtrack`), its REST API and pages, webhook signing and injection (raw bodies, omitted headers, replays), the pull relay of App deliveries, the config-repo PR workflow driver (drafts, reviews, comment edits, adopted run PRs), blueprint and policy definitions with their remediation PRs and workflow runs |
 | web UI | `webui/mapping`, `webui/gate`, `webui/oracle`, `webui/roundtrip` (with the web mode of `otterdog/runner`: `WebOtterdogCli`) | the table of the 12 web-only organization settings and its drift check against the SUT's source; the login gate (one bot login at a time per machine, a TOTP window apart, blocked after a failure that retries would make worse); the oracles (REST for 7 settings, a trusted otterdog's `show-live` for the others); the settings round trip (snapshot, set, verify, converge, restore) |
 | scenarios | `scenarios/model`, `checks`, `engine`, `offline`, `collect`, `known_bugs`, `selection`, `inject` | YAML scenarios, oracle checks, the live/offline/differential engines, pytest collection, known otterdog bugs, tag selection from changed files, ad-hoc injection of jsonnet files (`otterdog-acceptance inject`, `tests/adhoc`) |
-| reporting | `observe`, `differential`, `report`, `appmanifest` | observations, base vs head comparison, run summaries (with the coverage matrix of the run), the artifact scrubber, the GitHub App manifest flow |
+| reporting | `observe`, `differential`, `report`, `coverage_verify`, `appmanifest` | observations, base vs head comparison, run summaries (with the coverage matrix of the run), the live verification of the matrix (`verified_on` from run directories), the artifact scrubber, the GitHub App manifest flow |
 
 Rules every module follows: subprocesses only through `procs.run()` (and `procs.run_harness()` for the children of a
 batch; a unit test greps for `subprocess.` outside `procs.py`), GitHub HTTP only through `GitHubHttp`, no secret ever
@@ -233,7 +233,9 @@ Four registries keep the battery honest:
   for partial and gap features, the outline of the missing test. `tests/unit/test_coverage_matrix.py` checks that every
   covering item exists, that the inventory is exhaustive (it parses the example template and pins every command,
   event, task and endpoint) and that [coverage-matrix.md](coverage-matrix.md), generated from the YAML, is current.
-  Every run's `summary.md` reports the matrix shares and the features whose covering items ran;
+  Every run's `summary.md` reports the matrix shares and the features whose covering items ran, and
+  `otterdog-acceptance assist verify-coverage` records in `verified_on` the runs in which a feature's live covering
+  items passed (none failing), so the matrix tells implemented coverage from coverage seen working;
 - **the HTTP request inventory** `scenarios/api_endpoints.yaml`: every write request otterdog sends to GitHub, named
   as otterdog's request statistics name it, with its source and trigger. Live steps assert the requests of their
   apply with `apply.api` (the runner sets `OTTERDOG_STATS_FILE`); `tests/unit/test_api_endpoints.py` refuses an

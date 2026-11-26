@@ -58,5 +58,6 @@ env -u OTTERDOG_CONFIG_ROOT .venv/bin/python -m pytest -q -p no:cacheprovider te
 ```
 
 The matrix renders a covered or partial feature without `verified_on` as **unverified** unless an offline item
-covers it; `verified_on` entries come from a green live run's `run.json` (`run` is the run id), reported by the user.
+covers it; `verified_on` entries are recorded by `otterdog-acceptance assist verify-coverage <run dirs> --write` from
+the artifacts of a run in which the feature's live covering items passed (none failing).
 Keep the README's coverage numbers as they are unless the user asks you to update them.
