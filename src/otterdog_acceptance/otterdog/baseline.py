@@ -28,6 +28,7 @@ import time
 from collections.abc import Callable, Collection, Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
+from otterdog_acceptance.infra import INFRA_PREFIX
 from otterdog_acceptance.otterdog.output import CURRENT_CONFIG_ERROR, ApplyResult
 from otterdog_acceptance.otterdog.render import ConfigFragments
 from otterdog_acceptance.otterdog.runner import OtterdogCli
@@ -74,6 +75,24 @@ def settings_busy_field(result: ApplyResult) -> str | None:
         return None
     match = SETTINGS_BUSY_RE.search(result.raw)
     return match.group("field") if match else None
+
+
+# A GitHub 5xx in otterdog's apply output ("Exception while accessing '<url>': (status=502, body={"): a baseline object
+# the reset could not restore because of it is an infrastructure failure (nightly 45596269086: POST /orgs/{org}/repos
+# answered 502 twice during a GitHub incident, the run's config repo stayed missing and 22 items errored).
+SERVER_ERROR_RE = re.compile(r"(?:accessing '(?P<url>[^'\s]+)':\s*\()?status=(?P<status>5\d\d)\b")
+
+
+def server_errors(results: Sequence[ApplyResult]) -> list[str]:
+    """The GitHub 5xx answers in the outputs of ``results`` ('502 on <url>', or the status alone), without repeats."""
+    found: list[str] = []
+    for result in results:
+        for match in SERVER_ERROR_RE.finditer(result.raw):
+            url = match.group("url")
+            error = f"{match.group('status')} on {url}" if url else match.group("status")
+            if error not in found:
+                found.append(error)
+    return found
 
 
 def _tail(text: str, lines: int = TAIL_LINES) -> str:
@@ -366,7 +385,13 @@ class BaselineManager:
         for repo in self.baseline_repos:
             results.append(self.guarded_apply(cli, repo_filter=repo, delete=True))
         self._check_in_sync()
-        self._check_live_baseline()
+        try:
+            self._check_live_baseline()
+        except SafetyError as exc:
+            errors = server_errors(results)
+            if not errors:
+                raise
+            raise SafetyError(f"{exc}; {INFRA_PREFIX} GitHub answered {', '.join(errors)} during the reset") from exc
         combined = combine_apply_results(results)
         if combined.failed_patches:
             log.warning("baseline reset: failed patches %s", combined.failed_patches)

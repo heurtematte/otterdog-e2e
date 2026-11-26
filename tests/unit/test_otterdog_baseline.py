@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import logging
 import sys
 from pathlib import Path
@@ -9,8 +10,14 @@ from typing import Any
 
 import pytest
 
+from otterdog_acceptance.infra import INFRA_PREFIX, is_infra
 from otterdog_acceptance.naming import RunContext
-from otterdog_acceptance.otterdog.baseline import BaselineManager, combine_apply_results, settings_busy_field
+from otterdog_acceptance.otterdog.baseline import (
+    BaselineManager,
+    combine_apply_results,
+    server_errors,
+    settings_busy_field,
+)
 from otterdog_acceptance.otterdog.output import PlanObject, PlanResult, parse_apply, parse_plan
 from otterdog_acceptance.otterdog.render import OrgConfigRenderer, build_baseline
 from otterdog_acceptance.otterdog.runner import OtterdogCli
@@ -428,8 +435,9 @@ def test_guarded_apply_raises_on_infra_errors(tmp_path: Path) -> None:
 
 
 # --- reset ---------------------------------------------------------------------------------------------------------
-def queue_reset(cli: FakeCli, *, in_sync: bool = True) -> None:
-    """Outputs of a reset whose step 2 sees leftovers of this run and of another run."""
+def queue_reset(cli: FakeCli, *, in_sync: bool = True, first_apply: str | None = None) -> None:
+    """Outputs of a reset whose step 2 sees leftovers of this run and of another run (``first_apply``: the output of
+    step 2's apply, a clean one by default)."""
     leftovers = plan_text(
         '+ add repository[name="e2e-t3c7z8a5-config"] {\n    + name = "e2e-t3c7z8a5-config"\n  + }',
         remove('repository[name="e2e-t3c7z8a5-gone"]'),
@@ -438,7 +446,7 @@ def queue_reset(cli: FakeCli, *, in_sync: bool = True) -> None:
         counts=(1, 0, 3),
     )
     cli.queue("plan", stdout=leftovers)
-    cli.queue("apply", stdout=sample("apply-executed-ignored"))
+    cli.queue("apply", stdout=first_apply or sample("apply-executed-ignored"), exit_code=int(first_apply is not None))
     cli.queue("plan", stdout=plan_text(remove('repository[name="e2e-t3c7z8a5-gone"]'), counts=(0, 0, 1)))
     cli.queue("apply", stdout=sample("apply-executed"))
     cli.queue("check-status", status={"org_id": ORG, "sync_status": {"in_sync": in_sync}})
@@ -483,8 +491,41 @@ def test_reset_verifies_the_live_baseline(tmp_path: Path) -> None:
     oracle = manager.oracle
     oracle.remove_repo("otterdog-e2e-defaults")  # type: ignore[attr-defined]
     oracle.set("org", value={"login": ORG, "description": "no marker"})  # type: ignore[attr-defined]
-    with pytest.raises(SafetyError, match=r"otterdog-e2e-defaults.*lost the safety marker"):
+    with pytest.raises(SafetyError, match=r"otterdog-e2e-defaults.*lost the safety marker") as excinfo:
         manager.reset()
+    assert INFRA_PREFIX not in str(excinfo.value) and not is_infra(str(excinfo.value))
+
+
+def server_error_apply() -> str:
+    """apply-failed-patch with GitHub's 502 to POST /orgs/{org}/repos (the box text of nightly 45596269086)."""
+    return sample("apply-failed-patch").replace(
+        '(status=422, body={"message":"Repository creation failed.","status":"422"})', "(status=502, body={"
+    )
+
+
+def test_server_errors() -> None:
+    """The 5xx answers of the apply outputs with their url, once each; a 4xx is no server error."""
+    failed = parse_apply(server_error_apply())
+    assert server_errors([failed, failed]) == ["502 on https://api.github.com/orgs/e2e-test-org/repos"]
+    assert server_errors([parse_apply(sample("apply-failed-patch")), parse_apply(sample("apply-executed"))]) == []
+    bare = dataclasses.replace(failed, raw="Error: failed to update settings (status=503, body={")
+    assert server_errors([bare]) == ["503"]
+
+
+def test_reset_tags_a_baseline_repo_lost_to_a_github_5xx_as_infra(tmp_path: Path) -> None:
+    """A baseline repo still missing after an apply GitHub answered 5xx: the SafetyError names the answer with
+    INFRA_PREFIX, so results.jsonl, the report and the triage count it as infrastructure (nightly 45596269086)."""
+    manager = make_manager(tmp_path)
+    queue_reset(manager.reset_cli, first_apply=server_error_apply())
+    manager.oracle.remove_repo("e2e-t3c7z8a5-config")  # type: ignore[attr-defined]
+    with pytest.raises(SafetyError) as excinfo:
+        manager.reset()
+    message = str(excinfo.value)
+    assert message == (
+        "baseline reset left the org in an unexpected state: repository 'e2e-t3c7z8a5-config' is missing; [infra] "
+        "GitHub answered 502 on https://api.github.com/orgs/e2e-test-org/repos during the reset"
+    )
+    assert is_infra(message)
 
 
 def test_push_and_text(tmp_path: Path) -> None:
