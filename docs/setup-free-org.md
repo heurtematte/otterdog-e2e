@@ -202,7 +202,7 @@ Notes:
 ## 5. First doctor run
 
 ```bash
-.venv/bin/otterdog-acceptance doctor --target free
+otterdog-acceptance doctor --target free
 ```
 
 doctor is read-only. On a fresh organization expect `FAIL` rows for the marker, the repositories
@@ -237,9 +237,9 @@ idempotent). An invitation expires after 7 days: bootstrap then invites again.
 ## 7. Bootstrap
 
 ```bash
-.venv/bin/otterdog-acceptance bootstrap --target free                  # dry run: reports what it would do
-.venv/bin/otterdog-acceptance bootstrap --target free --apply          # asks you to type the organization login
-.venv/bin/otterdog-acceptance bootstrap --target free --apply --wait   # also waits for the invitations and the App
+otterdog-acceptance bootstrap --target free                  # dry run: reports what it would do
+otterdog-acceptance bootstrap --target free --apply          # asks you to type the organization login
+otterdog-acceptance bootstrap --target free --apply --wait   # also waits for the invitations and the App
 ```
 
 `setup` offers to run `bootstrap --apply --wait` itself. `bootstrap --apply` is idempotent and runs, in order:
@@ -277,7 +277,7 @@ organization, installed on test organizations only) and waits for its installati
 ([onboarding.md](onboarding.md#the-app-step)); the short version by hand:
 
 ```bash
-.venv/bin/otterdog-acceptance app-manifest --target free --webhook-url https://<a-sink-you-control>/otterdog-e2e
+otterdog-acceptance app-manifest --target free --webhook-url https://<a-sink-you-control>/otterdog-e2e
 ```
 
 The webhook URL is only a **sink**: any HTTPS endpoint you control that answers 2xx, or a smee.io channel used only
@@ -302,7 +302,7 @@ them from the deliveries API and relays them to the webapp under test; nothing e
 ## 9. Check and run
 
 ```bash
-.venv/bin/otterdog-acceptance doctor --target free    # every row OK (WARN rows explain what will be skipped)
+otterdog-acceptance doctor --target free    # every row OK (WARN rows explain what will be skipped)
 make offline                                   # no GitHub involved
 make cli TARGET=free                           # live CLI tier
 make webhooks TARGET=free
@@ -339,7 +339,7 @@ reachable through the UI ([web-ui-testing.md](web-ui-testing.md)). It is off unl
 4. Optional: a probe App for `install-app`/`uninstall-app` (a second App of the org without permissions, not
    installed), declared with `E2E_WEB_PROBE_APP_SLUG` (`web_ui.probe_app_slug` of the profile).
 5. Run it explicitly (logins are never a side effect):
-   `E2E_ALLOW_WEB_UI=1 .venv/bin/otterdog-acceptance run --target free --suite cli --scenario 'webui.*' tests/web_ui`.
+   `E2E_ALLOW_WEB_UI=1 otterdog-acceptance run --target free --suite cli --scenario 'webui.*' tests/web_ui`.
 
 ## CI
 
@@ -351,8 +351,8 @@ web-UI lane), holding its variables and secrets, and must be listed in the repos
 unless `--apply` ([onboarding.md](onboarding.md#ci-ci-sync)):
 
 ```bash
-.venv/bin/otterdog-acceptance ci-sync --target free                    # dry run: operations and names, never values
-.venv/bin/otterdog-acceptance ci-sync --target free --nightly --apply  # also adds free to E2E_TARGETS (nightly, janitor)
+otterdog-acceptance ci-sync --target free                    # dry run: operations and names, never values
+otterdog-acceptance ci-sync --target free --nightly --apply  # also adds free to E2E_TARGETS (nightly, janitor)
 gh workflow run e2e.yml -f target=free -f sut=release:latest
 ```
 

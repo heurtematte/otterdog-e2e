@@ -30,7 +30,7 @@ outlines as the YAML.
     make one SCENARIO=O-VAL-ORGVAR                         # an offline scenario (no GitHub)
     make lint-scenarios                                    # every live scenario step validated offline
     make one SCENARIO=cli.org.workflow-permissions TARGET=free
-    .venv/bin/otterdog-acceptance run --target free --suite webapp -k test_draft_pr   # a Python test of a tier
+    otterdog-acceptance run --target free --suite webapp -k test_draft_pr   # a Python test of a tier
     make report                                            # summary.md of the newest run
     ```
 

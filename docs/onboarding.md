@@ -34,11 +34,11 @@ By hand, before `setup` (no API can do these, see [What cannot be automated](#wh
 Then, from the repository root (`make init` done, `OTTERDOG_CONFIG_ROOT` unset):
 
 ```bash
-.venv/bin/otterdog-acceptance setup --target acme-a --profile free    # org, tokens, web login, App, then bootstrap and doctor
-.venv/bin/otterdog-acceptance bootstrap --target acme-a --apply --wait # only when you declined it in setup
-.venv/bin/otterdog-acceptance doctor --target acme-a                   # every row OK (WARN rows say what will be skipped)
-.venv/bin/otterdog-acceptance ci-sync --target acme-a                  # dry run: the environments, variables and secrets
-.venv/bin/otterdog-acceptance ci-sync --target acme-a --apply          # writes them with your gh login
+otterdog-acceptance setup --target acme-a --profile free    # org, tokens, web login, App, then bootstrap and doctor
+otterdog-acceptance bootstrap --target acme-a --apply --wait # only when you declined it in setup
+otterdog-acceptance doctor --target acme-a                   # every row OK (WARN rows say what will be skipped)
+otterdog-acceptance ci-sync --target acme-a                  # dry run: the environments, variables and secrets
+otterdog-acceptance ci-sync --target acme-a --apply          # writes them with your gh login
 make cli TARGET=acme-a                                          # first live run, locally
 gh workflow run e2e.yml -f target=acme-a -f sut=release:latest  # first run in CI
 ```
@@ -146,9 +146,9 @@ instance `free` has `pass:bots/technology.csi/github.com/otterdog-e2e-free-admin
 
 ```bash
 make init                                                   # once: Playwright (extra browser) and its Firefox
-.venv/bin/otterdog-acceptance accounts --target free               # every role whose account is in the store
-.venv/bin/otterdog-acceptance accounts --target free --role admin --rotate --expires-in 90
-.venv/bin/otterdog-acceptance setup --target free                  # finds the tokens in the store and checks them
+otterdog-acceptance accounts --target free               # every role whose account is in the store
+otterdog-acceptance accounts --target free --role admin --rotate --expires-in 90
+otterdog-acceptance setup --target free                  # finds the tokens in the store and checks them
 ```
 
 `pass` runs with `PASSWORD_STORE_DIR` and nothing else: ci-admin's `~/.cbi/config` is never read. Export it in your
@@ -314,9 +314,9 @@ Run `setup --target <instance>` again at any time. Stored tokens are checked aga
 token that fails is asked again (for an optional role you may also remove it). `--rotate` replaces valid values:
 
 ```bash
-.venv/bin/otterdog-acceptance setup --target acme-a --rotate admin --rotate author   # new tokens (regenerating them works too)
-.venv/bin/otterdog-acceptance setup --target acme-a --rotate web                     # a new password or TOTP setup key
-.venv/bin/otterdog-acceptance setup --target acme-a --rotate app                     # registers a NEW App: delete the old one
+otterdog-acceptance setup --target acme-a --rotate admin --rotate author   # new tokens (regenerating them works too)
+otterdog-acceptance setup --target acme-a --rotate web                     # a new password or TOTP setup key
+otterdog-acceptance setup --target acme-a --rotate app                     # registers a NEW App: delete the old one
 ```
 
 The org is pinned: `--org` naming another organization than the stored `E2E_ORG`, or an `E2E_ORG_ID` that no longer
@@ -332,7 +332,7 @@ status contexts, the webapp workers, `E2E_APP_WEBHOOK_URL`, `E2E_MIN_RATE_REMAIN
 `E2E_WEB_LOGIN_SPACING`.
 
 ```bash
-.venv/bin/otterdog-acceptance setup --target acme-b --from acme-a
+otterdog-acceptance setup --target acme-b --from acme-a
 make setup TARGET=acme-b FROM=acme-a
 ```
 
@@ -526,10 +526,10 @@ variables and secrets from its env file.
   `CI` or `GITHUB_ACTIONS` is set.
 
 ```bash
-.venv/bin/otterdog-acceptance ci-sync --target acme-a                                        # dry run
-.venv/bin/otterdog-acceptance ci-sync --target acme-a --reviewer alice --reviewer bob --apply
-.venv/bin/otterdog-acceptance ci-sync --target acme-a --nightly --apply                      # also nightly and janitor
-.venv/bin/otterdog-acceptance ci-sync --target acme-a --prune-branch-policies                # dry run: "would delete"
+otterdog-acceptance ci-sync --target acme-a                                        # dry run
+otterdog-acceptance ci-sync --target acme-a --reviewer alice --reviewer bob --apply
+otterdog-acceptance ci-sync --target acme-a --nightly --apply                      # also nightly and janitor
+otterdog-acceptance ci-sync --target acme-a --prune-branch-policies                # dry run: "would delete"
 ```
 
 When you are the only required reviewer and self-review is prevented, you cannot approve the untrusted runs you
@@ -593,10 +593,10 @@ list, and so does pytest's `--e2e-target` (or `E2E_TARGET`) when live tests are 
 install -d -m 700 ~/.config/otterdog-acceptance/lists
 printf '%s\n' '# instances of my nightly runs' free acme-a > ~/.config/otterdog-acceptance/lists/nightly
 
-.venv/bin/otterdog-acceptance run --target free,acme-a --suite cli                  # one after the other
-.venv/bin/otterdog-acceptance run --target @all --suite cli --parallel 2 --fail-fast
-.venv/bin/otterdog-acceptance pr 792 --sha <40-hex> --target @nightly
-.venv/bin/otterdog-acceptance doctor --target @all                                  # one table per instance
+otterdog-acceptance run --target free,acme-a --suite cli                  # one after the other
+otterdog-acceptance run --target @all --suite cli --parallel 2 --fail-fast
+otterdog-acceptance pr 792 --sha <40-hex> --target @nightly
+otterdog-acceptance doctor --target @all                                  # one table per instance
 make cli TARGET=free,acme-a PARALLEL=2
 make doctor TARGET=@all
 ```

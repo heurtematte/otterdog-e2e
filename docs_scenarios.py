@@ -383,6 +383,7 @@ class Site:
     check_values: dict[str, str] = field(default_factory=dict)
     oracle_lines: dict[str, int] = field(default_factory=dict)
     mentions: dict[str, list[tuple[str, int, str]]] = field(default_factory=dict)
+    coverage: Mapping[str, Any] = field(default_factory=dict)
 
 
 def _kb_id(value: Any) -> str | None:
@@ -704,6 +705,7 @@ def load_site(root: Path, repo_url: str, slugify: Slugify) -> Site:
     site.check_values = check_values((docs / WRITING).read_text(encoding="utf-8"))
     site.oracle_lines = function_lines((root / ORACLE).read_text(encoding="utf-8"))
     site.mentions = mentions(python_sources(root), {scenario.id for scenario in site.scenarios})
+    site.coverage = coverage
     return site
 
 
@@ -1869,6 +1871,122 @@ class Generated:
 
     markdown: str
     source: str
+
+
+# --- the coverage summary of the home page ----------------------------------------------------------------------------
+HOME = "index.md"  # the home page, generated from README.md (docs_hooks.readme_to_home)
+STATUSES = (("covered", "covered"), ("partial", "partial"), ("gap", "gaps"))  # status of a feature -> its plural
+COVERAGE_TIERS = ("offline", "cli", "webhooks", "webapp", "web_ui", "enterprise")  # the tier of a feature
+
+
+def status_counts(features: Iterable[Mapping[str, Any]]) -> dict[str, int]:
+    """The number of features per status (every status present)."""
+    found = dict.fromkeys((status for status, _ in STATUSES), 0)
+    for feature in features:
+        status = str(feature.get("status"))
+        if status in found:
+            found[status] += 1
+    return found
+
+
+def share(part: float, total: int) -> str:
+    """``part`` of ``total`` as a whole percentage (``0%`` of nothing)."""
+    return f"{round(100 * part / total) if total else 0}%"
+
+
+def coverage_bar(found: Mapping[str, int]) -> str:
+    """An inline bar of the covered, partial and gap shares (``e2e-bar`` of docs/assets/theme.css)."""
+    total = sum(found.values())
+    title = ", ".join(f"{found[status]} {plural}" for status, plural in STATUSES)
+    parts = "".join(
+        f'<span class="e2e-bar__{status}" style="width: {100 * found[status] / total:.1f}%"></span>'
+        for status, _ in STATUSES
+        if total and found[status]
+    )
+    return f'<span class="e2e-bar" title="{title}">{parts}</span>'
+
+
+def coverage_rows(header: str, groups: Iterable[tuple[str, Sequence[Mapping[str, Any]]]]) -> list[str]:
+    """The table of the coverage per group: label (Markdown), features, bar, covered share, partial, gaps."""
+    out = [f"| {header} | Features | Coverage | Covered | Partial | Gaps |", "|---|--:|---|--:|--:|--:|"]
+    for label, features in groups:
+        found = status_counts(features)
+        total = len(features)
+        out.append(
+            f"| {cell(label)} | {total} | {coverage_bar(found)} | {share(found['covered'], total)} "
+            f"| {found['partial']} | {found['gap']} |"
+        )
+    return out
+
+
+def home_coverage(site: Site) -> str:
+    """The coverage summary of the home page, from scenarios/coverage.yaml, the scenarios, the Python tests and the
+    known bugs of the commit the site is built from: key figures, the shares per tier and, folded, per area."""
+    w = Writer(site, HOME)
+    features = [feature for feature in site.coverage.get("features") or [] if isinstance(feature, Mapping)]
+    found = status_counts(features)
+    total = len(features)
+    tests = sum(len(module.tests) for module in site.modules)
+    open_bugs = sum(1 for bug in site.known_bugs.values() if bug.get("status") != "fixed")
+    runs = [run for feature in features for run in feature.get("verified_on") or [] if isinstance(run, Mapping)]
+    verified = sum(1 for feature in features if feature.get("verified_on"))
+    last = max((str(run.get("date") or "") for run in runs), default="")
+    tiles = (
+        (str(total), "otterdog features inventoried", ""),
+        (share(found["covered"], total), f"covered ({found['covered']} features)", "covered"),
+        (str(found["partial"]), "partially covered", "partial"),
+        (str(found["gap"]), "gaps, each with its outline", "gap"),
+        (str(verified), f"seen working in a live run{f' (last {last})' if last else ''}", "covered"),
+        (str(len(site.scenarios) + tests), f"tests: {len(site.scenarios)} YAML scenarios, {tests} in Python", ""),
+        (str(open_bugs), "otterdog bugs found, confirmed or suspected", ""),
+    )
+    html = "".join(
+        f'<div class="e2e-tile{f" e2e-tile--{kind}" if kind else ""}"><span class="e2e-tile__value">{value}</span>'
+        f'<span class="e2e-tile__label">{label}</span></div>'
+        for value, label, kind in tiles
+    )
+    upstream = site.coverage.get("otterdog") or {}
+    ref = str(upstream.get("ref") or "")
+    release = str(upstream.get("release") or "")
+    inventory = f"[`{ref[:7]}`]({UPSTREAM}/commit/{ref})" if ref else "`main`"
+    weighted = share(found["covered"] + found["partial"] / 2, total)
+    legend = "".join(
+        f'<span class="e2e-legend__item"><span class="e2e-bar__{status}"></span>{plural}</span>'
+        for status, plural in STATUSES
+    )
+    anchors = site.area_anchors
+    matrix = w.rel(COVERAGE_MATRIX)
+    areas = [
+        (
+            f"[{escape(str(area.get('title') or area['id']))}]({matrix}#{anchors[str(area['id'])]})"
+            if str(area["id"]) in anchors
+            else escape(str(area.get("title") or area["id"])),
+            [feature for feature in features if feature.get("area") == area["id"]],
+        )
+        for area in site.coverage.get("areas") or []
+        if isinstance(area, Mapping) and area.get("id")
+    ]
+    tiers = [(f"`{tier}`", [feature for feature in features if feature.get("tier") == tier]) for tier in COVERAGE_TIERS]
+    out = [
+        f'<div class="e2e-tiles">{html}</div>',
+        "",
+        (
+            f"Inventory of otterdog `main` at {inventory}"
+            + (f" (latest release then: {release})" if release else "")
+            + f", {weighted} covered when a partial feature counts half; the figures are computed from the sources "
+            "of `main` when this site is built."
+        ),
+        "",
+        f'<p class="e2e-legend">{legend}</p>',
+        "",
+        *coverage_rows("Tier", ((label, group) for label, group in tiers if group)),
+        "",
+        f'??? note "By area ({len(areas)} areas)"',
+        "",
+        *(f"    {line}" for line in coverage_rows("Area", areas)),
+        "",
+    ]
+    return "\n".join(out)
 
 
 def pages(site: Site) -> dict[str, Generated]:

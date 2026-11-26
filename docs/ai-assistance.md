@@ -43,7 +43,7 @@ with `--json`. Exit codes: 0 success, 1 harness error (for `check`: problems fou
 ### `assist pr-context`
 
 ```bash
-.venv/bin/otterdog-acceptance assist pr-context 790 --sha 0cee9e302282fefa092b4e0767248a997a9272ea
+otterdog-acceptance assist pr-context 790 --sha 0cee9e302282fefa092b4e0767248a997a9272ea
 ```
 
 `otterdog-acceptance assist pr-context NUMBER [--sha SHA] [--upstream OWNER/REPO] [--out DIR] [--json]`
@@ -68,7 +68,7 @@ functionality it changes and reference the PR there: never a PR-named scenario o
 ### `assist check`
 
 ```bash
-.venv/bin/otterdog-acceptance assist check scenarios/offline/rulesets/val-ruleset-strict.yaml tests/webapp/test_stale_status.py
+otterdog-acceptance assist check scenarios/offline/rulesets/val-ruleset-strict.yaml tests/webapp/test_stale_status.py
 ```
 
 `otterdog-acceptance assist check [PATHS...] [--sut SPEC] [--no-lint] [--json]`
@@ -85,7 +85,7 @@ problems (file, location, message) and the lint result; exit 1 when there is any
 ### `assist triage`
 
 ```bash
-.venv/bin/otterdog-acceptance assist triage latest
+otterdog-acceptance assist triage latest
 ```
 
 `otterdog-acceptance assist triage RUN_DIR|latest [--baseline RUN_DIR] [--out DIR] [--json]`
@@ -108,8 +108,8 @@ With `--baseline`, each failure is marked new or already present in the baseline
 ### `assist coverage`
 
 ```bash
-.venv/bin/otterdog-acceptance assist coverage --status gap,partial --priority P0
-.venv/bin/otterdog-acceptance assist coverage --feature config.hook.validate-team
+otterdog-acceptance assist coverage --status gap,partial --priority P0
+otterdog-acceptance assist coverage --feature config.hook.validate-team
 ```
 
 `otterdog-acceptance assist coverage [--status gap,partial] [--priority P0,P1,P2] [--area AREA] [--tier TIER]

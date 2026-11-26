@@ -388,6 +388,23 @@ def test_readme_to_home() -> None:
     ]
 
 
+def test_readme_to_home_fills_the_site_blocks() -> None:
+    """A line ``<!-- site:<name> -->`` becomes its generated block, after the links of README.md were rebased (the
+    block's links are relative to docs/ already); without blocks the line is kept; a block not given is an error."""
+    readme = text("See [matrix](docs/coverage-matrix.md).", "", "<!-- site:coverage -->", "", "End.")
+    generated = "| [Area](coverage-matrix.md#cli) | 1 |\n"
+    assert hooks().readme_to_home(readme, {"coverage": generated}).split("\n") == [
+        "See [matrix](coverage-matrix.md).",
+        "",
+        "| [Area](coverage-matrix.md#cli) | 1 |",
+        "",
+        "End.",
+    ]
+    assert "<!-- site:coverage -->" in hooks().readme_to_home(readme)
+    with pytest.raises(ValueError, match=r"no generated block for <!-- site:coverage -->"):
+        hooks().readme_to_home(readme, {"other": "x"})
+
+
 def test_readme_home_page() -> None:
     """README.md has one github-only block (the docs badge and the link to the site); the home page generated from it
     has no link left to docs/ and every relative link resolves (a page of docs/ or a file of the repository)."""
@@ -395,8 +412,10 @@ def test_readme_home_page() -> None:
     assert readme.count("<!-- github-only -->") == readme.count("<!-- /github-only -->") == 1
     block = readme.split("<!-- github-only -->")[1].split("<!-- /github-only -->")[0]
     assert SITE in block and "actions/workflows/docs.yml/badge.svg" in block
+    assert readme.count("<!-- site:coverage -->") == 1, "the home page shows the coverage summary"
     home = hooks().readme_to_home(readme)
     assert "github-only" not in home and "badge.svg" not in home
+    assert ".venv/bin/otterdog-acceptance" not in readme, "otterdog-acceptance is on the PATH after make init"
     relative = [dest for dest in destinations(home) if not urlsplit(dest).scheme and not dest.startswith("#")]
     assert relative, "the README links the documentation"
     for dest in relative:

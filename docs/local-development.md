@@ -78,24 +78,24 @@ make one SCENARIO='offline.my.*'
 make one SCENARIO='cli.my.*' TARGET=free
 
 # keep the resources and the scratch directory of a failing session for inspection
-.venv/bin/otterdog-acceptance run --target free --scenario 'cli.my.*' --keep
+otterdog-acceptance run --target free --scenario 'cli.my.*' --keep
 # ... then sweep exactly that run
 make janitor TARGET=free RUN_ID=<run id> APPLY=1
 
 # skip the baseline reset when iterating (the org must already be at the baseline)
-.venv/bin/otterdog-acceptance run --target free --scenario 'cli.my.*' --no-reset
+otterdog-acceptance run --target free --scenario 'cli.my.*' --no-reset
 
 # your otterdog checkout, uncommitted changes included, compared with its merge base
-.venv/bin/otterdog-acceptance run --sut dirty:../otterdog --base-sut auto --suite offline,differential
+otterdog-acceptance run --sut dirty:../otterdog --base-sut auto --suite offline,differential
 
 # a webapp image you built yourself
-.venv/bin/otterdog-acceptance run --target free --suite webapp --webapp-image ghcr.io/eclipse-csi/otterdog:local
+otterdog-acceptance run --target free --suite webapp --webapp-image ghcr.io/eclipse-csi/otterdog:local
 
 # jsonnet files tried without a scenario (offline; --target for a live plan): see "Ad-hoc injection"
-.venv/bin/otterdog-acceptance inject --fragment repositories=scenarios/fragments/repo-basic.jsonnet --print
+otterdog-acceptance inject --fragment repositories=scenarios/fragments/repo-basic.jsonnet --print
 
 # the offline lint of every live scenario step (validate --local with the SUT)
-make lint-scenarios        # = .venv/bin/otterdog-acceptance run --suite offline --sut release:latest -k lint
+make lint-scenarios        # = otterdog-acceptance run --suite offline --sut release:latest -k lint
 ```
 
 `otterdog-acceptance run` without `--suite` runs `offline`, `cli`, `webhooks`, `webapp` and `enterprise`, plus
@@ -103,7 +103,7 @@ make lint-scenarios        # = .venv/bin/otterdog-acceptance run --suite offline
 
 `otterdog-acceptance -v ...` / `-vv ...` log at INFO/DEBUG (redacted). `otterdog-acceptance sut resolve SPEC` shows what
 a spec resolves to (label, sha, version, trust, base sha, changed files). `python -m otterdog_acceptance` is the same
-command line as `.venv/bin/otterdog-acceptance` (`.venv/bin/python -m otterdog_acceptance doctor --target free`): batch
+command line as `otterdog-acceptance` (`.venv/bin/python -m otterdog_acceptance doctor --target free`): batch
 runs start their children as `python -P -m otterdog_acceptance`, with the interpreter of the parent (`-P`: an
 `otterdog_acceptance` package in the current directory is never imported).
 
@@ -118,10 +118,10 @@ instance with an env file) or `@<list>` (the file `~/.config/otterdog-acceptance
 `#` comments). Details and rules: [onboarding.md](onboarding.md#running-on-one-organization-or-a-list).
 
 ```bash
-.venv/bin/otterdog-acceptance targets
-.venv/bin/otterdog-acceptance run --target free,acme-a --suite cli --scenario 'cli.my.*'   # one child process per target
-.venv/bin/otterdog-acceptance run --target @all --suite cli --parallel 2 --fail-fast        # distinct orgs, at most 2 at once
-.venv/bin/otterdog-acceptance doctor --target @all --json                                  # a JSON list, one entry per target
+otterdog-acceptance targets
+otterdog-acceptance run --target free,acme-a --suite cli --scenario 'cli.my.*'   # one child process per target
+otterdog-acceptance run --target @all --suite cli --parallel 2 --fail-fast        # distinct orgs, at most 2 at once
+otterdog-acceptance doctor --target @all --json                                  # a JSON list, one entry per target
 make cli TARGET=free,acme-a PARALLEL=2
 make report RUN=artifacts/<run id>                                                   # one target's own report
 ```
@@ -163,14 +163,14 @@ setup key stored), put `E2E_ADMIN_PASSWORD` and `E2E_ADMIN_TOTP_SEED` in `~/.con
 (chmod 600; `setup --target <instance> --rotate web` asks for both), then:
 
 ```bash
-.venv/bin/otterdog-acceptance doctor --target free          # web:* rows: credentials, seed, 2FA, browser, login gate (never logs in)
+otterdog-acceptance doctor --target free          # web:* rows: credentials, seed, 2FA, browser, login gate (never logs in)
 make web-ui TARGET=free                              # = otterdog-acceptance run --target free --suite web_ui --allow-web-ui
 make web-ui TARGET=free SUT=branch:main ARGS='-k round_trip'
-.venv/bin/otterdog-acceptance run --target free --suite web_ui --allow-web-ui --scenario webui.settings.round-trip
+otterdog-acceptance run --target free --suite web_ui --allow-web-ui --scenario webui.settings.round-trip
 # your otterdog checkout (dirty: and path: SUTs are trusted locally; CI runs only released or upstream SUTs)
-.venv/bin/otterdog-acceptance run --target free --sut dirty:../otterdog --suite web_ui --allow-web-ui
+otterdog-acceptance run --target free --sut dirty:../otterdog --suite web_ui --allow-web-ui
 # the bot's browser session: a visible window that closes at once (a display is needed)
-E2E_WEB_LOGIN=1 .venv/bin/otterdog-acceptance run --target free --suite web_ui --allow-web-ui --scenario webui.cmd.web-login
+E2E_WEB_LOGIN=1 otterdog-acceptance run --target free --suite web_ui --allow-web-ui --scenario webui.cmd.web-login
 ```
 
 - Nothing logs in without `--allow-web-ui` (or `E2E_ALLOW_WEB_UI=1` in the process environment): every web test then
@@ -249,32 +249,32 @@ Recipes (from the project root, `OTTERDOG_CONFIG_ROOT` unset):
 
 ```bash
 # a repository fragment, validated and planned offline with the latest release
-.venv/bin/otterdog-acceptance inject --fragment repositories=scenarios/fragments/repo-basic.jsonnet
+otterdog-acceptance inject --fragment repositories=scenarios/fragments/repo-basic.jsonnet
 
 # a library and a fragment using it, with upstream main, printing the rendered configuration
-.venv/bin/otterdog-acceptance inject --sut branch:main --library e2e=scenarios/lib/e2e.libsonnet \
+otterdog-acceptance inject --sut branch:main --library e2e=scenarios/lib/e2e.libsonnet \
   --fragment repositories=scenarios/fragments/ruleset-repo.jsonnet --print
 
 # the vars of a scenario file become --var options
-.venv/bin/otterdog-acceptance inject --library e2e=scenarios/lib/e2e.libsonnet \
+otterdog-acceptance inject --library e2e=scenarios/lib/e2e.libsonnet \
   --fragment repositories=scenarios/fragments/environment-repo.jsonnet --var wait_timer=5 --var 'branch_policies=[main]'
 
 # an organization variable and an overlay
-.venv/bin/otterdog-acceptance inject --fragment variables=scenarios/fragments/org-variable.jsonnet \
+otterdog-acceptance inject --fragment variables=scenarios/fragments/org-variable.jsonnet \
   --fragment repositories=scenarios/fragments/repo-basic.jsonnet --overlay scenarios/fragments/overlay-run-topics.jsonnet
 
 # an enterprise-only feature, offline
-.venv/bin/otterdog-acceptance inject --plan enterprise --fragment rulesets=my-org-ruleset.jsonnet
+otterdog-acceptance inject --plan enterprise --fragment rulesets=my-org-ruleset.jsonnet
 
 # a complete configuration, planned against another one (local-plan: BASE -> config)
-.venv/bin/otterdog-acceptance inject --config scenarios/fragments/offline-config.jsonnet --base my-previous-config.jsonnet
+otterdog-acceptance inject --config scenarios/fragments/offline-config.jsonnet --base my-previous-config.jsonnet
 
 # your otterdog checkout, uncommitted changes included
-.venv/bin/otterdog-acceptance inject --sut dirty:../otterdog --fragment repositories=my-repo.jsonnet
+otterdog-acceptance inject --sut dirty:../otterdog --fragment repositories=my-repo.jsonnet
 
 # live: validate and plan on the test organization, then apply and clean up
-.venv/bin/otterdog-acceptance inject --target free --fragment variables=scenarios/fragments/org-variable.jsonnet
-.venv/bin/otterdog-acceptance inject --target free --apply --fragment repositories=scenarios/fragments/repo-basic.jsonnet
+otterdog-acceptance inject --target free --fragment variables=scenarios/fragments/org-variable.jsonnet
+otterdog-acceptance inject --target free --apply --fragment repositories=scenarios/fragments/repo-basic.jsonnet
 ```
 
 Teams and `code_scanning_default_languages` are refused offline (their validation calls GitHub; languages beside
@@ -342,7 +342,7 @@ lists the test organization and relays the App deliveries to it.
 To explore by hand (open PRs in the test org yourself and watch the webapp react), run only the relay:
 
 ```bash
-.venv/bin/otterdog-acceptance relay --target free --forward-to http://127.0.0.1:5000/github-webhook/receive --since 30m
+otterdog-acceptance relay --target free --forward-to http://127.0.0.1:5000/github-webhook/receive --since 30m
 ```
 
 It forwards the App deliveries newer than `--since` and prints one line per delivery until Ctrl-C. It holds the org
@@ -408,7 +408,7 @@ The harness must tell otterdog's defects from its own. Three mechanisms do it:
 ```bash
 make harness-check                                  # origin/main's harness vs the working tree, release:latest
 make harness-check HARNESS_BASE=HEAD~3 SUT=tag:v1.7.1
-.venv/bin/otterdog-acceptance compare-runs artifacts/<baseline run> artifacts/<run>   # two runs you already have
+otterdog-acceptance compare-runs artifacts/<baseline run> artifacts/<run>   # two runs you already have
 ```
 
 ## Editor
@@ -455,8 +455,12 @@ matter `edit_url` wins (compare it with the upstream template when Zensical is u
 
 The pages stay GitHub-flavored Markdown that renders on github.com; `docs_hooks.py` adapts them for the site:
 
-- the home page is `README.md`, with its links rebased on `docs/` and without the blocks between
-  `<!-- github-only -->` and `<!-- /github-only -->` (the badge, the link to the site): there is no `docs/index.md`;
+- the home page is `README.md`, with its links rebased on `docs/`, without the blocks between
+  `<!-- github-only -->` and `<!-- /github-only -->` (the badge, the link to the site) and without the navigation
+  sidebar: there is no `docs/index.md`. Its line `<!-- site:coverage -->`, a comment github.com hides, becomes the
+  coverage summary `docs_scenarios.home_coverage` computes when the site is built (key figures, the shares per tier
+  and per area, from `scenarios/coverage.yaml`, the tests and `scenarios/known_bugs.yaml`): the README holds no
+  figure that could go stale;
 - a link that leaves `docs/` (`../scenarios/coverage.yaml`) points to the file on GitHub (`blob/main`, `tree/main`
   for a directory), and its target must exist (`--strict` fails otherwise);
 - GitHub callouts (`> [!WARNING]`) become admonitions;

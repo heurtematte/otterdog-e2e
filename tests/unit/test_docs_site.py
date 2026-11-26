@@ -191,7 +191,7 @@ def test_stage_generates_the_pages_with_their_sources(staged: Any) -> None:
     the theme override; no problem."""
     files = {name: content.decode() for name, content in staged.files.items() if not name.endswith((".png", ".svg"))}
     edit = f"{REPO_URL}/edit/main/"
-    assert files["docs/index.md"].startswith(f"---\nedit_url: {edit}README.md\n---\n\n")
+    assert files["docs/index.md"].startswith(f"---\nedit_url: {edit}README.md\nhide:\n  - navigation\n---\n\n")
     assert files["docs/scenarios/index.md"].startswith(f"---\nedit_url: {edit}docs_scenarios.py\nhide:\n")
     page = files["docs/scenarios/offline/rulesets/val-rulesets.md"]
     assert page.startswith(f"---\nedit_url: {edit}scenarios/offline/rulesets/val-rulesets.yaml\n---\n")
@@ -201,6 +201,8 @@ def test_stage_generates_the_pages_with_their_sources(staged: Any) -> None:
     assert {"theme/main.html", "theme/partials/actions.html", "theme/partials/tabs.html"} <= set(files)
     assert "edit_url: " not in files["docs/security.md"]
     assert "> [!" not in files["docs/index.md"], "GitHub callouts of README.md become admonitions"
+    assert "<!-- site:" not in files["docs/index.md"] and 'class="e2e-tiles"' in files["docs/index.md"]
+    assert "](coverage-matrix.md#" in files["docs/index.md"], "the areas link their section of the coverage matrix"
     assert staged.problems == []
 
 

@@ -9,20 +9,44 @@ Documentation: https://heurtematte.github.io/otterdog-e2e/
 <!-- /github-only -->
 
 End-to-end test harness for [otterdog](https://github.com/eclipse-csi/otterdog), the GitOps tool that manages GitHub
-organizations as code. It covers the three faces of otterdog:
+organizations as code. It runs otterdog against **real, dedicated GitHub test organizations** and checks what GitHub
+really holds afterwards, for the three faces of otterdog:
 
 - the **CLI** (`validate`, `plan`, `apply`, `import`, `push-config`, `open-pr`, ...),
 - the **webapp** (Quart application + GitHub App) and its config-repository pull request workflow (validation
   status and comments, `/otterdog` commands, approvals, auto-merge, merge then apply, sync checks),
 - **webhooks**: deliveries to the GitHub App receiver and the org/repository webhooks that otterdog manages.
 
-A web-UI tier also covers what otterdog can only do through the GitHub web UI (its Playwright login as a bot owner):
-the web-only organization settings and the UI-driven commands.
+It tests a released otterdog version, upstream `main`, an upstream pull request pinned to a commit or a local checkout
+(uncommitted changes included). For a pull request it also runs base and head side by side and reports the expected
+and unexpected differences.
 
-The harness runs against **real, dedicated GitHub test organizations**: GitHub Free, Team and Enterprise Cloud
-organizations on github.com, one or several in one command. It can test a released otterdog version, upstream `main`, a
-proposed upstream pull request pinned to a commit, or a local checkout (uncommitted changes included). For a pull
-request it compares base and head (differential observations) and reports expected and unexpected deltas.
+## How it works
+
+```mermaid
+flowchart LR
+  subgraph harness["otterdog-acceptance"]
+    tests["YAML scenarios<br/>and pytest tests"]
+    oracle["oracle: read-only<br/>GitHub client"]
+  end
+  cli["otterdog CLI<br/>(SUT, in docker)"]
+  org[("GitHub test<br/>organization")]
+  webapp["otterdog webapp<br/>(SUT, in docker)"]
+  tests -- "validate, plan, apply" --> cli
+  cli -- "GitHub API" --> org
+  tests -- "pull requests, comments" --> org
+  org -- "App deliveries" --> webapp
+  webapp -- "checks, merge, apply" --> org
+  oracle -- "reads the state" --> org
+```
+
+A live test writes an otterdog configuration (the baseline of the organization plus what the test adds), runs the SUT
+(the *system under test*, the otterdog version being tested) and reads the organization back through the **oracle**, a
+GitHub client independent of otterdog, to check what GitHub really did. It then plans again until otterdog sees no
+change (convergence). The webapp tests act as GitHub users: they open pull requests on the organization's config
+repository, comment and approve, and the GitHub App's deliveries reach the webapp under test through a relay. Every
+object a run creates carries its run id (`e2e-<run>-...`); each run starts from a baseline of the organization and
+removes what it created.
 
 > [!WARNING]
 > Only use **dedicated test organizations** and **dedicated machine accounts** that belong to test organizations
@@ -31,18 +55,91 @@ request it compares base and head (differential observations) and reports expect
 > anything, but these checks only protect you if the accounts cannot reach any real organization.
 > See [docs/security.md](docs/security.md).
 
-## Requirements
+## Tiers
+
+A **tier** is a family of tests that need the same environment, from nothing at all to a GitHub organization with
+the GitHub App and the admin bot's web login. Each tier is a directory of `tests/` (YAML scenarios also live in
+`scenarios/offline`, `scenarios/cli` and `scenarios/enterprise`), a `--suite` value of `otterdog-acceptance run` and a
+`make` target. Each arrow reads "needs what the tier on its left needs, plus":
+
+```mermaid
+flowchart LR
+  unit["<b>unit</b><br/>the harness itself"]
+  offline["<b>offline</b><br/>otterdog, network cut"]
+  differential["<b>differential</b><br/>base vs head"]
+  cli["<b>cli</b><br/>otterdog on GitHub"]
+  enterprise["<b>enterprise</b>"]
+  webhooks["<b>webhooks</b>"]
+  webapp["<b>webapp</b>"]
+  web_ui["<b>web_ui</b>"]
+  unit -- "+ the SUT image<br/>(docker)" --> offline
+  offline -- "+ a base SUT" --> differential
+  offline -- "+ a test organization<br/>and its tokens" --> cli
+  cli -- "+ plan Enterprise Cloud" --> enterprise
+  cli -- "+ the GitHub App" --> webhooks
+  webhooks -- "+ the webapp<br/>in docker compose" --> webapp
+  cli -- "+ the admin bot's<br/>web login" --> web_ui
+```
+
+| Tier | What it checks | Run it |
+|---|---|---|
+| unit | the harness itself: parsers, guards, renderers and the scenario engine on fakes (no network, no docker) | `make unit` |
+| offline | otterdog without GitHub, with a vendored template: configuration loading, credential providers, `validate`, `local-plan`, `show`, `canonical-diff`, `--help` and exit codes; the offline lint of every live scenario step; the webapp's boot, runtime and webhook receiver with dummy credentials | `make offline` |
+| differential | the same observe-only scenarios on a base and a head SUT, compared: the expected and unexpected deltas of a change | `make differential BASE_SUT=<sut>` |
+| cli | the CLI on the test organization: `plan`, `apply` and otterdog's other commands on run-prefixed resources, the GitHub state read back by the oracle, convergence; the regression scenarios of fixed otterdog bugs | `make cli TARGET=<instance>` |
+| enterprise | the features only GitHub Enterprise Cloud offers | `make enterprise TARGET=<instance>` |
+| webhooks | the organization and repository webhooks otterdog manages, real GitHub App deliveries through the relay | `make webhooks TARGET=<instance>` |
+| webapp | the webapp under test in docker compose: validation of config pull requests, comments, `/otterdog` commands, approvals, auto-merge, apply, sync checks, blueprints, policies | `make webapp TARGET=<instance>` |
+| web_ui | what otterdog only does through the GitHub web UI, logged in as the admin bot: the 12 web-only organization settings, `import` of web settings, `review-permissions`, `install-app` ([web-ui-testing.md](docs/web-ui-testing.md)) | `make web-ui TARGET=<instance>` |
+
+A test whose needs are missing is skipped with the reason: no target, a plan or capability the organization lacks, no
+GitHub App, no docker, a low rate budget, or for `web_ui` no web credentials, no `--allow-web-ui` or an untrusted SUT.
+When the tiers run:
+
+- **every push and pull request** of this repository (`ci.yml`): ruff, mypy, the unit tier and the offline tier of
+  `release:latest` and `branch:main`, no secrets;
+- **every night** (`nightly.yml`): every tier on five test organizations, each taking one share (shard) of the live
+  tests, first for `release:latest`, then for `branch:main` with a differential against `release:latest`;
+- **on demand**: an upstream pull request (`otterdog-acceptance pr`, workflow `e2e-otterdog-pr.yml`), a tier or a
+  scenario on an instance (`make one TARGET=<instance> SCENARIO=<glob>`).
+
+[architecture.md](docs/architecture.md#tiers-and-lanes) gives the timeouts and time budgets of each tier and how the
+shards split the live tests.
+
+## Coverage
+
+[`scenarios/coverage.yaml`](scenarios/coverage.yaml) inventories what otterdog can do: its CLI commands and flags,
+every property of its configuration model, its validation rules and diff semantics, the webapp's events, commands,
+tasks and endpoints, and notable fixes. Each feature names the tests that cover it:
+
+- **covered**: at least one test asserts it, and runs strictly on the default SUT;
+- **partial**: part of it is asserted, the rest is outlined;
+- **gap**: no test yet, but the outline of the missing test is written down.
+
+<!-- site:coverage -->
+
+The [coverage matrix](docs/coverage-matrix.md), generated from that file, details every feature by area, tier and
+priority, and [battery-guide.md](docs/battery-guide.md) explains how to close a gap. The tests also find otterdog
+defects: [known issues](docs/known-issues.md) describes them (from [scenarios/known_bugs.yaml](scenarios/known_bugs.yaml))
+with their reproductions, and the tests that reproduce one assert the correct behaviour and run as expected failures
+while it is open. The `summary.md` of every run has a "Coverage matrix" section: the shares of the tiers it ran and
+the features it exercised.
+
+Not covered (future work): a ghproxy mock (a Dependency-Track mock exists: compose profile `dtrack`), MongoDB
+inspection, tunnels (only the pull relay and a loopback external webapp exist), a Helm/Kubernetes lane, GitHub
+Enterprise Server, ghe.com and Enterprise Managed Users, `repository_dispatch` triggers. The harness never automates a
+browser itself: the web-UI tier lets otterdog's own Playwright client do it.
+
+## Getting started
+
+Requirements:
 
 - Python 3.11 or later (CI uses 3.12) and [poetry](https://python-poetry.org/) 2.x (the lock file was written by
   poetry 2.5.1); `git`.
 - `unshare` (util-linux) with unprivileged user namespaces: offline otterdog commands run without network
   (`unshare -rn`); in CI the harness refuses to run them unsandboxed.
-- Docker (with the compose plugin) for the webapp tiers and for every untrusted SUT (pull requests). The SUT, the
-  *system under test*, is the otterdog version a run tests ([below](#systems-under-test-sut-specs),
-  [glossary](docs/glossary.md)).
-- Network access to github.com and PyPI: the SUT is fetched and installed by the harness.
-
-## Quickstart
+- Docker (with the compose plugin) for the SUT images, the webapp tiers and every untrusted SUT (pull requests).
+- Network access to github.com and PyPI: the harness fetches and installs the SUT itself.
 
 Without any GitHub organization (offline tier only):
 
@@ -53,7 +150,7 @@ make offline     # offline tier of the latest otterdog release, in its docker im
 
 # differential proof of concept of otterdog#790: the offline tier of the head, then base and head CLIs on every
 # observed offline scenario, about 15 min warm
-.venv/bin/otterdog-acceptance run --sut sha:9bdeb75 --change 790 --suite offline,differential
+otterdog-acceptance run --sut sha:9bdeb75 --change 790 --suite offline,differential
 ```
 
 The first run fetches the otterdog repository, installs each SUT and builds its webapp image; later runs reuse the
@@ -64,76 +161,26 @@ onboard it ([docs/onboarding.md](docs/onboarding.md) is the fast path, [docs/set
 the same steps by hand):
 
 ```bash
-.venv/bin/otterdog-acceptance setup --target free             # interactive: org, tokens (prefilled URLs), App, bootstrap
-.venv/bin/otterdog-acceptance doctor --target free            # read-only checks
-.venv/bin/otterdog-acceptance ci-sync --target free --apply   # CI environments, variables and secrets (your gh login)
-make cli TARGET=free                                   # live CLI tier
-make one TARGET=free SCENARIO='cli.repo.*'             # selected scenarios only
-make web-ui TARGET=free                                # web-UI tier: the admin bot logs in (docs/web-ui-testing.md)
+otterdog-acceptance setup --target free             # interactive: org, tokens (prefilled URLs), App, bootstrap
+otterdog-acceptance doctor --target free            # read-only checks
+otterdog-acceptance ci-sync --target free --apply   # CI environments, variables and secrets (your gh login)
+make cli TARGET=free                                # live CLI tier
+make one TARGET=free SCENARIO='cli.repo.*'          # selected scenarios only
+make web-ui TARGET=free                             # web-UI tier: the admin bot logs in (docs/web-ui-testing.md)
 ```
 
 Every test organization is an **instance** (`free` above, or any name such as `acme-a` bound to a profile
 `targets/<profile>.yaml` by `E2E_PROFILE`); several of them run in one command, one child process each:
 
 ```bash
-.venv/bin/otterdog-acceptance setup --target acme-a --from free   # a second organization, same settings
-.venv/bin/otterdog-acceptance targets                             # the instances, their profile and org
-make cli TARGET=free,acme-a                                # one after the other (PARALLEL=2: at once)
-.venv/bin/otterdog-acceptance run --target @all --suite cli       # every instance with an env file
+otterdog-acceptance setup --target acme-a --from free   # a second organization, same settings
+otterdog-acceptance targets                             # the instances, their profile and org
+make cli TARGET=free,acme-a                             # one after the other (PARALLEL=2: at once)
+otterdog-acceptance run --target @all --suite cli       # every instance with an env file
 ```
 
-## Tiers
-
-| Tier | Directory | Needs | Content |
-|---|---|---|---|
-| unit | `tests/unit` | nothing (no network, no docker) | harness self-tests |
-| offline | `tests/offline`, `scenarios/offline` | the SUT image (docker; network once to build it) | configuration loading, credential providers, template hooks, `validate`, `local-plan`, `local-apply` (declined), `show`, `show-default`, `canonical-diff`, `list-projects`, `--help`, `--version` and exit codes with a vendored template; the offline lint of every live scenario step; webapp boot, runtime and webhook receiver contract with dummy credentials |
-| cli | `tests/cli`, `scenarios/cli` (regressions included) | target + admin identity | live CLI lifecycle (`plan -n`/`apply -f -n`), run-prefixed resources |
-| webhooks | `tests/webhooks` | target (+ GitHub App) | otterdog-managed repository/org webhooks, real App deliveries through the relay |
-| webapp | `tests/webapp` | target + GitHub App + docker | the webapp under test in docker compose, config-repo PR workflow |
-| web_ui | `tests/web_ui` | target + the admin bot's web credentials (password, TOTP seed) + `--allow-web-ui`, a trusted SUT, no SAML SSO | otterdog's web-UI login: the round trip of the 12 web-only org settings, `import` of web settings, `review-permissions`, `list-advisories -w`, `install-app`/`uninstall-app`, `web-login` (local) ([web-ui-testing.md](docs/web-ui-testing.md)) |
-| enterprise | `tests/enterprise`, `scenarios/enterprise` | target with plan `enterprise` | enterprise-only features |
-| differential | `tests/differential` | `--base-sut` (+ target for the live part) | observe-only scenarios on base and head, compared |
-
-Lanes: `pr-fast` (at most 45 min: offline tiers of both SUTs, offline differential, tag-selected live scenarios)
-and `nightly-full` (everything; the web-UI tier in its own optional lane). Live tests are skipped (with the reason)
-when no target is given, when a capability, plan, identity, docker or the GitHub App is missing, or when the rate
-budget is low. Web-UI tests also skip without `--allow-web-ui`, web credentials or a trusted SUT.
-
-## Coverage
-
-[`scenarios/coverage.yaml`](scenarios/coverage.yaml) inventories otterdog's features (CLI commands and flags, every
-property of the configuration model, validation rules, diff semantics, the webapp's events, commands, tasks and
-endpoints, notable fixes) and maps each one to the scenarios and tests that cover it, with an outline of the missing
-test for every gap. [docs/coverage-matrix.md](docs/coverage-matrix.md) is generated from it, and a unit test fails
-when the two diverge. After editing the YAML, regenerate the page:
-
-```bash
-.venv/bin/python tests/unit/test_coverage_matrix.py --write   # rewrites docs/coverage-matrix.md, prints the coverage per area
-```
-
-At otterdog main d9dac78 (after v1.7.1) the matrix lists 360 features: 309 covered, 40 partial and 11 gaps (86%
-covered, 91% when a partial feature counts half); 156 are covered by offline items, the only tier run against real SUTs
-so far (`release:latest` v1.7.1 and `branch:main` d9dac78). The battery behind it has 147 YAML scenarios (66 offline,
-74 cli of which 7 regressions, 7 enterprise) and 222 Python test functions (78 offline, 59 cli, 5 webhooks, 64 webapp,
-11 web-UI, 1 enterprise, 4 differential); the offline tier runs about 640 items (one per offline scenario step) in
-about 12 minutes. [scenarios/known_bugs.yaml](scenarios/known_bugs.yaml) registers 81 otterdog defects (50 confirmed,
-21 suspected, 10 fixed upstream): the items that reproduce one assert the correct behaviour
-and run as expected failures while it is open.
-
-Every run's `summary.md` has a "Coverage matrix" section: the covered, partial and gap shares per tier, and the
-features whose covering items ran in that run. [docs/battery-guide.md](docs/battery-guide.md) explains how to close a
-gap: which harness API, YAML key, fixture or check kind to use for each kind of feature, and the conventions.
-
-## AI-assisted test writing
-
-The harness never calls an AI, but an agent can work with it. Deterministic `otterdog-acceptance assist` commands gather
-context bundles (a pull request, a failed run, the coverage gaps) and validate what an agent writes; the agent skills
-of `.claude/skills/` use them to write the tests of an otterdog PR, triage a run and close coverage gaps, e.g.
-`/otterdog-pr-tests 790 <sha>`, `/triage-e2e-run latest` or `/fill-coverage-gap <feature>` in Claude Code, or in any
-agent supporting Agent Skills. Every proposal goes through `assist check`, the offline tier and your review; the
-skills never run live tiers, write to GitHub, commit or push unless you ask. See
-[docs/ai-assistance.md](docs/ai-assistance.md).
+[docs/reference.md](docs/reference.md) lists every command, the Makefile targets, the configuration, the artifacts of
+a run and the CI workflows.
 
 ## Systems under test (SUT specs)
 
@@ -155,145 +202,32 @@ Every SUT runs inside its own docker image (no network for offline commands, rea
 credentials in a 0600 env-file). Trusted SUTs may run in a host virtualenv instead with `E2E_CLI_RUNTIME=host`, and
 the web mode of the web-UI tier always does (its login never reaches a container); untrusted SUTs never do.
 Destructive resets always use a trusted reset SUT (`--e2e-reset-sut`, default `auto`: the SUT under test when it is
-trusted, else its merge base, else `release:latest`).
-`otterdog-acceptance sut classify SPEC` prints the trust decision.
+trusted, else its merge base, else `release:latest`). `otterdog-acceptance sut classify SPEC` prints the trust
+decision, and [testing-an-otterdog-pr.md](docs/testing-an-otterdog-pr.md) how to test a pull request.
 
-## Commands
+## AI-assisted test writing
 
-All commands are subcommands of `.venv/bin/otterdog-acceptance` (`--help` on each one; `-v`/`-vv` for more logging).
-
-| Command | Purpose |
-|---|---|
-| `setup --target T [--profile P] [--shard S] [--from I] [--token-type classic\|fine-grained] [--rotate ROLE] [--wait-timeout 30m] [--open] [--no-browser]`, `setup --shards` | interactive onboarding of one instance, or of the instance of every shard in turn: org, tokens of every role (prefilled creation URLs, checked before they are written), web-UI login, GitHub App (verified before its installation link), then bootstrap and doctor; with an accounts store, the classic tokens and the web steps (org creation, invitations, public memberships, App creation and installation) in Firefox as the machine accounts; writes `~/.config/otterdog-acceptance/<instance>.env` ([onboarding.md](docs/onboarding.md)) |
-| `accounts --target T [--role R] [--rotate] [--expires-in none] [--config FILE]` | set up machine accounts in a Firefox window (optional extra `browser`): sign in, enroll 2FA when missing, create the classic token; secrets in the accounts store of `~/.config/otterdog-acceptance/setup.yaml` (pass or Vault, ci-admin's names), the tokens checked and registered by `setup` ([onboarding.md](docs/onboarding.md#machine-accounts-in-the-browser)) |
-| `web-login [ACCOUNT \| --target T [--role R]] [--url URL]` | a visible Firefox signed in as an account of the accounts store (by the name of its entries), of an instance (admin by default) or typed in the terminal, on the test organization or `--url`; Enter signs it out ([onboarding.md](docs/onboarding.md#signing-in-as-an-account)) |
-| `ci-sync --target T [--reviewer LOGIN] [--nightly] [--prune-branch-policies] [--apply]` | the CI environments, variables and secrets of an instance, with your own `gh` login (dry run without `--apply`; deployment branch `main` only, the protections read back before any secret) |
-| `targets [--json]` | list the instances (env files) and profiles, with their shard and organization |
-| `shards [--json]` | what each shard of `scenarios/shards.yaml` runs (one test organization each) and the instances that select it ([architecture.md](docs/architecture.md#organizations-and-shards)) |
-| `doctor --target T [--json]` | read-only checks: env, identities and their isolation, token kind and expiry, PAT scopes (classic) or permission probes (fine-grained), org id/plan/marker, memberships, teams, repositories, GitHub App, web-UI credentials and login gate (never logs in), docker, unshare (exit 1 on FAIL); several targets: one table each |
-| `bootstrap --target T [--apply [--wait [--wait-timeout 30m]]]` | idempotent org preparation: marker (typed confirmation), identities (a separate oracle invited as an owner when its own token proves its login), configs/defaults repositories, lease, template, baseline reset, App checks and delivery probe (dry run without `--apply`; `--wait`, only with `--apply`, waits for the invitations and the App installation) |
-| `sut resolve\|install\|image\|classify SPEC` | resolve a SUT to a commit, install its CLI (trusted only), build its webapp image, classify its trust |
-| `run [--target T] [--sut S] [--base-sut B] [--suite ...] [--tags ...] [--scenario ...] [-k EXPR] [pytest args]` | run tiers through pytest (also `--change N\|slug` (the scenarios referencing the change: expected deltas, extra scenarios, its `base` is the default `--base-sut`; default: N of a `pr:N@<sha>` SUT), `--reset-sut`, `--run-id`, `--artifacts`, `--webapp-image`, `--keep`, `--no-reset`, `--strict-diff`, `--allow-web-ui`); several targets (`a,b`, `@all`, `@<list>`): one child process each, `--parallel N`, `--fail-fast`, a batch summary |
-| `pr N --sha SHA [--target T] [--suite auto\|...] [--strict-diff] [--allow-web-ui] [--change C]` | test upstream PR N at SHA: regression tiers, differential against its base, the scenarios referencing the PR (several targets like `run`) |
-| `relay --target T --forward-to URL [--since 10m] [--allow-remote]` | forward the App's webhook deliveries to a local webapp (holds the org lease) |
-| `janitor --target T [--older-than 6h] [--run-id ID [--force-takeover]] [--apply]` | list (and delete) leftovers of finished or crashed runs (a lease of `--run-id` renewed within 20 minutes is not taken over unless `--force-takeover`); several targets one after the other |
-| `report DIR` | print the summary of a run artifacts directory |
-| `compare-runs BASELINE RUN [--json]` | the outcome of every item of two runs of the same SUT, typically by two harness revisions (`make harness-check`): exit 1 when an outcome changed, 2 when the runs are not comparable |
-| `scrub-artifacts DIR` | delete non-text files and files leaking a secret (the secret values of its environment included; exit 1 on leaks) |
-| `cache prune [--keep 3]` | drop old builds, sources, runs and images from the harness cache (never an entry whose lock a running session or build holds) |
-| `completion bash\|zsh\|fish` | print the shell completion script of `otterdog-acceptance` and `oda` (`eval "$(oda completion zsh)"` in `~/.zshrc`, [local-development.md](docs/local-development.md#shell-completion)) |
-| `app-manifest --target T --webhook-url URL [--port 8765] [--exchange CODE]` | create the e2e GitHub App from a manifest |
-| `inject [--target T] [--sut S] --fragment KIND=FILE [--library NAME=FILE] [--overlay FILE] [--config/--base FILE] [--apply] [--print]` | try jsonnet files against a SUT without writing a scenario (offline by default; `--target`: live validate + plan, `--apply` with guards and cleanup) |
-| `assist pr-context N [--sha SHA] \| check [PATHS] [--sut S] [--no-lint] \| triage DIR\|latest [--baseline DIR] \| coverage [--status ...] [--feature ID]` | deterministic helpers of AI-assisted test writing: the context bundle of an otterdog PR, validation of the files an agent wrote, triage of a run's failures (after a scrub), the coverage gaps; `--json` on each ([ai-assistance.md](docs/ai-assistance.md)) |
-
-`run` refuses pass-through arguments that could change the SUT, load plugins or print secrets (`--e2e-*`, `-p`,
-`-c`, `-o`, `--rootdir`, `--showlocals`, `@file`, ...). Its exit code is pytest's; budget overruns never fail a run.
-Without `--suite` it runs `offline`, `cli`, `webhooks`, `webapp` and `enterprise`, plus `differential` with a base SUT
-and `web_ui` with `--allow-web-ui`. `--allow-web-ui` lets otterdog log in to github.com as the admin bot: only give
-it with a target whose web credentials are set up ([web-ui-testing.md](docs/web-ui-testing.md)); a `pr:` SUT is
-untrusted, so `pr --allow-web-ui` only passes the option on and the web tests skip.
-
-The same options exist as pytest options when you call pytest directly: `--e2e-target`, `--e2e-sut`,
-`--e2e-base-sut`, `--e2e-reset-sut`, `--e2e-tags`, `--e2e-scenario`, `--e2e-artifacts`, `--e2e-run-id`,
-`--e2e-keep`, `--e2e-no-reset`, `--e2e-webapp-image`, `--e2e-change`, `--e2e-strict-diff`,
-`--e2e-no-http-cache`, `--e2e-allow-remote-webapp`, `--e2e-trust-code`, `--e2e-allow-web-ui` (most fall back to an
-`E2E_*` variable; `E2E_ALLOW_WEB_UI` only from the process environment).
-
-## Makefile
-
-`make help` lists every target. The main ones: `init`, `unit`, `lint`, `format`, `typecheck`, `check`, `offline`,
-`lint-scenarios` (the offline lint of every live scenario step), `inject ARGS='--fragment KIND=FILE ...'`,
-`cli`, `webhooks`, `webapp`, `web-ui`, `enterprise`, `differential`, `e2e`, `one SCENARIO=<glob>`, `pr PR=<n> SHA=<sha>`,
-`setup [FROM=<instance>] [PROFILE=<profile>]`, `ci-sync [REVIEWER=<login>] [NIGHTLY=1] [APPLY=1]`, `targets`, `doctor`,
-`bootstrap [APPLY=1] [WAIT=1]`, `janitor [APPLY=1]`, `relay`, `report [RUN=<dir>]`, `scrub`, `cache-prune`, `sut`.
-They read `TARGET` (default
-`$E2E_TARGET`; a comma list, `@all` or `@<list>` for the run-based targets, `pr`, `doctor` and `janitor`), `PARALLEL`,
-`SUT` (default `release:latest`), `BASE_SUT`, `SUITE` and `ARGS` (extra pytest arguments), and never pass
-`OTTERDOG_CONFIG_ROOT` on.
-
-## Configuration
-
-- `targets/<profile>.yaml`: the profiles (`free.yaml`, `team.yaml`, `enterprise.yaml`), holding no org-specific
-  value. Values come from environment variables; secrets are never written there (`*_env` keys name the variable
-  holding them).
-- Instances: one test organization each, `--target <instance>`. Its environment files, first one wins and the process
-  environment wins over all of them: `~/.config/otterdog-acceptance/<instance>.env` (written by `setup`, with
-  `E2E_PROFILE=<profile>`), `.env.e2e.<instance>`, `.env.e2e`. The instances `free`, `team` and `enterprise` use the
-  profile of the same name. [.env.example](.env.example) lists every variable with its meaning and the required token
-  scopes; [docs/onboarding.md](docs/onboarding.md#instances-and-profiles) the naming rules.
-- `E2E_CACHE_DIR` (default `~/.cache/otterdog-acceptance`): upstream mirror, SUT sources and builds, tool venvs, private
-  per-run scratch directories. `E2E_ARTIFACTS` (default `./artifacts`): redacted run artifacts.
-- The project was named otterdog-e2e: while `~/.config/otterdog-acceptance` (or `~/.cache/otterdog-acceptance`) does
-  not exist, the harness keeps using `~/.config/otterdog-e2e` (or `~/.cache/otterdog-e2e`) as it is. The names it
-  gives on GitHub and in the secret stores keep the former prefix: the org marker `[otterdog-e2e]`, the repositories
-  `otterdog-e2e-configs` and `otterdog-e2e-defaults`, the App `otterdog-e2e-<org>`, the token names, the accounts
-  store entries, the webhook host `otterdog-e2e.invalid` and the docker images `otterdog-e2e/*`.
-
-## Run artifacts
-
-Every session that runs e2e tests writes `<E2E_ARTIFACTS>/<run_id>/` (a `--collect-only` session leaves nothing):
-
-| Path | Content |
-|---|---|
-| `run.json` | target, org, plan, SUT/base/reset SUT details and versions, capabilities, lane, timings (SUT preparation included), the `otterdog-acceptance` command |
-| `results.jsonl` | one line per test: outcome, phase durations, tier, scenario, tags, skip/xfail reason, short failure, infra flag, rate budget |
-| `summary.md` | human summary: outcomes, failures, skips by reason, known bugs, coverage matrix (shares and the features the run exercised), budget overruns, differential summary, a "Manual testing" block for otterdog's PR template |
-| `cli/`, `reset/cli/`, `base/…/cli/`, `head/…/cli/`, `offline/<test>/cli/` | redacted `cmd.txt` (logical and process argv, runtime, duration), `stdout.txt`, `stderr.txt`, `exit_code.txt` of every otterdog command |
-| `offline/<test>/workspace/` | the rendered configuration of an offline test (`otterdog.json`, `<org>.jsonnet.txt`, `-BASE`) |
-| `webapp/compose.log`, `offline-webapp/webapp/compose.log`, `deliveries.jsonl` | webapp logs and relayed App deliveries (no payloads) |
-| `observations/{base,head}.jsonl`, `differential.{md,json}` | differential recordings and their comparison |
-| `webui/<scenario>.json` | evidence of the web-UI scenarios (values read and written, restore results, the login gate's counters) |
-| `leaks.json` | result of the artifact scrub |
-
-Artifacts contain redacted text files only; credentials, otterdog's HTTP cache and the App key live in the private
-scratch directory below `E2E_CACHE_DIR`, which is deleted at session end (unless `--e2e-keep`).
-
-## Continuous integration
-
-| Workflow | Trigger | What |
-|---|---|---|
-| `ci.yml` | push to main, pull requests | ruff, mypy, unit tier, offline tier of `release:latest` and `branch:main`, all blocking (no secrets) |
-| `e2e.yml` | dispatch, reusable | one live session per instance (`target`: one instance or a comma list, allowlist `E2E_INSTANCES`): `classify` (no secrets) then one `e2e` job per instance in the `e2e-<instance>` or `e2e-<instance>-untrusted` environment |
-| `e2e-otterdog-pr.yml` | dispatch only | validates `pr` and the 40-hex `sha`, then calls `e2e.yml` with `pr:<n>@<sha>` and base `auto` |
-| `e2e-webui.yml` | dispatch, reusable | the web-UI tier of a trusted SUT on one or several instances (one at a time), in the `e2e-<instance>-webui` environment (the only one holding the bot's password and TOTP seed) |
-| `nightly.yml` | schedule | per enabled instance (`E2E_TARGETS`): `release:latest`, then `branch:main` with a differential against `release:latest`; the web-UI lane when `E2E_WEB_UI_ENABLED` is `true` (one instance at a time) |
-| `janitor.yml` | every 6 hours | a `check` job (no environment, no secrets) refuses `E2E_ORG`, `E2E_ORG_ID` and `E2E_PROFILE` as repository or organization variables, then sweeps leftovers of old runs on every enabled instance |
-| `docs.yml` | push to main and pull requests changing the documentation, dispatch | strict Zensical build of the documentation site (staged by `docs_site.py`); on main, deploys it to GitHub Pages (no secrets) |
-
-The required repository setup (environments, variables, secrets) is described in
-[docs/security.md](docs/security.md#ci-environments) and [docs/setup-free-org.md](docs/setup-free-org.md#ci);
-`otterdog-acceptance ci-sync` creates it per instance ([docs/onboarding.md](docs/onboarding.md#ci-ci-sync)).
+The harness never calls an AI, but an agent can work with it. Deterministic `otterdog-acceptance assist` commands gather
+context bundles (a pull request, a failed run, the coverage gaps) and validate what an agent writes; the agent skills
+of `.claude/skills/` use them to write the tests of an otterdog PR, triage a run and close coverage gaps, e.g.
+`/otterdog-pr-tests 790 <sha>`, `/triage-e2e-run latest` or `/fill-coverage-gap <feature>` in Claude Code, or in any
+agent supporting Agent Skills. Every proposal goes through `assist check`, the offline tier and your review; the
+skills never run live tiers, write to GitHub, commit or push unless you ask. See
+[docs/ai-assistance.md](docs/ai-assistance.md).
 
 ## Documentation
 
 The documentation is published at https://heurtematte.github.io/otterdog-e2e/ (Zensical, built and deployed by
 `docs.yml`; `make docs` builds it locally, see [local-development.md](docs/local-development.md#documentation-site)).
 
-| Document | Content |
+| To... | Read |
 |---|---|
-| [architecture.md](docs/architecture.md) | components, tiers, data flow, safety model, differential testing |
-| [security.md](docs/security.md) | threat model, controls, secrets in an external vault (HashiCorp Vault, pass, Bitwarden), CI environments, incident runbook |
-| [onboarding.md](docs/onboarding.md) | the fast path: `setup`, `ci-sync`, instances and profiles, runs on several organizations, what GitHub does not let a program do |
-| [roles.md](docs/roles.md) | the roles (machine accounts) admin, oracle, author, approver, outsider, config_reader: what each one does in the tests, what is skipped without it, diagrams of their interactions with otterdog and the test organization |
-| [setup-free-org.md](docs/setup-free-org.md) | machine accounts, organization, tokens (classic or fine-grained), bootstrap, GitHub App, first run, by hand |
-| [setup-enterprise-org.md](docs/setup-enterprise-org.md) | GitHub Enterprise Cloud specifics (trial, SAML SSO, policies), the Team profile |
-| [checking-instances.md](docs/checking-instances.md) | doctor on every organization at once, the usual `WARN` rows and whether they block, the `unshare` sandbox on Ubuntu, the runs that prove an installation |
-| [github-app.md](docs/github-app.md) | the e2e GitHub App: permissions, manifest flow, webhook sink, relay |
-| [writing-scenarios.md](docs/writing-scenarios.md) | the YAML scenario model, checks, rules, examples |
-| [battery-guide.md](docs/battery-guide.md) | authoring guide of the test battery: which harness API, YAML key, fixture or check kind closes which kind of coverage gap, conventions, the lint and the login budget |
-| [ai-assistance.md](docs/ai-assistance.md) | AI-assisted test writing: the `assist` commands and their bundles, the agent skills of `.claude/skills/` (PR tests, run triage, coverage gaps, scenarios), the safety model and the limits |
-| [web-ui-testing.md](docs/web-ui-testing.md) | the web-UI tier: web-only settings, the bot account, gating, the login gate, CI lane, recovery |
-| [testing-an-otterdog-pr.md](docs/testing-an-otterdog-pr.md) | `pr`, local checkouts, scenario references (`--change`), differential report, CI dispatch, the `/e2e` trigger |
-| [local-development.md](docs/local-development.md) | Makefile, debugging, the relay with `make dev-webapp`, caches, troubleshooting |
-| [capability-matrix.md](docs/capability-matrix.md) | what each GitHub plan allows and how the harness gates scenarios |
-| [scenario-catalog.md](docs/scenario-catalog.md) | v1 scenarios, the test battery and the backlog |
-| [coverage-matrix.md](docs/coverage-matrix.md) | every otterdog feature, its covering scenarios and tests, the outline of each gap (generated from `scenarios/coverage.yaml`) |
-| [known-issues.md](docs/known-issues.md) | suspected and confirmed otterdog defects with reproductions (mirrors `scenarios/known_bugs.yaml`) |
-
-Out of scope for v1 (future work): a ghproxy mock (a Dependency-Track mock exists: compose profile `dtrack`), MongoDB
-inspection, tunnels (only the pull relay and a loopback external webapp exist), a Helm/Kubernetes lane, GitHub
-Enterprise Server, ghe.com and Enterprise Managed Users, `repository_dispatch` triggers. The harness never automates a browser itself: the web-UI tier lets
-otterdog's own Playwright client do it.
+| set up a test organization | [onboarding.md](docs/onboarding.md) (the fast path), [roles.md](docs/roles.md) (the machine accounts), [setup-free-org.md](docs/setup-free-org.md) and [setup-enterprise-org.md](docs/setup-enterprise-org.md) (by hand), [github-app.md](docs/github-app.md), [checking-instances.md](docs/checking-instances.md) |
+| run and debug the harness | [local-development.md](docs/local-development.md), [reference.md](docs/reference.md) (commands, Makefile, configuration, artifacts, CI) |
+| write tests | [writing-scenarios.md](docs/writing-scenarios.md) (the YAML scenario model), [battery-guide.md](docs/battery-guide.md) (which API, YAML key or check closes which gap), [web-ui-testing.md](docs/web-ui-testing.md), [ai-assistance.md](docs/ai-assistance.md) |
+| test an otterdog pull request | [testing-an-otterdog-pr.md](docs/testing-an-otterdog-pr.md) |
+| understand the design | [architecture.md](docs/architecture.md), [security.md](docs/security.md) (threat model, secrets in a vault, CI environments), [glossary.md](docs/glossary.md) |
+| see what is tested | [coverage-matrix.md](docs/coverage-matrix.md), [scenario-catalog.md](docs/scenario-catalog.md), [capability-matrix.md](docs/capability-matrix.md) (what each GitHub plan allows), [known-issues.md](docs/known-issues.md), [api-coverage.md](docs/api-coverage.md) (the HTTP requests otterdog sends) |
 
 ## Contributing
 

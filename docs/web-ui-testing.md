@@ -230,12 +230,12 @@ tier of `e2e.yml`.
 ## Running it locally
 
 ```bash
-.venv/bin/otterdog-acceptance doctor --target free                       # web:* rows (never logs in)
-E2E_ALLOW_WEB_UI=1 .venv/bin/otterdog-acceptance run --target free --suite cli --scenario 'webui.*' tests/web_ui
+otterdog-acceptance doctor --target free                       # web:* rows (never logs in)
+E2E_ALLOW_WEB_UI=1 otterdog-acceptance run --target free --suite cli --scenario 'webui.*' tests/web_ui
 # one scenario
-E2E_ALLOW_WEB_UI=1 .venv/bin/otterdog-acceptance run --target free --suite cli --scenario webui.settings.round-trip tests/web_ui
+E2E_ALLOW_WEB_UI=1 otterdog-acceptance run --target free --suite cli --scenario webui.settings.round-trip tests/web_ui
 # the bot's browser session (visible window, closes at once)
-E2E_WEB_LOGIN=1 E2E_ALLOW_WEB_UI=1 .venv/bin/otterdog-acceptance run --target free --suite cli --scenario webui.cmd.web-login tests/web_ui
+E2E_WEB_LOGIN=1 E2E_ALLOW_WEB_UI=1 otterdog-acceptance run --target free --suite cli --scenario webui.cmd.web-login tests/web_ui
 # pytest directly works too
 .venv/bin/pytest tests/web_ui --e2e-target free --e2e-allow-web-ui -p no:cacheprovider
 ```

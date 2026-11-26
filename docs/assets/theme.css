@@ -136,3 +136,118 @@
 .md-container:has(.e2e-hero) .md-content__inner > h1:first-of-type {
   display: none;
 }
+
+/* the coverage summary of the home page (docs_scenarios.home_coverage): key figures as tiles, the covered, partial
+   and gap shares as bars */
+:root {
+  --e2e-covered: #2e8540;
+  --e2e-partial: #f7941e;
+  --e2e-gap: #d43f3a;
+}
+
+.e2e-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 0.6rem;
+  margin: 1em 0;
+}
+
+.e2e-tile {
+  display: flex;
+  flex-direction: column;
+  padding: 0.5rem 0.7rem;
+  border: 0.05rem solid var(--md-default-fg-color--lightest);
+  border-left: 0.25rem solid var(--md-primary-fg-color--light);
+  border-radius: 0.2rem;
+}
+
+.e2e-tile--covered {
+  border-left-color: var(--e2e-covered);
+}
+
+.e2e-tile--partial {
+  border-left-color: var(--e2e-partial);
+}
+
+.e2e-tile--gap {
+  border-left-color: var(--e2e-gap);
+}
+
+.e2e-tile__value {
+  font-size: 1.3rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.e2e-tile__label {
+  color: var(--md-default-fg-color--light);
+  font-size: 0.65rem;
+  line-height: 1.3;
+}
+
+.e2e-bar {
+  display: inline-flex;
+  width: 100%;
+  min-width: 8rem;
+  height: 0.6rem;
+  overflow: hidden;
+  vertical-align: middle;
+  background-color: var(--md-default-fg-color--lightest);
+  border-radius: 0.3rem;
+}
+
+.e2e-bar__covered {
+  background-color: var(--e2e-covered);
+}
+
+.e2e-bar__partial {
+  background-color: var(--e2e-partial);
+}
+
+.e2e-bar__gap {
+  background-color: var(--e2e-gap);
+}
+
+.md-typeset .e2e-legend {
+  font-size: 0.7rem;
+}
+
+.e2e-legend__item {
+  margin-right: 1rem;
+  white-space: nowrap;
+}
+
+.e2e-legend__item > span {
+  display: inline-block;
+  width: 0.6rem;
+  height: 0.6rem;
+  margin-right: 0.3rem;
+  border-radius: 50%;
+}
+
+/* the tables of the coverage summary: full width on wide screens, the bar taking the free space (narrow screens keep
+   the scrolling tables of the theme) */
+@media screen and (min-width: 45em) {
+  .md-typeset__table:has(.e2e-bar),
+  .md-typeset table:not([class]):has(.e2e-bar) {
+    display: table;
+    width: 100%;
+  }
+
+  .md-typeset table:not([class]):has(.e2e-bar) td:first-child {
+    min-width: 12rem;
+  }
+
+  .md-typeset table:not([class]):has(.e2e-bar) :is(th, td):nth-child(3) {
+    width: 40%;
+  }
+}
+
+.md-typeset table:not([class]):has(.e2e-bar) :is(th, td) {
+  padding: 0.5em 0.8em;
+  vertical-align: middle;
+}
+
+.md-typeset table:not([class]):has(.e2e-bar) td:first-child code {
+  white-space: nowrap;
+}

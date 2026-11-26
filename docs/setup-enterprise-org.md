@@ -42,8 +42,8 @@ enterprise owner's token ([What cannot be automated](onboarding.md#what-cannot-b
 ## Instance and env file
 
 ```bash
-.venv/bin/otterdog-acceptance setup --target enterprise                   # or: setup --target acme-ghec --profile enterprise
-.venv/bin/otterdog-acceptance doctor --target enterprise
+otterdog-acceptance setup --target enterprise                   # or: setup --target acme-ghec --profile enterprise
+otterdog-acceptance doctor --target enterprise
 ```
 
 By hand (the file setup would write):
@@ -51,8 +51,8 @@ By hand (the file setup would write):
 ```bash
 install -m 600 .env.example ~/.config/otterdog-acceptance/enterprise.env
 $EDITOR ~/.config/otterdog-acceptance/enterprise.env      # E2E_ORG, E2E_ORG_ID, identities of this organization
-.venv/bin/otterdog-acceptance doctor --target enterprise
-.venv/bin/otterdog-acceptance bootstrap --target enterprise --apply --wait
+otterdog-acceptance doctor --target enterprise
+otterdog-acceptance bootstrap --target enterprise --apply --wait
 ```
 
 Another instance name needs `E2E_PROFILE=enterprise` in its file (`~/.config/otterdog-acceptance/acme-ghec.env`).
@@ -160,6 +160,6 @@ example `["free", "enterprise"]`) for the nightly and janitor runs ([onboarding.
 [security.md](security.md#ci-environments)). A dispatch can then name several instances:
 
 ```bash
-.venv/bin/otterdog-acceptance ci-sync --target enterprise --nightly --apply
+otterdog-acceptance ci-sync --target enterprise --nightly --apply
 gh workflow run e2e.yml -f target=free,enterprise -f sut=release:latest   # one job per instance
 ```

@@ -33,7 +33,7 @@ the [coverage matrix](docs/coverage-matrix.md), update `scenarios/coverage.yaml`
 - `make check` passes, and `make offline` for a change of the offline tier or the scenarios;
 - `make harness-check` reports no unexplained outcome change for a change of `src/` or of the scenario semantics
   (the same otterdog run by `origin/main`'s harness and yours, [local-development.md](docs/local-development.md#checking-a-harness-change));
-- `.venv/bin/otterdog-acceptance assist check <files>` reports no problem for the scenarios and tests you wrote;
+- `otterdog-acceptance assist check <files>` reports no problem for the scenarios and tests you wrote;
 - `make docs` builds the documentation site without warning when you changed `docs/`, `README.md` or `zensical.toml`;
 - no secret anywhere: not in scenarios, fixtures, artifacts you attach or pull request text (dummy values only; see
   [security](docs/security.md));

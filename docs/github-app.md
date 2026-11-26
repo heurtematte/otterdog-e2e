@@ -94,7 +94,7 @@ organization owner (the admin machine account).
 **With app-manifest**, step by step:
 
 ```bash
-.venv/bin/otterdog-acceptance app-manifest --target free --webhook-url https://<sink>/otterdog-e2e
+otterdog-acceptance app-manifest --target free --webhook-url https://<sink>/otterdog-e2e
 ```
 
 1. The command verifies the organization, then serves an auto-submitting form on `http://127.0.0.1:8765/`

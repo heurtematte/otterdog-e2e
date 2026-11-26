@@ -62,13 +62,13 @@ is not a `run`/`pr` option; call pytest directly:
 
 ```bash
 # committed HEAD of a local otterdog checkout (the checkout is only read)
-.venv/bin/otterdog-acceptance run --sut path:../otterdog --base-sut auto --suite offline,differential
+otterdog-acceptance run --sut path:../otterdog --base-sut auto --suite offline,differential
 
 # HEAD plus uncommitted changes
-.venv/bin/otterdog-acceptance run --sut dirty:../otterdog --base-sut auto --suite offline,differential
+otterdog-acceptance run --sut dirty:../otterdog --base-sut auto --suite offline,differential
 
 # against the test org, compared with a release
-.venv/bin/otterdog-acceptance run --target free --sut dirty:../otterdog --base-sut tag:v1.6.1
+otterdog-acceptance run --target free --sut dirty:../otterdog --base-sut tag:v1.6.1
 ```
 
 - `auto` is the merge base of the checkout's `HEAD` with upstream main (the local commits are fetched into the
@@ -92,7 +92,7 @@ the templates. The pytest option is `--e2e-change` (environment fallback `E2E_CH
 explicitly:
 
 ```bash
-.venv/bin/otterdog-acceptance run --target free --sut dirty:../otterdog \
+otterdog-acceptance run --target free --sut dirty:../otterdog \
   --change check-merge                                                 # base tag:v1.6.0 from the references
 
 .venv/bin/python -m pytest tests/offline tests/differential \
@@ -187,7 +187,7 @@ references:
 The differential proof of concept of #790 needs no GitHub organization at all:
 
 ```bash
-.venv/bin/otterdog-acceptance run --sut sha:9bdeb75 --change 790 --suite offline,differential   # base sha:b5f7bb1 from the references
+otterdog-acceptance run --sut sha:9bdeb75 --change 790 --suite offline,differential   # base sha:b5f7bb1 from the references
 ```
 
 With warm caches it takes 15 to 30 minutes (the offline tier of the head runs first). The verified outcome is 388
@@ -202,7 +202,7 @@ passed, 8 skipped and 30 xfailed (registered known bugs), with `differential: 1 
 - the other 696 observations of the 59 observed scenarios are unchanged, for example O-VAL-SYNTAX, whose jsonnet
   error prints a different workspace path on each side.
 
-Check the references of the scenarios you changed with `.venv/bin/otterdog-acceptance assist check <files>`.
+Check the references of the scenarios you changed with `otterdog-acceptance assist check <files>`.
 
 ## Reading the differential report
 

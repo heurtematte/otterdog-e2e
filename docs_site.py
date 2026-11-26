@@ -3,9 +3,10 @@
 Zensical runs no MkDocs hooks, so what they did happens before it builds, in the staging directory ``.docs-site/``
 (git-ignored), from the sources of the commit being built:
 
-* the pages of docs/, the home page generated from README.md (docs_hooks.readme_to_home) and the pages of the
-  scenario explorer (docs_scenarios.pages); a generated page names its source in the front matter ``edit_url``, which
-  the theme override docs-theme/partials/actions.html gives its edit button;
+* the pages of docs/, the home page generated from README.md (docs_hooks.readme_to_home, with the coverage summary
+  of docs_scenarios.home_coverage) and the pages of the scenario explorer (docs_scenarios.pages); a generated page
+  names its source in the front matter ``edit_url``, which the theme override docs-theme/partials/actions.html gives
+  its edit button;
 * every page as Python-Markdown needs it (docs_hooks.render_page): GitHub callouts as admonitions, unescaped pipes in
   table code spans, links leaving docs/ to GitHub; a link to a file missing from the repository is a problem;
 * ``.docs-site/zensical.toml``: zensical.toml with the staged pages (docs_dir), the theme override copied next to them
@@ -184,9 +185,7 @@ def stage(root: Path, slugify: docs_scenarios.Slugify | None = None) -> Staging:
         else:
             result.files[f"{DOCS}/{uri}"] = path.read_bytes()
     for uri, page in {
-        docs_hooks.HOME: docs_scenarios.Generated(
-            docs_hooks.readme_to_home((root / docs_hooks.README).read_text(encoding="utf-8")), docs_hooks.README
-        ),
+        docs_hooks.HOME: docs_scenarios.Generated(home_page(root, site), docs_hooks.README),
         **generated,
     }.items():
         if uri in markdown:
@@ -203,6 +202,22 @@ def stage(root: Path, slugify: docs_scenarios.Slugify | None = None) -> Staging:
             rendered = rendered.rstrip("\n") + "\n\n" + defined + "\n"
         result.files[f"{DOCS}/{uri}"] = rendered.encode()
     return result
+
+
+# the front matter of the home page: its navigation sidebar would stay empty (the tabs hold the sections), so the
+# page, its diagrams and the coverage tables take its width
+HOME_FRONT_MATTER = "---\nhide:\n  - navigation\n---\n\n"
+
+
+def home_page(root: Path, site: docs_scenarios.Site) -> str:
+    """The home page: README.md (docs_hooks.readme_to_home) with its generated blocks (``<!-- site:coverage -->``: the
+    coverage summary of docs_scenarios.home_coverage), without the navigation sidebar."""
+    readme = (root / docs_hooks.README).read_text(encoding="utf-8")
+    try:
+        home = docs_hooks.readme_to_home(readme, {"coverage": docs_scenarios.home_coverage(site)})
+    except ValueError as exc:
+        raise SiteError(str(exc)) from None
+    return HOME_FRONT_MATTER + home
 
 
 def write(staging: Path, files: Mapping[str, bytes]) -> list[str]:

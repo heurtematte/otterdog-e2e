@@ -4,7 +4,9 @@ The pages stay GitHub-flavored Markdown that renders on github.com. These functi
 Markdown of Zensical) does differently, without changing the sources:
 
 * the home page (``index.md``) is generated from README.md: the blocks between ``<!-- github-only -->`` and
-  ``<!-- /github-only -->`` are dropped and the links are rebased from the repository root to docs/;
+  ``<!-- /github-only -->`` are dropped, the links are rebased from the repository root to docs/ and each line
+  ``<!-- site:<name> -->`` (a comment github.com hides) is replaced by the block docs_site.py generates under that
+  name (``coverage``: the coverage summary of docs_scenarios.home_coverage);
 * GitHub callouts (``> [!WARNING]``) become admonitions;
 * in table rows, ``\\|`` inside a code span becomes ``|``: GitHub needs the escape to keep the pipe in its cell, while
   Python-Markdown already ignores the pipes of code spans and would print the backslash;
@@ -19,7 +21,7 @@ from __future__ import annotations
 
 import posixpath
 import re
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from urllib.parse import quote, unquote, urlsplit, urlunsplit
 
@@ -29,6 +31,8 @@ DOCS_DIR = "docs"
 # the branch the site is built from (also in the edit_uri of zensical.toml)
 BRANCH = "main"
 
+# a line of README.md replaced on the home page by a generated block (readme_to_home)
+SITE_BLOCK_RE = re.compile(r"^[ ]{0,3}<!-- site:(?P<name>[a-z][a-z0-9-]*) -->[ \t]*$", re.MULTILINE)
 GITHUB_ONLY_RE = re.compile(
     r"^[ ]{0,3}<!-- github-only -->[ \t]*\n.*?^[ ]{0,3}<!-- /github-only -->[ \t]*(?:\n|\Z)", re.MULTILINE | re.DOTALL
 )
@@ -228,10 +232,23 @@ def github_url(dest: str, page: str, repo_url: str, root: Path) -> tuple[str, bo
     return url, path.exists()
 
 
-def readme_to_home(readme: str) -> str:
+def readme_to_home(readme: str, blocks: Mapping[str, str] | None = None) -> str:
     """The home page: README.md without its github-only blocks, its links rebased from the repository root to docs/
-    (``docs/x.md`` -> ``x.md``, ``scenarios/y`` -> ``../scenarios/y``)."""
-    return rewrite_links(GITHUB_ONLY_RE.sub("", readme), _rebase_on_docs)
+    (``docs/x.md`` -> ``x.md``, ``scenarios/y`` -> ``../scenarios/y``), then every line ``<!-- site:<name> -->``
+    replaced by ``blocks[name]`` (Markdown whose links are already relative to docs/). Without ``blocks`` the lines
+    are kept; with them, a line naming a block they lack is a ValueError."""
+    home = rewrite_links(GITHUB_ONLY_RE.sub("", readme), _rebase_on_docs)
+    if blocks is None:
+        return home
+
+    def block(match: re.Match[str]) -> str:
+        """The generated block of one line."""
+        name = match["name"]
+        if name not in blocks:
+            raise ValueError(f"{README}: no generated block for <!-- site:{name} --> (known: {', '.join(blocks)})")
+        return blocks[name].strip("\n")
+
+    return SITE_BLOCK_RE.sub(block, home)
 
 
 def _rebase_on_docs(dest: str) -> str | None:

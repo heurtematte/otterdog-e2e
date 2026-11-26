@@ -318,6 +318,50 @@ def test_every_scenario_and_module_gets_a_page() -> None:
         assert pages[scenario_.uri].source == scenario_.path
 
 
+def test_home_coverage_counts_features_tests_and_bugs() -> None:
+    """The coverage summary of the home page: tiles, a row per tier with features, a row per area linked to its section
+    of the coverage matrix (folded), the bars sized by the shares."""
+    module = explorer()
+    current = module.Site(root=ROOT, repo_url=REPO, slugify=slugify)
+    current.coverage = {
+        "otterdog": {"ref": "d9dac7868f3cd2d1bae1bf1b1675b572547d9136", "release": "v1.7.1"},
+        "areas": [{"id": "cli", "title": "CLI commands"}, {"id": "teams", "title": "Teams"}],
+        "features": [
+            {"area": "cli", "tier": "offline", "status": "covered"},
+            {"area": "cli", "tier": "offline", "status": "covered", "verified_on": [{"date": "2026-11-25"}]},
+            {"area": "cli", "tier": "cli", "status": "partial"},
+            {"area": "teams", "tier": "cli", "status": "gap"},
+        ],
+    }
+    current.area_anchors = {"cli": "cli-commands"}
+    current.scenarios = [scenario({"id": "a"}), scenario({"id": "b"})]
+    current.known_bugs = {"KB-001": {"status": "confirmed"}, "KB-002": {"status": "fixed"}}
+    home = module.home_coverage(current)
+    lines = home.split("\n")
+    tiles = re.findall(r'e2e-tile__value">([^<]*)</span><span class="e2e-tile__label">([^<]*)<', lines[0])
+    assert tiles == [
+        ("4", "otterdog features inventoried"),
+        ("50%", "covered (2 features)"),
+        ("1", "partially covered"),
+        ("1", "gaps, each with its outline"),
+        ("1", "seen working in a live run (last 2026-11-25)"),
+        ("2", "tests: 2 YAML scenarios, 0 in Python"),
+        ("1", "otterdog bugs found, confirmed or suspected"),
+    ]
+    assert "[`d9dac78`](https://github.com/eclipse-csi/otterdog/commit/d9dac78" in home and "v1.7.1" in home
+    assert "62% covered when a partial feature counts half" in home  # round half to even, as the matrix
+    assert any(line.startswith("| `offline` | 2 | ") and line.endswith("| 100% | 0 | 0 |") for line in lines)
+    assert any(line.startswith("| `cli` | 2 | ") and line.endswith("| 0% | 1 | 1 |") for line in lines)
+    assert not any(line.startswith("| `webapp` |") for line in lines), "a tier without features has no row"
+    assert '??? note "By area (2 areas)"' in lines
+    assert any(line.startswith("    | [CLI commands](coverage-matrix.md#cli-commands) | 3 | ") for line in lines)
+    assert any(line.startswith("    | Teams | 1 | ") for line in lines)
+    assert '<span class="e2e-bar__covered" style="width: 66.7%"></span>' in home
+    assert module.coverage_bar({"covered": 0, "partial": 0, "gap": 0}) == (
+        '<span class="e2e-bar" title="0 covered, 0 partial, 0 gaps"></span>'
+    )
+
+
 def test_every_known_bug_of_a_scenario_has_an_anchor() -> None:
     current = site()
     for scenario_ in current.scenarios:
