@@ -2,9 +2,9 @@
 
 Libraries are inlined as ``local <name> = (<expression>);`` right after the template import, overlays are object
 mixins after layer 2 (``<org> + (<overlay>)``), both verbatim. The renders are evaluated with the jsonnet binary on
-the vendored template copy (tests/unit/data/template, examples/template of otterdog main @9bdeb75), like the other
-render tests, and, when E2E_TEST_OTTERDOG names an otterdog executable, validated with ``otterdog validate --local``
-through the offline OtterdogCli (dummy token, unshare -rn sandbox when available).
+the vendored template copy (tests/unit/data/template, otterdog/resources/defaults of otterdog main @fa01483), like the
+other render tests, and, when E2E_TEST_OTTERDOG names an otterdog executable, validated with
+``otterdog validate --local`` through the offline OtterdogCli (dummy token, unshare -rn sandbox when available).
 """
 
 from __future__ import annotations

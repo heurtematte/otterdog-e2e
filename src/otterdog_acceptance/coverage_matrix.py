@@ -1,6 +1,6 @@
 """Validation and rendering of the coverage matrix (scenarios/coverage.yaml -> docs/coverage-matrix.md).
 
-scenarios/coverage.yaml is the machine-readable inventory of what otterdog (main @9bdeb75) can do: CLI commands and
+scenarios/coverage.yaml is the machine-readable inventory of what otterdog (main @fa01483) can do: CLI commands and
 flags, every property of the configuration model grouped into features, validation rules, diff semantics, the webapp
 and notable CHANGELOG fixes. Each feature says which existing scenario ids (scenarios/{offline,cli,enterprise}) or
 pytest node ids (tests/<tier>/...::test_x) cover it, and gaps carry an outline precise enough to write the missing
@@ -120,7 +120,8 @@ NODE_ID_RE = re.compile(r"^tests/(?P<dir>[a-z_]+)/(?P<file>[A-Za-z0-9_/]+\.py)::
 INVENTORY_RE = re.compile(r"^(?P<kind>[a-z]+):(?P<value>\S.*)$")
 AVAILABLE_PREFIX = "available:"  # a gap_outline need the harness already provides (docs/battery-guide.md)
 
-# otterdog main @9bdeb75, updated to main @d9dac78: what must be inventoried (keys of the features' ``inventory`` lists)
+# otterdog main @9bdeb75, updated to main @d9dac78, then to main @fa01483 (v1.8.0 + 32 commits): what must be
+# inventoried (keys of the features' ``inventory`` lists)
 EXPECTED_INVENTORY: dict[str, tuple[str, ...]] = {
     # otterdog/cli.py:179-969 (29 subcommands; --version is a group option)
     "command": (
@@ -269,8 +270,10 @@ EXPECTED_INVENTORY: dict[str, tuple[str, ...]] = {
     # otterdog/webapp/blueprints/__init__.py:30-34, otterdog/webapp/policies/__init__.py:24-26
     "blueprint": ("required_file", "pin_workflow", "append_configuration", "scorecard_integration"),
     "policy": ("dependency_track_upload", "macos_large_runners"),
-    # first line of otterdog/webapp/templates/comment/*.txt
-    "marker": ("help", "team-info", "validate", "check-sync", "automerge", "blueprint-dismissal"),
+    # first line of otterdog/webapp/templates/comment/*.txt; "automerge" is the header of the separate comment of the
+    # webapps before #965 (main 144eae5, after v1.8.0: LEGACY_AUTO_MERGE_COMMENT_HEADER of tasks/auto_merge_comment.py),
+    # "auto-merge-status" the section of the validate comment that replaces it (validation_comment.txt:2)
+    "marker": ("help", "team-info", "validate", "check-sync", "automerge", "auto-merge-status", "blueprint-dismissal"),
     # commit statuses: validate_pull_request.py:233-271, check_sync.py:214-257
     "status": (
         "validation/pending",

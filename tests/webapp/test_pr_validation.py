@@ -59,18 +59,18 @@ WORDING_771 = "some of the requested changes"
 WORDING_BEFORE_771 = "some of requested changes"
 IMPORT_REFUSED = "is not allowed"  # utils.py _make_jsonnet_import_callback: "import of '<path>' is not allowed"
 IMPORT_ATTEMPTED = "can't resolve"  # what an unconfined evaluation of a missing import reports
-# eclipse-csi/otterdog#950 "fix(web): validate the merge commit of a pull request" (open: the head of the pull
-# request; add its merge commit once merged)
-FEATURE_950 = ("3e6e8fa78bacadfd22e08fbbcc8d452dcd4880c3",)
+# eclipse-csi/otterdog#950 "fix(web): validate the merge commit of a pull request": squash commit on main (2026-11-18,
+# after v1.8.0) and the last head of the pull request (a pr: SUT of that head does not contain the squash commit)
+FEATURE_950 = ("7f4235b921cc316d675be120976d83dfcb8797ea", "0cee789e0623403b05388273ae6f222bf1680dba")
 MERGED_INTO = "merged into"  # summary "Diff for <head sha> merged into <sha of main>" (validation_comment.txt, #950)
 NOT_UP_TO_DATE = "The branch of this pull request is not up-to-date"  # fallback warning of #950
 REFERENCES_950 = [
     {
         "pr": 950,
         "note": (
-            "'fix(web): validate the merge commit of a pull request' (open, head 3e6e8fa): the validation compares "
-            "the merge commit GitHub creates (mergeable, merging the current head into the current main) with its "
-            "first parent, so a change made on main after the branch was created no longer shows as reverted "
+            "'fix(web): validate the merge commit of a pull request' (main 7f4235b, after v1.8.0): the validation "
+            "compares the merge commit GitHub creates (mergeable, merging the current head into the current main) "
+            "with its first parent, so a change made on main after the branch was created no longer shows as reverted "
             "(eclipse-score/.eclipsefdn#257: a phantom secret change refused /otterdog merge); the summary reads "
             "'Diff for <head> merged into <main>'. Without merge commit (conflicts, GitHub too slow) it validates "
             "head.sha against main as before and warns 'The branch of this pull request is not up-to-date' when "
@@ -130,6 +130,22 @@ def _assert_one_propagated_sync_status(s: WebappScenario, pr: ConfigPr, copied: 
         f"copying the previous status (check_sync.py:91-124) (SUT): {statuses}"
     )
     assert statuses[0][0] == copied.get("state"), f"copied sync state {statuses[0]} != {copied} (SUT)"
+
+
+def stacked_repo(name: str, description: str) -> str:
+    """A new repository like conftest.repo_fragment, over three lines: its description line and a fragment added
+    after it are separated by the unchanged closing line. git merges a change of the description on one side with
+    that addition on the other only then: changes on adjacent lines conflict, and GitHub creates no merge commit."""
+    return f"orgs.newRepo({json.dumps(name)}) {{\n      description: {json.dumps(description)},\n    }}"
+
+
+def outdated_branch_text(s: WebappScenario, name: str, description: str, harmless: str | None = None) -> str:
+    """The baseline plus the run repository ``name`` (stacked_repo) and, with ``harmless``, the description of the
+    harmless repository (the PR's own change, after the run repository)."""
+    repositories = [stacked_repo(name, description)]
+    if harmless is not None:
+        repositories.append(s.patch(s.harmless_repo, f"description: {json.dumps(harmless)}"))
+    return s.render(repositories=repositories)
 
 
 @pytest.mark.scenario("W-PR-VALID", priority="P0", references=REFERENCES_943)
@@ -553,7 +569,9 @@ def test_outdated_branch_is_validated_as_merged(
     second commit on the stale branch changes the harmless repository again: its validation must show only the
     PR's change, as merged into the new main (#950), never the description of main reverted. A third commit that
     conflicts with main (the same description) has no merge commit: the head is validated against main and the
-    comment warns that the branch is not up-to-date."""
+    comment warns that the branch is not up-to-date. The run repository spans three lines (stacked_repo), so the
+    second commit merges into main without conflict (nightly 45451116543: on one line, the description changed on
+    main and the PR's change right after it conflicted, and #950 fell back to the head)."""
     s, texts = webapp_scenario, webapp_scenario.texts
     included = s.webapp_includes_any(FEATURE_950)
     if included is not True:
@@ -566,9 +584,10 @@ def test_outdated_branch_is_validated_as_merged(
         )
     name = s.run_repo()
     declared, moved, conflicting = s.describe("declared"), s.describe("changed on main"), s.describe("changed by PR")
-    s.declare_live({name: declared})
+    s.declare_live_text(outdated_branch_text(s, name, declared), what=[name])
+    assert s.oracle.repo(name) is not None, f"repository {name} missing after the trusted apply (precondition)"
     main_before = s.flow.main_sha()
-    pr = s.open_pr(s.harmless_text(repos={name: declared}))
+    pr = s.open_pr(outdated_branch_text(s, name, declared, s.describe("description change")))
     s.wait_validation(pr)
     first = s.wait_comment(pr, marker="validate").get("body") or ""
     if included:
@@ -578,12 +597,13 @@ def test_outdated_branch_is_validated_as_merged(
         )
 
     main_after = s.flow.reset_main(
-        s.text(repos={name: moved}), message=f"otterdog-acceptance {s.run_ctx.run_id}: {s.sid} changes {name} on main"
+        outdated_branch_text(s, name, moved),
+        message=f"otterdog-acceptance {s.run_ctx.run_id}: {s.sid} changes {name} on main",
     )
     second_description = s.describe("second commit")
     second = s.flow.push_commit(
         pr,
-        s.text(repos={name: declared}, overrides={s.harmless_repo: second_description}),
+        outdated_branch_text(s, name, declared, second_description),
         message=f"e2e {s.run_ctx.run_id} {s.sid}: second commit on a branch that predates main",
     )
     s.wait_validation(second)
@@ -610,7 +630,7 @@ def test_outdated_branch_is_validated_as_merged(
 
     third = s.flow.push_commit(
         second,
-        s.text(repos={name: conflicting}, overrides={s.harmless_repo: second_description}),
+        outdated_branch_text(s, name, conflicting, second_description),
         message=f"e2e {s.run_ctx.run_id} {s.sid}: a commit that conflicts with main",
     )
     s.wait_validation(third)

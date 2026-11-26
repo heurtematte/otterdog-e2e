@@ -11,7 +11,8 @@ cli.kb.dispatch-workflow-exit-code (known bug KB-045): a refused dispatch must n
 cli.delete-file: ``delete-file -r <repo> --path <p> [-m <msg>]`` deletes a file of a CONFIGURED repository with the
     given commit message (default "Deleting file '<p>' with otterdog."); a missing file creates no commit; a
     repository the configuration does not declare is never touched (otterdog/operations/delete_file.py).
-cli.kb.delete-file-missing (known bug KB-044): a file that does not exist is reported 'succeeded'.
+cli.kb.delete-file-missing (known bug KB-044, fixed by #961 in 1.9.0): a file that does not exist is reported
+    'succeeded'; fixed SUTs report it 'not found, nothing to delete' (exit 0).
 cli.kb.delete-file-refused (known bug KB-043): a refused deletion (protected default branch) crashes with an
     UnboundLocalError instead of printing 'failure deleting file' and exiting 1.
 cli.sync-template: ``sync-template -r <repo>`` re-copies every file of the template repository into a repository
@@ -62,6 +63,7 @@ RUN_TIMEOUT = 180.0  # the run of a dispatch shows up after a few seconds
 DISPATCH_ATTEMPTS = 3  # GitHub can refuse the first dispatches of a workflow it just indexed (404/422)
 DISPATCH_INTERVAL = 10.0
 UNBOUND_RE = re.compile(r"UnboundLocalError|cannot access local variable|referenced before assignment")
+NOTHING_TO_DELETE = "not found, nothing to delete"  # eclipse-csi/otterdog#961: a file absent from the repository
 
 
 def repo_config(live_config: LiveConfig, *repositories: str) -> str:
@@ -269,13 +271,15 @@ def test_delete_file_reports_a_missing_file(
     cli_lines: Callable[[CliResult], str],
 ) -> None:
     """Deleting a file that does not exist (in the session's config repository, declared by the baseline) must not be
-    reported 'succeeded' (KB-044: otterdog prints 'succeeded', in red, for a file it did not find)."""
+    reported 'succeeded' (KB-044: otterdog prints 'succeeded', in red, for a file it did not find); since #961 the
+    line ends with 'not found, nothing to delete'."""
     fresh_workspace.write_org_config(baseline.text())
     repo, path = target.config_repo_for(run_ctx), f"{run_ctx.name('missing')}.md"
     result = delete_file(make_cli(fresh_workspace), repo, path).assert_ok("delete-file of a missing file")
     text = cli_lines(result)
     assert deleting_line(target, repo, path) in text, text[-2000:]
     assert f"{deleting_line(target, repo, path)} succeeded" not in text, "a missing file was reported 'succeeded'"
+    assert f"{deleting_line(target, repo, path)} {NOTHING_TO_DELETE}" in text, text[-2000:]
 
 
 @pytest.mark.scenario("cli.kb.delete-file-refused", priority="P2")

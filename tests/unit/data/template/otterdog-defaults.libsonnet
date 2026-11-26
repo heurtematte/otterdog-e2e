@@ -91,6 +91,9 @@ local newRepo(name) = {
     allow_verified_creator_actions: true,
     allow_action_patterns: [],
 
+    # do not require actions to be pinned to a full-length commit SHA
+    sha_pinning_required: false,
+
     # issue read tokens by default
     default_workflow_permissions: "read",
 
@@ -120,6 +123,9 @@ local newRepo(name) = {
 
   # rulesets
   rulesets: [],
+
+  # actions policies
+  actions_policies: [],
 
   # team permissions
   team_permissions: {},
@@ -207,6 +213,28 @@ local newRepoRuleset(name) = {
   required_deployment_environments: [],
 
   required_merge_queue: null,
+
+  copilot_code_review: null,
+
+  commit_message_pattern: null,
+  commit_author_email_pattern: null,
+  committer_email_pattern: null,
+  branch_name_pattern: null,
+  tag_name_pattern: null,
+
+  # push rules, only supported by rulesets with target 'push', 0 disables a rule
+  restricted_file_paths: [],
+  restricted_file_paths_exceptions: [],
+  max_file_path_length: 0,
+  restricted_file_extensions: [],
+  max_file_size: 0,
+  max_file_size_exceptions: [],
+
+  required_code_scanning: null,
+  required_code_quality: null,
+  required_code_coverage: null,
+  requires_license_compliance_scanning: false,
+  required_workflows: null,
 };
 
 # Function to create a merge queue with default settings.
@@ -220,12 +248,73 @@ local newMergeQueue() = {
   requires_all_group_entries_to_pass_required_checks: true,
 };
 
+# Function to create copilot code review settings with default settings.
+local newCopilotCodeReview() = {
+  review_on_push: false,
+  review_draft_pull_requests: false,
+};
+
+# Function to create the settings of a rule restricting commit metadata or ref names with default settings.
+local newPattern() = {
+  name: "",
+  negate: false,
+  operator: "starts_with",
+  pattern: "",
+};
+
+# Function to create code scanning settings with default settings.
+local newCodeScanning() = {
+  code_scanning_tools: [],
+};
+
+# Function to create code quality settings with default settings.
+local newCodeQuality() = {
+  severity: "errors",
+};
+
+# Function to create code coverage settings with default settings.
+local newCodeCoverage() = {
+  minimum_coverage: null,
+  max_coverage_drop: null,
+};
+
+# Function to create required workflows settings with default settings.
+local newWorkflows() = {
+  do_not_enforce_on_create: false,
+  workflows: [],
+};
+
 # Function to create a new organization ruleset with default settings.
 local newOrgRuleset(name) = newRepoRuleset(name) {
   include_repo_names: [],
   exclude_repo_names: [],
   protect_repo_names: false,
 };
+
+# --8<-- [start:actions_policy]
+# Function to create a new repository actions policy with default settings.
+local newRepoActionsPolicy(name) = {
+  name: name,
+  enforcement: "active",
+
+  # the workflows targeted by the policy, '~ALL' targets all workflows
+  include_workflows: ["~ALL"],
+  exclude_workflows: [],
+
+  # the rules of the policy, null does not require a rule
+  # the actors allowed to run the targeted workflows
+  allowed_actors: null,
+  # the events allowed to trigger the targeted workflows
+  allowed_events: null,
+};
+
+# Function to create a new organization actions policy with default settings.
+local newOrgActionsPolicy(name) = newRepoActionsPolicy(name) {
+  include_repo_names: [],
+  exclude_repo_names: [],
+  protect_repo_names: false,
+};
+# --8<-- [end:actions_policy]
 
 # --8<-- [start:code_security_configuration]
 # Function to create a new organization code security configuration with default settings.
@@ -331,6 +420,14 @@ local newOrgRole(name) = {
   base_role: "none",
 };
 
+# Function to create a new team sync entry, i.e. an identity provider group
+# connected to a team, with default settings.
+local newTeamSync(id) = {
+  id: id,
+  name: "",
+  description: "",
+};
+
 # Function to create a new team with default settings.
 local newTeam(name) = {
   name: name,
@@ -338,6 +435,8 @@ local newTeam(name) = {
   privacy: "visible",
   notifications: true,
   members: [],
+  team_sync: [],
+  external_group_id: null,
   skip_members: false,
   skip_non_organization_members: false,
 };
@@ -369,7 +468,7 @@ local newCustomProperty(name) = {
   default_value: null,
   description: null,
   allowed_values: [],
-  values_editable_by: null,
+  values_editable_by: "org_actors",
 };
 
 # Function to create a new organization with default settings.
@@ -481,6 +580,9 @@ local newOrg(name, id=name) = {
       allow_verified_creator_actions: true,
       allow_action_patterns: [],
 
+      # do not require actions to be pinned to a full-length commit SHA
+      sha_pinning_required: false,
+
       # issue read tokens by default
       default_workflow_permissions: "read",
 
@@ -510,6 +612,9 @@ local newOrg(name, id=name) = {
   # organization code security configurations
   code_security_configurations: [],
 
+  # organization actions policies
+  actions_policies: [],
+
   # List of repositories of the organization.
   # Entries here can be extended during template manifestation:
   #  * new repos should be defined using the newRepo template
@@ -526,6 +631,7 @@ local newOrg(name, id=name) = {
   newOrg:: newOrg,
   newOrgRole:: newOrgRole,
   newTeam:: newTeam,
+  newTeamSync:: newTeamSync,
   newOrgWebhook:: newOrgWebhook,
   newOrgSecret:: newOrgSecret,
   newOrgDependabotSecret:: newOrgDependabotSecret,
@@ -533,6 +639,7 @@ local newOrg(name, id=name) = {
   newOrgVariable:: newOrgVariable,
   newOrgRuleset:: newOrgRuleset,
   newOrgCodeSecurityConfiguration:: newOrgCodeSecurityConfiguration,
+  newOrgActionsPolicy:: newOrgActionsPolicy,
   newCustomProperty:: newCustomProperty,
   newRepo:: newRepo,
   extendRepo:: extendRepo,
@@ -543,10 +650,17 @@ local newOrg(name, id=name) = {
   newRepoVariable:: newRepoVariable,
   newBranchProtectionRule:: newBranchProtectionRule,
   newRepoRuleset:: newRepoRuleset,
+  newRepoActionsPolicy:: newRepoActionsPolicy,
   newEnvironment:: newEnvironment,
   newEnvSecret:: newEnvSecret,
   newEnvVariable:: newEnvVariable,
   newPullRequest:: newPullRequest,
   newStatusChecks:: newStatusChecks,
   newMergeQueue:: newMergeQueue,
+  newCopilotCodeReview:: newCopilotCodeReview,
+  newPattern:: newPattern,
+  newCodeScanning:: newCodeScanning,
+  newCodeQuality:: newCodeQuality,
+  newCodeCoverage:: newCodeCoverage,
+  newWorkflows:: newWorkflows,
 }
