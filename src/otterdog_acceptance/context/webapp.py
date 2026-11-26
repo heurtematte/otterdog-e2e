@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any, TypeGuard, cast
 from otterdog_acceptance.context.helpers import describe_error
 from otterdog_acceptance.context.state import ContextError
 from otterdog_acceptance.context.sut import SutFacet
+from otterdog_acceptance.waiting import WaitTimeoutError, wait_until
 
 if TYPE_CHECKING:
     from otterdog_acceptance.blueprints import BlueprintHelper
@@ -36,6 +37,14 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 WEBAPP_READY_TIMEOUT = 300.0
+# The webapp reads otterdog.json by branch name (GET contents without ref), and right after a commit GitHub may still
+# serve the previous file that way (nightly 45596269086: committed 12:04:57, the webapp read the previous run's file at
+# 12:04:59 and never fetched this run's config repo). publish_otterdog_json returns once the branch has served the new
+# file OTTERDOG_JSON_SERVED_READS times in a row.
+OTTERDOG_JSON = "otterdog.json"
+OTTERDOG_JSON_SERVED_TIMEOUT = 120.0
+OTTERDOG_JSON_SERVED_INTERVAL = 2.0
+OTTERDOG_JSON_SERVED_READS = 2
 
 
 @dataclass
@@ -159,7 +168,11 @@ class WebappFacet(SutFacet):
         """Commit the webapp's otterdog.json to the configs repo (only when its content changes); ``organization``
         overrides the org entry's admin_teams / approval_teams (a list of team names or patterns; None drops the key,
         so the GITHUB_ADMIN_TEAMS / GITHUB_APPROVAL_TEAMS of the webapp apply). Call it again without overrides to
-        restore the run's file, and reload_webapp() to make the webapp read it."""
+        restore the run's file, and reload_webapp() to make the webapp read it.
+
+        The current file is read at the branch's head commit (by branch name GitHub may still serve an older one), and
+        the call returns once the branch name serves the new file (OTTERDOG_JSON_SERVED_*), as the webapp reads it;
+        ContextError when it never does."""
         from otterdog_acceptance.otterdog.workspace import webapp_otterdog_json
 
         target = self.require_target()
@@ -173,11 +186,32 @@ class WebappFacet(SutFacet):
                     entry[key] = value
         content = json.dumps(data, indent=2) + "\n"
         oracle = self.oracle()
-        branch = oracle.default_branch(target.configs_repo) or "main"
-        if oracle.file_content(target.configs_repo, "otterdog.json", ref=branch) == content:
-            return
-        message = f"otterdog-acceptance: otterdog.json of run {self.run_ctx.run_id}"
-        self.mutator("admin").commit_files(target.configs_repo, branch, {"otterdog.json": content}, message)
+        repo = target.configs_repo
+        branch = oracle.default_branch(repo) or "main"
+        head = oracle.branch_sha(repo, branch)
+        if oracle.file_content(repo, OTTERDOG_JSON, ref=head or branch) != content:
+            message = f"otterdog-acceptance: otterdog.json of run {self.run_ctx.run_id}"
+            self.mutator("admin").commit_files(repo, branch, {OTTERDOG_JSON: content}, message)
+        served = 0
+
+        def serves_content() -> bool:
+            """True once the branch name has served ``content`` OTTERDOG_JSON_SERVED_READS times in a row."""
+            nonlocal served
+            served = served + 1 if oracle.file_content(repo, OTTERDOG_JSON, ref=branch) == content else 0
+            return served >= OTTERDOG_JSON_SERVED_READS
+
+        try:
+            wait_until(
+                serves_content,
+                timeout=OTTERDOG_JSON_SERVED_TIMEOUT,
+                interval=OTTERDOG_JSON_SERVED_INTERVAL,
+                what=f"{repo}:{branch} serves the new {OTTERDOG_JSON}",
+            )
+        except WaitTimeoutError as exc:
+            raise ContextError(
+                f"GitHub still serves another {OTTERDOG_JSON} on {target.org}/{repo}:{branch} "
+                f"{OTTERDOG_JSON_SERVED_TIMEOUT:g} s after the commit: the webapp would load a stale configuration"
+            ) from exc
 
     def config_flow(
         self,

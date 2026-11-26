@@ -848,6 +848,7 @@ def webapp_context(tmp_path: Path, live: LiveFakes, monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr(
         "otterdog_acceptance.otterdog.workspace.webapp_otterdog_json", lambda *a, **k: {"organizations": []}
     )
+    monkeypatch.setattr("otterdog_acceptance.context.webapp.OTTERDOG_JSON_SERVED_INTERVAL", 0.0)
     context = new_context(tmp_path, target="free")
     context.ensure_live()
     credentials = AppCredentials("1", "-----BEGIN PRIVATE KEY-----\nx\n-----END PRIVATE KEY-----", "s3cret-hook", None)
@@ -859,9 +860,14 @@ def webapp_context(tmp_path: Path, live: LiveFakes, monkeypatch: pytest.MonkeyPa
     original = mutator.commit_files
 
     def commit(repo: str, branch: str, files: Any, message: str) -> str:
-        """Record the otterdog.json commit."""
+        """Record the otterdog.json commit; the oracle serves the files on the branch (and moves a known head)."""
         events.append(f"commit:{repo}:{','.join(files)}")
-        return original(repo, branch, files, message)
+        sha = original(repo, branch, files, message)
+        for path, content in files.items():
+            live.oracle.add_file(repo, path, content, ref=branch)
+        if live.oracle.branch_sha(repo, branch) is not None:
+            live.oracle.set("branch_sha", repo, branch, value=sha)
+        return sha
 
     mutator.commit_files = commit  # type: ignore[method-assign]
     return context, events
@@ -902,6 +908,67 @@ def test_publish_otterdog_json_is_idempotent(webapp_context: tuple[E2EContext, l
     )
     context.publish_otterdog_json(SimpleNamespace(url="u"))  # type: ignore[arg-type]
     assert not [e for e in events if e.startswith("commit")]
+
+
+RUN_JSON = json.dumps({"organizations": []}, indent=2) + "\n"  # the otterdog.json of webapp_context
+OLD_JSON = '{"organizations": [{"name": "previous run"}]}\n'
+
+
+def stale_by_branch(live: LiveFakes, monkeypatch: pytest.MonkeyPatch, reads: int) -> list[str | None]:
+    """The fake oracle serves OLD_JSON for the first ``reads`` reads of otterdog.json by branch name (a GitHub replica
+    that has not seen the commit yet); returns the contents served by branch name."""
+    served: list[str | None] = []
+    original = live.oracle.file_content
+
+    def file_content(repo: str, path: str, ref: str | None = None) -> str | None:
+        """Stale by branch name for the first reads, exact by sha."""
+        if path == "otterdog.json" and ref == "main":
+            served.append(OLD_JSON if len(served) < reads else original(repo, path, ref))
+            return served[-1]
+        return original(repo, path, ref)
+
+    monkeypatch.setattr(live.oracle, "file_content", file_content)
+    return served
+
+
+def test_publish_otterdog_json_waits_until_the_branch_serves_it(
+    webapp_context: tuple[E2EContext, list[str]], live: LiveFakes, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Nightly 45596269086: the branch name still served the previous file after the commit; publish returns once it
+    served the new one twice in a row (the webapp reads it by branch name)."""
+    context, events = webapp_context
+    live.oracle.add_repo("otterdog-e2e-configs")
+    live.oracle.add_file("otterdog-e2e-configs", "otterdog.json", OLD_JSON, ref="main")
+    served = stale_by_branch(live, monkeypatch, reads=3)
+    context.publish_otterdog_json(SimpleNamespace(url="u"))  # type: ignore[arg-type]
+    assert [e for e in events if e.startswith("commit")] == ["commit:otterdog-e2e-configs:otterdog.json"]
+    assert served == [OLD_JSON, OLD_JSON, OLD_JSON, RUN_JSON, RUN_JSON]
+
+
+def test_publish_otterdog_json_compares_at_the_head_commit(
+    webapp_context: tuple[E2EContext, list[str]], live: LiveFakes, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A stale read by branch name that happens to equal the new file does not skip the commit: the file is compared
+    at the branch's head sha (restoring the run's file right after an override commit)."""
+    context, events = webapp_context
+    live.oracle.add_repo("otterdog-e2e-configs")
+    live.oracle.set("branch_sha", "otterdog-e2e-configs", "main", value="a" * 40)
+    live.oracle.add_file("otterdog-e2e-configs", "otterdog.json", OLD_JSON, ref="a" * 40)
+    live.oracle.add_file("otterdog-e2e-configs", "otterdog.json", RUN_JSON, ref="main")  # stale: the older file
+    context.publish_otterdog_json(SimpleNamespace(url="u"))  # type: ignore[arg-type]
+    assert [e for e in events if e.startswith("commit")] == ["commit:otterdog-e2e-configs:otterdog.json"]
+
+
+def test_publish_otterdog_json_fails_when_the_branch_stays_stale(
+    webapp_context: tuple[E2EContext, list[str]], live: LiveFakes, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The branch never serves the new file within OTTERDOG_JSON_SERVED_TIMEOUT: ContextError, no webapp init."""
+    context, _events = webapp_context
+    live.oracle.add_repo("otterdog-e2e-configs")
+    stale_by_branch(live, monkeypatch, reads=10**6)
+    monkeypatch.setattr("otterdog_acceptance.context.webapp.OTTERDOG_JSON_SERVED_TIMEOUT", 0.0)
+    with pytest.raises(ContextError, match=r"still serves another otterdog\.json"):
+        context.publish_otterdog_json(SimpleNamespace(url="u"))  # type: ignore[arg-type]
 
 
 def test_webapp_deployment_external_and_none(webapp_context: tuple[E2EContext, list[str]]) -> None:
