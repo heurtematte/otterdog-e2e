@@ -23,7 +23,8 @@ description: |
   background, for minutes, and answers 409 "Currently updating default_repository_permission. Further changes will be
   ignored until update is complete" to any PATCH /orgs/{org} that names it meanwhile (nightly 45395404229, 1.8.0 and
   main: the 'fork' step put the template values back 2-3 minutes after the 'privileges' step). The baseline reset
-  restores them; an attempt that comes too early gets the same 409 and the next reset completes it.
+  restores them: a guarded apply refused with that 409 plans and applies again after a pause (baseline.py
+  SETTINGS_BUSY_*; nightly 45596269086: the cleanup reset failed its settings patch for about 2 minutes).
   Private Pages creation (members_can_create_private_pages) is enterprise-only (validation, KB-024) and not changed
   here. org_level: unfiltered plans, full baseline reset as cleanup (it removes the private run repository too).
 priority: P1

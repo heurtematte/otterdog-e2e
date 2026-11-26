@@ -10,7 +10,7 @@ from typing import Any
 import pytest
 
 from otterdog_acceptance.naming import RunContext
-from otterdog_acceptance.otterdog.baseline import BaselineManager, combine_apply_results
+from otterdog_acceptance.otterdog.baseline import BaselineManager, combine_apply_results, settings_busy_field
 from otterdog_acceptance.otterdog.output import PlanObject, PlanResult, parse_apply, parse_plan
 from otterdog_acceptance.otterdog.render import OrgConfigRenderer, build_baseline
 from otterdog_acceptance.otterdog.runner import OtterdogCli
@@ -348,6 +348,74 @@ def test_guarded_apply_skips_noop_plans(tmp_path: Path) -> None:
     cli.queue("plan", stdout=sample("local-plan-remove-repo"))
     pending = manager.guarded_apply(cli, repo_filter=None, delete=False)
     assert pending.no_changes and pending.pending_deletions == 1
+
+
+SETTINGS_PLAN = plan_text(
+    '~ settings {\n    ~ default_repository_permission = "none" -> "read"\n  ~ }', counts=(0, 1, 0)
+)
+
+
+def settings_busy_apply() -> str:
+    """apply-failed-patch with the settings patch GitHub refused while updating default_repository_permission (the
+    box text of nightly 45596269086)."""
+    return (
+        sample("apply-failed-patch")
+        .replace('ADD - repository[name="e2e-t3c7z8a5-basic"]', "CHANGE - settings")
+        .replace("failed to add repo with name 'e2e-test-org/e2e-t3c7z8a5-basic':", "failed to update settings:")
+        .replace(
+            "'https://api.github.com/orgs/e2e-test-org/repos': (status=422, "
+            'body={"message":"Repository creation failed.","status":"422"})',
+            '\'https://api.github.com/orgs/e2e-test-org\': (status=409, body={"message":"Conflict","errors":'
+            '"Currently updating default_repository_permission. Further changes will be ignored until update is '
+            "complete. If you wish to update other settings, please remove default_repository_permission",
+        )
+    )
+
+
+def test_settings_busy_field() -> None:
+    """Only a refused settings patch with GitHub's 409 'Currently updating <field>' counts."""
+    assert settings_busy_field(parse_apply(settings_busy_apply())) == "default_repository_permission"
+    assert settings_busy_field(parse_apply(sample("apply-failed-patch"))) is None
+    assert settings_busy_field(parse_apply(sample("apply-executed"))) is None
+
+
+def test_guarded_apply_waits_while_github_updates_an_org_setting(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """409 'Currently updating default_repository_permission': plan, guard and apply again after a pause; the result
+    sums the attempts and keeps the failures of the last one."""
+    pauses: list[float] = []
+    monkeypatch.setattr("otterdog_acceptance.otterdog.baseline.settings_busy_sleep", pauses.append)
+    manager = make_manager(tmp_path)
+    cli = manager.reset_cli
+    for _ in range(2):
+        cli.queue("plan", stdout=SETTINGS_PLAN)
+        cli.queue("apply", stdout=settings_busy_apply(), exit_code=1)
+    cli.queue("plan", stdout=SETTINGS_PLAN)
+    cli.queue("apply", stdout=sample("apply-executed-ignored"))
+    with caplog.at_level(logging.WARNING):
+        result = manager.guarded_apply(cli, repo_filter=None, delete=False)
+    assert pauses == [30.0, 60.0]
+    assert [call.command for call in cli.calls] == ["plan", "apply"] * 3
+    assert result.failed_patches == [] and result.added == 24
+    assert "still updating the org setting default_repository_permission" in caplog.text
+
+
+def test_guarded_apply_gives_up_on_a_busy_setting_after_the_wait_budget(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Still 409 after SETTINGS_BUSY_WAIT_MAX: the failed settings patch is returned, as before."""
+    pauses: list[float] = []
+    monkeypatch.setattr("otterdog_acceptance.otterdog.baseline.settings_busy_sleep", pauses.append)
+    monkeypatch.setattr("otterdog_acceptance.otterdog.baseline.SETTINGS_BUSY_WAIT_MAX", 100.0)
+    manager = make_manager(tmp_path)
+    cli = manager.reset_cli
+    for _ in range(3):
+        cli.queue("plan", stdout=SETTINGS_PLAN)
+        cli.queue("apply", stdout=settings_busy_apply(), exit_code=1)
+    result = manager.guarded_apply(cli, repo_filter=None, delete=False)
+    assert pauses == [30.0, 60.0]
+    assert result.failed_patches == ["CHANGE - settings"]
 
 
 def test_guarded_apply_raises_on_infra_errors(tmp_path: Path) -> None:

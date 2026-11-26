@@ -21,8 +21,10 @@ at session end while web_restore_pending, i.e. whenever the web-UI tier ran but 
 
 from __future__ import annotations
 
+import dataclasses
 import logging
 import re
+import time
 from collections.abc import Callable, Collection, Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
@@ -30,7 +32,9 @@ from otterdog_acceptance.otterdog.output import CURRENT_CONFIG_ERROR, ApplyResul
 from otterdog_acceptance.otterdog.render import ConfigFragments
 from otterdog_acceptance.otterdog.runner import OtterdogCli
 from otterdog_acceptance.otterdog.workspace import ConfigWorkspace
+from otterdog_acceptance.ratewait import alarm_suspended
 from otterdog_acceptance.safety import SafetyError
+from otterdog_acceptance.waiting import intervals
 
 if TYPE_CHECKING:
     from otterdog_acceptance.config_repo import ConfigRepoFlow
@@ -48,6 +52,28 @@ GUARD_WORKSPACE = "guard-workspace"
 GUARD_ARTIFACTS = "guard"  # the guard CLI's command copies: <reset artifacts>/guard/cli/ (role "reset" in reports)
 CHECK_STATUS_JSON = "baseline-check-status.json"
 TAIL_LINES = 30
+
+# GitHub applies some org settings in the background (default_repository_permission: about 2 minutes in nightly
+# 45596269086 after cli.org.member-privileges) and meanwhile answers every PATCH /orgs/{org} with 409 "Currently
+# updating <field>. Further changes will be ignored until update is complete.": a guarded apply refused that way is
+# planned and applied again after a pause, so the reset after such a scenario does not fail every settings patch.
+SETTINGS_PATCH = "CHANGE - settings"
+SETTINGS_BUSY_RE = re.compile(r"status=409, body=.*Currently updating (?P<field>\w+)")
+SETTINGS_BUSY_PAUSES = (30.0, 60.0)  # seconds before each new attempt (the last one repeats)
+SETTINGS_BUSY_WAIT_MAX = 600.0  # total pause of one guarded apply, not counted against the item's timeout
+
+
+def settings_busy_sleep(seconds: float) -> None:
+    """The pause before a guarded apply runs again (a seam for tests)."""
+    time.sleep(seconds)
+
+
+def settings_busy_field(result: ApplyResult) -> str | None:
+    """The org setting GitHub was still updating when it refused the settings patch of ``result`` (409), else None."""
+    if SETTINGS_PATCH not in result.failed_patches:
+        return None
+    match = SETTINGS_BUSY_RE.search(result.raw)
+    return match.group("field") if match else None
 
 
 def _tail(text: str, lines: int = TAIL_LINES) -> str:
@@ -200,7 +226,38 @@ class BaselineManager:
         return result
 
     def _guarded(self, cli: OtterdogCli, *, repo_filter: str | None, delete: bool) -> tuple[PlanResult, ApplyResult]:
-        """guarded_apply returning the verified plan too; apply is skipped when the plan has nothing to apply."""
+        """guarded_apply returning the verified plan too; apply is skipped when the plan has nothing to apply. A
+        settings patch refused while GitHub still updates an org setting (409, SETTINGS_BUSY_RE) makes it plan, check
+        and apply again after a pause (SETTINGS_BUSY_PAUSES, at most SETTINGS_BUSY_WAIT_MAX s in total, the item's
+        timeout suspended); the result then sums the attempts and keeps the failed patches of the last one."""
+        plan, result = self._guarded_once(cli, repo_filter=repo_filter, delete=delete)
+        attempts = [result]
+        pauses = intervals(SETTINGS_BUSY_PAUSES)
+        waited = 0.0
+        while (field := settings_busy_field(result)) is not None:
+            pause = next(pauses)
+            if waited + pause > SETTINGS_BUSY_WAIT_MAX:
+                log.warning("guarded apply (-r %s): GitHub still updates %s after %.0f s", repo_filter, field, waited)
+                break
+            log.warning(
+                "guarded apply (-r %s): GitHub is still updating the org setting %s (409), applying again in %.0f s",
+                repo_filter,
+                field,
+                pause,
+            )
+            with alarm_suspended():
+                settings_busy_sleep(pause)
+            waited += pause
+            result = self._guarded_once(cli, repo_filter=repo_filter, delete=delete)[1]
+            attempts.append(result)
+        if len(attempts) > 1:
+            result = dataclasses.replace(combine_apply_results(attempts), failed_patches=list(result.failed_patches))
+        return plan, result
+
+    def _guarded_once(
+        self, cli: OtterdogCli, *, repo_filter: str | None, delete: bool
+    ) -> tuple[PlanResult, ApplyResult]:
+        """One plan -> guard -> apply of _guarded."""
         if self.write_check is not None:
             self.write_check()
         planned = cli.plan(repo_filter=repo_filter)
