@@ -175,6 +175,7 @@ shortened to the relevant lines.
 | KB-093 | organization workflow permissions relaxed to write: repositories need a second apply | suspected | model | step of `cli.repo.org-coerced` |
 | KB-094 | web apply of `default_branch_name` reports done, GitHub keeps the old name | suspected | web UI | `webui.kb.default-branch-name` |
 | KB-095 | code scanning default setup with `javascript-typescript` never converges | suspected | provider, model | step of `cli.repo.code-scanning-languages` |
+| KB-096 | org variable selection updated right after its PATCH: GitHub's PUT answers 404 one time in two | suspected | provider | step of `cli.org.variable` |
 
 ## Issues
 
@@ -3130,3 +3131,50 @@ too), `add-language` plans nothing. The fix of the scenario waits until the setu
 converge plan and expects no change in `add-language`; it needs the body of the endpoint (`javascript` and
 `typescript`, or `javascript-typescript`) to write that wait. Until then the step `add-language` declares the bug for
 its plan and apply phases.
+
+### KB-096 — updating the selected repositories of an organization variable fails one time in two
+
+Status: **suspected** · Upstream: none · Scenarios: step `selected-two` of `cli.org.variable`
+
+Evidence: `otterdog/providers/github/rest/org_client.py:648-660`, `otterdog/providers/github/rest/org_client.py:666-688`
+(otterdog main fa01483; 644-656 and 662-684 in v1.8.0), e2e: `scenarios/cli/variables/org-variable.yaml`.
+
+`update_variable` sends `PATCH /orgs/{org}/actions/variables/{name}` with the variable minus its name and repository
+ids (value and visibility), then, when the visibility stays `selected`, `_set_selected_repositories_for_variable`
+sends `PUT /orgs/{org}/actions/variables/{name}/repositories` at once. GitHub answers that PUT 404 about one time in
+two, and the selection stays unchanged. otterdog raises "failed to update selected repositories for variable" without
+the status or the body, and does not retry. The step `selected-two` of `cli.org.variable` (one repository selected,
+then two) failed this way on 4 runs of 5 in the nightlies 44545614854 to 44760214930, and again in 45395404229
+(2026-11-24) and 45807315316 (2026-11-26), on 1.8.0 and main. Neither the age of the added repository nor its id
+explains it: the repository was created a step earlier and both ids resolve.
+
+Two probes with the admin token of `otterdog-e2e-org-level` on 2026-11-27 replayed the requests with `gh api`,
+without otterdog. GitHub's answer to the PUT is only `{"message":"Not Found"}`, with the scope it requires
+(`admin:org`) granted. Variants from the selection `[A]`, 5 rounds each:
+
+| Requests before the PUT `[A, X]` | 404 |
+| --- | --- |
+| PATCH `{value, visibility}`, then the PUT 0.4 s later, X never selected | 2 of 5 |
+| the same, X selected and removed before (otterdog's sequence) | 3 of 5 |
+| PATCH `{value}` only, then the PUT 0.4 s later | 2 of 5 |
+| no PATCH | 0 of 5 |
+| PATCH `{value, visibility}`, 5 s, then the PUT | 0 of 5 |
+
+A PUT that does not change the selection always passed. A PUT that grows the selection right after a PATCH of the
+variable fails about one time in two, whatever the PATCH changes; 5 s later it passes. The 404 is GitHub's, but
+otterdog triggers it with two requests in a row and loses the answer. GitHub's REST description documents only 204
+and 409 for the PUT, and the PATCH accepts `selected_repository_ids` (visibility `selected`), so one PATCH could carry
+the whole change; a retry of the PUT on 404 would also do. The step `selected-two` declares the bug for its apply
+phase: a pass there is the half of the runs where GitHub accepted the PUT, not a fix.
+
+#### Reproduction (live)
+
+```console
+$ gh api -X POST /orgs/$ORG/actions/variables --input - <<<'{"name":"'$VAR'","value":"one","visibility":"selected","selected_repository_ids":['$ID_A']}'
+$ gh api -X PATCH /orgs/$ORG/actions/variables/$VAR --input - <<<'{"value":"one","visibility":"selected"}' \
+    && gh api -i -X PUT /orgs/$ORG/actions/variables/$VAR/repositories --input - <<<'{"selected_repository_ids":['$ID_A','$ID_B']}'
+HTTP/2.0 404 Not Found
+{"message":"Not Found","documentation_url":"https://docs.github.com/rest/actions/variables#set-selected-repositories-for-an-organization-variable","status":"404"}
+```
+
+Run the PATCH and PUT pair a few times (putting `[A]` back after each success): about one pair in two answers 404.

@@ -3419,7 +3419,7 @@ features:
     priority: P2
     status: covered
     covered_by: [cli.org.variable, cli.kb.org-variable-same-apply]
-    known_bugs: [KB-022]
+    known_bugs: [KB-022, KB-096]
     verified_on:
       - {target: "org-level", sut: "v1.8.0", run: "tp23ue25", date: "2026-11-25"}
 

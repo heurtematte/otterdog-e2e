@@ -1956,7 +1956,7 @@ Details:
     - Source: `otterdog/models/organization_variable.py:91-93`, `otterdog/providers/github/rest/org_client.py:638-664`
     - Properties (`org-variable`): `selected_repositories`
     - Operations: add, modify, converge
-    - Known bugs: KB-022
+    - Known bugs: KB-022, KB-096
     - Verified on `org-level` with `v1.8.0`: run `tp23ue25` (2026-11-25)
 - **`secrets-variables.repo-secret.lifecycle`** (covered, P0, `cli`): repository secrets: add (repo public key), forced update with --update-secrets, values never read back
     - Source: `otterdog/models/repo_secret.py:24-31`, `otterdog/models/secret.py:125-188`, `otterdog/providers/github/rest/secret_client.py:111-218`

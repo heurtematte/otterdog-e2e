@@ -12,7 +12,9 @@ description: |
   earlier, it is more than a minute old at the PUT, and the PUT still answered 404 on 1.8.0 and main (nightly
   45395404229, 2026-11-24): the age of the repository is not the cause. otterdog sends PATCH .../variables/{name} with the whole
   variable but its name and ids (value, visibility 'selected': models/organization_variable.py apply_live_patch), then
-  the PUT; both repository ids resolved (GET /repos/{owner}/{repo} twice). The oracle checks the variable (GET .../actions/variables/{name}) and its selected
+  the PUT at once; both repository ids resolved (GET /repos/{owner}/{repo} twice). Probes without otterdog (2026-11-27)
+  found the cause: GitHub answers 404 to about half of the PUTs that grow the selection right after a PATCH of the
+  variable, never without the PATCH or 5 s after it (known bug KB-096, declared by the step for its apply). The oracle checks the variable (GET .../actions/variables/{name}) and its selected
   repositories (GH-07: GET .../variables/{name}/repositories). The update step changes the value and widens the
   visibility to all repositories (otterdog 'public' == GitHub 'all'). Org-level object: the scenario is org_level, so
   its plans are not filtered with -r and its cleanup is a full baseline reset.
@@ -73,6 +75,7 @@ steps:
         equals: ["{{ p }}-orgvar"]
 
   - name: selected-two
+    known_bug: {id: KB-096, phases: [apply]}  # GitHub's PUT .../repositories right after the PATCH: 404 one time in two
     fragments:
       variables:
         - |

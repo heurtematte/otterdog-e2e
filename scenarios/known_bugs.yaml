@@ -1181,3 +1181,19 @@
   upstream: null
   fixed_in: null
   scenarios: []
+
+- id: KB-096
+  title: updating the selected repositories of an organization variable fails about one time in two, because otterdog sends PUT .../variables/{name}/repositories right after the PATCH of the variable and GitHub answers that PUT 404 (the selection is unchanged)
+  status: suspected
+  evidence:
+    - otterdog/providers/github/rest/org_client.py:648-660
+    - otterdog/providers/github/rest/org_client.py:666-688
+    - "openapi: PATCH /orgs/{org}/actions/variables/{name} accepts selected_repository_ids (visibility selected); PUT
+      /orgs/{org}/actions/variables/{name}/repositories documents 204 and 409 only"
+    - "e2e: scenarios/cli/variables/org-variable.yaml (step selected-two declares the bug for its apply phase; 404 on 4
+      runs of 5 in the nightlies 44545614854 to 44760214930, then in 45395404229 and 45807315316, 1.8.0 and main;
+      gh api probes of 2026-11-27 on otterdog-e2e-org-level, without otterdog: a PUT growing the selection 0.4 s after a
+      PATCH answered 404 7 times in 15, a PUT without a PATCH or 5 s after it 0 times in 10)"
+  upstream: null
+  fixed_in: null
+  scenarios: []
