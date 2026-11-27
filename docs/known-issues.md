@@ -3162,10 +3162,9 @@ without otterdog. GitHub's answer to the PUT is only `{"message":"Not Found"}`, 
 
 A PUT that does not change the selection always passed. A PUT that grows the selection right after a PATCH of the
 variable fails about one time in two, whatever the PATCH changes; 5 s later it passes. The 404 is GitHub's, but
-otterdog triggers it with two requests in a row and loses the answer. GitHub's REST description documents only 204
-and 409 for the PUT, and the PATCH accepts `selected_repository_ids` (visibility `selected`), so one PATCH could carry
-the whole change; a retry of the PUT on 404 would also do. The step `selected-two` declares the bug for its apply
-phase: a pass there is the half of the runs where GitHub accepted the PUT, not a fix.
+otterdog triggers it with two requests in a row and loses the answer (GitHub's REST description documents only 204
+and 409 for the PUT); "Proposed fix" below says how otterdog could avoid it. The step `selected-two` declares the bug
+for its apply phase: a pass there is the half of the runs where GitHub accepted the PUT, not a fix.
 
 #### Reproduction (live)
 
@@ -3178,3 +3177,41 @@ HTTP/2.0 404 Not Found
 ```
 
 Run the PATCH and PUT pair a few times (putting `[A]` back after each success): about one pair in two answers 404.
+
+#### Proposed fix
+
+Not filed upstream yet. Three changes to `OrgClient` (`otterdog/providers/github/rest/org_client.py` at fa01483), the
+first one preferred:
+
+1. **One request.** `update_variable` keeps `selected_repository_ids` in the body of the PATCH and no longer sends the
+   PUT: with a single request there is nothing to race. GitHub documents the field for
+   `PATCH /orgs/{org}/actions/variables/{name}` ("You can only provide a list of repository ids when the visibility is
+   set to selected"), and `add_variable` already sends the ids in its POST, which GitHub honours (the probes created
+   their variable that way). The condition stays the one of today's PUT: ids only when the visibility is `selected` or
+   unchanged.
+
+   ```python
+   async def update_variable(self, org_id: str, variable_name: str, variable: dict[str, Any]) -> None:
+       variable.pop("name", None)
+       if variable.get("visibility") not in (None, "selected"):
+           variable.pop("selected_repository_ids", None)  # GitHub takes ids only with the visibility 'selected'
+       status, body = await self.requester.request_raw(
+           "PATCH", f"/orgs/{org_id}/actions/variables/{variable_name}", json.dumps(variable)
+       )
+       if status != 204:
+           raise RuntimeError(f"failed to update org variable '{variable_name}': {status} {body}")
+   ```
+
+   Not checked live yet: no probe has sent a PATCH with `selected_repository_ids`. Before proposing it, a probe should
+   check that such a PATCH changes the selection (`GET .../variables/{name}/repositories` right after it) and never
+   answers 404.
+2. **Retry the PUT.** If GitHub ignores the ids of the PATCH, keep the two requests and retry the PUT on 404 a few
+   times, a few seconds apart: in the probes a PUT 5 s after the PATCH always passed (5 of 5). A genuine 404 (the
+   variable deleted meanwhile) only fails a few seconds later.
+3. **Say what GitHub answered.** `_set_selected_repositories_for_variable` raises "failed to update selected
+   repositories for variable ..." without the status and the body (`org_client.py:658-659`); with them the
+   nightlies would have shown a 404 from the first failure instead of needing the probes.
+
+Once otterdog ships a fix, the entry gets `status: fixed` and `fixed_in`. With the first change, the step `selected-two`
+also stops expecting `PUT /orgs/{org}/actions/variables/{name}/repositories` in its `apply.api` and expects the PATCH
+instead, from the fixed release on; the other two changes keep the requests the step expects.
