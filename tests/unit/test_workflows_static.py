@@ -589,6 +589,58 @@ def test_ci_workflow_has_no_secrets() -> None:
     assert ci_jobs["offline"]["strategy"]["matrix"]["sut"] == ["release:latest", "branch:main"]
 
 
+def test_ci_offline_parts_partition_the_tier() -> None:
+    """The offline tier runs in parts selected with pytest -k: A and B, A and not B, not A (each item in exactly one),
+    every part on every SUT."""
+    offline = jobs("ci")["offline"]
+    parts = offline["strategy"]["matrix"]["part"]
+    assert [part["keyword"] for part in parts] == [
+        "test_scenarios.py and O-VAL",
+        "test_scenarios.py and not O-VAL",
+        "not test_scenarios.py",
+    ]
+    assert len({part["name"] for part in parts}) == len(parts)
+    tier = next(step for step in steps(offline) if step.get("name") == "Offline tier")
+    assert tier["env"]["KEYWORD"] == "${{ matrix.part.keyword }}" and '-k "$KEYWORD"' in tier["run"]
+
+
+@pytest.mark.parametrize(
+    ("path", "offline"),
+    [
+        ("docs/coverage-matrix.md", False),
+        ("docs/assets/sortable.js", False),
+        ("README.md", False),
+        ("zensical.toml", False),
+        ("docs_scenarios.py", False),
+        (".claude/skills/triage-e2e-run/SKILL.md", False),
+        ("tests/unit/test_docs_site.py", False),
+        ("scenarios/coverage.yaml", False),
+        (".github/workflows/docs.yml", False),
+        ("src/otterdog_acceptance/coverage_matrix.py", True),
+        ("tests/offline/test_scenarios.py", True),
+        ("tests/conftest.py", True),
+        ("tests/cli/test_commands_content.py", True),
+        ("scenarios/known_bugs.yaml", True),
+        ("scenarios/offline/rulesets/val-ruleset-strict.yaml", True),
+        ("scenarios/fragments/README.md", True),
+        ("pyproject.toml", True),
+        ("poetry.lock", True),
+        ("Makefile", True),
+        (".github/workflows/ci.yml", True),
+        ("docker/Dockerfile", True),
+    ],
+)
+def test_ci_skips_the_offline_tier_only_for_files_it_never_reads(path: str, offline: bool) -> None:
+    """The changes job runs the offline tier unless every changed file matches NOT_OFFLINE (grep -E, the same syntax
+    as Python here); lint and the unit tier always run."""
+    ci_jobs = jobs("ci")
+    scope = next(step for step in steps(ci_jobs["changes"]) if step.get("id") == "scope")
+    assert bool(re.search(scope["env"]["NOT_OFFLINE"], path)) is not offline, path
+    assert ci_jobs["offline"]["needs"] == "changes"
+    assert ci_jobs["offline"]["if"] == "needs.changes.outputs.offline == 'true'"
+    assert "needs" not in ci_jobs["lint"] and "needs" not in ci_jobs["unit"]
+
+
 def test_e2e_workflow_contract() -> None:
     """e2e.yml: dispatch + call inputs, classify without secrets (instances validated against the allowlist), one job
     per instance with the two-environment rule, concurrency, timeouts, the instance check, final janitor --run-id,

@@ -1,5 +1,8 @@
 # CI of the harness itself (SPEC 17): lint, types, unit tier and the offline tier of release:latest and branch:main.
 # No secrets and no environment: everything here runs against dummy credentials or without GitHub at all.
+# The offline tier runs in three parts per SUT (about 6 minutes each instead of 17 in one job), and not at all when a
+# push or pull request changes no file it reads (documentation, unit tests: the `changes` job); lint and the unit tier
+# always run.
 name: ci
 
 on:
@@ -18,6 +21,59 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  changes:
+    name: changed files
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      offline: ${{ steps.scope.outputs.offline }}
+    steps:
+      - name: Check out the harness (with its history, to diff)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Decide whether the offline tier runs
+        id: scope
+        env:
+          EVENT: ${{ github.event_name }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          HEAD_SHA: ${{ github.sha }}
+          # files the offline tier never reads: the site and its generators, the Markdown pages, the agent skills,
+          # the unit tier and the coverage matrix (both checked by the unit tier, which always runs); any other path
+          # runs it, unknown ones included
+          NOT_OFFLINE: '^(docs/|docs-theme/|\.claude/|tests/unit/|[^/]+\.md$|zensical\.toml$|docs_(hooks|scenarios|site)\.py$|scenarios/coverage\.yaml$|\.github/workflows/docs\.yml$)'
+        run: |
+          set -euo pipefail
+          sha_re='^[0-9a-f]{40}$'
+          case "$EVENT" in
+            push) base="$PUSH_BEFORE" head="$HEAD_SHA" range="${PUSH_BEFORE}..${HEAD_SHA}" ;;
+            pull_request) base="$PR_BASE" head="$PR_HEAD" range="${PR_BASE}...${PR_HEAD}" ;;
+            *) base="" head="" range="" ;;
+          esac
+          offline=true
+          reason="event $EVENT"
+          if [[ "$base" =~ $sha_re && "$head" =~ $sha_re && "$base" != 0000000000000000000000000000000000000000 ]] &&
+            git cat-file -e "${base}^{commit}" 2>/dev/null && git cat-file -e "${head}^{commit}" 2>/dev/null; then
+            files="$(git diff --name-only "$range")"
+            if [[ -z "$files" ]]; then
+              reason="no changed file"
+            else
+              read_by_offline="$(grep -cvE "$NOT_OFFLINE" <<<"$files" || true)"
+              reason="$read_by_offline changed file(s) the offline tier reads"
+              if [[ "$read_by_offline" == 0 ]]; then
+                offline=false
+                reason="no changed file the offline tier reads"
+              fi
+            fi
+          fi
+          echo "offline=$offline" >> "$GITHUB_OUTPUT"
+          echo "offline tier: $offline ($reason)" | tee -a "$GITHUB_STEP_SUMMARY"
+
   lint:
     name: ruff and mypy
     runs-on: ubuntu-24.04
@@ -84,17 +140,26 @@ jobs:
         run: .venv/bin/python -m pytest -q -p no:cacheprovider tests/unit
 
   offline:
-    name: offline tier (${{ matrix.sut }})
+    name: offline tier (${{ matrix.sut }}, ${{ matrix.part.name }})
+    needs: changes
+    if: needs.changes.outputs.offline == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     permissions:
       contents: read
     # every SUT is blocking: an otterdog change on main that breaks an expectation fails the workflow, so the
-    # scenarios are adapted (references and SUT-dependent expectations) instead of the failure going unnoticed
+    # scenarios are adapted (references and SUT-dependent expectations) instead of the failure going unnoticed.
+    # The parts split the items with pytest -k into a partition (every item runs in exactly one part): the validation
+    # scenarios (O-VAL, about 5 min), the other offline scenarios (local-plan, show, canonical-diff: about 5 min) and
+    # the Python tests (lint of the live steps, the webapp, the CLI: about 7 min), plus about a minute of setup each.
     strategy:
       fail-fast: false
       matrix:
         sut: ["release:latest", "branch:main"]
+        part:
+          - { name: validation scenarios, keyword: "test_scenarios.py and O-VAL" }
+          - { name: other scenarios, keyword: "test_scenarios.py and not O-VAL" }
+          - { name: Python tests, keyword: "not test_scenarios.py" }
     steps:
       - name: Check out the harness
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -132,11 +197,12 @@ jobs:
         timeout-minutes: 35
         env:
           SUT: ${{ matrix.sut }}
-        run: .venv/bin/otterdog-acceptance run --suite offline --sut "$SUT"
+          KEYWORD: ${{ matrix.part.keyword }}
+        run: .venv/bin/otterdog-acceptance run --suite offline --sut "$SUT" -k "$KEYWORD"
       - name: Locate the run artifacts
         if: always()
         env:
-          LABEL: offline-${{ matrix.sut }}
+          LABEL: offline-${{ matrix.sut }}-${{ matrix.part.name }}
         run: |
           set -euo pipefail
           shopt -s nullglob

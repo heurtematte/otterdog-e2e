@@ -97,7 +97,8 @@ GitHub App, no docker, a low rate budget, or for `web_ui` no web credentials, no
 When the tiers run:
 
 - **every push and pull request** of this repository (`ci.yml`): ruff, mypy, the unit tier and the offline tier of
-  `release:latest` and `branch:main`, no secrets;
+  `release:latest` and `branch:main` (three parallel parts per SUT, skipped when only the documentation or the unit
+  tests change), no secrets;
 - **every night** (`nightly.yml`): every tier on five test organizations, each taking one share (shard) of the live
   tests, first for `release:latest`, then for `branch:main` with a differential against `release:latest`;
 - **on demand**: an upstream pull request (`otterdog-acceptance pr`, workflow `e2e-otterdog-pr.yml`), a tier or a
