@@ -50,9 +50,10 @@ class FakeDocker:
     GLOBAL_OPTIONS = ("--project-name", "--project-directory", "--env-file", "--file", "--profile")
 
     def __init__(self) -> None:
-        """No calls yet; every subcommand succeeds with empty output."""
+        """No calls yet; every subcommand succeeds with empty output. An answer is one (code, stdout, stderr), or a
+        list of them given to the successive calls (the last one repeats)."""
         self.calls: list[dict[str, Any]] = []
-        self.answers: dict[str, tuple[int, str, str]] = {}
+        self.answers: dict[str, tuple[int, str, str] | list[tuple[int, str, str]]] = {}
 
     @classmethod
     def split(cls, argv: Sequence[str]) -> tuple[list[str], list[str]]:
@@ -65,7 +66,10 @@ class FakeDocker:
     def __call__(self, argv: Sequence[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
         """procs.run replacement."""
         self.calls.append({"argv": list(argv), **kwargs})
-        code, stdout, stderr = self.answers.get(self.split(argv)[1][0], (0, "", ""))
+        answer = self.answers.get(self.split(argv)[1][0], (0, "", ""))
+        if isinstance(answer, list):
+            answer = answer.pop(0) if len(answer) > 1 else answer[0]
+        code, stdout, stderr = answer
         return subprocess.CompletedProcess(list(argv), code, stdout, stderr)
 
     def commands(self) -> list[list[str]]:
@@ -245,15 +249,37 @@ def test_write_files_installs_the_mock_script(tmp_path: Path) -> None:
 
 # --- single services -----------------------------------------------------------------------------------------------
 def test_stop_and_start_a_service(up: WebappStack, docker: FakeDocker) -> None:
-    """stop: compose stop --timeout 10 <service>; start: up --wait --no-deps --no-recreate <service>."""
+    """stop: compose stop --timeout 10 <service>, then ps until the service no longer runs; start: up --wait
+    --no-deps --no-recreate <service>."""
+    docker.answers["ps"] = (0, "redis\nwebapp\n", "")
     up.stop_service("mongodb")
     up.start_service("mongodb", timeout=45)
     assert docker.commands()[1:] == [
         ["stop", "--timeout", "10", "mongodb"],
+        ["ps", "--services", "--status", "running"],
         ["up", "--detach", "--wait", "--wait-timeout", "45", "--no-deps", "--no-recreate", "mongodb"],
     ]
     up.start_service("webapp")  # the webapp is also waited for on /internal/health (patched healthy)
     assert docker.commands()[-1][-1] == "webapp"
+
+
+def test_stop_waits_until_the_service_no_longer_runs(
+    up: WebappStack, docker: FakeDocker, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Nightly 45807315316: compose ps still listed mongodb as running right after compose stop returned; stop_service
+    returns only once it is gone, and fails (with the log tail) when it never goes."""
+    monkeypatch.setattr(stack_module, "STOP_SETTLE_INTERVAL", 0.01)
+    docker.answers["ps"] = [(0, "mongodb\nredis\nwebapp\n", ""), (0, "redis\nwebapp\n", "")]
+    up.stop_service("mongodb")
+    assert [command[0] for command in docker.commands()[1:]] == ["stop", "ps", "ps"]
+    assert "mongodb" not in up.running_services()
+
+    monkeypatch.setattr(stack_module, "STOP_SETTLE_TIMEOUT", 0.05)
+    docker.answers["ps"] = (0, "mongodb\nredis\nwebapp\n", "")
+    docker.answers["logs"] = (0, "mongodb-1 | still here\n", "")
+    with pytest.raises(WebappStackError, match=r"still runs after 0\.05 s") as info:
+        up.stop_service("mongodb")
+    assert "still here" in str(info.value)
 
 
 def test_service_names_and_state(up: WebappStack, docker: FakeDocker, tmp_path: Path) -> None:

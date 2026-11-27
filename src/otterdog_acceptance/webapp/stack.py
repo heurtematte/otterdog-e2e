@@ -132,6 +132,8 @@ READY_INTERVAL = 3.0
 HEALTH_TIMEOUT = 60.0
 COMPOSE_DOWN_TIMEOUT = 180.0
 SERVICE_TIMEOUT = 300.0
+STOP_SETTLE_TIMEOUT = 30.0  # stop_service: until compose ps no longer lists the stopped service as running
+STOP_SETTLE_INTERVAL = 0.5
 LOG_TAIL = 150
 SERVICES = ("webapp", "mongodb", "redis", "dtrack-mock")  # services of compose.e2e.yaml
 # Redis keys of the leases that make /internal/init and /internal/check run once at a time across the workers (since
@@ -667,10 +669,23 @@ class WebappStack:
 
     def stop_service(self, service: str, *, timeout: float = SERVICE_TIMEOUT) -> None:
         """``docker compose stop <service>``: e.g. redis or mongodb for fail-fast cases (their data lives in memory:
-        a restart starts them empty), the webapp for webapp-down cases."""
-        self._compose_checked(
-            "stop", "--timeout", "10", self._service(service), timeout=timeout, what=f"stopping {service}"
-        )
+        a restart starts them empty), the webapp for webapp-down cases. Returns once ``compose ps`` no longer lists the
+        service as running: right after the stop it still did once (nightly 45807315316, mongod had exited 10 ms
+        before), so a fail-fast case would have checked a service that was down as running."""
+        name = self._service(service)
+        self._compose_checked("stop", "--timeout", "10", name, timeout=timeout, what=f"stopping {service}")
+        try:
+            waiting.wait_until(
+                lambda: name not in self.running_services(),
+                timeout=STOP_SETTLE_TIMEOUT,
+                interval=STOP_SETTLE_INTERVAL,
+                what=f"{service} no longer running",
+            )
+        except waiting.WaitTimeoutError:
+            raise WebappStackError(
+                f"docker compose stopped {service}, but it still runs after {STOP_SETTLE_TIMEOUT:g} s"
+                f"\n--- webapp log tail ---\n{self.logs(tail=LOG_TAIL)}"
+            ) from None
         _logger.info("webapp stack %s: service %s stopped", self.project_name, service)
 
     def start_service(self, service: str, *, timeout: float = SERVICE_TIMEOUT) -> None:

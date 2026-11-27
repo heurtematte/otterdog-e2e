@@ -210,6 +210,25 @@ def _wait_cards(
     return cards
 
 
+def _reload_cards(
+    s: WebappScenario, bp: BlueprintHelper, *, until: Any, what: str, timeout: float = LOAD_TIMEOUT
+) -> tuple[dict[str, Any], str, dict[str, dict[str, str]]]:
+    """/internal/init again until the policy cards of the project page satisfy ``until(cards)``, or the fetch fails:
+    (the FetchPoliciesTask, the page, its cards) of the last one. Just after a commit GitHub can still list the
+    policies directory of the configs repo as it was before it: on nightly 45807315316 (1.8.0) the webapp loaded the
+    first of two global policies committed a second apart, not the second (no cache in the e2e stack)."""
+
+    def attempt() -> tuple[dict[str, Any], str, dict[str, dict[str, str]]]:
+        """One reload and the page it leads to."""
+        fetch = bp.reload(tasks=(FETCH_POLICIES,))[FETCH_POLICIES]
+        page = _project_page(s, bp)
+        return fetch, page, _policy_cards(page)
+
+    return s.reaction(
+        attempt, until=lambda found: found[0].get("status") != "finished" or until(found[2]), what=what, timeout=timeout
+    )
+
+
 def _wait_push(relay: DeliveryRelay, repo: str, sha: str, *, after: datetime) -> RelayedDelivery:
     """The relayed push delivery of ``repo`` at ``sha``, checked as forwarded (infra / SUT classification)."""
 
@@ -262,6 +281,12 @@ def _counter(counters: dict[str, int], name: str) -> int:
     return int(counters.get(name, 0))
 
 
+def _run_brief(run: dict[str, Any]) -> dict[str, Any]:
+    """The fields of a workflow run that decide a check (a whole run is long enough for the report to cut the
+    conclusion off)."""
+    return {key: run.get(key) for key in ("id", "status", "conclusion", "created_at", "updated_at")}
+
+
 # --- definitions ----------------------------------------------------------------------------------------------------
 @pytest.mark.scenario("W-POL-LOAD", priority="P2", references=REFERENCES_944_LOAD)
 @pytest.mark.tags("webapp", "webhooks-app")
@@ -285,10 +310,15 @@ def test_policy_definitions_are_loaded_and_merged(
     )
     global_macos_path = bp.add_policy(global_macos, scope=GLOBAL)
     global_sbom_path = bp.add_policy(global_sbom, scope=GLOBAL)
-    fetch = bp.reload(tasks=(FETCH_POLICIES,))[FETCH_POLICIES]
+    fetch, page, cards = _reload_cards(
+        s,
+        bp,
+        until=lambda found: (
+            (found.get(MACOS) or {}).get("name") == global_macos.name and (not sbom_supported or SBOM in found)
+        ),
+        what="the global policies of this test on the project page",
+    )
     assert fetch.get("status") == "finished", f"{FETCH_POLICIES} after /internal/init failed (SUT): {fetch}"
-    page = _project_page(s, bp)
-    cards = _policy_cards(page)
     macos, sbom = cards.get(MACOS), cards.get(SBOM)
     assert macos is not None, f"the global macos policy is missing from the project page: {sorted(cards)}"
     assert macos["name"] == global_macos.name, f"global macos card: {macos}"
@@ -385,7 +415,8 @@ def test_macos_large_runner_jobs_are_cancelled_unless_allowed(
     webapp_scenario: WebappScenario, blueprints: BlueprintHelper
 ) -> None:
     """allowed false: the queued job is cancelled by the App (run cancelled, cancelled counter +1); allowed true: the
-    job is only counted (permitted counter +1, the run still waits for a runner until the harness cancels it)."""
+    job is only counted (permitted counter +1, the run still waits for a runner until the harness cancels it, unless
+    GitHub already failed it: never cancelled)."""
     s, bp = webapp_scenario, blueprints
     if bp.larger_runners:
         pytest.skip("the org has larger runners: a job on macos-latest-large would run and be billed")
@@ -414,7 +445,9 @@ def test_macos_large_runner_jobs_are_cancelled_unless_allowed(
             f"GitHub failed run {run_id} on macos-latest-large by itself (no larger runner on this plan): "
             "no queued job is left for the App to cancel"
         )
-    assert cancelled.get("conclusion") == "cancelled", f"run {run_id} on a disallowed larger runner: {cancelled}"
+    assert cancelled.get("conclusion") == "cancelled", (
+        f"run {run_id} on a disallowed larger runner: {_run_brief(cancelled)}"
+    )
     counters = bp.wait_policy_counter(
         MACOS, CANCELLED, at_least=_counter(before, CANCELLED) + 1, timeout=COUNTER_TIMEOUT
     )
@@ -441,7 +474,14 @@ def test_macos_large_runner_jobs_are_cancelled_unless_allowed(
         f"an allowed job counted as cancelled: {counters}"
     )
     waiting_run = s.oracle.workflow_run(repo, run_id) or {}
-    assert waiting_run.get("status") != "completed", f"the App cancelled an allowed larger-runner job: {waiting_run}"
+    if waiting_run.get("status") == "completed":
+        # nightly 45807315316 (GitHub Free): the allowed run was created at 17:59:50 and completed as failure at
+        # 17:59:54, by GitHub itself like the denied one above can; the counters already hold the App's decision,
+        # only a cancelled conclusion is the App's
+        conclusion = waiting_run.get("conclusion")
+        assert conclusion != "cancelled", f"the App cancelled an allowed larger-runner job: {_run_brief(waiting_run)}"
+        assert conclusion == "failure", f"allowed larger-runner run {run_id} completed: {_run_brief(waiting_run)}"
+        return
     bp.cancel_run(repo, run_id)
     done = bp.wait_run(
         repo, workflow, after=permitted.after, run_id=run_id, until=lambda r: r.get("status") == "completed"
