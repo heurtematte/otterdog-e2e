@@ -103,8 +103,9 @@ def test_site_settings() -> None:
     assert config["site_url"] == SITE_URL
     assert config["repo_url"] == REPO_URL
     assert config["edit_uri"] == "edit/main/docs/"
-    assert config["extra_javascript"] == ["assets/explorer.js", "assets/sortable.js"]
-    assert config["extra_css"] == ["assets/explorer.css", "assets/theme.css"]
+    assert config["extra_javascript"] == ["assets/explorer.js", "assets/sortable.js", "assets/nightly.js"]
+    assert config["extra_css"] == ["assets/explorer.css", "assets/theme.css", "assets/nightly.css"]
+    assert all((DOCS / asset).is_file() for asset in [*config["extra_javascript"], *config["extra_css"]])
     assert config["theme"]["custom_dir"] == "docs-theme" and config["theme"].get("name", "material") == "material"
     assert (config["theme"]["logo"], config["theme"]["favicon"]) == (
         "assets/images/otterdog-emblem.png",
@@ -204,6 +205,17 @@ def test_stage_generates_the_pages_with_their_sources(staged: Any) -> None:
     assert "<!-- site:" not in files["docs/index.md"] and 'class="e2e-tiles"' in files["docs/index.md"]
     assert "](coverage-matrix.md#" in files["docs/index.md"], "the areas link their section of the coverage matrix"
     assert staged.problems == []
+
+
+def test_the_nightly_page_gets_the_dashboard(staged: Any, site_module: Any, tmp_path: Path) -> None:
+    """``<!-- site:nightly -->`` of docs/nightly.md becomes the mount point of docs/assets/nightly.js (the source keeps
+    the comment github.com hides); a page naming an unknown block stops the staging."""
+    page = staged.files["docs/nightly.md"].decode()
+    assert "<!-- site:" not in page
+    assert '<div class="e2e-nightly" data-workflow="nightly.yml" data-history="../assets/nightly/history.json">' in page
+    assert "<!-- site:nightly -->" in (DOCS / "nightly.md").read_text(encoding="utf-8")
+    with pytest.raises(ValueError, match=r"docs/x\.md: no generated block for <!-- site:other -->"):
+        site_module.docs_hooks.fill_site_blocks("# x\n\n<!-- site:other -->\n", {"nightly": ""}, "docs/x.md")
 
 
 def test_the_staged_configuration(staged: Any, site_module: Any) -> None:

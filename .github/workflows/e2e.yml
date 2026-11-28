@@ -292,6 +292,7 @@ jobs:
           fi
           unshare -rn true
       - name: Install the harness
+        id: install
         env:
           POETRY_VERSION: "2.5.1"
           POETRY_VIRTUALENVS_IN_PROJECT: "true"
@@ -516,6 +517,24 @@ jobs:
           path: ${{ runner.temp }}/otterdog-e2e-artifacts
           if-no-files-found: ignore
           retention-days: 7
+      - name: Publish the results digest (the notice the nightly dashboard reads)
+        id: digest
+        if: always() && steps.install.outcome == 'success'
+        # best effort: the dashboard shows the job's conclusion without it
+        continue-on-error: true
+        timeout-minutes: 5
+        env:
+          TARGET: ${{ matrix.target }}
+          SUT: ${{ needs.classify.outputs.sut }}
+          RUN_OUTCOME: ${{ steps.run.outcome }}
+        run: |
+          set -euo pipefail
+          dirs=()
+          for id in ${E2E_RUN_IDS:-}; do dirs+=("$E2E_ARTIFACTS/$id"); done
+          # counts, SUT and node ids of the scrubbed run directories, never a failure text: GitHub keeps the notice as
+          # an annotation of this job, public like the job (src/otterdog_acceptance/digest.py, docs/nightly.md)
+          .venv/bin/otterdog-acceptance digest "${dirs[@]}" --instance "$TARGET" --shard "${E2E_SHARD:-}" \
+            --lane "${E2E_LANE:-}" --sut "$SUT" --session "$RUN_OUTCOME" --github-notice
       - name: Job summary
         if: always()
         env:

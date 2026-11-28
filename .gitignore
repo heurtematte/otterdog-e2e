@@ -19,6 +19,8 @@ artifacts/
 site/
 # docs_site.py: the pages staged for Zensical
 .docs-site/
+# the history of the nightly dashboard, written by docs_nightly.py collect
+docs/assets/nightly/
 
 # --- agents: local Claude Code settings and agent worktrees (the skills of .claude/skills/ are tracked) ---
 .claude/settings.local.json

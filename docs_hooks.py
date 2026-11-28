@@ -6,7 +6,8 @@ Markdown of Zensical) does differently, without changing the sources:
 * the home page (``index.md``) is generated from README.md: the blocks between ``<!-- github-only -->`` and
   ``<!-- /github-only -->`` are dropped, the links are rebased from the repository root to docs/ and each line
   ``<!-- site:<name> -->`` (a comment github.com hides) is replaced by the block docs_site.py generates under that
-  name (``coverage``: the coverage summary of docs_scenarios.home_coverage);
+  name (``coverage``: the coverage summary of docs_scenarios.home_coverage); the pages of docs/ get theirs the same
+  way (fill_site_blocks; ``nightly``: the mount point of the nightly dashboard, docs_nightly.dashboard_block);
 * GitHub callouts (``> [!WARNING]``) become admonitions;
 * in table rows, ``\\|`` inside a code span becomes ``|``: GitHub needs the escape to keep the pipe in its cell, while
   Python-Markdown already ignores the pipes of code spans and would print the backslash;
@@ -238,17 +239,21 @@ def readme_to_home(readme: str, blocks: Mapping[str, str] | None = None) -> str:
     replaced by ``blocks[name]`` (Markdown whose links are already relative to docs/). Without ``blocks`` the lines
     are kept; with them, a line naming a block they lack is a ValueError."""
     home = rewrite_links(GITHUB_ONLY_RE.sub("", readme), _rebase_on_docs)
-    if blocks is None:
-        return home
+    return home if blocks is None else fill_site_blocks(home, blocks, README)
+
+
+def fill_site_blocks(markdown: str, blocks: Mapping[str, str], source: str) -> str:
+    """Every line ``<!-- site:<name> -->`` of ``markdown`` (the page ``source``) replaced by ``blocks[name]``; a line
+    naming a block they lack is a ValueError."""
 
     def block(match: re.Match[str]) -> str:
         """The generated block of one line."""
         name = match["name"]
         if name not in blocks:
-            raise ValueError(f"{README}: no generated block for <!-- site:{name} --> (known: {', '.join(blocks)})")
+            raise ValueError(f"{source}: no generated block for <!-- site:{name} --> (known: {', '.join(blocks)})")
         return blocks[name].strip("\n")
 
-    return SITE_BLOCK_RE.sub(block, home)
+    return SITE_BLOCK_RE.sub(block, markdown)
 
 
 def _rebase_on_docs(dest: str) -> str | None:

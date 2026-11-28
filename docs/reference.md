@@ -26,6 +26,7 @@ logging.
 | `relay --target T --forward-to URL [--since 10m] [--allow-remote]` | forward the App's webhook deliveries to a local webapp (holds the org lease) |
 | `janitor --target T [--older-than 6h] [--run-id ID [--force-takeover]] [--apply]` | list (and delete) leftovers of finished or crashed runs (a lease of `--run-id` renewed within 20 minutes is not taken over unless `--force-takeover`); several targets one after the other |
 | `report DIR` | print the summary of a run artifacts directory |
+| `digest DIR... [--instance I] [--shard S] [--lane L] [--sut S] [--session OUTCOME] [--github-notice]` | the results digest of the run directories of one session: outcome counts, SUT, the failed, errored and xpassed node ids with their known bugs, never a failure text; `--github-notice` prints it as the notice the [nightly dashboard](nightly.md) reads (the digest step of `e2e.yml`) |
 | `compare-runs BASELINE RUN [--json]` | the outcome of every item of two runs of the same SUT, typically by two harness revisions (`make harness-check`): exit 1 when an outcome changed, 2 when the runs are not comparable |
 | `scrub-artifacts DIR` | delete non-text files and files leaking a secret (the secret values of its environment included; exit 1 on leaks) |
 | `cache prune [--keep 3]` | drop old builds, sources, runs and images from the harness cache (never an entry whose lock a running session or build holds) |
@@ -106,7 +107,7 @@ scratch directory below `E2E_CACHE_DIR`, which is deleted at session end (unless
 | `e2e-webui.yml` | dispatch, reusable | the web-UI tier of a trusted SUT on one or several instances (one at a time), in the `e2e-<instance>-webui` environment (the only one holding the bot's password and TOTP seed) |
 | `nightly.yml` | schedule | per enabled instance (`E2E_TARGETS`): `release:latest`, then `branch:main` with a differential against `release:latest`; the web-UI lane when `E2E_WEB_UI_ENABLED` is `true` (one instance at a time) |
 | `janitor.yml` | every 6 hours | a `check` job (no environment, no secrets) refuses `E2E_ORG`, `E2E_ORG_ID` and `E2E_PROFILE` as repository or organization variables, then sweeps leftovers of old runs on every enabled instance |
-| `docs.yml` | push to main and pull requests changing the documentation, dispatch | strict Zensical build of the documentation site (staged by `docs_site.py`); on main, deploys it to GitHub Pages (no secrets) |
+| `docs.yml` | push to main and pull requests changing the documentation, dispatch, the end of every nightly | strict Zensical build of the documentation site (staged by `docs_site.py`); on main, first collects the history of the [nightly dashboard](nightly.md) (`docs_nightly.py`), then deploys the site to GitHub Pages (no secrets) |
 
 The required repository setup (environments, variables, secrets) is described in
 [docs/security.md](security.md#ci-environments) and [docs/setup-free-org.md](setup-free-org.md#ci);

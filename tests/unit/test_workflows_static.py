@@ -118,7 +118,7 @@ REPO_LEVEL_CHECKS = (*TARGET_VALIDATIONS[:2], ("janitor", "check", "repository")
 VAULT_JOBS = (("e2e", "e2e"), ("e2e-webui", "webui"), ("janitor", "janitor"))
 VAULT_CALLERS = (("nightly", "release"), ("nightly", "main"), ("nightly", "webui"), ("e2e-otterdog-pr", "e2e"))
 JOB_PERMISSIONS = {
-    ("docs", "build"): {"contents": "read", "pages": "read"},
+    ("docs", "build"): {"contents": "read", "pages": "read", "actions": "read", "checks": "read"},
     ("docs", "deploy"): {"pages": "write", "id-token": "write"},
     **{job: {"contents": "read", "id-token": "write"} for job in (*VAULT_JOBS, *VAULT_CALLERS)},
 }
@@ -133,6 +133,7 @@ DOCS_PATHS = [
     "docs-theme/**",
     "docs_site.py",
     "docs_hooks.py",
+    "docs_nightly.py",
     "docs_scenarios.py",
     "scenarios/**",
     "tests/**/*.py",
@@ -707,6 +708,24 @@ def test_e2e_secrets_and_variables_cover_the_target_files() -> None:
         assert mapped[name] == expected, f"{name} must come from {expected}"
 
 
+def test_e2e_publishes_the_results_digest() -> None:
+    """The e2e job prints the digest of its scrubbed run directories as a notice (the nightly dashboard reads it from
+    the job's annotations): after the scrub, whatever the session did, without a secret, never failing the job."""
+    e2e = jobs("e2e")["e2e"]
+    digest_index, digest = step_by_id(e2e, "digest")
+    scrub_index, _ = step_by_id(e2e, "scrub")
+    install_index, _ = step_by_id(e2e, "install")
+    assert install_index < scrub_index < digest_index
+    assert digest["if"] == "always() && steps.install.outcome == 'success'"
+    assert digest["continue-on-error"] is True and isinstance(digest["timeout-minutes"], int)
+    assert not secret_names(digest.get("env"))
+    assert digest["env"]["RUN_OUTCOME"] == "${{ steps.run.outcome }}"
+    assert digest["env"]["TARGET"] == "${{ matrix.target }}"
+    script = digest["run"]
+    assert ".venv/bin/otterdog-acceptance digest " in script and "--github-notice" in script
+    assert '--shard "${E2E_SHARD:-}"' in script and '--session "$RUN_OUTCOME"' in script
+
+
 def test_otterdog_pr_workflow_contract() -> None:
     """e2e-otterdog-pr.yml: dispatch only, pin validated in bash and through the API, then e2e.yml with base auto."""
     on = triggers(workflow("e2e-otterdog-pr"))
@@ -982,9 +1001,11 @@ def test_janitor_instance_check_refuses_reserved_suffixes(tmp_path: Path) -> Non
 
 
 def test_docs_workflow_contract() -> None:
-    """docs.yml: build (strict, pinned hash-checked packages) on pull requests and main, deploy from main only."""
+    """docs.yml: build (strict, pinned hash-checked packages) on pull requests and main, deploy from main only; on main
+    and at the end of every nightly, the history of the nightly dashboard is collected before the build."""
     on = triggers(workflow("docs"))
-    assert set(on) == {"push", "pull_request", "workflow_dispatch"}, "no pull_request_target"
+    assert set(on) == {"push", "pull_request", "workflow_dispatch", "workflow_run"}, "no pull_request_target"
+    assert on["workflow_run"] == {"workflows": ["nightly"], "types": ["completed"]}
     assert on["push"]["branches"] == ["main"]
     assert on["push"]["paths"] == on["pull_request"]["paths"] == DOCS_PATHS
     assert "secrets." not in workflow_text("docs")
@@ -1001,14 +1022,21 @@ def test_docs_workflow_contract() -> None:
         "actions/setup-python",
         "run",
         "run",
+        "run",
         "actions/configure-pages",
         "actions/upload-pages-artifact",
     ]
     assert steps(build)[1]["with"] == {"python-version": "3.12"}, "no setup-python cache"
-    install, run = steps(build)[2]["run"], steps(build)[3]["run"]
+    install, collect, run = steps(build)[2]["run"], steps(build)[3], steps(build)[4]["run"]
     assert "--require-hashes" in install and "--only-binary=:all:" in install and "-r docs/requirements.txt" in install
+    assert collect["run"] == "python docs_nightly.py collect"
+    assert collect["if"] == DEPLOY_CONDITION, "pull requests read no run (and get no history)"
+    assert collect["env"] == {
+        "GITHUB_TOKEN": "${{ github.token }}",
+        "E2E_INSTANCE_SHARDS": "${{ vars.E2E_INSTANCE_SHARDS }}",
+    }
     assert run == "python docs_site.py build --strict"
-    configure, upload = steps(build)[4], steps(build)[5]
+    configure, upload = steps(build)[5], steps(build)[6]
     assert configure["uses"].startswith("actions/configure-pages@")
     assert upload["uses"].startswith("actions/upload-pages-artifact@") and upload["with"] == {"path": "site/"}
     assert configure["if"] == upload["if"] == DEPLOY_CONDITION, "pull requests never upload a site"

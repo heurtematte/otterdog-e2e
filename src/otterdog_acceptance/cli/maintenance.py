@@ -45,6 +45,34 @@ def report(directory: str) -> None:
     _echo(report_module.build_summary(Path(directory)))
 
 
+@main.command("digest")
+@click.argument("directories", metavar="DIRECTORY...", nargs=-1, type=click.Path(file_okay=False))
+@click.option("--instance", default="", help="the instance of the session")
+@click.option("--shard", default="", help="its shard (E2E_SHARD)")
+@click.option("--lane", default="", help="the lane (E2E_LANE)")
+@click.option("--sut", default="", help="the SUT spec, used when no run.json names the SUT")
+@click.option("--session", default="", help="the outcome of the session step (success, failure, cancelled)")
+@click.option("--github-notice", is_flag=True, help="print it as the GitHub Actions notice the dashboard reads")
+@_handled
+def digest_command(
+    directories: tuple[str, ...],
+    instance: str,
+    shard: str,
+    lane: str,
+    sut: str,
+    session: str,
+    github_notice: bool,
+) -> None:
+    """Print the results digest of the run directories of one session (docs/nightly.md): the outcome counts, the SUT,
+    the failed, errored and xpassed node ids with their known bugs, the known bugs of the xfailed items; never a
+    failure text. A missing directory counts nothing (a session that never started)."""
+    from otterdog_acceptance import digest as digest_module
+
+    meta = {"instance": instance, "shard": shard, "lane": lane, "sut": sut, "session": session}
+    built = digest_module.build([Path(directory) for directory in directories], meta)
+    _echo(built.notice() if github_notice else built.message())
+
+
 @main.command("compare-runs")
 @click.argument("baseline", type=click.Path(file_okay=False, exists=True))
 @click.argument("run_dir", metavar="RUN", type=click.Path(file_okay=False, exists=True))

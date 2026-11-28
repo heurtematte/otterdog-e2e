@@ -3,8 +3,9 @@
 Zensical runs no MkDocs hooks, so what they did happens before it builds, in the staging directory ``.docs-site/``
 (git-ignored), from the sources of the commit being built:
 
-* the pages of docs/, the home page generated from README.md (docs_hooks.readme_to_home, with the coverage summary
-  of docs_scenarios.home_coverage) and the pages of the scenario explorer (docs_scenarios.pages); a generated page
+* the pages of docs/ (their ``<!-- site:<name> -->`` lines filled: ``nightly``, docs_nightly.dashboard_block), the home
+  page generated from README.md (docs_hooks.readme_to_home, with the coverage summary of
+  docs_scenarios.home_coverage) and the pages of the scenario explorer (docs_scenarios.pages); a generated page
   names its source in the front matter ``edit_url``, which the theme override docs-theme/partials/actions.html gives
   its edit button;
 * every page as Python-Markdown needs it (docs_hooks.render_page): GitHub callouts as admonitions, unescaped pipes in
@@ -40,6 +41,7 @@ from pathlib import Path
 from typing import Any
 
 import docs_hooks
+import docs_nightly
 import docs_scenarios
 
 ROOT = Path(__file__).resolve().parent
@@ -191,6 +193,13 @@ def stage(root: Path, slugify: docs_scenarios.Slugify | None = None) -> Staging:
         if uri in markdown:
             raise SiteError(f"{DOCS}/{uri} must not exist: it is generated (from {page.source})")
         markdown[uri] = with_edit_url(page.markdown, edit + page.source)
+    # the generated blocks of the pages of docs/ (the home page has its own, home_page)
+    blocks = {"nightly": docs_nightly.dashboard_block()}
+    for uri, page_text in markdown.items():
+        try:
+            markdown[uri] = docs_hooks.fill_site_blocks(page_text, blocks, f"{DOCS}/{uri}")
+        except ValueError as exc:
+            raise SiteError(str(exc)) from None
     # appended to the staged pages only: the sources keep GitHub-flavored Markdown, where they would show verbatim
     defined = "\n".join(abbreviations(markdown.get(GLOSSARY, "")))
     for uri, text in markdown.items():

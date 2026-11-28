@@ -30,8 +30,9 @@ POETRY ?= poetry
 # otterdog-acceptance and its short alias oda
 E2E_LINK ?= $(HOME)/.local/bin/otterdog-acceptance
 ODA_LINK ?= $(HOME)/.local/bin/oda
-# Python files outside the package: the staging of the documentation site (docs_site.py and its modules)
-HOOKS := docs_hooks.py docs_scenarios.py docs_site.py
+# Python files outside the package: the staging of the documentation site (docs_site.py and its modules) and the
+# history of its nightly dashboard (docs_nightly.py)
+HOOKS := docs_hooks.py docs_scenarios.py docs_site.py docs_nightly.py
 
 # one target instance, or several for the run-based targets, pr, doctor and janitor: a comma list, @all, @<list>
 TARGET ?= $(E2E_TARGET)

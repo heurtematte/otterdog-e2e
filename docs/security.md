@@ -637,7 +637,16 @@ What the workflows enforce (and `tests/unit/test_workflows_static.py` checks):
   plus `pages: read` (`actions/configure-pages`, on main only), and installs Zensical from `docs/requirements.txt`
   (exact versions, `--require-hashes`, wheels only). Its deploy job, the only job of the repository allowed to write,
   holds just `pages: write` and `id-token: write`, runs only on `main` (never for a pull request) in the
-  `github-pages` environment, and only publishes the artifact of the build job.
+  `github-pages` environment, and only publishes the artifact of the build job;
+- the nightly dashboard ([nightly.md](nightly.md)): the digest step of the `e2e` job prints, as a notice that GitHub
+  keeps as a public annotation of the job, the outcome counts, the SUT and the node ids of the failed, errored and
+  xpassed items with their known bugs (`otterdog-acceptance digest`, from the scrubbed run directories; the notice is
+  escaped so that no line break can start another workflow command), never a failure text, a command output or a
+  GitHub text. On main, and when a nightly completes (`workflow_run`, which runs the workflow of `main`), the docs
+  build job also reads the runs, jobs and annotations of the nightly with `GITHUB_TOKEN` (`actions: read`,
+  `checks: read`, sent to `api.github.com` only, redirects not followed) and the history the site already publishes
+  (without a token); `docs_nightly.py` checks and bounds every value, and the page renders them as text, linking only
+  to github.com. The page itself calls the public API from the reader's browser, without a token or cookie.
 
 What you must configure: the two environments per instance with the protections above (and the third one for the
 web-UI lane), their secrets and variables (`otterdog-acceptance ci-sync`), the repository variable `E2E_INSTANCES`, a

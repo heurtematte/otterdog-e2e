@@ -1,0 +1,153 @@
+/* The nightly dashboard (docs/nightly.md, docs/assets/nightly.js): a grid of lanes x shards, one cell per session job,
+   colored by its state, in both palettes of the site. */
+.e2e-nightly {
+  --e2e-ok: #1a7f37;
+  --e2e-ok-bg: rgba(26, 127, 55, 0.1);
+  --e2e-ko: #cf222e;
+  --e2e-ko-bg: rgba(207, 34, 46, 0.1);
+  --e2e-run: #9a6700;
+  --e2e-run-bg: rgba(212, 167, 44, 0.15);
+  --e2e-off: var(--md-default-fg-color--light);
+  --e2e-off-bg: var(--md-default-fg-color--lightest);
+}
+
+[data-md-color-scheme="slate"] .e2e-nightly {
+  --e2e-ok: #3fb950;
+  --e2e-ok-bg: rgba(63, 185, 80, 0.15);
+  --e2e-ko: #f85149;
+  --e2e-ko-bg: rgba(248, 81, 73, 0.15);
+  --e2e-run: #d29922;
+  --e2e-run-bg: rgba(210, 153, 34, 0.18);
+}
+
+.e2e-nightly__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0.6rem 0;
+}
+
+.e2e-nightly__select {
+  max-width: 100%;
+  padding: 0.2rem 0.4rem;
+  font: inherit;
+  color: inherit;
+  background: var(--md-default-bg-color);
+  border: 1px solid var(--md-default-fg-color--lighter);
+  border-radius: 0.2rem;
+}
+
+.md-typeset .e2e-nightly__refresh {
+  margin: 0;
+  padding: 0.2rem 0.8rem;
+}
+
+.e2e-nightly__facts {
+  color: var(--md-default-fg-color--light);
+  font-size: 0.85em;
+}
+
+.e2e-nightly__error {
+  color: var(--e2e-ko);
+}
+
+.md-typeset .e2e-nightly table:not([class]),
+.md-typeset .e2e-nightly table {
+  font-size: 0.7rem;
+}
+
+.md-typeset .e2e-nightly .e2e-nightly__cell {
+  min-width: 7.5rem;
+  vertical-align: top;
+  border-left: 3px solid transparent;
+}
+
+.e2e-nightly__cell--success {
+  background: var(--e2e-ok-bg);
+  border-left-color: var(--e2e-ok) !important;
+}
+
+.e2e-nightly__cell--failure {
+  background: var(--e2e-ko-bg);
+  border-left-color: var(--e2e-ko) !important;
+}
+
+.e2e-nightly__cell--running {
+  background: var(--e2e-run-bg);
+  border-left-color: var(--e2e-run) !important;
+}
+
+.e2e-nightly__cell--queued,
+.e2e-nightly__cell--waiting,
+.e2e-nightly__cell--cancelled,
+.e2e-nightly__cell--skipped,
+.e2e-nightly__cell--none {
+  color: var(--e2e-off);
+  background: var(--e2e-off-bg);
+}
+
+.e2e-nightly__cell--running .e2e-nightly__state {
+  animation: e2e-nightly-pulse 2s ease-in-out infinite;
+}
+
+@keyframes e2e-nightly-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .e2e-nightly__cell--running .e2e-nightly__state {
+    animation: none;
+  }
+}
+
+.e2e-nightly__state {
+  font-weight: 700;
+}
+
+.e2e-nightly__cell--success .e2e-nightly__state {
+  color: var(--e2e-ok);
+}
+
+.e2e-nightly__cell--failure .e2e-nightly__state {
+  color: var(--e2e-ko);
+}
+
+.e2e-nightly__cell--running .e2e-nightly__state {
+  color: var(--e2e-run);
+}
+
+.e2e-nightly__detail,
+.e2e-nightly__counts {
+  display: block;
+  white-space: nowrap;
+}
+
+.e2e-nightly__detail {
+  color: var(--md-default-fg-color--light);
+}
+
+.e2e-nightly__run-start > * {
+  border-top: 2px solid var(--md-default-fg-color--lighter);
+}
+
+.e2e-nightly__problems code {
+  word-break: break-all;
+}
+
+.e2e-nightly__tag {
+  display: inline-block;
+  padding: 0 0.4em;
+  font-size: 0.85em;
+  font-weight: 700;
+  border-radius: 0.2rem;
+  color: var(--e2e-ko);
+  background: var(--e2e-ko-bg);
+}
+
+.e2e-nightly__tag--xpassed {
+  color: var(--e2e-run);
+  background: var(--e2e-run-bg);
+}

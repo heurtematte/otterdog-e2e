@@ -331,6 +331,8 @@ PUBLIC_NAMES: dict[str, list[str]] = {
         "DiffReport",
         "compare",
     ],
+    # the results digest of a CI session, the notice of the nightly dashboard (docs/nightly.md)
+    "otterdog_acceptance.digest": ["Digest", "Problem", "build", "escape_data", "NOTICE_TITLE"],
     # scenario references to otterdog PRs / named changes and the ChangeSpec of a differential run (SPEC 14)
     "otterdog_acceptance.changes": [
         "ChangeError",
