@@ -342,6 +342,26 @@ def test_server_errors_retried_only_for_idempotent_calls(api: responses.Requests
     assert sleeps == [1.0, 1.0]
 
 
+def test_git_object_posts_retried_on_server_errors(api: responses.RequestsMock, sleeps: list[float]) -> None:
+    """POSTs creating git blobs, trees and commits only add objects no ref points to: retried on 500, 502/503/504 and
+    connection errors (nightly 45986766053: POST .../git/commits -> 500); a POST creating a ref is not."""
+    commits = f"{GITHUB_API}/repos/{FAKE_ORG}/r/git/commits"
+    trees = f"{GITHUB_API}/repos/{FAKE_ORG}/r/git/trees"
+    api.add(responses.POST, commits, status=500)
+    api.add(responses.POST, commits, body=requests.ConnectionError("reset"))
+    api.add(responses.POST, commits, status=201, json={"sha": "c0ffee"})
+    api.add(responses.POST, trees, status=503)
+    api.add(responses.POST, trees, status=201, json={"sha": "7ee"})
+    api.add(responses.POST, f"{GITHUB_API}/repos/{FAKE_ORG}/r/git/refs", status=500)
+    http = make_http(sleeps, write_scope=make_verified_org())
+    assert http.post(f"/repos/{FAKE_ORG}/r/git/commits", json={"message": "m", "tree": "t"}) == {"sha": "c0ffee"}
+    assert http.post(f"/repos/{FAKE_ORG}/r/git/trees", json={"tree": []}) == {"sha": "7ee"}
+    with pytest.raises(GitHubError) as info:
+        http.post(f"/repos/{FAKE_ORG}/r/git/refs", json={"ref": "refs/heads/x", "sha": "c0ffee"})
+    assert info.value.status == 500
+    assert sleeps == [1.0, 2.0, 1.0]
+
+
 def test_connection_errors_retried_for_get_not_post(api: responses.RequestsMock, sleeps: list[float]) -> None:
     """Connection errors: GET retried with backoff, POST raised at once."""
     api.add(responses.GET, ORG_URL, body=requests.ConnectionError("reset"))

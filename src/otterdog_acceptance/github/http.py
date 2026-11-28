@@ -11,7 +11,8 @@ GraphQL queries: every other write needs a VerifiedOrg (SPEC 5.1).
 
 Resilience: GET responses carrying an ETag are cached in memory and revalidated with ``If-None-Match`` (a 304 does not
 count against the primary rate limit); rate-limited requests (403/429) are retried for every method; connection errors
-and 502/503/504 only for GET/HEAD/PUT/DELETE and GraphQL queries; mutating calls are paced ``min_write_interval`` apart.
+and 502/503/504 only for GET/HEAD/PUT/DELETE and GraphQL queries, and with 500 for the POSTs creating git blobs, trees
+and commits (an orphan object at worst); mutating calls are paced ``min_write_interval`` apart.
 
 Mutating calls never follow redirects: GitHub redirects requests for a renamed or transferred repository (301/307) to
 ``/repositories/<id>``, which could be outside the write scope; the 3xx answer surfaces as a GitHubError (with its
@@ -89,6 +90,11 @@ UNSCOPED_WRITE_PATTERNS = (
 )
 RETRYABLE_STATUSES = frozenset({502, 503, 504})
 IDEMPOTENT_METHODS = frozenset({"GET", "HEAD", "PUT", "DELETE"})
+# POSTs of the git database that only add an object no ref points to yet: a retry at worst leaves an orphan object, so
+# they are retried like idempotent calls, on 500 too (nightlies: POST .../git/commits -> 503 in run tp0p46a3, -> 500 in
+# tp64kg8d of 45986766053, each failing a webapp test that had not written anything else yet)
+GIT_OBJECT_POST = re.compile(r"^/repos/[^/]+/[^/]+/git/(?:blobs|trees|commits)$")
+GIT_OBJECT_RETRYABLE_STATUSES = RETRYABLE_STATUSES | {500}
 READ_METHODS = frozenset({"GET", "HEAD"})
 NO_CACHE_PATHS = frozenset({"/rate_limit"})  # always fetched fresh (and never counted)
 RATE_LIMIT_MAX_WAIT = 300.0  # cap of any rate-limit sleep (retry-after or reset)
@@ -367,10 +373,10 @@ class GitHubHttp:
         headers: dict[str, str],
         cached: _CachedResponse | None,
     ) -> requests.Response:
-        """Perform the call, retrying rate limits (all methods) and transient failures (idempotent calls only); writes
-        never follow redirects (a redirect could leave the write scope)."""
+        """Perform the call, retrying rate limits (all methods) and transient failures (idempotent calls and git object
+        POSTs only); writes never follow redirects (a redirect could leave the write scope)."""
         write = self._is_write(method, api_path, json)
-        retry_transient = not write or method in IDEMPOTENT_METHODS
+        transient = self._transient_statuses(method, api_path, write)
         attempt = 0
         while True:
             if write:
@@ -388,7 +394,7 @@ class GitHubHttp:
                     allow_redirects=not write,
                 )
             except (requests.ConnectionError, requests.Timeout, requests.exceptions.ChunkedEncodingError) as exc:
-                if not retry_transient or attempt >= self.max_retries:
+                if not transient or attempt >= self.max_retries:
                     raise
                 delay = CONNECTION_BACKOFF[min(attempt, len(CONNECTION_BACKOFF) - 1)]
                 logger.warning("%s %s failed (%s); retrying in %.0f s", method, api_path, type(exc).__name__, delay)
@@ -400,7 +406,7 @@ class GitHubHttp:
             if response.status_code == 304 and cached is not None:
                 response = self._from_cache(cached, response)
             self._log(method, api_path, response)
-            retry_in = self._retry_delay(response, attempt, retry_transient)
+            retry_in = self._retry_delay(response, attempt, transient)
             if retry_in is None or attempt >= self.max_retries:
                 return response
             logger.warning(
@@ -409,12 +415,22 @@ class GitHubHttp:
             self.sleep(retry_in)
             attempt += 1
 
-    def _retry_delay(self, response: requests.Response, attempt: int, retry_transient: bool) -> float | None:
+    @staticmethod
+    def _transient_statuses(method: str, api_path: str, write: bool) -> frozenset[int]:
+        """Statuses retried as transient failures (connection errors too, unless empty): 502/503/504 for reads and
+        idempotent writes, 500 as well for the POSTs creating git objects (GIT_OBJECT_POST), none for other writes."""
+        if method == "POST" and GIT_OBJECT_POST.match(api_path):
+            return GIT_OBJECT_RETRYABLE_STATUSES
+        if not write or method in IDEMPOTENT_METHODS:
+            return RETRYABLE_STATUSES
+        return frozenset()
+
+    def _retry_delay(self, response: requests.Response, attempt: int, transient: frozenset[int]) -> float | None:
         """Seconds to wait before retrying ``response`` (None = do not retry)."""
         rate_delay = self._rate_limit_delay(response, attempt)
         if rate_delay is not None:
             return rate_delay
-        if retry_transient and response.status_code in RETRYABLE_STATUSES:
+        if response.status_code in transient:
             return CONNECTION_BACKOFF[min(attempt, len(CONNECTION_BACKOFF) - 1)]
         return None
 
