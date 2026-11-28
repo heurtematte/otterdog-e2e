@@ -6,6 +6,8 @@
 # Each matrix entry calls e2e.yml with one instance, which must also be in the allowlist E2E_INSTANCES when that is set.
 # Scheduled runs are skipped until E2E_TARGETS is set, so a fresh fork or clone stays quiet; workflow_dispatch always runs.
 # Web-UI lane: E2E_WEB_UI_ENABLED == 'true' and E2E_WEB_UI_TARGETS (default ["free"]), docs/web-ui-testing.md.
+# Job names show the shard of the instance: repository variable E2E_INSTANCE_SHARDS ({instance: shard}, written by
+# ci-sync from E2E_SHARD), else the instance name.
 name: nightly
 
 on:
@@ -19,7 +21,7 @@ cache-mode: none
 
 jobs:
   release:
-    name: release:latest
+    name: release:latest (${{ fromJSON(vars.E2E_INSTANCE_SHARDS || '{}')[matrix.target] || matrix.target }})
     if: ${{ vars.E2E_TARGETS != '' || github.event_name == 'workflow_dispatch' }}
     permissions:
       contents: read
@@ -42,7 +44,7 @@ jobs:
       lane: nightly-full
 
   main:
-    name: branch:main vs release:latest
+    name: branch:main vs release:latest (${{ fromJSON(vars.E2E_INSTANCE_SHARDS || '{}')[matrix.target] || matrix.target }})
     needs: release
     if: ${{ !cancelled() && (vars.E2E_TARGETS != '' || github.event_name == 'workflow_dispatch') }}
     permissions:
@@ -70,7 +72,7 @@ jobs:
   # for the instances of E2E_WEB_UI_TARGETS (JSON list, default ["free"]), each with an e2e-<instance>-webui
   # environment holding the admin bot's web credentials; trusted SUT only, after the other sessions of the night.
   webui:
-    name: web-UI tier (release:latest)
+    name: web-UI tier release:latest (${{ fromJSON(vars.E2E_INSTANCE_SHARDS || '{}')[matrix.target] || matrix.target }})
     needs: [release, main]
     if: ${{ !cancelled() && vars.E2E_WEB_UI_ENABLED == 'true' }}
     permissions:

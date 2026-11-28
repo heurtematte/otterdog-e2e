@@ -34,6 +34,7 @@ import pytest
 import yaml
 
 from otterdog_acceptance import cli
+from otterdog_acceptance.onboard.cisync import REPOSITORY_VARIABLES, SHARDS_VARIABLE
 from otterdog_acceptance.redact import SECRET_KEY_RE
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -81,6 +82,8 @@ E2E_ENVIRONMENT = (
 INSTANCES_ALLOWLIST = '${{ vars.E2E_INSTANCES || vars.E2E_TARGETS || \'["free","team","enterprise"]\' }}'
 MATRIX_FROM_CLASSIFY = "${{ fromJSON(needs.classify.outputs.targets) }}"
 INSTANCE_CONCURRENCY = {"group": "e2e-${{ matrix.target }}", "cancel-in-progress": False, "queue": "max"}
+# the name of an instance's jobs: its shard (repository variable written by ci-sync), else the instance
+SHARD_NAME = "${{ fromJSON(vars.E2E_INSTANCE_SHARDS || '{}')[matrix.target] || matrix.target }}"
 # settings.INSTANCE_NAME_RE and settings.RESERVED_INSTANCE_SUFFIXES, in bash
 INSTANCE_VALIDATION = (
     '[[ "$name" =~ ^[a-z0-9][a-z0-9-]{0,38}$ ]]',
@@ -772,6 +775,24 @@ def test_an_orphaned_session_stops_before_the_sweep(name: str, job_id: str) -> N
     script = str(stop["run"])
     assert "pattern='\\.venv/bin/otterdog-acceptance'" in script and "for sig in INT TERM KILL" in script
     assert not stop.get("env"), "the stop step needs no secret"
+
+
+@pytest.mark.parametrize(
+    ("name", "job_id", "template"),
+    [
+        ("nightly", "release", "release:latest ({shard})"),
+        ("nightly", "main", "branch:main vs release:latest ({shard})"),
+        ("nightly", "webui", "web-UI tier release:latest ({shard})"),
+        ("e2e", "e2e", "e2e {shard} (${{{{ needs.classify.outputs.sut }}}}, ${{{{ needs.classify.outputs.trust }}}})"),
+        ("e2e-webui", "webui", "web-UI {shard} (${{{{ needs.classify.outputs.sut }}}})"),
+        ("janitor", "janitor", "janitor {shard}"),
+    ],
+)
+def test_instance_jobs_are_named_after_the_shard(name: str, job_id: str, template: str) -> None:
+    """The jobs of one instance show its shard (E2E_INSTANCE_SHARDS, written by ci-sync), else the instance: a job name
+    is evaluated before the environment applies, so the E2E_SHARD of the environment cannot name it."""
+    assert jobs(name)[job_id]["name"] == template.format(shard=SHARD_NAME)
+    assert SHARDS_VARIABLE in REPOSITORY_VARIABLES, "never copied into an environment"
 
 
 def test_janitor_workflow_contract() -> None:

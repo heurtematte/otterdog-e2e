@@ -565,6 +565,57 @@ def test_nightly_of_a_default_instance_keeps_the_allowlist_and_the_nightly_defau
     assert "repository variable E2E_INSTANCES: created from the default instances + team (before E2E_TARGETS" in output
 
 
+@pytest.mark.parametrize(
+    ("shard", "existing", "expected"),
+    [
+        ("repos", None, '{"org2":"repos"}'),
+        ("repos", '{"free":"free"}', '{"free":"free","org2":"repos"}'),
+        ("repos", '{"org2":"teams","free":"free"}', '{"org2":"repos","free":"free"}'),
+        ("repos", '{"org2":"repos"}', None),
+        ("", '{"org2":"repos","free":"free"}', '{"free":"free"}'),
+        ("", '{"free":"free"}', None),
+        ("", None, None),
+    ],
+)
+def test_the_shard_map_names_the_jobs(
+    home: Path, project: Path, shard: str, existing: str | None, expected: str | None
+) -> None:
+    """E2E_INSTANCE_SHARDS maps the instance to its E2E_SHARD (the workflows' job names), drops an instance without
+    one, and is left alone when it already says so."""
+    write_env(home, web=False, extra=f"E2E_SHARD={shard}" if shard else "")
+    gh = Gh(repo_variables={"E2E_INSTANCES": '["org2"]', **({"E2E_INSTANCE_SHARDS": existing} if existing else {})})
+    sync, echoed = make_sync(home, project, gh)
+    sync.run(apply=True)
+    found = [args[4] for args, _ in gh.writes() if args[:3] == ("variable", "set", "E2E_INSTANCE_SHARDS")]
+    assert found == ([expected] if expected else [])
+    assert all("--env" not in args for args, _ in gh.writes() if "E2E_INSTANCE_SHARDS" in args), "repository level"
+    output = "\n".join(echoed)
+    if shard and expected:
+        assert f"repository variable E2E_INSTANCE_SHARDS: org2 runs the shard {shard} (job names)" in output
+    elif shard:
+        assert "note: E2E_INSTANCE_SHARDS maps org2 to the shard repos already" in output
+    elif expected:
+        assert "repository variable E2E_INSTANCE_SHARDS: drop org2 (no E2E_SHARD in org2.env)" in output
+
+
+@pytest.mark.parametrize(
+    ("variable", "value", "message"),
+    [
+        ("E2E_INSTANCE_SHARDS", '["org2"]', "E2E_INSTANCE_SHARDS is not a JSON object of instance -> shard"),
+        ("E2E_SHARD", "Repos!", "E2E_SHARD of .* is not a shard name"),
+    ],
+)
+def test_a_malformed_shard_is_refused(home: Path, project: Path, variable: str, value: str, message: str) -> None:
+    """A shard map that is not a JSON object, or an E2E_SHARD that is not a name: refused before any write."""
+    write_env(home, web=False, extra=f"E2E_SHARD={value}" if variable == "E2E_SHARD" else "E2E_SHARD=repos")
+    repo_variables = {"E2E_INSTANCES": '["org2"]', **({variable: value} if variable != "E2E_SHARD" else {})}
+    gh = Gh(repo_variables=repo_variables)
+    sync, _ = make_sync(home, project, gh)
+    with pytest.raises(CiSyncError, match=message):
+        sync.run(apply=True)
+    assert not gh.writes()
+
+
 def test_a_malformed_repository_list_is_refused(home: Path, project: Path) -> None:
     """E2E_INSTANCES that is not a JSON list of names: fix it first."""
     sync, _ = make_sync(home, project, Gh(repo_variables={"E2E_INSTANCES": "free,team"}))

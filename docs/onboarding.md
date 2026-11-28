@@ -509,7 +509,9 @@ variables and secrets from its env file.
   `E2E_TARGETS` changes (set before `E2E_TARGETS`, so the allowlist never loses an instance), and otherwise only notes
   that the instance is dispatchable already. `--nightly` also adds the instance to `E2E_TARGETS` (the nightly and
   janitor runs); an absent `E2E_TARGETS` is created as the workflows' default `["free"]` plus the instance, which
-  starts the scheduled runs. `E2E_WEB_UI_ENABLED` and `E2E_WEB_UI_TARGETS` stay yours to set.
+  starts the scheduled runs. `E2E_INSTANCE_SHARDS` maps the instance to its `E2E_SHARD` (or drops it when the env
+  file has none): the workflows name the jobs of an instance after its shard, which a job name cannot read from the
+  environment. `E2E_WEB_UI_ENABLED` and `E2E_WEB_UI_TARGETS` stay yours to set.
 - **Your credential**: every call goes through your own `gh` CLI login (`gh auth login`; `GH_TOKEN`, `GITHUB_TOKEN`,
   `GH_HOST` and `GH_CONFIG_DIR` are passed on when you export them), never a machine account's token: ci-sync refuses
   to run when that credential is a token or secret of the instance, or when `gh` is logged in as one of its machine

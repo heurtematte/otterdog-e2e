@@ -569,6 +569,9 @@ Repository variables:
   is unset, their scheduled runs are skipped. Each of them must be in `E2E_INSTANCES` too (`ci-sync --nightly`).
 - `E2E_WEB_UI_ENABLED` and `E2E_WEB_UI_TARGETS`: the nightly web-UI lane ([web-ui-testing.md](web-ui-testing.md));
   the instances of `E2E_WEB_UI_TARGETS` must be in `E2E_INSTANCES` too.
+- `E2E_INSTANCE_SHARDS`: the JSON object instance to shard, for example `{"free": "repos"}`, that names the jobs of
+  an instance after its shard (`release:latest (repos)`, `e2e repos (...)`); an instance missing from it keeps its
+  own name. Display only: the session reads `E2E_SHARD` from the instance's environment. `ci-sync` writes it.
 
 The `target` input of `e2e.yml`, `e2e-webui.yml` and `e2e-otterdog-pr.yml` is one instance or a comma separated list
 of at most 8 (spaces ignored, duplicates dropped):

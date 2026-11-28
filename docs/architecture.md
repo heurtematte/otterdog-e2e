@@ -175,7 +175,8 @@ checks that no item lands on a shard whose plan lacks what it requires. Offline 
 explicit scenario selection (`--e2e-scenario`) runs on any instance, and an instance without `E2E_SHARD` runs every live
 item. `otterdog-acceptance shards` shows the share of each (scenarios, steps, test functions) and the instances that
 select it; `run --target <the five instances> --parallel 5` runs them at once, and CI does the same with its matrix of
-instances (`E2E_INSTANCES`), each job reading `E2E_SHARD` from the environment `ci-sync` fills. The organizations share
+instances (`E2E_INSTANCES`), each job reading `E2E_SHARD` from the environment `ci-sync` fills and named after the
+shard (the repository variable `E2E_INSTANCE_SHARDS`, also written by `ci-sync`). The organizations share
 one set of machine accounts, an organization keeping its own when `set:` of the accounts store says so
 ([onboarding](onboarding.md#the-organizations-of-the-shards)).
 

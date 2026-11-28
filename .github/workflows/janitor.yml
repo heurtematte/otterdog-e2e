@@ -58,7 +58,8 @@ jobs:
           echo "no per-instance variable at repository or organization level"
 
   janitor:
-    name: janitor ${{ matrix.target }}
+    # the shard of the instance (E2E_INSTANCE_SHARDS, ci-sync), else the instance
+    name: janitor ${{ fromJSON(vars.E2E_INSTANCE_SHARDS || '{}')[matrix.target] || matrix.target }}
     needs: check
     if: ${{ vars.E2E_TARGETS != '' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-24.04

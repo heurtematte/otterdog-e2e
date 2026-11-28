@@ -150,7 +150,8 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   webui:
-    name: web-UI ${{ matrix.target }} (${{ needs.classify.outputs.sut }})
+    # the shard of the instance (E2E_INSTANCE_SHARDS, ci-sync), else the instance
+    name: web-UI ${{ fromJSON(vars.E2E_INSTANCE_SHARDS || '{}')[matrix.target] || matrix.target }} (${{ needs.classify.outputs.sut }})
     needs: classify
     runs-on: ubuntu-24.04
     timeout-minutes: 120

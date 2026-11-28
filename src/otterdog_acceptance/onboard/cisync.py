@@ -35,7 +35,8 @@ Repository variables last: E2E_INSTANCES (JSON list of the dispatchable instance
 --nightly E2E_TARGETS too (created from the nightly/janitor default ``["free"]`` plus the instance when absent). The
 workflows' allowlist is E2E_INSTANCES, else E2E_TARGETS, else the default instances: while E2E_INSTANCES is absent it is
 created from that OLD allowlist plus the instance whenever the instance is not in it or E2E_TARGETS changes (and before
-E2E_TARGETS), so the allowlist never loses an instance.
+E2E_TARGETS), so the allowlist never loses an instance. E2E_INSTANCE_SHARDS (JSON object instance -> shard) maps the
+instance to its E2E_SHARD, or drops it when the instance has none: the workflows name their jobs after the shard.
 
 Dry run by default: the operations are printed with names, never values (the reads still run: repository, gh user,
 reviewers, current repository variables, deployment branch policies); --apply runs them in order and stops at the
@@ -57,17 +58,29 @@ from otterdog_acceptance.context import in_ci
 from otterdog_acceptance.onboard.envfile import check_instance_name, instance_env_path, read_env_file
 from otterdog_acceptance.procs import CompletedProcess
 from otterdog_acceptance.redact import REDACTOR, SECRET_KEY_RE
-from otterdog_acceptance.settings import DEFAULT_WEB_ENV, LOGIN_RE, TARGET_FILE_SUFFIXES, UPSTREAM_REPO_RE
+from otterdog_acceptance.settings import (
+    DEFAULT_WEB_ENV,
+    INSTANCE_NAME_RE,
+    LOGIN_RE,
+    TARGET_FILE_SUFFIXES,
+    UPSTREAM_REPO_RE,
+)
+from otterdog_acceptance.shards import SHARD_ENV
 from otterdog_acceptance.vaults import VaultError, is_reference, parse, resolve
 
 TRUSTED, UNTRUSTED, WEBUI = "trusted", "untrusted", "webui"
 ENVIRONMENT_KINDS = (TRUSTED, UNTRUSTED, WEBUI)
 ENVIRONMENT_SUFFIXES: Mapping[str, str] = {TRUSTED: "", UNTRUSTED: "-untrusted", WEBUI: "-webui"}
 INSTANCES_VARIABLE, TARGETS_VARIABLE = "E2E_INSTANCES", "E2E_TARGETS"
+# {instance: shard} for the job names of the workflows (the shard, else the instance): GitHub evaluates a job name
+# before the job's environment applies, so a name cannot read the E2E_SHARD of the environment
+SHARDS_VARIABLE = "E2E_INSTANCE_SHARDS"
 DEFAULT_INSTANCES = ("free", "team", "enterprise")  # the workflows' allowlist without E2E_INSTANCES / E2E_TARGETS
 DEFAULT_NIGHTLY = ("free",)  # nightly.yml / janitor.yml: fromJSON(vars.E2E_TARGETS || '["free"]')
 # repository-level variables of the workflows (job conditions and matrices): never copied into an environment
-REPOSITORY_VARIABLES = frozenset({INSTANCES_VARIABLE, TARGETS_VARIABLE, "E2E_WEB_UI_ENABLED", "E2E_WEB_UI_TARGETS"})
+REPOSITORY_VARIABLES = frozenset(
+    {INSTANCES_VARIABLE, TARGETS_VARIABLE, SHARDS_VARIABLE, "E2E_WEB_UI_ENABLED", "E2E_WEB_UI_TARGETS"}
+)
 ALWAYS_VARIABLES = frozenset({"E2E_PROFILE"})
 WEB_SECRETS = frozenset({DEFAULT_WEB_ENV["password_env"], DEFAULT_WEB_ENV["totp_seed_env"]})
 AUTOMATIC_SECRETS = frozenset({"GITHUB_TOKEN"})
@@ -192,6 +205,17 @@ def _json_list(text: str, name: str) -> list[str]:
         value = None
     if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
         raise CiSyncError(f"the repository variable {name} is not a JSON list of instance names: fix it first")
+    return value
+
+
+def _json_map(text: str, name: str) -> dict[str, str]:
+    """A JSON object of instance names to shard names (CiSyncError otherwise)."""
+    try:
+        value = json.loads(text)
+    except ValueError:
+        value = None
+    if not isinstance(value, dict) or not all(isinstance(item, str) for item in value.values()):
+        raise CiSyncError(f"the repository variable {name} is not a JSON object of instance -> shard: fix it first")
     return value
 
 
@@ -367,12 +391,15 @@ class CiSync:
             found.append((str((data or {}).get("login") or login), reviewer_id))
         return found
 
+    def repository_variable(self, repo: str, name: str) -> str | None:
+        """The value of a repository variable (None when it does not exist)."""
+        data = self.call_json(["api", f"repos/{repo}/actions/variables/{name}"], allow_missing=True)
+        return None if data is None else str((data or {}).get("value") or "")
+
     def repository_list(self, repo: str, name: str) -> list[str] | None:
         """A repository variable holding a JSON list (None when it does not exist)."""
-        data = self.call_json(["api", f"repos/{repo}/actions/variables/{name}"], allow_missing=True)
-        if data is None:
-            return None
-        return _json_list(str((data or {}).get("value") or ""), name)
+        value = self.repository_variable(repo, name)
+        return None if value is None else _json_list(value, name)
 
     # --- plan ---------------------------------------------------------------------------------------------------
     def environment_name(self, kind: str) -> str:
@@ -635,7 +662,34 @@ class CiSync:
             self.notes.append(f"{INSTANCES_VARIABLE} lists {self.instance} already")
         if nightly is not None:
             operations.append(nightly)
+        operations += self.shard_operations(repo)
         return operations
+
+    def shard_operations(self, repo: str) -> list[Operation]:
+        """E2E_INSTANCE_SHARDS maps the instance to its E2E_SHARD (the workflows name their jobs after the shard, an
+        instance missing from the map after itself); an instance without E2E_SHARD is dropped from it."""
+        shard = (self.values.get(SHARD_ENV) or "").strip()
+        if shard and not INSTANCE_NAME_RE.fullmatch(shard):
+            raise CiSyncError(f"{SHARD_ENV} of {self.env_path} is not a shard name ({INSTANCE_NAME_RE.pattern})")
+        value = self.repository_variable(repo, SHARDS_VARIABLE)
+        shards = {} if value is None else _json_map(value, SHARDS_VARIABLE)
+        if shards.get(self.instance) == (shard or None):
+            if shard:
+                self.notes.append(f"{SHARDS_VARIABLE} maps {self.instance} to the shard {shard} already")
+            return []
+        if shard:
+            shards[self.instance] = shard
+            detail = f"{self.instance} runs the shard {shard} (job names)"
+        else:
+            del shards[self.instance]
+            detail = f"drop {self.instance} (no {SHARD_ENV} in {self.env_path.name})"
+        body = json.dumps(shards, separators=(",", ":"))
+        return [
+            Operation(
+                f"repository variable {SHARDS_VARIABLE}: {detail}",
+                ("variable", "set", SHARDS_VARIABLE, "--body", body, "--repo", repo),
+            )
+        ]
 
     @staticmethod
     def _list_operation(repo: str, name: str, items: Sequence[str], detail: str) -> Operation:

@@ -241,7 +241,8 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   e2e:
-    name: e2e ${{ matrix.target }} (${{ needs.classify.outputs.sut }}, ${{ needs.classify.outputs.trust }})
+    # the shard of the instance (E2E_INSTANCE_SHARDS, ci-sync), else the instance
+    name: e2e ${{ fromJSON(vars.E2E_INSTANCE_SHARDS || '{}')[matrix.target] || matrix.target }} (${{ needs.classify.outputs.sut }}, ${{ needs.classify.outputs.trust }})
     needs: classify
     runs-on: ubuntu-24.04
     # the session (270 min) plus setup, sweep and upload, under the 360 min of a GitHub-hosted job
